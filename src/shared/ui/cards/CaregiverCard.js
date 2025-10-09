@@ -62,10 +62,18 @@ const CaregiverCard = ({ caregiver, onPress, onMessage, onBook, showActions = tr
           <View style={styles.nameSection}>
             <Text style={styles.name}>{name}</Text>
             <View style={styles.ratingRow}>
-              <View style={styles.stars}>
-                {renderStars(rating)}
-              </View>
-              <Text style={styles.reviewText}>({reviewCount})</Text>
+              {reviewCount > 0 ? (
+                <>
+                  <View style={styles.stars}>
+                    {renderStars(rating)}
+                  </View>
+                  <Text style={styles.reviewText}>({reviewCount})</Text>
+                </>
+              ) : (
+                <Text style={[styles.reviewText, { fontStyle: 'italic' }]}>
+                  New caregiver
+                </Text>
+              )}
             </View>
           </View>
         </View>

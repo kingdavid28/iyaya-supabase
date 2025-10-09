@@ -5,7 +5,7 @@ import React, { useCallback, useEffect, useState } from "react"
 import { ActivityIndicator, Alert, Dimensions, Image, Linking, Modal, Platform, Pressable, RefreshControl, ScrollView, Text, TextInput, View, FlatList } from "react-native"
 import { Button, Card, Chip, Searchbar } from "react-native-paper"
 import Toast from "../components/ui/feedback/Toast"
-import { bookingsAPI, applicationsAPI, caregiversAPI, authAPI } from "../services/index"
+import { supabaseService } from '../services/supabaseService'
 import { getCurrentSocketURL } from '../config/api'
 import { useAuth } from "../contexts/AuthContext"
 
@@ -375,43 +375,28 @@ function CaregiverDashboard({ onLogout, route }) {
     return () => unsubscribe();
   }, [selectedParent, user?.id]);
 
-  // Fetch reviews with runtime Firebase check
+  // Fetch reviews using Supabase
   useEffect(() => {
     if (!user?.id) return;
 
-    // Check if Firebase is available
-    const checkFirebaseAvailability = () => {
+    const fetchReviews = async () => {
       try {
-        const { database: db, ref, onValue, query, orderByChild } = require('../config/firebase');
-        return !!(db && onValue && ref && query && orderByChild);
+        const { supabase } = await import('../config/supabase');
+        const { data, error } = await supabase
+          .from('reviews')
+          .select('*')
+          .eq('caregiver_id', user.id)
+          .order('created_at', { ascending: false });
+
+        if (error) throw error;
+        setReviews(data || []);
       } catch (error) {
-        console.warn('Firebase not available:', error);
-        return false;
+        console.warn('Failed to fetch reviews:', error);
+        setReviews([]);
       }
     };
 
-    if (!checkFirebaseAvailability()) {
-      console.warn('⚠️ Firebase not available, skipping reviews fetch');
-      return;
-    }
-
-    const { database: db, ref, onValue, query, orderByChild } = require('../config/firebase');
-
-    const reviewsRef = ref(db, `reviews/${user.id}`);
-    const reviewsQuery = query(reviewsRef, orderByChild('timestamp'));
-
-    const unsubscribe = onValue(reviewsQuery, (snapshot) => {
-      const reviewsData = [];
-      snapshot.forEach((childSnapshot) => {
-        reviewsData.push({
-          id: childSnapshot.key,
-          ...childSnapshot.val()
-        });
-      });
-      setReviews(reviewsData.reverse());
-    });
-
-    return () => unsubscribe();
+    fetchReviews();
   }, [user?.id]);
   
   const { pendingRequests, notifications } = usePrivacy();
@@ -502,18 +487,14 @@ function CaregiverDashboard({ onLogout, route }) {
 
   const handleConfirmAttendance = async (booking) => {
     try {
-      const response = await bookingsAPI.updateStatus(
+      await supabaseService.updateBookingStatus(
         booking.id,
         'confirmed',
         'Caregiver confirmed attendance'
       );
 
-      if (response.success) {
-        showToast('Attendance confirmed successfully!', 'success');
-        fetchBookings(); // Refresh bookings list
-      } else {
-        throw new Error(response.error || 'Failed to confirm attendance');
-      }
+      showToast('Attendance confirmed successfully!', 'success');
+      fetchBookings(); // Refresh bookings list
     } catch (error) {
       console.error('Confirm attendance failed:', error);
       showToast('Failed to confirm attendance. Please try again.', 'error');
@@ -575,14 +556,13 @@ function CaregiverDashboard({ onLogout, route }) {
       setApplicationSubmitting(true)
 
       console.log('Submitting application with jobId:', jobId);
-      const response = await applicationsAPI.apply({
-        jobId: jobId,
-        coverLetter: coverLetter || '',
-        proposedRate: proposedRate ? Number(proposedRate) : undefined,
-        message: coverLetter || ''
-      })
+      const response = await supabaseService.applyToJob(
+        jobId,
+        user.id,
+        coverLetter || ''
+      );
 
-      if (response.success) {
+      if (response) {
         // Create Firebase connection between caregiver and job poster (parent)
         const parentId = matchedJob?.parentId || matchedJob?.userId || matchedJob?.createdBy;
 
@@ -598,7 +578,7 @@ function CaregiverDashboard({ onLogout, route }) {
         }
 
         const newApplication = {
-          id: response.data._id || Date.now(),
+          id: response.id || Date.now(),
           jobId,
           jobTitle,
           family,
@@ -620,8 +600,6 @@ function CaregiverDashboard({ onLogout, route }) {
         setSelectedJob(null)
         setApplicationForm({ coverLetter: '', proposedRate: '' })
         setActiveTab("applications")
-      } else {
-        throw new Error(response.error || 'Application submission failed')
       }
     } catch (error) {
       console.error('Application submission failed:', error)
@@ -660,19 +638,9 @@ function CaregiverDashboard({ onLogout, route }) {
       console.log('💾 Dashboard payload:', payload);
       
       if (isCaregiver) {
-        try {
-          const response = await caregiversAPI.updateProfile(payload)
-          console.log('💾 Dashboard update response:', response);
-        } catch (e) {
-          const status = e?.response?.status
-          if (status === 404) {
-            await caregiversAPI.createProfile(payload)
-          } else {
-            throw e
-          }
-        }
+        await supabaseService.updateProfile(user.id, payload);
       } else {
-        await authAPI.updateProfile({ name: payload.name })
+        await supabaseService.updateProfile(user.id, { name: payload.name });
       }
       
       await loadProfile()
@@ -969,8 +937,23 @@ function CaregiverDashboard({ onLogout, route }) {
                 style={styles.headerButton} 
                 onPress={() => {
                   try {
+                    // Combine user data with profile data for complete profile view
+                    const completeProfile = {
+                      ...profile,
+                      name: profile?.name || user?.name,
+                      bio: profile?.bio || user?.bio,
+                      profileImage: profile?.profileImage || profile?.profile_image || user?.profile_image,
+                      skills: profile?.skills || user?.skills || [],
+                      hourlyRate: profile?.hourlyRate || user?.hourly_rate,
+                      experience: profile?.experience || { description: user?.experience },
+                      certifications: profile?.certifications || user?.certifications || [],
+                      availability: profile?.availability || user?.availability || { days: [] },
+                      ageCareRanges: profile?.ageCareRanges || user?.ageCareRanges || [],
+                      emergencyContacts: profile?.emergencyContacts || user?.emergencyContacts || []
+                    };
+                    
                     navigation.navigate('CaregiverProfileComplete', { 
-                      profile: profile 
+                      profile: completeProfile 
                     });
                   } catch (error) {
                     console.error('Profile navigation error:', error);

@@ -3,7 +3,7 @@ import { View, Text, FlatList, TouchableOpacity, RefreshControl, Image, Keyboard
 import { Ionicons } from '@expo/vector-icons';
 import { Card } from 'react-native-paper';
 import { useAuth } from '../../../contexts/AuthContext';
-import firebaseMessagingService from '../../../services/firebaseMessagingService';
+import { messagingAPI, realtimeService } from '../../../services';
 import { styles } from '../../styles/CaregiverDashboard.styles';
 
 const MessagesTab = ({ navigation, refreshing, onRefresh }) => {
@@ -20,14 +20,30 @@ const MessagesTab = ({ navigation, refreshing, onRefresh }) => {
 
     console.log('🔍 MessagesTab: Fetching conversations for caregiver:', userIdToUse);
 
-    setLoading(true);
-    const unsubscribe = firebaseMessagingService.getConversations(userIdToUse, (conversations) => {
-      console.log('📨 MessagesTab: Received conversations:', conversations);
-      setConversations(conversations);
-      setLoading(false);
-    }, 'caregiver'); // Pass 'caregiver' userType
+    const loadConversations = async () => {
+      try {
+        setLoading(true);
+        const response = await messagingAPI.getConversations();
+        console.log('📨 MessagesTab: Received conversations:', response.data);
+        setConversations(response.data || []);
+      } catch (error) {
+        console.error('Error loading conversations:', error);
+        setConversations([]);
+      } finally {
+        setLoading(false);
+      }
+    };
 
-    return () => unsubscribe();
+    loadConversations();
+    
+    // Setup real-time subscription
+    const subscription = realtimeService.subscribeToMessages('*', () => {
+      loadConversations();
+    });
+
+    return () => {
+      if (subscription) subscription.unsubscribe();
+    };
   }, [user?.id, user?.uid]);
 
   const formatTime = (timestamp) => {
@@ -56,7 +72,7 @@ const MessagesTab = ({ navigation, refreshing, onRefresh }) => {
       const conversationId = `${id1}_${id2}`;
 
       console.log('👁️ Marking messages as read with conversation ID:', conversationId);
-      await firebaseMessagingService.markMessagesAsRead(userIdToUse, conversation.parentId, conversationId);
+      await messagingAPI.markAsRead(conversationId);
     }
 
     navigation.navigate('Chat', {

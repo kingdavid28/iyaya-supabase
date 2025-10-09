@@ -14,8 +14,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Card } from 'react-native-paper';
-import firebaseMessagingService from '../services/firebaseMessagingService';
-import { getFirebaseDatabase } from '../config/firebase';
+import { messagingAPI, realtimeService } from '../services';
 import { useAuth } from '../contexts/AuthContext';
 
 // MessageItem component with simplified features
@@ -130,27 +129,48 @@ const ChatScreen = ({ route }) => {
     setConversationId(convId);
   }, [currentUserId, targetUserId]);
 
-  // Fetch messages and create connection
+  // Fetch messages and setup real-time subscription
   useEffect(() => {
     if (!currentUserId || !targetUserId || !conversationId) return;
 
-    // Create connection if it doesn't exist
-    firebaseMessagingService.createConnection(currentUserId, targetUserId).catch(console.error);
+    let subscription;
 
-    // Listen to messages using consistent conversation ID
-    const unsubscribe = firebaseMessagingService.getMessages(currentUserId, targetUserId, (messagesData) => {
-      setMessages(messagesData);
-    }, conversationId);
+    const setupMessaging = async () => {
+      try {
+        // Get or create conversation
+        const conversation = await messagingAPI.startConversation(targetUserId);
+        const realConversationId = conversation.data?.id || conversationId;
 
-    // Mark messages as read when screen is active
-    firebaseMessagingService.markMessagesAsRead(currentUserId, targetUserId, conversationId).catch(console.error);
+        // Load existing messages
+        const response = await messagingAPI.getMessages(realConversationId);
+        setMessages(response.data?.messages || []);
 
-    return () => unsubscribe();
+        // Setup real-time subscription
+        subscription = realtimeService.subscribeToMessages(realConversationId, (payload) => {
+          if (payload.eventType === 'INSERT') {
+            setMessages(prev => [payload.new, ...prev]);
+          }
+        });
+
+        // Mark messages as read
+        await messagingAPI.markAsRead(realConversationId);
+      } catch (error) {
+        console.error('Error setting up messaging:', error);
+      }
+    };
+
+    setupMessaging();
+
+    return () => {
+      if (subscription) {
+        subscription.unsubscribe();
+      }
+    };
   }, [currentUserId, targetUserId, conversationId]);
 
   // Send message
   const sendMessage = async () => {
-    if (!newMessage.trim() || !currentUserId || !targetUserId || !conversationId) {
+    if (!newMessage.trim() || !currentUserId || !targetUserId) {
       return;
     }
 
@@ -158,7 +178,10 @@ const ChatScreen = ({ route }) => {
     setIsSending(true);
 
     try {
-      await firebaseMessagingService.sendMessage(currentUserId, targetUserId, messageText, 'text', null, conversationId);
+      await messagingAPI.sendMessage({
+        recipientId: targetUserId,
+        content: messageText
+      });
       setNewMessage('');
     } catch (error) {
       console.error('Error sending message:', error);

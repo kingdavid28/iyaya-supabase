@@ -20,6 +20,7 @@ export const useParentDashboard = () => {
   const [bookings, setBookings] = useState([]);
   const [children, setChildren] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [dataLoaded, setDataLoaded] = useState(false);
 
   // Load profile data
   const loadProfile = useCallback(async () => {
@@ -55,27 +56,35 @@ export const useParentDashboard = () => {
     
     setLoading(true);
     try {
+      console.log('📋 Fetching jobs for parent:', user?.id);
       const res = await apiService.jobs.getMy();
-      const jobsList = res?.data?.jobs || res?.jobs || [];
+      console.log('📋 Jobs API response:', res);
+      
+      // Handle different response structures
+      const jobsList = res?.data || res || [];
+      console.log('📋 Jobs list:', jobsList);
       
       const transformedJobs = jobsList.map(job => ({
         id: job._id || job.id,
+        _id: job._id || job.id,
         title: job.title || 'Childcare Position',
         description: job.description || '',
-        hourlyRate: job.hourlyRate || job.rate || 300,
+        hourlyRate: job.hourlyRate || job.hourly_rate || job.rate || 300,
         location: job.location || 'Cebu City',
-        startDate: job.startDate,
-        endDate: job.endDate,
-        startTime: job.startTime,
-        endTime: job.endTime,
-        status: job.status || 'open',
+        startDate: job.startDate || job.date,
+        endDate: job.endDate || job.date,
+        startTime: job.startTime || job.start_time,
+        endTime: job.endTime || job.end_time,
+        status: job.status || 'active',
         applications: job.applications || [],
-        createdAt: job.createdAt
+        createdAt: job.createdAt || job.created_at,
+        date: job.date || job.startDate
       }));
       
+      console.log('📋 Transformed jobs:', transformedJobs);
       setJobs(transformedJobs);
     } catch (error) {
-      console.error('Error fetching jobs:', error);
+      console.error('❌ Error fetching jobs:', error);
       setJobs([]);
     } finally {
       setLoading(false);
@@ -87,55 +96,37 @@ export const useParentDashboard = () => {
     if (!user?.id) return;
     
     try {
-      // Add cache-busting parameter to ensure fresh data
-      const res = await apiService.caregivers.getAll({ _t: Date.now() });
-      const caregiversList = res?.data?.caregivers || res?.caregivers || [];
+      console.log('🔍 Fetching caregivers...');
+      const res = await apiService.caregivers.getAll();
+      console.log('🔍 Raw API response:', res);
       
-      console.log('🔍 Raw caregivers response:', {
-        total: caregiversList.length,
-        sample: caregiversList.slice(0, 2).map(c => ({ 
-          name: c.name, 
-          role: c.role || c.user?.role, 
-          userType: c.userType || c.user?.userType,
-          hasProfile: c.hasProfile,
-          user: c.user ? { role: c.user.role, userType: c.user.userType } : null
-        }))
-      });
+      const caregiversList = res?.data || res || [];
+      console.log('🔍 Caregivers list:', caregiversList);
       
-      // Backend returns User IDs for messaging compatibility
-      const transformedCaregivers = caregiversList.map(caregiver => {
-        console.log('🔍 Processing caregiver:', { id: caregiver._id, name: caregiver.name, userId: caregiver.user?._id });
-        return {
-          _id: caregiver._id || caregiver.id, // This is now User ID from backend
-          id: caregiver._id || caregiver.id,  // This is now User ID from backend
-          name: caregiver.name || 'Caregiver',
-          rating: caregiver.rating || 0,
-          hourlyRate: caregiver.hourlyRate || 300,
-          experience: caregiver.experience || '',
-          skills: caregiver.skills || [],
-          location: caregiver.location || caregiver.address || '',
-          avatar: caregiver.avatar || caregiver.profileImage,
-          ageCareRanges: caregiver.ageCareRanges || [],
-          bio: caregiver.bio || '',
-          hasProfile: caregiver.hasProfile || false,
-          createdAt: caregiver.createdAt || caregiver.registeredAt || new Date().toISOString(),
-          registeredAt: caregiver.registeredAt || caregiver.createdAt || new Date().toISOString()
-        };
-      });
+      if (!Array.isArray(caregiversList)) {
+        console.warn('⚠️ Caregivers response is not an array:', typeof caregiversList);
+        setCaregivers([]);
+        return;
+      }
       
-      console.log('🎯 Transformed caregivers:', {
-        total: transformedCaregivers.length,
-        featured: transformedCaregivers.slice(0, 3).map(c => ({ 
-          name: c.name, 
-          createdAt: c.createdAt,
-          hasProfile: c.hasProfile 
-        }))
-      });
+      const transformedCaregivers = caregiversList.map(caregiver => ({
+        id: caregiver.id,
+        _id: caregiver.id,
+        name: caregiver.name || 'Caregiver',
+        rating: caregiver.rating || 4.5,
+        hourlyRate: caregiver.hourly_rate || 300,
+        experience: caregiver.experience || '2+ years',
+        skills: caregiver.skills || ['Childcare', 'First Aid'],
+        location: caregiver.address || 'Cebu City',
+        avatar: caregiver.profile_image,
+        bio: caregiver.bio || 'Experienced caregiver',
+        createdAt: caregiver.created_at || new Date().toISOString()
+      }));
       
+      console.log('✅ Transformed caregivers:', transformedCaregivers.length);
       setCaregivers(transformedCaregivers);
-      console.log('📊 Total caregivers set for HomeTab:', transformedCaregivers.length);
     } catch (error) {
-      console.error('❌ Error fetching caregivers:', error?.message || error);
+      console.error('❌ Error fetching caregivers:', error);
       setCaregivers([]);
     }
   }, [user?.id]);
@@ -146,28 +137,33 @@ export const useParentDashboard = () => {
 
     try {
       console.log('📅 Fetching bookings for parent:', user?.id);
-      const res = await apiService.bookings.getMy();
-      console.log('📅 Bookings API response:', res);
+      
+      // Import bookingService dynamically to avoid circular imports
+      const { default: bookingService } = await import('../services/bookingService');
+      const bookingsList = await bookingService.getBookings();
+      
+      console.log('📅 Bookings from service:', bookingsList);
 
-      const list = Array.isArray(res?.bookings) ? res.bookings : res?.data?.bookings || [];
-
-      const normalized = list.map((booking, idx) => ({
-        id: booking._id || booking.id || idx + 1,
-        _id: booking._id || booking.id,
-        caregiver: booking.caregiver || booking.caregiverId,
-        caregiverName: booking.caregiver?.name || booking.caregiverName || 'Caregiver',
+      const normalized = bookingsList.map((booking, idx) => ({
+        id: booking.id || booking._id || idx + 1,
+        _id: booking.id || booking._id,
+        caregiver: booking.caregiverId || booking.caregiver,
+        caregiverName: booking.caregiverId?.name || booking.caregiver?.name || booking.caregiver_name || 'Caregiver',
         date: booking.date || booking.startDate || new Date().toISOString(),
-        startTime: booking.startTime,
-        endTime: booking.endTime,
-        time: booking.time || (booking.startTime && booking.endTime ? `${booking.startTime} - ${booking.endTime}` : ''),
+        startTime: booking.startTime || booking.start_time,
+        endTime: booking.endTime || booking.end_time,
+        time: booking.time || booking.time_display || (booking.startTime && booking.endTime ? `${booking.startTime} - ${booking.endTime}` : ''),
         status: booking.status || 'pending',
-        children: booking.children || [],
+        children: booking.selectedChildren || booking.selected_children || booking.children || [],
         address: booking.address || booking.location,
         location: formatAddress(booking.location || booking.address),
-        totalCost: booking.totalCost || booking.amount,
-        hourlyRate: booking.hourlyRate || booking.rate || 300,
-        createdAt: booking.createdAt || new Date().toISOString(),
-        updatedAt: booking.updatedAt || new Date().toISOString()
+        totalCost: booking.totalAmount || booking.total_amount || booking.totalCost || booking.amount,
+        hourlyRate: booking.hourlyRate || booking.hourly_rate || booking.rate || 300,
+        contactPhone: booking.contactPhone || booking.contact_phone,
+        specialInstructions: booking.specialInstructions || booking.special_instructions,
+        emergencyContact: booking.emergencyContact || booking.emergency_contact,
+        createdAt: booking.created_at || booking.createdAt || new Date().toISOString(),
+        updatedAt: booking.updated_at || booking.updatedAt || new Date().toISOString()
       }));
 
       console.log('📅 Normalized bookings:', normalized);
@@ -195,24 +191,26 @@ export const useParentDashboard = () => {
       const res = await apiService.children.getMy();
       console.log('👶 Children API response:', res);
 
-      const list = res?.data?.children || res?.children || [];
+      // Handle different response structures
+      const list = res?.data || res?.children || [];
 
       const normalized = list.map((child, idx) => ({
-        id: child._id || child.id || idx + 1,
-        _id: child._id || child.id,
+        id: child.id || child._id || idx + 1,
+        _id: child.id || child._id,
         name: child.name || child.firstName || 'Child',
         firstName: child.firstName || child.name,
         lastName: child.lastName || '',
         middleInitial: child.middleInitial || '',
-        age: child.age || child.birthDate ? new Date().getFullYear() - new Date(child.birthDate).getFullYear() : 0,
-        birthDate: child.birthDate || child.dateOfBirth,
+        age: child.age || (child.birthdate ? new Date().getFullYear() - new Date(child.birthdate).getFullYear() : 0),
+        birthDate: child.birthdate || child.dateOfBirth,
         gender: child.gender || 'Not specified',
         specialNeeds: child.specialNeeds || [],
-        allergies: child.allergies || [],
+        allergies: child.allergies || '',
         notes: child.notes || '',
+        preferences: child.notes || '',
         profileImage: child.profileImage || child.avatar,
-        createdAt: child.createdAt || new Date().toISOString(),
-        updatedAt: child.updatedAt || new Date().toISOString()
+        createdAt: child.created_at || child.createdAt || new Date().toISOString(),
+        updatedAt: child.updated_at || child.updatedAt || new Date().toISOString()
       }));
 
       console.log('👶 Normalized children:', normalized);
@@ -227,21 +225,31 @@ export const useParentDashboard = () => {
         stack: error?.stack
       });
       setChildren([]);
-      // Re-throw to let error handler process it
-      throw error;
     }
   }, [user?.id, user?.role]);
 
-  // Load data on focus
-  useFocusEffect(
-    useCallback(() => {
-      loadProfile();
+  // Load data only once on mount
+  useEffect(() => {
+    if (!dataLoaded && user?.id) {
+      Promise.all([
+        loadProfile(),
+        fetchJobs(),
+        fetchCaregivers(),
+        fetchBookings(),
+        fetchChildren()
+      ]).finally(() => setDataLoaded(true));
+    }
+  }, [user?.id, dataLoaded]);
+
+  // Refresh data when tabs become active
+  useEffect(() => {
+    if (activeTab === 'jobs' && user?.id) {
       fetchJobs();
-      fetchCaregivers();
+    }
+    if (activeTab === 'bookings' && user?.id) {
       fetchBookings();
-      fetchChildren();
-    }, [loadProfile, fetchJobs, fetchCaregivers, fetchBookings, fetchChildren])
-  );
+    }
+  }, [activeTab, fetchJobs, fetchBookings, user?.id]);
 
   return {
     activeTab,
@@ -257,6 +265,7 @@ export const useParentDashboard = () => {
     fetchJobs,
     fetchCaregivers,
     fetchBookings,
-    fetchChildren
+    fetchChildren,
+    dataLoaded
   };
 };

@@ -140,20 +140,18 @@ class JobService {
   // Modern jobs API methods
   async getAllJobs(filters = {}) {
     try {
-      const queryParams = new URLSearchParams();
+      // Import supabaseService dynamically to avoid circular imports
+      const { supabaseService } = await import('./supabaseService');
       
-      Object.keys(filters).forEach(key => {
-        if (filters[key] !== undefined && filters[key] !== null && filters[key] !== '') {
-          queryParams.append(key, filters[key]);
-        }
-      });
-
-      const endpoint = queryParams.toString() ? `?${queryParams.toString()}` : '';
-      const response = await this.makeJobRequest(endpoint);
-      return response.data;
+      console.log('📋 Fetching all jobs with filters:', filters);
+      const jobs = await supabaseService.getJobs(filters);
+      
+      console.log('📋 JobService - Fetched all jobs:', jobs?.length || 0);
+      return jobs || [];
     } catch (error) {
       logger.error('Get all jobs failed:', error);
-      throw new Error('Failed to load jobs');
+      console.error('❌ Get all jobs error details:', error.message);
+      throw new Error(error.message || 'Failed to load jobs');
     }
   }
 
@@ -169,14 +167,33 @@ class JobService {
 
   async createJobPost(jobData) {
     try {
-      const response = await this.makeJobRequest('/', {
-        method: 'POST',
-        body: jobData,
-      });
-      return response;
+      // Import supabaseService dynamically to avoid circular imports
+      const { supabaseService } = await import('./supabaseService');
+      const { supabase } = await import('../config/supabase');
+      
+      const { data: { user }, error } = await supabase.auth.getUser();
+      if (error || !user) {
+        throw new Error('User not authenticated');
+      }
+      
+      // Get user profile to get name
+      const profile = await supabaseService.getProfile(user.id);
+      
+      const jobPayload = {
+        ...jobData,
+        client_id: user.id,
+        client_name: profile?.name || user.email || 'Unknown Client'
+      };
+      
+      console.log('📝 Creating job with data:', jobPayload);
+      const result = await supabaseService.createJob(jobPayload);
+      console.log('✅ Job created successfully:', result);
+      
+      return { data: result };
     } catch (error) {
       logger.error('Create job post failed:', error);
-      throw error;
+      console.error('❌ Job creation error details:', error.message);
+      throw new Error(error.message || 'Failed to create job');
     }
   }
 
@@ -207,11 +224,24 @@ class JobService {
 
   async getMyJobs(page = 1, limit = 10) {
     try {
-      const response = await this.makeJobRequest(`/my-jobs?page=${page}&limit=${limit}`);
-      return response.data;
+      // Import supabaseService dynamically to avoid circular imports
+      const { supabaseService } = await import('./supabaseService');
+      const { supabase } = await import('../config/supabase');
+      
+      const { data: { user }, error } = await supabase.auth.getUser();
+      if (error || !user) {
+        throw new Error('User not authenticated');
+      }
+      
+      console.log('📋 Fetching jobs for user:', user.id);
+      const jobs = await supabaseService.getMyJobs(user.id);
+      
+      console.log('📋 JobService - Fetched jobs:', jobs?.length || 0);
+      return { jobs: jobs || [] };
     } catch (error) {
       logger.error('Get my jobs failed:', error);
-      throw new Error('Failed to load your jobs');
+      console.error('❌ Get my jobs error details:', error.message);
+      throw new Error(error.message || 'Failed to load your jobs');
     }
   }
 

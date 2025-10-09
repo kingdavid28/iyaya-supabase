@@ -34,7 +34,7 @@ import { navigateToUserDashboard } from '../utils/navigationUtils';
 const CaregiverAuth = ({ navigation }) => {
   const [mode, setMode] = useState('login');
   const { dispatch } = useApp();
-  const { user: authUser, login, signup, verifyEmailToken } = useAuth();
+  const { user: authUser, signIn, signUp, verifyEmailToken } = useAuth();
   const { formData, formErrors, handleChange, validateForm: validateCurrentForm, resetForm } = useAuthForm();
   const { handleSubmit: handleAuthSubmit, isSubmitting } = useAuthSubmit(navigation);
   const [showPassword, setShowPassword] = useState(false);
@@ -67,6 +67,18 @@ const CaregiverAuth = ({ navigation }) => {
     }, [authUser, navigation])
   );
 
+  // Calculate age from birth date
+  const calculateAge = (birthDate) => {
+    const today = new Date();
+    const birth = new Date(birthDate);
+    let age = today.getFullYear() - birth.getFullYear();
+    const monthDiff = today.getMonth() - birth.getMonth();
+    if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birth.getDate())) {
+      age--;
+    }
+    return age;
+  };
+
   const handleFormSubmit = async () => {
     try {
       Keyboard.dismiss();
@@ -83,32 +95,48 @@ const CaregiverAuth = ({ navigation }) => {
     
     const result = await execute(async () => {
       if (mode === 'signup') {
+        // Validate age requirement
+        if (birthDate) {
+          const age = calculateAge(birthDate);
+          if (age < 18) {
+            Alert.alert(
+              'Age Requirement',
+              'You must be at least 18 years old to create an account.',
+              [{ text: 'OK' }]
+            );
+            return;
+          }
+        }
+        
         // Proceed with signup - backend will handle duplicate emails
         console.log('🚀 Proceeding with signup for:', email, 'as caregiver');
         
-        const result = await signup({ 
-          email, 
-          password, 
+        const userData = {
           name: fullName,
           firstName,
           lastName,
           middleInitial,
           birthDate,
-          phone, 
-          role: 'caregiver' 
-        });
+          phone,
+          role: 'caregiver'
+        };
+        const result = await signUp(email, password, userData);
         
-        // Show verification message only if verification is required
-        if (result?.requiresVerification) {
-          Alert.alert(
-            "Account Created!", 
-            "Please check your email for a verification link. Click the link to activate your account and access the dashboard.",
-            [{ text: "OK" }]
-          );
-        } else if (result?.success && result?.user?.role) {
-          // If no verification required, navigate immediately
-          navigateToUserDashboard(navigation, result.user.role);
-        }
+        // Show email verification notification
+        Alert.alert(
+          'Check Your Email',
+          `We've sent a verification link to ${email}. Please check your email and click the link to verify your account before signing in.`,
+          [
+            {
+              text: 'OK',
+              onPress: () => {
+                // Switch to login mode after signup
+                setMode('login');
+                resetForm();
+              }
+            }
+          ]
+        );
         
         return result;
       } else if (mode === 'reset') {
@@ -117,7 +145,7 @@ const CaregiverAuth = ({ navigation }) => {
         setMode('login');
         return result;
       } else {
-        const result = await login(email, password);
+        const result = await signIn(email, password);
         
         // Don't override role - use the role from login response
         
@@ -256,7 +284,11 @@ const CaregiverAuth = ({ navigation }) => {
                   <CustomDateTimePicker
                     label="Birth Date *"
                     value={formData.birthDate ? new Date(formData.birthDate) : null}
-                    onDateChange={(date) => handleChange('birthDate', date.toISOString().split('T')[0])}
+                    onDateChange={(date) => {
+                      if (date && !isNaN(date.getTime())) {
+                        handleChange('birthDate', date.toISOString().split('T')[0])
+                      }
+                    }}
                     mode="date"
                     placeholder="Select birth date"
                     maximumDate={new Date()}

@@ -9,7 +9,9 @@ import {
   ScrollView, 
   Alert,
   ActivityIndicator,
-  Keyboard
+  Keyboard,
+  KeyboardAvoidingView,
+  Platform
 } from 'react-native';
 import { 
   X, 
@@ -24,6 +26,7 @@ import {
 } from 'lucide-react-native';
 import jobService from '../../../services/jobService';
 import { useAuth } from '../../../contexts/AuthContext';
+import { getCurrentDeviceLocation, searchLocation } from '../../../utils/locationUtils';
 
 import CustomDateTimePicker from '../../../shared/ui/inputs/DateTimePicker';
 import TimePicker from '../../../shared/ui/inputs/TimePicker';
@@ -44,6 +47,11 @@ const JobPostingModal = ({ visible, onClose, onJobPosted }) => {
   const [errors, setErrors] = useState({});
   const [showStartPicker, setShowStartPicker] = useState(false);
   const [showEndPicker, setShowEndPicker] = useState(false);
+  const [locationLoading, setLocationLoading] = useState(false);
+  const [locationSearchVisible, setLocationSearchVisible] = useState(false);
+  const [locationSearchText, setLocationSearchText] = useState('');
+  const [locationSearchResults, setLocationSearchResults] = useState([]);
+  const [locationSearchLoading, setLocationSearchLoading] = useState(false);
   
   const [jobData, setJobData] = useState({
     title: '',
@@ -143,6 +151,46 @@ const JobPostingModal = ({ visible, onClose, onJobPosted }) => {
     }));
   };
 
+  const getCurrentLocation = async () => {
+    try {
+      setLocationLoading(true);
+      const locationData = await getCurrentDeviceLocation();
+      
+      if (locationData && locationData.address) {
+        const formattedAddress = `${locationData.address.street || ''} ${locationData.address.city || ''}, ${locationData.address.province || ''}`;
+        setJobData({ ...jobData, location: formattedAddress.trim() });
+      }
+    } catch (error) {
+      Alert.alert('Location Error', error.message || 'Failed to get current location.');
+    } finally {
+      setLocationLoading(false);
+    }
+  };
+
+  const handleLocationSearch = async () => {
+    if (!locationSearchText.trim()) return;
+    
+    try {
+      setLocationSearchLoading(true);
+      const result = await searchLocation(locationSearchText);
+      setLocationSearchResults([result]);
+    } catch (error) {
+      Alert.alert('Search Failed', error.message || 'Failed to search location.');
+    } finally {
+      setLocationSearchLoading(false);
+    }
+  };
+
+  const selectLocationFromSearch = (location) => {
+    if (location && location.address) {
+      const formattedAddress = `${location.address.street || ''} ${location.address.city || ''}, ${location.address.province || ''}`;
+      setJobData({ ...jobData, location: formattedAddress.trim() });
+      setLocationSearchVisible(false);
+      setLocationSearchText('');
+      setLocationSearchResults([]);
+    }
+  };
+
   const handleSubmit = async () => {
     try {
       setLoading(true);
@@ -235,6 +283,26 @@ const JobPostingModal = ({ visible, onClose, onJobPosted }) => {
             
             <View>
               <Text style={styles.label}>Location *</Text>
+              <View style={styles.locationSection}>
+                <TouchableOpacity
+                  style={styles.gpsButton}
+                  onPress={getCurrentLocation}
+                  disabled={locationLoading}
+                >
+                  <MapPin size={16} color="#4F46E5" />
+                  <Text style={styles.gpsButtonText}>
+                    {locationLoading ? 'Getting Location...' : 'Use GPS'}
+                  </Text>
+                </TouchableOpacity>
+                
+                <TouchableOpacity
+                  style={styles.searchButton}
+                  onPress={() => setLocationSearchVisible(true)}
+                >
+                  <Text style={styles.searchButtonText}>Search</Text>
+                </TouchableOpacity>
+              </View>
+              
               <View style={[styles.inputGroup, errors.location && styles.inputError]}> 
                 <MapPin size={20} color="#6B7280" style={styles.inputIcon} />
                 <TextInput
@@ -404,7 +472,12 @@ const JobPostingModal = ({ visible, onClose, onJobPosted }) => {
       onRequestClose={onClose}
     >
       <View style={styles.modalOverlay}>
-        <View style={styles.modalContainer}>
+        <KeyboardAvoidingView 
+          style={{ flex: 1 }}
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          keyboardVerticalOffset={Platform.OS === 'ios' ? 100 : 0}
+        >
+          <View style={styles.modalContainer}>
           <View style={styles.modalHeader}>
             <Text style={styles.modalTitle}>
               {step === 1 ? 'Job Details' : step === 2 ? 'Schedule' : 'Review & Post'}
@@ -471,8 +544,66 @@ const JobPostingModal = ({ visible, onClose, onJobPosted }) => {
               </TouchableOpacity>
             </View>
           </View>
-        </View>
+          </View>
+        </KeyboardAvoidingView>
       </View>
+      
+      {/* Location Search Modal */}
+      <Modal
+        visible={locationSearchVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setLocationSearchVisible(false)}
+      >
+        <View style={styles.searchModalOverlay}>
+          <View style={styles.searchModalContainer}>
+            <View style={styles.searchModalHeader}>
+              <Text style={styles.searchModalTitle}>Search Location</Text>
+              <TouchableOpacity onPress={() => setLocationSearchVisible(false)}>
+                <X size={24} color="#6b7280" />
+              </TouchableOpacity>
+            </View>
+            
+            <View style={styles.searchModalContent}>
+              <TextInput
+                value={locationSearchText}
+                onChangeText={setLocationSearchText}
+                style={styles.searchInput}
+                placeholder="Enter address or location"
+                onSubmitEditing={handleLocationSearch}
+                returnKeyType="search"
+              />
+              
+              <TouchableOpacity
+                style={styles.searchSubmitButton}
+                onPress={handleLocationSearch}
+                disabled={locationSearchLoading}
+              >
+                <Text style={styles.searchSubmitButtonText}>
+                  {locationSearchLoading ? 'Searching...' : 'Search'}
+                </Text>
+              </TouchableOpacity>
+              
+              {locationSearchResults.length > 0 && (
+                <View style={styles.searchResults}>
+                  {locationSearchResults.map((result, index) => (
+                    <TouchableOpacity
+                      key={index}
+                      style={styles.searchResultItem}
+                      onPress={() => selectLocationFromSearch(result)}
+                    >
+                      <MapPin size={20} color="#4F46E5" />
+                      <Text style={styles.searchResultText}>
+                        {result.address.formatted}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              )}
+            </View>
+          </View>
+        </View>
+      </Modal>
     </Modal>
   );
 };
@@ -720,6 +851,105 @@ const styles = StyleSheet.create({
   },
   skillChipTextSelected: {
     color: '#fff',
+  },
+  locationSection: {
+    flexDirection: 'row',
+    gap: 8,
+    marginBottom: 12,
+  },
+  gpsButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#EEF2FF',
+    borderRadius: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    flex: 1,
+  },
+  gpsButtonText: {
+    color: '#4F46E5',
+    fontSize: 14,
+    fontWeight: '500',
+    marginLeft: 4,
+  },
+  searchButton: {
+    backgroundColor: '#F3F4F6',
+    borderRadius: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    flex: 1,
+  },
+  searchButtonText: {
+    color: '#374151',
+    fontSize: 14,
+    fontWeight: '500',
+    textAlign: 'center',
+  },
+  searchModalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  searchModalContainer: {
+    backgroundColor: 'white',
+    borderRadius: 12,
+    width: '90%',
+    maxWidth: 400,
+    maxHeight: '80%',
+  },
+  searchModalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#E5E7EB',
+  },
+  searchModalTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#111827',
+  },
+  searchModalContent: {
+    padding: 16,
+  },
+  searchInput: {
+    borderWidth: 1,
+    borderColor: '#D1D5DB',
+    borderRadius: 8,
+    padding: 12,
+    fontSize: 16,
+    marginBottom: 12,
+  },
+  searchSubmitButton: {
+    backgroundColor: '#4F46E5',
+    borderRadius: 8,
+    padding: 12,
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  searchSubmitButtonText: {
+    color: 'white',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  searchResults: {
+    gap: 8,
+  },
+  searchResultItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    padding: 12,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    borderRadius: 8,
+    backgroundColor: '#F9FAFB',
+  },
+  searchResultText: {
+    flex: 1,
+    color: '#374151',
   },
 });
 

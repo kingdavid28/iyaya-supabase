@@ -8,7 +8,7 @@ import {
   StyleSheet,
   Alert
 } from 'react-native';
-import { getFirebaseDatabase, ref, onValue, push, set, query, orderByChild } from '../config/firebase';
+import { supabase } from '../config/supabase';
 import { StarRatingInput, StarRatingDisplay } from 'react-native-star-rating-widget';
 
 const ReviewItem = ({ review }) => (
@@ -22,7 +22,7 @@ const ReviewItem = ({ review }) => (
       <Text style={styles.comment}>{review.comment}</Text>
     )}
     <Text style={styles.timestamp}>
-      {new Date(review.timestamp).toLocaleDateString()}
+      {new Date(review.created_at).toLocaleDateString()}
     </Text>
   </View>
 );
@@ -37,33 +37,21 @@ const CaregiverReviewsScreen = ({ route }) => {
   // Fetch reviews
   useEffect(() => {
     const fetchReviews = async () => {
-      const database = await getFirebaseDatabase();
-      const reviewsRef = ref(database, `reviews/${caregiverId}`);
-      const reviewsQuery = query(reviewsRef, orderByChild('timestamp'));
+      try {
+        const { data, error } = await supabase
+          .from('reviews')
+          .select('*')
+          .eq('caregiver_id', caregiverId)
+          .order('created_at', { ascending: false });
 
-      const unsubscribe = onValue(reviewsQuery, (snapshot) => {
-        const reviewsData = [];
-        snapshot.forEach((childSnapshot) => {
-          reviewsData.push({
-            id: childSnapshot.key,
-            parentId: childSnapshot.val().parentId,
-            rating: childSnapshot.val().rating,
-            comment: childSnapshot.val().comment,
-            timestamp: childSnapshot.val().timestamp
-          });
-        });
-        setReviews(reviewsData);
-      });
-
-      return unsubscribe;
+        if (error) throw error;
+        setReviews(data || []);
+      } catch (error) {
+        console.error('Error fetching reviews:', error);
+      }
     };
 
-    let unsubscribe;
-    fetchReviews().then((unsub) => {
-      unsubscribe = unsub;
-    });
-
-    return () => unsubscribe && unsubscribe();
+    fetchReviews();
   }, [caregiverId]);
 
   const submitReview = async () => {
@@ -73,18 +61,29 @@ const CaregiverReviewsScreen = ({ route }) => {
     }
 
     try {
-      const database = await getFirebaseDatabase();
-      const reviewRef = push(ref(database, `reviews/${caregiverId}`));
-      await set(reviewRef, {
-        parentId: userId,
-        rating: rating,
-        comment: comment,
-        timestamp: Date.now()
-      });
+      const { error } = await supabase
+        .from('reviews')
+        .insert({
+          caregiver_id: caregiverId,
+          parent_id: userId,
+          rating: rating,
+          comment: comment
+        });
+
+      if (error) throw error;
+
       setRating(0);
       setComment('');
       setShowReviewForm(false);
       Alert.alert('Success', 'Review submitted successfully');
+      
+      // Refresh reviews
+      const { data } = await supabase
+        .from('reviews')
+        .select('*')
+        .eq('caregiver_id', caregiverId)
+        .order('created_at', { ascending: false });
+      setReviews(data || []);
     } catch (error) {
       Alert.alert('Error', 'Failed to submit review');
       console.error('Error submitting review:', error);

@@ -6,7 +6,7 @@ import {
     off,
     ref,
     getFirebaseDatabase
-  } from '../config/firebase';
+  } from '../config/supabase';
 
 /**
  * Safely manages a Firebase connection reference

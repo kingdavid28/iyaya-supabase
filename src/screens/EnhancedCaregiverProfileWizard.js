@@ -27,7 +27,6 @@ import {
   Badge,
   IconButton,
   Switch,
-  List,
   Menu,
 } from 'react-native-paper';
 import { Ionicons } from '@expo/vector-icons';
@@ -40,12 +39,13 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import CustomDateTimePicker from '../shared/ui/inputs/DateTimePicker';
 import TimePicker from '../shared/ui/inputs/TimePicker';
 import { useAuth } from '../contexts/AuthContext';
-import { jobsAPI, applicationsAPI, bookingsAPI, caregiversAPI, authAPI, uploadsAPI, getCurrentAPIURL } from "../config/api";
 import { VALIDATION, CURRENCY, FEATURES } from '../config/constants';
-import { getCurrentSocketURL } from '../config/api';
 import { styles } from './styles/EnhancedCaregiverProfileWizard.styles';
 import { getCurrentDeviceLocation, searchLocation, validateLocation, formatLocationForDisplay } from '../utils/locationUtils';
-import { compressImage, uploadWithRetry, handleUploadError } from '../utils/imageUploadUtils';
+import { handleUploadError } from '../utils/imageUploadUtils';
+import { supabase } from '../config/supabase';
+import { supabaseService } from '../services/supabaseService';
+import imageUploadService from '../services/imageUploadService';
 
 const { width } = Dimensions.get('window');
 
@@ -138,6 +138,13 @@ const EnhancedCaregiverProfileWizard = ({ navigation, route }) => {
   const [locationSearchResults, setLocationSearchResults] = useState([]);
   const [locationSearchLoading, setLocationSearchLoading] = useState(false);
   
+  // Additional state variables
+  const [bioMenuVisible, setBioMenuVisible] = useState(false);
+  const [experienceMenuVisible, setExperienceMenuVisible] = useState(false);
+  const [profileImageError, setProfileImageError] = useState(false);
+  const [locationLoading, setLocationLoading] = useState(false);
+  const [documentUploading, setDocumentUploading] = useState(false);
+
   const autoSaveTimer = useRef(null);
   const scrollRef = useRef(null);
 
@@ -224,9 +231,25 @@ const EnhancedCaregiverProfileWizard = ({ navigation, route }) => {
     certExpiryDate: null,
   });
 
-  const [locationLoading, setLocationLoading] = useState(false);
-  const [documentUploading, setDocumentUploading] = useState(false);
-  const [profileImageError, setProfileImageError] = useState(false);
+
+
+// Enhanced profile image upload using Supabase
+const handleProfileImageUpload = async () => {
+  try {
+    setUploading(true);
+    const result = await imageUploadService.pickAndUploadProfileImage(user.id);
+    
+    if (result?.url) {
+      updateFormData('profileImage', result.url);
+      showSnackbar('Profile image uploaded successfully');
+    }
+  } catch (error) {
+    console.error('Profile image upload failed:', error);
+    Alert.alert('Upload Failed', error.message || 'Failed to upload profile image');
+  } finally {
+    setUploading(false);
+  }
+};
 
   // Enhanced validation with childcare-specific rules
   const validateField = (field, value) => {
@@ -274,6 +297,32 @@ const EnhancedCaregiverProfileWizard = ({ navigation, route }) => {
           delete newErrors.emergencyContacts;
         }
         break;
+        
+      case 'phone':
+        if (!value || value.trim() === '' || value === '+63') {
+          newErrors.phone = 'Please enter a valid phone number';
+        } else {
+          delete newErrors.phone;
+        }
+        break;
+        
+      case 'bio':
+        if (!value || value.length < 20) {
+          newErrors.bio = 'Please provide a bio with at least 20 characters';
+        } else {
+          delete newErrors.bio;
+        }
+        break;
+        
+      case 'hourlyRate': {
+        const rate = parseFloat(value);
+        if (isNaN(rate) || rate < VALIDATION.HOURLY_RATE_MIN || rate > VALIDATION.HOURLY_RATE_MAX) {
+          newErrors.hourlyRate = `Hourly rate must be between ${VALIDATION.HOURLY_RATE_MIN} and ${VALIDATION.HOURLY_RATE_MAX}`;
+        } else {
+          delete newErrors.hourlyRate;
+        }
+        break;
+      }
     }
     
     setErrors(newErrors);
@@ -297,7 +346,7 @@ const EnhancedCaregiverProfileWizard = ({ navigation, route }) => {
     validateField(field, value);
   };
 
-  // Optimized portfolio image upload
+  // Optimized portfolio image upload using Supabase
   const handlePortfolioImageUpload = async () => {
     try {
       if (formData.portfolio.images.length >= VALIDATION.PORTFOLIO_MAX_IMAGES) {
@@ -305,63 +354,28 @@ const EnhancedCaregiverProfileWizard = ({ navigation, route }) => {
         return;
       }
 
-      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-      if (status !== 'granted') {
-        Alert.alert('Permission needed', 'Please grant camera roll permissions to upload photos.');
-        return;
-      }
-
-      const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ['images'],
-        allowsEditing: true,
-        aspect: [4, 3],
-        quality: 0.8,
-        base64: false, // Don't get base64 initially
-      });
-
-      if (!result.canceled && result.assets[0]) {
-        setUploading(true);
-        const asset = result.assets[0];
+      setUploading(true);
+      const result = await imageUploadService.pickAndUploadProfileImage(user.id);
+      
+      if (result?.url) {
+        const newImage = {
+          url: result.url,
+          caption: tempInputs.portfolioCaption || '',
+          category: 'other',
+          uploadedAt: new Date(),
+        };
         
-        console.log('Portfolio image upload started');
+        updateFormData('portfolio', {
+          ...formData.portfolio,
+          images: [...formData.portfolio.images, newImage]
+        });
         
-        // Compress image for portfolio
-        const compressedImage = await compressImage(asset.uri, 0.8, 800, 600);
-        
-        const mimeType = 'image/jpeg';
-        const dataUrl = `data:${mimeType};base64,${compressedImage.base64}`;
-        
-        // Upload with retry logic
-        const uploadFunction = () => authAPI.uploadProfileImageBase64(dataUrl, mimeType);
-        const response = await uploadWithRetry(uploadFunction, 3, 2000);
-        
-        const imageUrl = response?.data?.url || response?.url;
-        
-        if (imageUrl) {
-          const baseUrl = getCurrentSocketURL();
-          const absoluteUrl = imageUrl.startsWith('/') 
-            ? `${baseUrl}${imageUrl}` 
-            : imageUrl;
-            
-          const newImage = {
-            url: absoluteUrl,
-            caption: tempInputs.portfolioCaption || '',
-            category: 'other',
-            uploadedAt: new Date(),
-          };
-          
-          updateFormData('portfolio', {
-            ...formData.portfolio,
-            images: [...formData.portfolio.images, newImage]
-          });
-          
-          setTempInputs(prev => ({ ...prev, portfolioCaption: '' }));
-          showSnackbar('Portfolio image added successfully');
-        }
+        setTempInputs(prev => ({ ...prev, portfolioCaption: '' }));
+        showSnackbar('Portfolio image added successfully');
       }
     } catch (error) {
       console.error('Portfolio image upload failed:', error);
-      handleUploadError(error);
+      Alert.alert('Upload Failed', error.message || 'Failed to upload portfolio image');
     } finally {
       setUploading(false);
     }
@@ -463,7 +477,7 @@ const EnhancedCaregiverProfileWizard = ({ navigation, route }) => {
     }
   };
 
-  // Document upload functionality
+  // Document upload functionality using Supabase
   const handleDocumentUpload = async (documentType) => {
     try {
       setDocumentUploading(true);
@@ -488,22 +502,14 @@ const EnhancedCaregiverProfileWizard = ({ navigation, route }) => {
         });
 
         console.log('📄 Uploading document:', documentType.label);
-        const response = await uploadsAPI.uploadDocument({
-          documentBase64: base64,
-          mimeType: asset.mimeType,
-          documentType: documentType.key,
-          folder: 'documents',
-          fileName: asset.name
-        });
-        console.log('📄 Upload response:', response);
-        const documentUrl = response?.url;
+        const response = await supabaseService.uploadProfileImage(user.id, base64);
         
-        if (documentUrl) {
+        if (response?.url) {
           const newDocument = {
             id: Date.now().toString(),
             type: documentType.key,
             label: documentType.label,
-            url: documentUrl,
+            url: response.url,
             fileName: asset.name,
             uploadedAt: new Date(),
             verified: false,
@@ -516,18 +522,13 @@ const EnhancedCaregiverProfileWizard = ({ navigation, route }) => {
       }
     } catch (error) {
       console.error('Document upload failed:', error);
-      console.error('Error details:', {
-        message: error.message,
-        response: error.response?.data,
-        status: error.response?.status
-      });
       Alert.alert('Upload Failed', error.message || 'Failed to upload document. Please try again.');
     } finally {
       setDocumentUploading(false);
     }
   };
 
-  // Certificate upload with file attachment
+  // Certificate upload with file attachment using Supabase
   const addCertificationWithFile = async () => {
     const certName = tempInputs.newCertification.trim();
     if (!certName) {
@@ -540,11 +541,7 @@ const EnhancedCaregiverProfileWizard = ({ navigation, route }) => {
       
       if (tempInputs.certificateFile) {
         setUploading(true);
-        const formData = new FormData();
-        formData.append('certificate', tempInputs.certificateFile);
-        formData.append('folder', 'certificates');
-        
-        const response = await uploadsAPI.uploadDocument(formData);
+        const response = await supabaseService.uploadProfileImage(user.id, tempInputs.certificateFile);
         certificateUrl = response?.url;
       }
 
@@ -899,7 +896,7 @@ const EnhancedCaregiverProfileWizard = ({ navigation, route }) => {
         clearTimeout(autoSaveTimer.current);
       }
     };
-  }, [formData, currentStep, user?.id]); // Removed 'touched' dependency
+  }, [formData, currentStep, user?.id, touched]);
 
   // Reset profile image error when image URL changes
   useEffect(() => {
@@ -911,13 +908,15 @@ const EnhancedCaregiverProfileWizard = ({ navigation, route }) => {
     setSnackbarVisible(true);
   };
 
+  // Normalize certifications on component mount
   useEffect(() => {
-  if (formData.certifications.some(cert => typeof cert === 'object')) {
-    const stringCerts = formData.certifications
-      .filter(cert => typeof cert === 'string');
-    updateFormData('certifications', stringCerts);
-  }
-}, []);
+    if (formData.certifications.some(cert => typeof cert === 'object')) {
+      const stringCerts = formData.certifications
+        .filter(cert => cert && (typeof cert === 'string' || cert.name))
+        .map(cert => typeof cert === 'string' ? cert : cert.name);
+      updateFormData('certifications', stringCerts);
+    }
+  }, []);
 
   const validateCurrentStep = () => {
     const step = ENHANCED_STEPS[currentStep];
@@ -942,16 +941,42 @@ const EnhancedCaregiverProfileWizard = ({ navigation, route }) => {
         }
         break;
       case 'ageCare':
-        // Skip validation for ageCare step to allow progression
-        isValid = true;
+        isValid = formData.ageCareRanges && formData.ageCareRanges.length > 0;
+        if (!isValid) {
+          setErrors(prev => ({ ...prev, ageCareRanges: 'Please select at least one age range you can care for' }));
+        } else {
+          setErrors(prev => ({ ...prev, ageCareRanges: undefined }));
+        }
         break;
       case 'emergency':
-        // Skip validation for emergency step to allow progression
-        isValid = true;
+        isValid = formData.emergencyContacts && formData.emergencyContacts.length > 0;
+        if (!isValid) {
+          setErrors(prev => ({ ...prev, emergencyContacts: 'Please add at least 1 emergency contact' }));
+        } else {
+          setErrors(prev => ({ ...prev, emergencyContacts: undefined }));
+        }
         break;
-      case 'professional':
-        // Skip validation for professional step to allow progression
-        isValid = true;
+      case 'professional': {
+        const experienceValid = formData.experience.description && formData.experience.description.length >= 50;
+        const hourlyRateValid = formData.hourlyRate && parseFloat(formData.hourlyRate) >= 50 && parseFloat(formData.hourlyRate) <= 2000;
+        
+        if (!experienceValid) {
+          setErrors(prev => ({ ...prev, experienceDescription: 'Please provide at least 50 characters describing your experience' }));
+        }
+        if (!hourlyRateValid) {
+          setErrors(prev => ({ ...prev, hourlyRate: 'Hourly rate must be between 50 and 2000' }));
+        }
+        
+        isValid = experienceValid && hourlyRateValid;
+        break;
+      }
+      case 'skills':
+        isValid = formData.skills.length > 0;
+        if (!isValid) {
+          setErrors(prev => ({ ...prev, skills: 'Please add at least one skill' }));
+        } else {
+          setErrors(prev => ({ ...prev, skills: undefined }));
+        }
         break;
     }
     
@@ -964,6 +989,8 @@ const EnhancedCaregiverProfileWizard = ({ navigation, route }) => {
         setCurrentStep(currentStep + 1);
         scrollRef.current?.scrollTo({ y: 0, animated: true });
       }
+    } else {
+      Alert.alert('Validation Error', 'Please complete all required fields before proceeding.');
     }
   };
 
@@ -975,7 +1002,10 @@ const EnhancedCaregiverProfileWizard = ({ navigation, route }) => {
   };
 
   const submitProfile = async () => {
-    if (!validateCurrentStep()) return;
+    if (!validateCurrentStep()) {
+      Alert.alert('Validation Error', 'Please complete all required fields before submitting.');
+      return;
+    }
     
     try {
       setLoading(true);
@@ -988,10 +1018,9 @@ const EnhancedCaregiverProfileWizard = ({ navigation, route }) => {
       }
       
       // Normalize enums and required fields to match backend expectations
-  
-    const normalizedCertifications = formData.certifications
-  .filter(cert => cert && (typeof cert === 'string' || cert.name))
-  .map(cert => typeof cert === 'string' ? cert : cert.name);
+      const normalizedCertifications = formData.certifications
+        .filter(cert => cert && (typeof cert === 'string' || cert.name))
+        .map(cert => typeof cert === 'string' ? cert : cert.name);
 
       const normalizedAgeCareRanges = (formData.ageCareRanges || [])
         .map(v => (typeof v === 'string' ? v.trim().toUpperCase() : ''))
@@ -1007,22 +1036,36 @@ const EnhancedCaregiverProfileWizard = ({ navigation, route }) => {
         };
       });
 
-      const profileData = {
+      // Split data between users table and caregiver_profiles table
+      const userProfileData = {
         name: formData.name,
-        phone: formData.phone && formData.phone.trim() !== '+63' ? formData.phone : '+639123456789', // Valid default phone
+        phone: formData.phone && formData.phone.trim() !== '+63' ? formData.phone : '+639123456789',
         bio: formData.bio,
-        experience: (formData.experience.years || 0) * 12 + (formData.experience.months || 0), // Convert to total months
-        hourlyRate: parseFloat(formData.hourlyRate) || 0,
-        education: formData.education,
-        languages: formData.languages,
+        profile_image: formData.profileImage,
+        address: [formData.address.street, formData.address.city, formData.address.province].filter(Boolean).join(', '),
+        location: [formData.address.city, formData.address.province].filter(Boolean).join(', '),
+        role: 'caregiver',
+        hourly_rate: parseFloat(formData.hourlyRate) || 0,
+        skills: formData.skills,
+        experience: formData.experience.description || '',
+      };
+
+      const caregiverProfileData = {
+        user_id: user.id,
+        bio: formData.bio,
+        experience: formData.experience.description || '',
         skills: formData.skills,
         certifications: normalizedCertifications,
-        ageCareRanges: normalizedAgeCareRanges,
-        portfolio: formData.portfolio,
+        hourly_rate: parseFloat(formData.hourlyRate) || 0,
         availability: formData.availability,
-        emergencyContacts: formData.emergencyContacts,
-        profileImage: formData.profileImage,
-        imageUrl: formData.profileImage, // Also send as imageUrl for compatibility
+        background_check_status: formData.backgroundCheck?.requestBackgroundCheck ? 'requested' : 'pending',
+        // Store complex data structures as JSONB
+        age_care_ranges: normalizedAgeCareRanges,
+        emergency_contacts: formData.emergencyContacts,
+        portfolio: formData.portfolio,
+        documents: normalizedDocuments,
+        education: formData.education,
+        languages: formData.languages,
         address: {
           street: formData.address.street,
           city: formData.address.city,
@@ -1030,117 +1073,42 @@ const EnhancedCaregiverProfileWizard = ({ navigation, route }) => {
           zipCode: formData.address.zipCode,
           country: formData.address.country,
           coordinates: formData.address.coordinates
-        },
-        documents: normalizedDocuments,
+        }
       };
 
-      console.log('📤 FULL PROFILE DATA BEING SENT:', JSON.stringify(profileData, null, 2));
-      console.log('📤 Profile data summary:', {
-        isEdit,
-        dataKeys: Object.keys(profileData),
-        name: profileData.name,
-        bio: profileData.bio?.substring(0, 50) + '...',
-        skillsCount: profileData.skills?.length,
-        hourlyRate: profileData.hourlyRate,
-        hasEmergencyContacts: !!profileData.emergencyContacts,
-        emergencyContactsCount: profileData.emergencyContacts?.length,
-        hasDocuments: !!profileData.documents,
-        documentsCount: profileData.documents?.length,
-        hasAddress: !!profileData.address,
-        hasCertifications: !!profileData.certifications,
-        certificationsCount: profileData.certifications?.length
-      });
+      console.log('📤 USER PROFILE DATA:', JSON.stringify(userProfileData, null, 2));
+      console.log('📤 CAREGIVER PROFILE DATA:', JSON.stringify(caregiverProfileData, null, 2));
 
-      let result;
-      if (isEdit) {
-        console.log('🔄 Calling updateProfile API...');
-        // Get Firebase token directly
-        const { firebaseAuthService } = await import('../services/firebaseAuthService');
-        const currentUser = firebaseAuthService.getCurrentUser();
-        const token = currentUser ? await currentUser.getIdToken() : null;
-        
-        console.log('🔑 Auth token check:', {
-          hasUser: !!user,
-          hasToken: !!token,
-          tokenLength: token?.length,
-          userId: user?.id
-        });
-        
-        if (!token) {
-          throw new Error('No authentication token available');
-        }
-        
-        try {
-          // Use the correct caregiver endpoint
-          const baseURL = getCurrentAPIURL();
-          const caregiverEndpoint = `${baseURL}/caregivers/profile`;
-          
-          console.log('🎯 Using caregiver endpoint:', caregiverEndpoint);
-          
-          const response = await fetch(caregiverEndpoint, {
-            method: 'PUT',
-            headers: {
-              'Authorization': `Bearer ${token}`,
-              'Content-Type': 'application/json'
-            },
-            body: JSON.stringify(profileData),
-          });
-          
-          console.log('📡 Caregiver endpoint response:', response.status, response.statusText);
-          
-          const responseData = await response.json();
-          console.log('📥 Caregiver response data:', responseData);
-          
-          if (!response.ok) {
-            throw new Error(responseData.error || `Caregiver profile update failed: ${response.status}`);
-          }
-          
-          result = responseData;
-          console.log('✅ CAREGIVER PROFILE UPDATE SUCCESS:', JSON.stringify(result, null, 2));
-        } catch (updateError) {
-          console.error('❌ Caregiver profile update failed:', updateError);
-          throw updateError;
-        }
-      } else {
-        console.log('🆕 Creating new caregiver profile...');
-        // For new profiles, also use the caregiver endpoint
-        const baseURL = getCurrentAPIURL();
-        const caregiverEndpoint = `${baseURL}/caregivers/profile`;
-        
-        const { firebaseAuthService } = await import('../services/firebaseAuthService');
-        const currentUser = firebaseAuthService.getCurrentUser();
-        const token = currentUser ? await currentUser.getIdToken() : null;
-        
-        if (!token) {
-          throw new Error('No authentication token available');
-        }
-        
-        const response = await fetch(caregiverEndpoint, {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${token}`,
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify(profileData),
-        });
-        
-        const responseData = await response.json();
-        
-        if (!response.ok) {
-          throw new Error(responseData.error || `Caregiver profile creation failed: ${response.status}`);
-        }
-        
-        result = responseData;
-        console.log('✅ CAREGIVER PROFILE CREATED:', JSON.stringify(result, null, 2));
+      // Update user profile first
+      console.log('🔄 Updating user profile...');
+      await supabaseService.updateProfile(user.id, userProfileData);
+      
+      // All complex data is now stored in caregiver_profiles table above
+      
+      // Then create/update caregiver profile
+      console.log('🔄 Creating/updating caregiver profile...');
+      const { data, error } = await supabase
+        .from('caregiver_profiles')
+        .upsert(caregiverProfileData, { 
+          onConflict: 'user_id',
+          ignoreDuplicates: false 
+        })
+        .select()
+        .single();
+      
+      if (error) throw error;
+      
+      console.log('📦 Caregiver profile data stored:', JSON.stringify(caregiverProfileData, null, 2));
+      
+      const result = data;
+      console.log('✅ CAREGIVER PROFILE SUCCESS');
+      
+      if (!isEdit) {
         await AsyncStorage.removeItem(`@enhanced_caregiver_profile_draft_${user?.id}`);
       }
       
       if (result) {
         showSnackbar(isEdit ? 'Profile updated successfully' : 'Profile created successfully');
-        
-        // Force refresh the auth context to get updated profile data
-        const { useAuth } = await import('../core/contexts/AuthContext');
-        // Trigger a profile refresh in the auth context
         
         setTimeout(() => {
           navigation.navigate('CaregiverDashboard', { refreshProfile: Date.now() });
@@ -1149,21 +1117,12 @@ const EnhancedCaregiverProfileWizard = ({ navigation, route }) => {
 
     } catch (error) {
       console.error('❌ Profile submission failed:', error);
-      console.error('📝 Error details:', {
-        message: error.message,
-        response: error.response?.data,
-        status: error.response?.status,
-        url: error.config?.url,
-        method: error.config?.method,
-        data: error.config?.data ? 'Data present' : 'No data'
-      });
       
       let errorMessage = 'Failed to save profile. Please try again.';
       if (error.response?.status === 404) {
         errorMessage = 'Profile endpoint not found. Please check backend.';
       } else if (error.response?.status === 401 || error.message.includes('401')) {
         errorMessage = 'Session expired. Please login again.';
-        // Optionally trigger logout
         setTimeout(() => {
           navigation.navigate('Welcome');
         }, 2000);
@@ -1203,68 +1162,7 @@ const EnhancedCaregiverProfileWizard = ({ navigation, route }) => {
     </View>
   );
 
-  // Optimized profile image upload with compression and retry logic
-  const handleProfileImageUpload = async () => {
-    try {
-      // Request permissions first
-      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-      if (status !== 'granted') {
-        Alert.alert('Permission needed', 'Please grant camera roll permissions to upload photos.');
-        return;
-      }
 
-      // Launch image picker with optimized settings
-      const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ['images'],
-        allowsEditing: true,
-        aspect: [1, 1],
-        quality: 0.8, // Reduced quality for smaller file size
-        base64: false, // Don't get base64 initially to save memory
-      });
-
-      if (!result.canceled && result.assets && result.assets[0]) {
-        setUploading(true);
-        const asset = result.assets[0];
-        
-        console.log('Profile image upload started');
-        console.log('Asset URI:', asset.uri);
-        console.log('Asset size:', asset.fileSize);
-        
-        // Compress image to reduce size
-        const compressedImage = await compressImage(asset.uri, 0.7, 600, 600);
-        
-        // Create optimized upload payload
-        const mimeType = 'image/jpeg';
-        const dataUrl = `data:${mimeType};base64,${compressedImage.base64}`;
-        
-        console.log('Uploading compressed image to backend...');
-        console.log('Compressed size:', compressedImage.base64.length);
-        
-        // Upload with retry logic
-        const uploadFunction = () => authAPI.uploadProfileImageBase64(dataUrl, mimeType);
-        const response = await uploadWithRetry(uploadFunction, 3, 2000);
-        
-        console.log('Upload response:', response);
-        
-        const imageUrl = response?.data?.url || response?.url || response?.imageUrl;
-        console.log('Received image URL:', imageUrl);
-        
-        if (imageUrl) {
-          // Store the URL as received from backend
-          updateFormData('profileImage', imageUrl);
-          console.log('Profile image URL updated in form:', imageUrl);
-          showSnackbar('Profile image uploaded successfully');
-        } else {
-          throw new Error('No image URL returned from server');
-        }
-      }
-    } catch (error) {
-      console.error('❌ Profile image upload failed:', error);
-      handleUploadError(error);
-    } finally {
-      setUploading(false);
-    }
-  };
 
   const renderBasicInformation = () => (
     <View style={styles.stepContainer}>
@@ -1351,12 +1249,12 @@ const EnhancedCaregiverProfileWizard = ({ navigation, route }) => {
           <Text style={styles.cardTitle}>About Me</Text>
           
           <Menu
-            visible={tempInputs.bioMenuVisible || false}
-            onDismiss={() => setTempInputs(prev => ({ ...prev, bioMenuVisible: false }))}
+            visible={bioMenuVisible}
+            onDismiss={() => setBioMenuVisible(false)}
             anchor={
               <Button
                 mode="outlined"
-                onPress={() => setTempInputs(prev => ({ ...prev, bioMenuVisible: true }))}
+                onPress={() => setBioMenuVisible(true)}
                 style={[styles.input, { marginBottom: 8 }]}
                 contentStyle={{ justifyContent: 'flex-start' }}
                 icon="format-list-bulleted"
@@ -1368,21 +1266,21 @@ const EnhancedCaregiverProfileWizard = ({ navigation, route }) => {
             <Menu.Item
               onPress={() => {
                 updateFormData('bio', "Hi! I'm a caring and experienced nanny who loves working with children. I create fun, educational activities and prioritize safety. I'm reliable, patient, and committed to helping your family.");
-                setTempInputs(prev => ({ ...prev, bioMenuVisible: false }));
+                setBioMenuVisible(false);
               }}
               title="Caring & Experienced Nanny"
             />
             <Menu.Item
               onPress={() => {
                 updateFormData('bio', "Professional childcare provider with CPR certification. I specialize in infant care, meal prep, and homework help. Your children's safety and happiness are my top priorities.");
-                setTempInputs(prev => ({ ...prev, bioMenuVisible: false }));
+                setBioMenuVisible(false);
               }}
               title="Professional Childcare Provider"
             />
             <Menu.Item
               onPress={() => {
                 updateFormData('bio', "Energetic babysitter who loves creating fun activities for kids! I'm great with bedtime routines, outdoor play, and keeping children engaged. References available upon request.");
-                setTempInputs(prev => ({ ...prev, bioMenuVisible: false }));
+                setBioMenuVisible(false);
               }}
               title="Energetic Babysitter"
             />
@@ -1443,12 +1341,12 @@ const EnhancedCaregiverProfileWizard = ({ navigation, route }) => {
 
       <View>
         <Menu
-          visible={tempInputs.experienceMenuVisible || false}
-          onDismiss={() => setTempInputs(prev => ({ ...prev, experienceMenuVisible: false }))}
+          visible={experienceMenuVisible}
+          onDismiss={() => setExperienceMenuVisible(false)}
           anchor={
             <Button
               mode="outlined"
-              onPress={() => setTempInputs(prev => ({ ...prev, experienceMenuVisible: true }))}
+              onPress={() => setExperienceMenuVisible(true)}
               style={[styles.input, { marginBottom: 8 }]}
               contentStyle={{ justifyContent: 'flex-start' }}
               icon="format-list-bulleted"
@@ -1460,26 +1358,23 @@ const EnhancedCaregiverProfileWizard = ({ navigation, route }) => {
           <Menu.Item
             onPress={() => {
               updateFormData('experience.description', "I have 2+ years of professional childcare experience working with children aged 6 months to 12 years. I'm skilled in creating engaging activities, managing daily routines, and ensuring child safety at all times.");
-              setTempInputs(prev => ({ ...prev, experienceMenuVisible: false }));
+              setExperienceMenuVisible(false);
             }}
             title="2+ Years Professional Experience"
-            titleStyle={{ fontSize: 14 }}
           />
           <Menu.Item
             onPress={() => {
               updateFormData('experience.description', "With 5+ years of experience as a nanny and babysitter, I specialize in infant care, meal preparation, and educational activities. I hold CPR certification and have excellent references from previous families.");
-              setTempInputs(prev => ({ ...prev, experienceMenuVisible: false }));
+              setExperienceMenuVisible(false);
             }}
             title="5+ Years Nanny & Babysitter"
-            titleStyle={{ fontSize: 14 }}
           />
           <Menu.Item
             onPress={() => {
               updateFormData('experience.description', "I'm an experienced childcare provider with 3+ years working in daycare centers and private homes. I excel at managing multiple children, homework assistance, and maintaining structured schedules while keeping kids happy and engaged.");
-              setTempInputs(prev => ({ ...prev, experienceMenuVisible: false }));
+              setExperienceMenuVisible(false);
             }}
             title="3+ Years Daycare & Private Homes"
-            titleStyle={{ fontSize: 14 }}
           />
         </Menu>
         
@@ -1528,147 +1423,147 @@ const EnhancedCaregiverProfileWizard = ({ navigation, route }) => {
   );
 
   const renderSkillsAndCertifications = () => (
-  <View style={styles.stepContainer}>
-    <Text style={styles.stepTitle}>Skills & Certifications</Text>
-    <Text style={styles.stepDescription}>
-      Highlight your skills and certifications to stand out to parents.
-    </Text>
+    <View style={styles.stepContainer}>
+      <Text style={styles.stepTitle}>Skills & Certifications</Text>
+      <Text style={styles.stepDescription}>
+        Highlight your skills and certifications to stand out to parents.
+      </Text>
 
-    <View style={styles.skillsSection}>
-      <Text style={styles.sectionTitle}>Skills *</Text>
-      <View style={styles.suggestedSkills}>
-        <Text style={styles.suggestedTitle}>Suggested Skills:</Text>
-        <View style={styles.chipContainer}>
-          {SUGGESTED_SKILLS.map((skill) => (
-            <Chip
-              key={skill}
-              mode={formData.skills.includes(skill) ? 'flat' : 'outlined'}
-              selected={formData.skills.includes(skill)}
-              onPress={() => {
-                if (formData.skills.includes(skill)) {
-                  updateFormData('skills', formData.skills.filter(s => s !== skill));
-                } else {
-                  updateFormData('skills', [...formData.skills, skill]);
-                }
-              }}
-              style={styles.chip}
-            >
-              {skill}
-            </Chip>
-          ))}
+      <View style={styles.skillsSection}>
+        <Text style={styles.sectionTitle}>Skills *</Text>
+        <View style={styles.suggestedSkills}>
+          <Text style={styles.suggestedTitle}>Suggested Skills:</Text>
+          <View style={styles.chipContainer}>
+            {SUGGESTED_SKILLS.map((skill) => (
+              <Chip
+                key={skill}
+                mode={formData.skills.includes(skill) ? 'flat' : 'outlined'}
+                selected={formData.skills.includes(skill)}
+                onPress={() => {
+                  if (formData.skills.includes(skill)) {
+                    updateFormData('skills', formData.skills.filter(s => s !== skill));
+                  } else {
+                    updateFormData('skills', [...formData.skills, skill]);
+                  }
+                }}
+                style={styles.chip}
+              >
+                {skill}
+              </Chip>
+            ))}
+          </View>
+        </View>
+
+        <View style={styles.addSkillContainer}>
+          <TextInput
+            label="Add Custom Skill"
+            value={tempInputs.newSkill}
+            onChangeText={(text) => setTempInputs(prev => ({ ...prev, newSkill: text }))}
+            mode="outlined"
+            style={styles.addInput}
+            onSubmitEditing={() => {
+              const skill = tempInputs.newSkill.trim();
+              if (skill && !formData.skills.includes(skill)) {
+                updateFormData('skills', [...formData.skills, skill]);
+                setTempInputs(prev => ({ ...prev, newSkill: '' }));
+              }
+            }}
+            returnKeyType="done"
+          />
+          <Button
+            mode="contained"
+            onPress={() => {
+              const skill = tempInputs.newSkill.trim();
+              if (skill && !formData.skills.includes(skill)) {
+                updateFormData('skills', [...formData.skills, skill]);
+                setTempInputs(prev => ({ ...prev, newSkill: '' }));
+              }
+            }}
+            disabled={!tempInputs.newSkill.trim()}
+            style={styles.addButton}
+          >
+            Add
+          </Button>
+        </View>
+
+        <View style={styles.selectedSkills}>
+          <Text style={styles.selectedTitle}>Your Skills ({formData.skills.length}):</Text>
+          <View style={styles.chipContainer}>
+            {formData.skills.map((skill) => (
+              <Chip
+                key={skill}
+                mode="flat"
+                onClose={() => updateFormData('skills', formData.skills.filter(s => s !== skill))}
+                style={styles.selectedChip}
+              >
+                {skill}
+              </Chip>
+            ))}
+          </View>
         </View>
       </View>
 
-      <View style={styles.addSkillContainer}>
-        <TextInput
-          label="Add Custom Skill"
-          value={tempInputs.newSkill}
-          onChangeText={(text) => setTempInputs(prev => ({ ...prev, newSkill: text }))}
-          mode="outlined"
-          style={styles.addInput}
-          onSubmitEditing={() => {
-            const skill = tempInputs.newSkill.trim();
-            if (skill && !formData.skills.includes(skill)) {
-              updateFormData('skills', [...formData.skills, skill]);
-              setTempInputs(prev => ({ ...prev, newSkill: '' }));
-            }
-          }}
-          returnKeyType="done"
-        />
-        <Button
-          mode="contained"
-          onPress={() => {
-            const skill = tempInputs.newSkill.trim();
-            if (skill && !formData.skills.includes(skill)) {
-              updateFormData('skills', [...formData.skills, skill]);
-              setTempInputs(prev => ({ ...prev, newSkill: '' }));
-            }
-          }}
-          disabled={!tempInputs.newSkill.trim()}
-          style={styles.addButton}
-        >
-          Add
-        </Button>
-      </View>
+      <Divider style={styles.divider} />
 
-      <View style={styles.selectedSkills}>
-        <Text style={styles.selectedTitle}>Your Skills ({formData.skills.length}):</Text>
-        <View style={styles.chipContainer}>
-          {formData.skills.map((skill) => (
-            <Chip
-              key={skill}
-              mode="flat"
-              onClose={() => updateFormData('skills', formData.skills.filter(s => s !== skill))}
-              style={styles.selectedChip}
-            >
-              {skill}
-            </Chip>
-          ))}
+      <View style={styles.certificationsSection}>
+        <Text style={styles.sectionTitle}>Certifications</Text>
+        <View style={styles.addSkillContainer}>
+          <TextInput
+            label="Add Certification"
+            value={tempInputs.newCertification}
+            onChangeText={(text) => setTempInputs(prev => ({ ...prev, newCertification: text }))}
+            mode="outlined"
+            style={styles.addInput}
+            placeholder="e.g., CPR Certified, First Aid"
+          />
+          
+          <Button
+            mode="contained"
+            onPress={() => {
+              const cert = tempInputs.newCertification.trim();
+              if (cert) {
+                updateFormData('certifications', [...formData.certifications, cert]);
+                setTempInputs(prev => ({ ...prev, newCertification: '' }));
+              }
+            }}
+            disabled={!tempInputs.newCertification.trim()}
+            style={styles.addButton}
+          >
+            Add Certificate
+          </Button>
+        </View>
+
+        <View style={styles.selectedSkills}>
+          <Text style={styles.selectedTitle}>Your Certifications ({formData.certifications.length}):</Text>
+          <View style={styles.certificationsContainer}>
+            {formData.certifications.map((cert, index) => (
+              <Card key={index} style={styles.certificationCard}>
+                <Card.Content>
+                  <View style={styles.certificationHeader}>
+                    <Text style={styles.certificationName}>
+                      {typeof cert === 'string' ? cert : (cert?.name || 'Unnamed Certificate')}
+                    </Text>
+                    <IconButton
+                      icon="close"
+                      size={20}
+                      onPress={() => {
+                        const updatedCerts = formData.certifications.filter((_, i) => i !== index);
+                        updateFormData('certifications', updatedCerts);
+                      }}
+                    />
+                  </View>
+                  {cert?.verified && (
+                    <Badge style={styles.verifiedBadge}>Verified</Badge>
+                  )}
+                </Card.Content>
+              </Card>
+            ))}
+          </View>
         </View>
       </View>
     </View>
+  );
 
-    <Divider style={styles.divider} />
-
-    <View style={styles.certificationsSection}>
-      <Text style={styles.sectionTitle}>Certifications</Text>
-      <View style={styles.addSkillContainer}>
-        <TextInput
-          label="Add Certification"
-          value={tempInputs.newCertification}
-          onChangeText={(text) => setTempInputs(prev => ({ ...prev, newCertification: text }))}
-          mode="outlined"
-          style={styles.addInput}
-          placeholder="e.g., CPR Certified, First Aid"
-        />
-        
-        <Button
-  mode="contained"
-  onPress={() => {
-    const cert = tempInputs.newCertification.trim();
-    if (cert) {
-      updateFormData('certifications', [...formData.certifications, cert]);
-      setTempInputs(prev => ({ ...prev, newCertification: '' }));
-    }
-  }}
-  disabled={!tempInputs.newCertification.trim()}
-  style={styles.addButton}
->
-  Add Certificate
-</Button>
-
-      </View>
-
-      <View style={styles.selectedSkills}>
-        <Text style={styles.selectedTitle}>Your Certifications ({formData.certifications.length}):</Text>
-        <View style={styles.certificationsContainer}>
-          {formData.certifications.map((cert, index) => (
-            <Card key={cert?.id || cert || index} style={styles.certificationCard}>
-              <Card.Content>
-                <View style={styles.certificationHeader}>
-                  <Text style={styles.certificationName}>
-                    {typeof cert === 'string' ? cert : (cert?.name || 'Unnamed Certificate')}
-                  </Text>
-                  <IconButton
-                    icon="close"
-                    size={20}
-                    onPress={() => {
-                      const updatedCerts = formData.certifications.filter((c, i) => i !== index);
-                      updateFormData('certifications', updatedCerts);
-                    }}
-                  />
-                </View>
-                {cert?.verified && (
-                  <Badge style={styles.verifiedBadge}>Verified</Badge>
-                )}
-              </Card.Content>
-            </Card>
-          ))}
-        </View>
-      </View>
-    </View>
-  </View>
-);
   // Address & Location render function
   const renderAddressLocation = () => (
     <View style={styles.stepContainer}>
@@ -1735,7 +1630,7 @@ const EnhancedCaregiverProfileWizard = ({ navigation, route }) => {
                   >
                     <Ionicons name="location-outline" size={20} color="#6366f1" />
                     <Text style={styles.searchResultText}>
-                      {result.address.formatted}
+                      {result.address?.formatted || 'Unknown location'}
                     </Text>
                   </TouchableOpacity>
                 ))}
@@ -1810,7 +1705,7 @@ const EnhancedCaregiverProfileWizard = ({ navigation, route }) => {
         <View style={styles.coordinatesDisplay}>
           <Ionicons name="location" size={16} color="#6366f1" />
           <Text style={styles.coordinatesText}>
-            GPS: {formData.address.coordinates.latitude.toFixed(6)}, {formData.address.coordinates.longitude.toFixed(6)}
+            GPS: {formData.address.coordinates.latitude?.toFixed(6) || 'N/A'}, {formData.address.coordinates.longitude?.toFixed(6) || 'N/A'}
           </Text>
         </View>
       )}

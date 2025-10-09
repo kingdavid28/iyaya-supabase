@@ -14,6 +14,8 @@ const MessageInput = ({
   onTyping,
   placeholder = "Type a message..."
 }) => {
+  const [message, setMessage] = useState('');
+  const [sending, setSending] = useState(false);
   const handleTextChange = (text) => {
     setMessage(text);
     if (onTyping) {
@@ -53,7 +55,7 @@ const MessageInput = ({
     } else {
       try {
         const result = await ImagePicker.launchImageLibraryAsync({
-          mediaTypes: ImagePicker.MediaTypeOptions.Images,
+          mediaTypes: ImagePicker.MediaType.Images,
           allowsEditing: true,
           aspect: [4, 3],
           quality: 0.8,

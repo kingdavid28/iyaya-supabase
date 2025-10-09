@@ -22,7 +22,16 @@ const MobileProfileSection = ({ greetingName, profileImage, profileContact, prof
     : fullName;
   
   // Get the most current profile image - prioritize profileImage prop which comes from parent dashboard state
-  const currentProfileImage = profileImage || profileData?.profileImage || profileData?.avatar || profileData?.imageUrl;
+  const currentProfileImage = profileImage || profileData?.profileImage || profileData?.profile_image || profileData?.avatar || profileData?.imageUrl;
+  
+  console.log('🖼️ MobileProfileSection - Profile image sources:', {
+    profileImage,
+    'profileData?.profileImage': profileData?.profileImage,
+    'profileData?.profile_image': profileData?.profile_image,
+    'profileData?.avatar': profileData?.avatar,
+    'profileData?.imageUrl': profileData?.imageUrl,
+    currentProfileImage
+  });
 
 
   // Only render on mobile platforms

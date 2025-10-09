@@ -1,8 +1,7 @@
-// Use environment configuration
-import { Config } from '../../core/config/environment';
-let API_BASE_URL = Config.API_BASE_URL;
+// Supabase configuration - no longer using old backend
+const API_BASE_URL = process.env.EXPO_PUBLIC_SUPABASE_URL || 'https://myiyrmiiywwgismcpith.supabase.co';
 
-console.log('🔗 API URL set to:', API_BASE_URL);
+console.log('🔗 Using Supabase instead of old backend API');
 
 // CSRF Token Management
 let csrfToken = null;
@@ -46,7 +45,7 @@ const detectAPIURL = async () => {
 };
 
 export const getCurrentAPIURL = () => API_BASE_URL;
-export const getCurrentSocketURL = () => API_BASE_URL.replace('/api', '');
+export const getCurrentSocketURL = () => API_BASE_URL;
 
 // Function to update API URL dynamically
 export const setAPIBaseURL = (newURL) => {

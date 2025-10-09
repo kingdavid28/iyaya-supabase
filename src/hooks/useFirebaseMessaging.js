@@ -1,7 +1,7 @@
 // hooks/useFirebaseMessaging.js
 import { useEffect, useState, useCallback } from 'react';
 import { useFirebase } from './useFirebase';
-import { safeOnValue, safeSet, testFirebaseConnection } from '../config/firebase';
+import { safeOnValue, safeSet, testFirebaseConnection } from '../config/supabase';
 
 export const useFirebaseMessaging = () => {
   const { isReady, error: firebaseError } = useFirebase();

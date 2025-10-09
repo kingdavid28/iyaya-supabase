@@ -5,6 +5,7 @@ import {
   TouchableOpacity,
   Modal,
   Platform,
+  TextInput,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import DateTimePicker from '@react-native-community/datetimepicker';
@@ -100,6 +101,60 @@ const CustomDateTimePicker = ({
     setShowPicker(false);
   };
 
+  const getWebInputType = () => {
+    switch (mode) {
+      case 'time':
+        return 'time';
+      case 'datetime':
+        return 'datetime-local';
+      default:
+        return 'date';
+    }
+  };
+
+  const formatDateForWeb = (date) => {
+    if (!date) return '';
+    
+    switch (mode) {
+      case 'time':
+        return date.toTimeString().slice(0, 5);
+      case 'datetime':
+        return date.toISOString().slice(0, 16);
+      default:
+        return date.toISOString().slice(0, 10);
+    }
+  };
+
+  const handleWebDateChange = (event) => {
+    const value = event.nativeEvent?.target?.value || event.target?.value;
+    if (!value) return;
+    
+    let newDate;
+    try {
+      switch (mode) {
+        case 'time': {
+          newDate = new Date();
+          const [hours, minutes] = value.split(':');
+          newDate.setHours(parseInt(hours), parseInt(minutes));
+          break;
+        }
+        case 'datetime':
+          newDate = new Date(value);
+          break;
+        default:
+          newDate = new Date(value + 'T00:00:00');
+          break;
+      }
+      
+      // Check if date is valid before calling onDateChange
+      if (newDate && !isNaN(newDate.getTime())) {
+        onDateChange(newDate);
+      }
+    } catch (error) {
+      console.warn('Invalid date value:', value, error);
+    }
+  };
+
   const renderIOSModal = () => (
     <Modal
       visible={showPicker}
@@ -136,6 +191,52 @@ const CustomDateTimePicker = ({
       </View>
     </Modal>
   );
+
+  if (Platform.OS === 'web') {
+    return (
+      <View style={[styles.container, style]}>
+        {label && (
+          <Text style={[styles.label, error && styles.labelError]}>
+            {label}
+          </Text>
+        )}
+        
+        <View style={[
+          styles.dateButton,
+          error && styles.dateButtonError,
+          disabled && styles.dateButtonDisabled
+        ]}>
+          <TextInput
+            style={[
+              styles.webDateInput,
+              disabled && styles.disabledText,
+              textStyle
+            ]}
+            value={formatDateForWeb(value)}
+            onChange={handleWebDateChange}
+            {...(Platform.OS === 'web' && {
+              type: getWebInputType(),
+              min: minimumDate ? formatDateForWeb(minimumDate) : undefined,
+              max: maximumDate ? formatDateForWeb(maximumDate) : undefined,
+            })}
+            editable={!disabled}
+            placeholder={placeholder || 'Select date'}
+          />
+          
+          <Ionicons 
+            name={getIcon()} 
+            size={20} 
+            color={disabled ? '#ccc' : error ? '#ff4444' : '#666'} 
+            style={styles.webDateIcon}
+          />
+        </View>
+        
+        {error && (
+          <Text style={styles.errorText}>{error}</Text>
+        )}
+      </View>
+    );
+  }
 
   return (
     <View style={[styles.container, style]}>

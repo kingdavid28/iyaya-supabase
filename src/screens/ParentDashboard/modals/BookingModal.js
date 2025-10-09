@@ -463,6 +463,7 @@ const BookingModal = ({ caregiver, childrenList = [], onConfirm, onClose, visibl
       <KeyboardAvoidingView 
         style={{ flex: 1 }}
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 100 : 0}
       >
           {/* Header */}
           <View style={styles.modalHeader}>

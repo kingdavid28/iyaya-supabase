@@ -3,14 +3,14 @@ import Constants from 'expo-constants';
 
 const ENV = {
   development: {
-    API_URL: 'http://192.168.1.9:5000/api',
-    SOCKET_URL: 'http://192.168.1.9:5000',
+    API_URL: process.env.EXPO_PUBLIC_SUPABASE_URL || 'https://myiyrmiiywwgismcpith.supabase.co',
+    SOCKET_URL: process.env.EXPO_PUBLIC_SUPABASE_URL || 'https://myiyrmiiywwgismcpith.supabase.co',
     ANALYTICS_ENABLED: false,
     DEBUG_MODE: true,
   },
   production: {
-    API_URL: process.env.EXPO_PUBLIC_API_URL || 'https://api.iyaya.app/api',
-    SOCKET_URL: process.env.EXPO_PUBLIC_SOCKET_URL || 'https://api.iyaya.app',
+    API_URL: process.env.EXPO_PUBLIC_SUPABASE_URL || 'https://myiyrmiiywwgismcpith.supabase.co',
+    SOCKET_URL: process.env.EXPO_PUBLIC_SUPABASE_URL || 'https://myiyrmiiywwgismcpith.supabase.co',
     ANALYTICS_ENABLED: true,
     DEBUG_MODE: false,
   }

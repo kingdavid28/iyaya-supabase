@@ -145,10 +145,10 @@ const HomeTab = ({
         </View>
         
         {/* Featured Caregivers Section */}
-        {featuredCaregivers.length > 0 ? (
-          <View style={{ paddingHorizontal: 8, marginBottom: 20, overflow: 'visible' }}>
-            <Text style={[styles.sectionTitle, { marginBottom: 12, marginLeft: 8 }]}>Featured Caregivers ({featuredCaregivers.length})</Text>
-            {featuredCaregivers.map((caregiver) => (
+        <View style={{ paddingHorizontal: 8, marginBottom: 20, overflow: 'visible' }}>
+          <Text style={[styles.sectionTitle, { marginBottom: 12, marginLeft: 8 }]}>Featured Caregivers ({featuredCaregivers.length})</Text>
+          {featuredCaregivers.length > 0 ? (
+            featuredCaregivers.map((caregiver) => (
               <CaregiverCard
                 key={caregiver.id || caregiver._id}
                 caregiver={caregiver}
@@ -156,9 +156,14 @@ const HomeTab = ({
                 onMessagePress={onMessageCaregiver}
                 onViewReviews={onViewReviews}
               />
-            ))}
-          </View>
-        ) : null}
+            ))
+          ) : (
+            <View style={styles.emptySection}>
+              <Text style={styles.emptySectionText}>No caregivers available yet</Text>
+              <Text style={styles.emptyStateSubtext}>Check back later for featured caregivers</Text>
+            </View>
+          )}
+        </View>
       </ScrollView>
     </View>
   );

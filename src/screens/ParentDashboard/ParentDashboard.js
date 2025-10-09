@@ -8,8 +8,8 @@ import { usePrivacy } from '../../components/features/privacy/PrivacyManager';
 import { useAuth } from '../../contexts/AuthContext';
 import { useParentDashboard } from '../../hooks/useParentDashboard';
 
-// API imports
-import { childrenAPI, authAPI, bookingsAPI, jobsAPI, messagingService } from '../../config/api';
+// Supabase service import
+import { supabaseService } from '../../services/supabaseService';
 
 // Utility imports
 import { applyFilters, countActiveFilters } from '../../utils/caregiverUtils';
@@ -49,14 +49,14 @@ const DEFAULT_FILTERS = {
 };
 
 const DEFAULT_CAREGIVER = {
-  _id: '1',
-  userId: '1',
-  name: 'Ana Dela Cruz',
-  avatar: 'https://example.com/avatar.jpg',
-  rating: 4.8,
-  reviews: 124,
-  hourlyRate: 350,
-  rate: '₱350/hr'
+  _id: null,
+  userId: null,
+  name: 'Select a Caregiver',
+  avatar: null,
+  rating: 0,
+  reviewCount: 0,
+  hourlyRate: 0,
+  rate: '₱0/hr'
 };
 
 const ParentDashboard = () => {
@@ -176,7 +176,7 @@ const ParentDashboard = () => {
         name: profile.name || '',
         contact: profile.email || profile.contact || '',
         location: profile.location || profile.address || '',
-        image: profile.profileImage || profile.avatar || ''
+        image: profile.profile_image || profile.profileImage || profile.avatar || ''
       });
     }
   }, [profile]);
@@ -297,7 +297,7 @@ const ParentDashboard = () => {
           style: 'destructive',
           onPress: async () => {
             try {
-              await childrenAPI.delete(child._id || child.id);
+              await supabaseService.deleteChild(child._id || child.id);
               await fetchChildren();
               Alert.alert('Success', 'Child deleted successfully!');
             } catch (error) {
@@ -323,7 +323,7 @@ const ParentDashboard = () => {
 
     try {
       if (childForm.editingId) {
-        await childrenAPI.update(childForm.editingId, childData);
+        await supabaseService.updateChild(childForm.editingId, childData);
       } else {
         // Check if child already exists before creating
         const existingChild = children.find(child =>
@@ -358,7 +358,7 @@ const ParentDashboard = () => {
 
         // Try to create the child
         try {
-          await childrenAPI.create(childData);
+          await supabaseService.addChild(user.id, childData);
         } catch (createError) {
           // If creation fails due to "already exists", try to find and update existing child
           if (createError.message && createError.message.includes('already exists')) {
@@ -376,7 +376,7 @@ const ParentDashboard = () => {
                     text: 'Update',
                     onPress: async () => {
                       try {
-                        await childrenAPI.update(existingChild._id || existingChild.id, childData);
+                        await supabaseService.updateChild(existingChild._id || existingChild.id, childData);
                         await fetchChildren();
                         toggleModal('child', false);
                         setChildForm({ name: '', age: '', allergies: '', notes: '', editingId: null });
@@ -439,14 +439,14 @@ const ParentDashboard = () => {
 
     try {
       // Ensure connection exists in Firebase
-      await firebaseMessagingService.createConnection(user.uid, caregiver._id || caregiver.id);
+      await firebaseMessagingService.createConnection(user.id, caregiver._id || caregiver.id);
 
     } catch (error) {
       console.log('Connection setup warning:', error.message);
     }
 
     navigation.navigate('CaregiverChat', {
-      userId: user.uid,
+      userId: user.id,
       caregiverId: caregiver._id || caregiver.id,
       caregiverName: caregiver.name
     });
@@ -454,7 +454,7 @@ const ParentDashboard = () => {
 
   const handleViewReviews = useCallback((caregiver) => {
     navigation.navigate('CaregiverReviews', {
-      userId: user.uid,
+      userId: user.id,
       caregiverId: caregiver._id || caregiver.id
     });
   }, [navigation, user]);
@@ -509,7 +509,7 @@ const ParentDashboard = () => {
     };
 
     try {
-      const booking = await bookingsAPI.create(payload);
+      const booking = await supabaseService.createBooking(payload);
 
       setActiveTab('bookings');
       await fetchBookings();
@@ -526,7 +526,7 @@ const ParentDashboard = () => {
   const handleCancelBooking = useCallback(async (bookingId) => {
     try {
       setRefreshing(true);
-      await bookingsAPI.cancel(bookingId);
+      await supabaseService.cancelBooking(bookingId);
     } catch (error) {
       console.warn('Failed to cancel booking:', error?.message || error);
     } finally {
@@ -548,7 +548,7 @@ const ParentDashboard = () => {
     if (!paymentData.bookingId || !paymentData.base64) return;
 
     try {
-      await bookingsAPI.uploadPaymentProof(paymentData.bookingId, paymentData.base64, paymentData.mimeType);
+      await supabaseService.uploadPaymentProof(paymentData.bookingId, paymentData.base64, paymentData.mimeType);
       toggleModal('payment', false);
       setPaymentData({ bookingId: null, base64: '', mimeType: 'image/jpeg' });
       await fetchBookings();
@@ -610,7 +610,7 @@ const ParentDashboard = () => {
           text: 'Complete',
           onPress: async () => {
             try {
-              await jobsAPI.update(jobId, { status: 'completed' });
+              await supabaseService.updateJob(jobId, { status: 'completed' });
               await fetchJobs();
               Alert.alert('Success', 'Job marked as completed');
             } catch (error) {
@@ -634,7 +634,7 @@ const ParentDashboard = () => {
           style: 'destructive',
           onPress: async () => {
             try {
-              await jobsAPI.delete(jobId);
+              await supabaseService.deleteJob(jobId);
               Alert.alert('Success', 'Job deleted successfully');
               await fetchJobs();
             } catch (error) {
@@ -681,7 +681,7 @@ const ParentDashboard = () => {
             encoding: 'base64',
           });
 
-          const imageResult = await authAPI.uploadProfileImage(base64Image, 'image/jpeg');
+          const imageResult = await supabaseService.uploadProfileImage(user.id, base64Image);
           const imageUrl = imageResult?.data?.url || imageResult?.url || imageResult?.data?.profileImageUrl;
 
           if (imageUrl) {
@@ -707,7 +707,7 @@ const ParentDashboard = () => {
         throw new Error('Authentication required. Please log in again.');
       }
 
-      const result = await authAPI.updateProfile(updateData);
+      const result = await supabaseService.updateProfile(user.id, updateData);
 
       if (result?.data) {
         console.log('Profile update result:', result.data);
@@ -751,6 +751,7 @@ const ParentDashboard = () => {
             profileImage={profileForm.image}
             profileContact={profileForm.contact}
             profileLocation={profile?.location || profile?.address || profileForm.location}
+            userData={profile}
             caregivers={caregivers || []}
             onBookCaregiver={handleBookCaregiver}
             onMessageCaregiver={handleMessageCaregiver}
@@ -762,14 +763,15 @@ const ParentDashboard = () => {
       case 'search':
         return (
           <SearchTab
-            caregivers={filteredCaregivers}
+            caregivers={caregivers}
+            filteredCaregivers={filteredCaregivers}
             onViewCaregiver={handleViewCaregiver}
             onMessageCaregiver={handleMessageCaregiver}
             onViewReviews={handleViewReviews}
             onBookCaregiver={handleBookCaregiver}
             searchQuery={searchQuery}
             onSearch={handleSearch}
-            onFilterPress={() => toggleModal('filter', true)}
+            onOpenFilter={() => toggleModal('filter', true)}
             activeFilters={activeFilters}
             loading={loading || searchLoading}
           />

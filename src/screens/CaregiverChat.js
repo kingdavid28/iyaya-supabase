@@ -16,7 +16,7 @@ import {
 import { useNavigation, useRoute } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../contexts/AuthContext';
-import firebaseMessagingService from '../services/firebaseMessagingService';
+import { messagingAPI, realtimeService } from '../services';
 
 export default function CaregiverChat({ route }) {
   const { user } = useAuth();
@@ -48,18 +48,20 @@ export default function CaregiverChat({ route }) {
         const convId = `${id1}_${id2}`;
         setConversationId(convId);
 
-        // Fetch existing messages
-        const unsubscribe = firebaseMessagingService.getMessages(
-          user.id,
-          caregiverId,
-          (messagesData) => {
-            setMessages(messagesData.reverse());
-          },
-          convId
-        );
+        // Get or create conversation and fetch messages
+        const conversation = await messagingAPI.startConversation(caregiverId);
+        const response = await messagingAPI.getMessages(conversation.data?.id || convId);
+        setMessages(response.data?.messages || []);
+        
+        // Setup real-time subscription
+        const subscription = realtimeService.subscribeToMessages(conversation.data?.id || convId, (payload) => {
+          if (payload.eventType === 'INSERT') {
+            setMessages(prev => [...prev, payload.new]);
+          }
+        });
 
         return () => {
-          if (unsubscribe) unsubscribe();
+          if (subscription) subscription.unsubscribe();
         };
       } catch (error) {
         console.error('Error initializing chat:', error);
@@ -81,14 +83,10 @@ export default function CaregiverChat({ route }) {
       const [id1, id2] = [user.id, caregiverId].sort();
       const convId = `${id1}_${id2}`;
 
-      await firebaseMessagingService.sendMessage(
-        user.id,
-        caregiverId,
-        newMessage.trim(),
-        'text',
-        null,
-        convId
-      );
+      await messagingAPI.sendMessage({
+        recipientId: caregiverId,
+        content: newMessage.trim()
+      });
 
       setNewMessage('');
     } catch (error) {

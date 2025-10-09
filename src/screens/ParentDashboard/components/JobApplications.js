@@ -23,10 +23,11 @@ import {
   AlertCircle,
   ChevronRight
 } from 'lucide-react-native';
-import { jobsAPI, applicationsAPI } from '../../../config/api';
+import { jobsAPI, applicationsAPI, realtimeService } from '../../../services';
 import { useAuth } from '../../../contexts/AuthContext';
 import { formatDistanceToNow } from 'date-fns';
 import { getProfileImageUrl } from '../../../utils/imageUtils';
+import { useRealtimeApplications } from '../../../hooks/useSupabaseRealtime';
 
 const JobApplications = ({ jobId, onViewApplicant }) => {
   const { user } = useAuth();
@@ -35,15 +36,15 @@ const JobApplications = ({ jobId, onViewApplicant }) => {
   const [refreshing, setRefreshing] = useState(false);
   const [selectedTab, setSelectedTab] = useState('all'); // 'all', 'new', 'reviewed'
 
-  // Fetch job applications via REST
+  // Fetch job applications via REST and setup real-time
   useEffect(() => {
     let isMounted = true;
     const load = async () => {
       if (!jobId || !user?.uid) return;
       try {
         setLoading(true);
-        const res = await jobsAPI.getApplicationsForJob(jobId);
-        const raw = res?.applications || [];
+        const res = await applicationsAPI.getForJob(jobId);
+        const raw = res?.data || [];
         // Normalize shape to align with previous UI expectations
         const mapped = raw.map((a) => ({
           id: a._id || a.id,
@@ -76,6 +77,13 @@ const JobApplications = ({ jobId, onViewApplicant }) => {
     load();
     return () => { isMounted = false; };
   }, [jobId, user?.uid, selectedTab]);
+
+  // Real-time subscription for application updates
+  useRealtimeApplications(jobId, (payload) => {
+    console.log('Real-time application update:', payload);
+    // Refresh applications when there are changes
+    setRefreshing(true);
+  });
 
   const handleRefresh = () => {
     setRefreshing(true);

@@ -9,7 +9,7 @@ import {
 } from 'react-native';
 import { Card } from 'react-native-paper';
 import { Ionicons } from '@expo/vector-icons';
-import firebaseMessagingService from '../../../services/firebaseMessagingService';
+import { messagingAPI, realtimeService } from '../../../services';
 
 const MessagesTab = ({ navigation, refreshing, onRefresh }) => {
   const [conversations, setConversations] = useState([]);
@@ -17,16 +17,30 @@ const MessagesTab = ({ navigation, refreshing, onRefresh }) => {
 
   useEffect(() => {
     loadConversations();
+    
+    // Setup real-time subscription for new conversations
+    const subscription = realtimeService.subscribeToMessages('*', (payload) => {
+      if (payload.eventType === 'INSERT') {
+        // Reload conversations when new messages arrive
+        loadConversations();
+      }
+    });
+
+    return () => {
+      if (subscription) {
+        subscription.unsubscribe();
+      }
+    };
   }, []);
 
   const loadConversations = async () => {
     try {
       setLoading(true);
-      // This would typically fetch conversations from Firebase or API
-      // For now, we'll show an empty state
-      setConversations([]);
+      const response = await messagingAPI.getConversations();
+      setConversations(response.data || []);
     } catch (error) {
       console.error('Error loading conversations:', error);
+      setConversations([]);
     } finally {
       setLoading(false);
     }

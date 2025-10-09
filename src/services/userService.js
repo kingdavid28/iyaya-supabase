@@ -1,163 +1,25 @@
-import { api, authAPI, caregiversAPI } from "../config/api"
+// Legacy userService - now redirects to Supabase services
+// This file is kept for backward compatibility but no longer uses old API
 import { logger } from "../utils/logger"
-import { validator } from "../utils/validation"
-import { API_CONFIG, VALIDATION } from "../config/constants"
 
 class UserService {
   // Create/Upsert profile for the authenticated user
   async createProfile(userId, profile) {
-    try {
-      if (!userId) {
-        throw new Error('User ID is required')
-      }
-
-      if (!profile || typeof profile !== 'object') {
-        throw new Error('Profile data must be an object')
-      }
-
-      logger.info(`Creating profile for user: ${userId}`)
-      // Use auth API to upsert current user's profile (server derives user from token)
-      const updated = await authAPI.updateProfile(profile)
-
-      // Update cache
-      try {
-        // Note: Cache functionality removed to prevent circular dependencies
-        logger.info('Profile created successfully, cache update skipped');
-      } catch (cacheError) {
-        logger.warn('Cache update skipped:', cacheError)
-      }
-
-      return updated
-    } catch (error) {
-      logger.error('Failed to create profile:', error)
-      throw error
-    }
+    throw new Error('Use Supabase services instead - old backend is deprecated');
   }
 
   // Update children for parent user
   async updateChildren(children, userId) {
-    try {
-      if (!userId) {
-        throw new Error('User ID is required')
-      }
-      
-      if (!Array.isArray(children)) {
-        throw new Error('Children must be an array')
-      }
-      
-      // Validate each child object
-      children.forEach((child, index) => {
-        // Validate name
-        try {
-          validator.validateName(child.name)
-        } catch (error) {
-          throw new Error(`Child at index ${index}: ${error.message}`)
-        }
-        
-        // Validate age
-        if (typeof child.age !== 'number' || child.age < 0 || child.age > 18) {
-          throw new Error(`Child at index ${index} must have a valid age between 0 and 18`)
-        }
-        
-        // Validate optional allergies
-        if (child.allergies && !Array.isArray(child.allergies)) {
-          throw new Error(`Child at index ${index}: allergies must be an array`)
-        }
-      })
-
-      logger.info(`Updating children for user: ${userId}`)
-      const result = await api.put(`${API_CONFIG.BASE_URL}/users/${userId}/children`, { children })
-
-      // Note: Cache invalidation removed to prevent circular dependencies
-      logger.info('Children updated successfully');
-
-      return result
-    } catch (error) {
-      logger.error('Failed to update children:', error)
-      throw error
-    }
+    throw new Error('Use Supabase childrenAPI instead - old backend is deprecated');
   }
 
   // Profile Management
   async getProfile(userId, forceRefresh = false) {
-    try {
-      // userId is kept for cache key compatibility, but fetching uses auth profile
-      // For current user profile, userId is not required
-      
-      const cacheKey = `profile:${userId}`
-      
-      // Note: Cache functionality removed to prevent circular dependencies
-      logger.info(`Fetching authenticated profile (auth/profile) for user: ${userId || 'unknown'}`)
-      const data = await authAPI.getProfile()
-      
-      // Basic response validation
-      if (!data || typeof data !== 'object') {
-        throw new Error('Invalid profile data received from server')
-      }
-      
-      // Note: Cache functionality removed to prevent circular dependencies
-      logger.info('Profile fetched successfully');
-
-      return data
-    } catch (error) {
-      logger.error("Failed to get user profile:", error)
-      throw error
-    }
+    throw new Error('Use AuthContext.getUserProfile instead - old backend is deprecated');
   }
 
   async updateProfile(userId, updates) {
-    try {
-      if (!userId) {
-        throw new Error('User ID is required')
-      }
-      
-      // Basic validation
-      if (!updates || typeof updates !== 'object') {
-        throw new Error('Profile data must be an object')
-      }
-
-      // Validate all provided fields
-      const validationRules = {
-        email: (email) => validator.validateEmail(email),
-        phone: (phone) => validator.validatePhone(phone),
-        firstName: (name) => validator.validateName(name),
-        lastName: (name) => validator.validateName(name),
-        dateOfBirth: (dob) => validator.validateDate(dob, 'Date of birth'),
-        address: (address) => validator.validateAddress(address),
-        emergencyContact: (contact) => {
-          if (contact && typeof contact === 'object') {
-            if (contact.name) validator.validateName(contact.name)
-            if (contact.phone) validator.validatePhone(contact.phone)
-            if (contact.relationship && typeof contact.relationship !== 'string') {
-              throw new Error('Emergency contact relationship must be a string')
-            }
-          }
-        }
-      }
-
-      // Apply validation rules to provided fields
-      Object.entries(updates).forEach(([key, value]) => {
-        if (validationRules[key]) {
-          validationRules[key](value)
-        } else if (key === 'children' && Array.isArray(value)) {
-          // Special handling for children array
-          this.updateChildren(value, userId)
-        }
-      })
-
-      logger.info(`Updating profile for user: ${userId}`)
-      
-      // Use authAPI.updateProfile instead of direct API call
-      const updated = await authAPI.updateProfile(updates)
-      
-      // Note: Cache functionality removed to prevent circular dependencies
-      logger.info('Profile updated successfully');
-
-      return updated
-    } catch (error) {
-      logger.error("Failed to update user profile:", error)
-      throw error
-    }
+    throw new Error('Use Supabase services instead - old backend is deprecated');
   }
 
   // Preferences

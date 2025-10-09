@@ -1,49 +1,24 @@
-import {
-  createUserWithEmailAndPassword,
-  signInWithEmailAndPassword,
-  signOut,
-  sendEmailVerification,
-  sendPasswordResetEmail,
-  updateProfile,
-  onAuthStateChanged
-} from 'firebase/auth';
-
-// Import safety functions for Firebase initialization - FIXED: Only initialize once
-import { getAuthSync, getFirebaseAuth, initializeFirebase } from '../config/firebase';
-
-// Global flag to prevent multiple initializations
-let isInitialized = false;
+import { supabase } from '../config/supabase';
 
 export const refreshToken = async () => {
   try {
-    // Only initialize once
-    if (!isInitialized) {
-      await initializeFirebase();
-      isInitialized = true;
-    }
-
-    const auth = getAuthSync();
-    const user = auth.currentUser;
-
-    if (!user) {
+    const { data: { session }, error } = await supabase.auth.getSession();
+    if (error || !session) {
       console.log('No user authenticated - returning null silently');
       return null;
     }
-
-    // Your token refresh logic here
-    const token = await user.getIdToken(true);
-    return token;
-
+    return session.access_token;
   } catch (error) {
     console.warn('Token refresh failed:', error.message);
     return null;
   }
 };
 
-export const getCurrentUser = () => {
+export const getCurrentUser = async () => {
   try {
-    const auth = getAuthSync();
-    return auth.currentUser;
+    const { data: { user }, error } = await supabase.auth.getUser();
+    if (error) throw error;
+    return user;
   } catch (error) {
     console.warn('Get current user failed:', error.message);
     return null;
@@ -52,173 +27,154 @@ export const getCurrentUser = () => {
 
 export const onAuthStateChangedSafe = (callback) => {
   try {
-    const auth = getAuthSync();
-    return onAuthStateChanged(auth, callback);
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      callback(session?.user || null);
+    });
+    return () => subscription.unsubscribe();
   } catch (error) {
-    console.error(' onAuthStateChanged failed:', error);
-    // Return a dummy unsubscribe function
+    console.error('onAuthStateChanged failed:', error);
     return () => {};
   }
 };
 
 export const firebaseAuthService = {
   async signup(userData) {
-    let user;
     try {
       const { email, password, name, role } = userData;
 
-      // Only initialize once
-      if (!isInitialized) {
-        await initializeFirebase();
-        isInitialized = true;
-      }
-      const auth = getAuthSync();
-
-      const userCredential = await createUserWithEmailAndPassword(auth, email, password);
-      user = userCredential.user;
-
-      await updateProfile(user, { displayName: name });
-
-      // Send Firebase verification email
-      await sendEmailVerification(user);
-    } catch (error) {
-      console.error('Firebase signup error:', error);
-      throw error;
-    }
-
-    // Sync complete profile with MongoDB
-    try {
-      const token = await user.getIdToken();
-      const profileData = {
-        firebaseUid: user.uid,
-        email: user.email,
-        name: user.displayName,
-        firstName: userData.firstName,
-        lastName: userData.lastName,
-        middleInitial: userData.middleInitial,
-        birthDate: userData.birthDate,
-        phone: userData.phone,
-        role: userData.role || 'parent',
-        emailVerified: user.emailVerified
-      };
-
-      await fetch(`${process.env.EXPO_PUBLIC_API_URL || 'http://192.168.1.9:5000'}/api/auth/firebase-sync`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        body: JSON.stringify(profileData)
-      });
-    } catch (error) {
-      console.warn('Failed to sync with MongoDB:', error.message);
-    }
-
-    return {
-      success: true,
-      requiresVerification: !user.emailVerified,
-      message: 'Account created successfully. Please check your email to verify your account.'
-    };
-  },
-
-  async login(email, password) {
-    try {
-      // Only initialize once
-      if (!isInitialized) {
-        await initializeFirebase();
-        isInitialized = true;
-      }
-      const auth = getAuthSync();
-
-      const userCredential = await signInWithEmailAndPassword(auth, email, password);
-      const user = userCredential.user;
-
-      if (!user.emailVerified) {
-        throw new Error('Please verify your email before logging in.');
-      }
-
-      const token = await user.getIdToken();
-
-      // Get complete user profile from MongoDB
-      let profile = { role: 'parent' };
-      try {
-        const response = await fetch(`${process.env.EXPO_PUBLIC_API_URL || 'http://192.168.1.9:5000'}/api/auth/firebase-profile`, {
-          headers: {
-            'Authorization': `Bearer ${token}`
+      const { data, error } = await supabase.auth.signUp({
+        email,
+        password,
+        options: {
+          data: {
+            name,
+            first_name: userData.firstName,
+            last_name: userData.lastName,
+            middle_initial: userData.middleInitial,
+            birth_date: userData.birthDate,
+            phone: userData.phone,
+            role: role || 'parent'
           }
-        });
-        if (response.ok) {
-          profile = await response.json();
         }
-      } catch (error) {
-        console.warn('Failed to get MongoDB profile:', error.message);
+      });
+
+      if (error) throw error;
+
+      // Insert user profile into users table
+      if (data.user) {
+        const { error: profileError } = await supabase
+          .from('users')
+          .insert({
+            id: data.user.id,
+            email: data.user.email,
+            name,
+            first_name: userData.firstName,
+            last_name: userData.lastName,
+            middle_initial: userData.middleInitial,
+            birth_date: userData.birthDate,
+            phone: userData.phone,
+            role: role || 'parent',
+            email_verified: data.user.email_confirmed_at ? true : false
+          });
+
+        if (profileError) {
+          console.warn('Failed to create user profile:', profileError.message);
+        }
       }
 
       return {
         success: true,
-        token,
+        requiresVerification: !data.user?.email_confirmed_at,
+        message: 'Account created successfully. Please check your email to verify your account.'
+      };
+    } catch (error) {
+      console.error('Supabase signup error:', error);
+      throw error;
+    }
+  },
+
+  async login(email, password) {
+    try {
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email,
+        password
+      });
+
+      if (error) throw error;
+
+      if (!data.user?.email_confirmed_at) {
+        throw new Error('Please verify your email before logging in.');
+      }
+
+      // Get user profile from users table
+      let profile = { role: 'parent' };
+      try {
+        const { data: userProfiles, error: profileError } = await supabase
+          .from('users')
+          .select('*')
+          .eq('id', data.user.id);
+
+        if (!profileError && userProfiles && userProfiles.length > 0) {
+          profile = userProfiles[0];
+        }
+      } catch (error) {
+        console.warn('Failed to get user profile:', error.message);
+      }
+
+      return {
+        success: true,
+        token: data.session?.access_token,
         user: {
-          id: user.uid,
-          email: user.email,
-          name: user.displayName,
-          emailVerified: user.emailVerified,
+          id: data.user.id,
+          email: data.user.email,
+          name: profile.name,
+          emailVerified: data.user.email_confirmed_at ? true : false,
           role: profile.role || 'parent',
-          firstName: profile.firstName,
-          lastName: profile.lastName,
+          firstName: profile.first_name,
+          lastName: profile.last_name,
           phone: profile.phone,
-          profileImage: profile.profileImage,
-          caregiverProfile: profile.caregiverProfile
+          profileImage: profile.profile_image
         }
       };
     } catch (error) {
-      console.error('Firebase login error:', error);
+      console.error('Supabase login error:', error);
       throw error;
     }
   },
 
   async signOut() {
     try {
-      // Only initialize once
-      if (!isInitialized) {
-        await initializeFirebase();
-        isInitialized = true;
-      }
-      const auth = getAuthSync();
-
-      await signOut(auth);
+      const { error } = await supabase.auth.signOut();
+      if (error) throw error;
     } catch (error) {
-      console.error('Firebase signOut error:', error);
+      console.error('Supabase signOut error:', error);
       throw error;
     }
   },
 
   async resetPassword(email) {
     try {
-      // Only initialize once
-      if (!isInitialized) {
-        await initializeFirebase();
-        isInitialized = true;
-      }
-      const auth = getAuthSync();
-
-      await sendPasswordResetEmail(auth, email);
+      const { error } = await supabase.auth.resetPasswordForEmail(email);
+      if (error) throw error;
+      
       return {
         success: true,
         message: 'Password reset link sent to your email.'
       };
     } catch (error) {
-      console.error('Firebase resetPassword error:', error);
+      console.error('Supabase resetPassword error:', error);
       throw error;
     }
   },
 
   // Safe current user getter
-  getCurrentUser() {
+  async getCurrentUser() {
     try {
-      const auth = getAuthSync();
-      return auth.currentUser;
+      const { data: { user }, error } = await supabase.auth.getUser();
+      if (error) throw error;
+      return user;
     } catch (error) {
-      console.error(' Get current user failed:', error);
+      console.error('Get current user failed:', error);
       return null;
     }
   },
@@ -226,11 +182,12 @@ export const firebaseAuthService = {
   // Safe auth state listener
   onAuthStateChanged(callback) {
     try {
-      const auth = getAuthSync();
-      return onAuthStateChanged(auth, callback);
+      const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+        callback(session?.user || null);
+      });
+      return () => subscription.unsubscribe();
     } catch (error) {
-      console.error(' onAuthStateChanged failed:', error);
-      // Return a dummy unsubscribe function
+      console.error('onAuthStateChanged failed:', error);
       return () => {};
     }
   }

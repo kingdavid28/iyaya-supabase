@@ -1,6 +1,6 @@
 // src/services/connectionService.js
 import { setupConnectionListener, withConnection } from '../utils/firebaseUtils';
-import { ref, get, update } from '../config/firebase';
+import { ref, get, update } from '../config/supabase';
 
 export const listenToConnections = (userId, onConnectionUpdate) => {
   return setupConnectionListener(`users/${userId}/connections`, onConnectionUpdate);

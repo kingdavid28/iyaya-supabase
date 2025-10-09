@@ -158,15 +158,28 @@ const CaregiverCard = ({ caregiver = {}, onPress, onMessagePress, onViewReviews,
               { marginBottom: spacing.xxs },
             ]}
           >
-            <Star size={16} color={colors.warning} fill={colors.warning} />
-            <Text
-              style={[
-                typography.caption,
-                { color: colors.textSecondary, marginLeft: spacing.xxs },
-              ]}
-            >
-              {rating} ({reviewCount} reviews)
-            </Text>
+            {reviewCount > 0 ? (
+              <>
+                <Star size={16} color={colors.warning} fill={colors.warning} />
+                <Text
+                  style={[
+                    typography.caption,
+                    { color: colors.textSecondary, marginLeft: spacing.xxs },
+                  ]}
+                >
+                  {rating} ({reviewCount} reviews)
+                </Text>
+              </>
+            ) : (
+              <Text
+                style={[
+                  typography.caption,
+                  { color: colors.textSecondary, fontStyle: 'italic' },
+                ]}
+              >
+                New caregiver
+              </Text>
+            )}
           </View>
           <View
             style={[

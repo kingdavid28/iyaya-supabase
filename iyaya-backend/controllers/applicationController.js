@@ -4,7 +4,12 @@ const User = require('../models/User');
 const { validationResult } = require('express-validator');
 const { process: processError } = require('../utils/errorHandler');
 const logger = require('../utils/logger');
-const socketService = require('../src/core/services/socketService');
+let socketService = null;
+try {
+  socketService = require('../services/socketService');
+} catch (error) {
+  console.warn('⚠️ Socket service not available, continuing without realtime updates:', error.message);
+}
 
 // Helper function to calculate total cost
 const calculateTotalCost = (startTime, endTime, hourlyRate) => {

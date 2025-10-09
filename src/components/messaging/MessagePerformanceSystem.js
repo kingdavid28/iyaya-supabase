@@ -1,5 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { getFirebaseDatabase, firebaseRef as ref, firebaseOnValue as onValue, firebaseQuery as query, firebaseOrderByChild as orderByChild, firebaseLimitToLast as limitToLast, firebaseStartAfter as startAfter, firebaseEndBefore as endBefore } from '../../config/firebase.js';
+import { getFirebaseDatabase, firebaseRef as ref, firebaseOnValue as onValue, firebaseQuery as query, firebaseOrderByChild as orderByChild, firebaseLimitToLast as limitToLast, firebaseStartAfter as startAfter, firebaseEndBefore as endBefore } from '../../config/supabase.js';
 
 // Message pagination constants
 const MESSAGES_PER_PAGE = 50;

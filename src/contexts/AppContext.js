@@ -1,11 +1,8 @@
 import { createContext, useContext, useReducer, useEffect, useRef } from "react"
 import AsyncStorage from "@react-native-async-storage/async-storage"
 import { STORAGE_KEYS } from "../config/constants"
-import { authService } from "../services/authService"
-import { userService } from "../services/userService"
 import { logger } from "../utils/logger"
 import { Alert } from "react-native"
-import jobService from '../services/jobService';
 
 // Initial State
 const initialState = {
@@ -302,128 +299,26 @@ const AppProvider = ({ children }) => {
   }
 
   const initializeAuthListener = () => {
-    // If AuthContext is managing JWT auth, skip Firebase-style listener
-    if (authUser) {
-      dispatch({ type: ACTION_TYPES.SET_AUTH_LOADING, payload: false })
-      return () => {}
-    }
-    return authService.onAuthStateChanged(async (user) => {
-      try {
-        dispatch({ type: ACTION_TYPES.SET_USER, payload: user })
-
-        // Only fetch profile if user is present, token exists, and profile is not loaded or is for a different user
-        if (user) {
-          try {
-            const token = await authService.getCurrentToken();
-            if (token && (!state.userProfile || state.userProfile.uid !== user.uid)) {
-              try {
-                const profile = await userService.getProfile(user.uid)
-                const normalizedProfile = profile ? { ...profile, role: normalizeRole(profile.role) } : null
-                dispatch({ type: ACTION_TYPES.SET_USER_PROFILE, payload: normalizedProfile })
-                // Merge role and name into user for downstream consumers (Navigator, jobService)
-                if (normalizedProfile) {
-                  const mergedUser = { ...user, role: normalizedProfile.role, displayName: normalizedProfile.name }
-                  dispatch({ type: ACTION_TYPES.SET_USER, payload: mergedUser })
-                }
-              } catch (error) {
-                logger.warn("Failed to load user profile:", error)
-                dispatch({ type: ACTION_TYPES.SET_USER_PROFILE, payload: null })
-              }
-            }
-          } catch (error) {
-            logger.warn("Failed to get token for profile loading:", error)
-          }
-        } else {
-          // Clear profile when no user
-          dispatch({ type: ACTION_TYPES.SET_USER_PROFILE, payload: null })
-        }
-      } catch (error) {
-        handleError("auth", error)
-      }
-    })
+    // AuthContext is managing Supabase auth, no need for additional listener
+    dispatch({ type: ACTION_TYPES.SET_AUTH_LOADING, payload: false })
+    return () => {}
   }
 
   // Action Creators
   const actions = {
     login: async (email, password) => {
-      try {
-        dispatch({
-          type: ACTION_TYPES.SET_LOADING,
-          payload: { key: "auth", value: true },
-        })
-        dispatch({ type: ACTION_TYPES.CLEAR_ERROR, payload: "auth" })
-
-        const result = await authService.login(email, password)
-        // Immediately set user so UI can react (Expo Go shim may not re-emit auth state)
-        if (result?.user) {
-          dispatch({ type: ACTION_TYPES.SET_USER, payload: result.user })
-        }
-        return result.user
-      } catch (error) {
-        handleError("auth", error)
-        throw error
-      } finally {
-        dispatch({
-          type: ACTION_TYPES.SET_LOADING,
-          payload: { key: "auth", value: false },
-        })
-      }
+      // Login is handled by AuthContext/Supabase
+      throw new Error('Use AuthContext.signIn instead')
     },
 
     register: async (userData) => {
-      try {
-        dispatch({
-          type: ACTION_TYPES.SET_LOADING,
-          payload: { key: "auth", value: true },
-        })
-        dispatch({ type: ACTION_TYPES.CLEAR_ERROR, payload: "auth" })
-
-        const result = await authService.register(userData)
-        // Set user immediately on successful registration
-        if (result?.user) {
-          dispatch({ type: ACTION_TYPES.SET_USER, payload: result.user })
-        }
-
-        try {
-          await userService.createProfile(result.user.uid, {
-            name: userData.name,
-            email: userData.email,
-            role: userData.role || "parent",
-          })
-        } catch (profileError) {
-          logger.warn("Failed to create backend profile:", profileError)
-        }
-
-        return result
-      } catch (error) {
-        handleError("auth", error)
-        throw error
-      } finally {
-        dispatch({
-          type: ACTION_TYPES.SET_LOADING,
-          payload: { key: "auth", value: false },
-        })
-      }
+      // Registration is handled by AuthContext/Supabase
+      throw new Error('Use AuthContext.signUp instead')
     },
 
     logout: async () => {
-      try {
-        dispatch({ type: ACTION_TYPES.SET_AUTH_LOADING, payload: true })
-
-        await authService.logout()
-        await AsyncStorage.multiRemove([
-          STORAGE_KEYS.USER_TOKEN,
-          STORAGE_KEYS.USER_PROFILE,
-        ])
-
-        dispatch({ type: ACTION_TYPES.LOGOUT })
-      } catch (error) {
-        logger.error("Logout error:", error)
-        dispatch({ type: ACTION_TYPES.LOGOUT })
-        Alert.alert("Logout", "Signed out successfully")
-      } finally {
-        dispatch({ type: ACTION_TYPES.SET_AUTH_LOADING, payload: false })
-      }
+      // Logout is handled by AuthContext/Supabase
+      dispatch({ type: ACTION_TYPES.LOGOUT })
     },
 
     setMockUser: () => {
@@ -459,8 +354,10 @@ const AppProvider = ({ children }) => {
           return;
         }
         
-        const token = await authService.getCurrentToken();
-        const bookings = await require('../services/bookingService').getBookings(state.user.role, token);
+        // Use Supabase service instead of old API
+        const { bookingsAPI } = await import('../services');
+        const result = await bookingsAPI.getMy();
+        const bookings = result.data || [];
         dispatch({
           type: ACTION_TYPES.SET_BOOKINGS,
           payload: bookings,
@@ -504,7 +401,10 @@ const AppProvider = ({ children }) => {
           return;
         }
         
-        const jobs = await jobService.getJobs(state.user.role, state.token);
+        // Use Supabase service instead of old API
+        const { jobsAPI } = await import('../services');
+        const result = await jobsAPI.getAvailable();
+        const jobs = result.data || [];
         dispatch({
           type: ACTION_TYPES.SET_JOBS,
           payload: jobs,
@@ -530,7 +430,9 @@ const AppProvider = ({ children }) => {
           type: ACTION_TYPES.SET_LOADING,
           payload: { key: "profile", value: true },
         });
-        const result = await userService.updateChildren(children);
+        // Use Supabase service instead of old API
+        const { childrenAPI } = await import('../services');
+        const result = await childrenAPI.getMy();
         // Update userProfile in state
         dispatch({
           type: ACTION_TYPES.SET_USER_PROFILE,
@@ -559,18 +461,9 @@ const AppProvider = ({ children }) => {
           throw new Error("No authenticated user")
         }
 
-        let updatedProfile
-        if (state.userProfile) {
-          updatedProfile = await userService.updateProfile(
-            state.user.uid,
-            profileData
-          )
-        } else {
-          updatedProfile = await userService.createProfile(state.user.uid, {
-            ...profileData,
-            email: state.user.email,
-          })
-        }
+        // Use Supabase service instead of old API
+        const { authAPI } = await import('../services');
+        const updatedProfile = await authAPI.updateProfile(profileData)
 
         dispatch({
           type: ACTION_TYPES.SET_USER_PROFILE,

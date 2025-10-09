@@ -6,6 +6,7 @@ import * as ImagePicker from 'expo-image-picker';
 import { authAPI, getCurrentAPIURL } from '../config/api';
 import { useAuth } from '../contexts/AuthContext';
 import ProfileImage from '../components/ui/feedback/ProfileImage';
+import { getCurrentDeviceLocation } from '../utils/locationUtils';
 
 const ParentProfile = ({ navigation }) => {
   const { user } = useAuth();
@@ -15,6 +16,7 @@ const ParentProfile = ({ navigation }) => {
   const [editForm, setEditForm] = useState({ name: '', phone: '', location: '', profileImage: '' });
   const [uploading, setUploading] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [locationLoading, setLocationLoading] = useState(false);
 
   useEffect(() => {
     loadProfile();
@@ -31,12 +33,15 @@ const ParentProfile = ({ navigation }) => {
       while (retries > 0) {
         try {
           const result = await authAPI.getProfile();
-          const profileData = result.data || result;
+          const profileData = result?.data || result;
+          if (!profileData) {
+            throw new Error('No profile data received');
+          }
           setProfile(profileData);
           
           // Initialize edit form with current data
           // Initialize edit form with current data - will be processed by getImageUrl later
-          const currentImage = profileData.profileImage || profileData.avatar || profileData.imageUrl || user?.profileImage || user?.avatar || '';
+          const currentImage = profileData.profile_image || profileData.profileImage || profileData.avatar || profileData.imageUrl || user?.profileImage || user?.avatar || '';
           setEditForm({
             name: profileData.name || user?.name || '',
             phone: typeof profileData.phone === 'string' ? profileData.phone : '',
@@ -71,7 +76,7 @@ const ParentProfile = ({ navigation }) => {
           profileImage: ''
         };
         setProfile(fallbackProfile);
-        const currentImage = fallbackProfile.profileImage || user?.profileImage || user?.avatar || '';
+        const currentImage = fallbackProfile.profile_image || fallbackProfile.profileImage || user?.profileImage || user?.avatar || '';
         setEditForm({
           name: fallbackProfile.name,
           phone: typeof fallbackProfile.phone === 'string' ? fallbackProfile.phone : '',
@@ -100,7 +105,7 @@ const ParentProfile = ({ navigation }) => {
       }
 
       const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ['images'],
+        mediaTypes: 'Images',
         allowsEditing: true,
         aspect: [1, 1],
         quality: 0.8,
@@ -112,7 +117,7 @@ const ParentProfile = ({ navigation }) => {
         const asset = result.assets[0];
         const dataUrl = `data:image/jpeg;base64,${asset.base64}`;
         
-        const response = await authAPI.uploadProfileImageBase64(dataUrl, 'image/jpeg');
+        const response = await authAPI.uploadProfileImage(dataUrl);
         console.log('Upload response:', response);
         
         // Handle different response structures
@@ -127,6 +132,8 @@ const ParentProfile = ({ navigation }) => {
           imageUrl = response.data.imageUrl;
         } else if (response?.data?.profileImage) {
           imageUrl = response.data.profileImage;
+        } else if (typeof response === 'string') {
+          imageUrl = response;
         }
         
         if (imageUrl) {
@@ -155,9 +162,8 @@ const ParentProfile = ({ navigation }) => {
       const updateData = {
         name: editForm.name.trim(),
         phone: editForm.phone.trim(),
-        location: editForm.location.trim(),
         address: editForm.location.trim(),
-        profileImage: editForm.profileImage
+        profile_image: editForm.profileImage
       };
       
       console.log('ParentProfile updating with:', updateData);
@@ -174,7 +180,7 @@ const ParentProfile = ({ navigation }) => {
           setProfile(prev => ({ 
             ...prev, 
             ...updateData,
-            ...(result.data || {})
+            ...(result?.data || result || {})
           }));
           setEditModalVisible(false);
           Alert.alert('Success', 'Profile updated successfully!');
@@ -207,6 +213,26 @@ const ParentProfile = ({ navigation }) => {
     }
   }, [editForm]);
 
+  // GPS Location functionality
+  const getCurrentLocation = async () => {
+    try {
+      setLocationLoading(true);
+      
+      const locationData = await getCurrentDeviceLocation();
+      
+      if (locationData && locationData.address) {
+        const formattedAddress = `${locationData.address.street || ''} ${locationData.address.city || ''} ${locationData.address.province || ''}`.trim();
+        setEditForm(prev => ({ ...prev, location: formattedAddress }));
+        Alert.alert('Success', 'Location updated successfully');
+      }
+    } catch (error) {
+      console.error('Location fetch failed:', error);
+      Alert.alert('Location Error', error.message || 'Failed to get current location. Please try again.');
+    } finally {
+      setLocationLoading(false);
+    }
+  };
+
   // Helper function to get properly formatted image URL
   const getImageUrl = useCallback((imageUrl) => {
     if (!imageUrl || imageUrl.trim() === '' || imageUrl === 'null') {
@@ -234,7 +260,7 @@ const ParentProfile = ({ navigation }) => {
 
   const handleEditPress = useCallback(() => {
     // Get the current profile image from multiple possible sources
-    const currentImage = getImageUrl(profile?.profileImage || profile?.avatar || profile?.imageUrl || user?.profileImage || user?.avatar || '');
+    const currentImage = getImageUrl(profile?.profile_image || profile?.profileImage || profile?.avatar || profile?.imageUrl || user?.profileImage || user?.avatar || '');
     
     setEditForm({
       name: profile?.name || user?.name || '',
@@ -282,7 +308,7 @@ const ParentProfile = ({ navigation }) => {
       <Card style={styles.headerCard}>
         <Card.Content style={styles.headerContent}>
           <ProfileImage
-            imageUrl={getImageUrl(profile.profileImage || profile.avatar || profile.imageUrl)}
+            imageUrl={getImageUrl(profile.profile_image || profile.profileImage || profile.avatar || profile.imageUrl)}
             size={100}
             style={styles.avatar}
             defaultIconSize={50}
@@ -442,12 +468,28 @@ const ParentProfile = ({ navigation }) => {
                 </View>
                 
                 <View style={styles.inputGroup}>
-                  <Text style={styles.inputLabel}>Location</Text>
+                  <View style={styles.locationHeader}>
+                    <Text style={styles.inputLabel}>Location</Text>
+                    <TouchableOpacity 
+                      onPress={getCurrentLocation}
+                      disabled={locationLoading || saving}
+                      style={styles.gpsButton}
+                    >
+                      {locationLoading ? (
+                        <ActivityIndicator size="small" color="#db2777" />
+                      ) : (
+                        <Ionicons name="location" size={16} color="#db2777" />
+                      )}
+                      <Text style={styles.gpsButtonText}>
+                        {locationLoading ? 'Getting...' : 'Use GPS'}
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
                   <TextInput
                     value={editForm.location}
                     onChangeText={(text) => setEditForm(prev => ({ ...prev, location: text }))}
                     style={styles.textInput}
-                    placeholder="Enter your location"
+                    placeholder="Enter your location or use GPS"
                     disabled={saving}
                     autoCapitalize="words"
                   />
@@ -732,6 +774,28 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     backgroundColor: '#ffffff',
+  },
+  locationHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  gpsButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 16,
+    backgroundColor: '#fdf2f8',
+    borderWidth: 1,
+    borderColor: '#f3e8ff',
+  },
+  gpsButtonText: {
+    fontSize: 12,
+    color: '#db2777',
+    marginLeft: 4,
+    fontWeight: '500',
   },
 });
 

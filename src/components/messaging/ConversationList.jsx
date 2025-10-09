@@ -15,9 +15,8 @@ import {
   Surface,
 } from 'react-native-paper';
 import { MessageCircle, Clock } from 'lucide-react-native';
-import { useAuth } from '../../../contexts/AuthContext';
-import { messagingService } from '../../../services/firebaseMessagingService';
-import { authService } from '../../../services/authService';
+import { useAuth } from '../../contexts/AuthContext';
+import { messagingService } from '../../services';
 
 const ConversationList = ({ onSelectConversation, selectedConversation, navigation }) => {
   const { user } = useAuth();
@@ -25,46 +24,43 @@ const ConversationList = ({ onSelectConversation, selectedConversation, navigati
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const userId = authService.getCurrentUserId();
-    if (!userId) {
-      setLoading(false);
-      return;
-    }
+    const loadConversations = async () => {
+      if (!user?.id) {
+        setLoading(false);
+        return;
+      }
 
-    const unsubscribe = messagingService.listenToUserConversations(userId, async (firebaseConversations) => {
-      // Enhance with user profile data from MongoDB
-      const enhancedConversations = await Promise.all(
-        firebaseConversations.map(async (conv) => {
-          try {
-            const userProfile = await messagingService.getConversationMetadata(conv.id);
-            return {
-              ...conv,
-              recipientName: userProfile?.name || 'Unknown User',
-              recipientAvatar: userProfile?.profileImage || null,
-              recipientRole: userProfile?.role || 'user',
-            };
-          } catch (error) {
-            console.warn('Error fetching user profile:', error);
-            return {
-              ...conv,
-              recipientName: 'Unknown User',
-              recipientAvatar: null,
-              recipientRole: 'user',
-            };
-          }
-        })
-      );
+      try {
+        const { data } = await messagingService.getConversations();
+        
+        // Transform Supabase conversations to match expected format
+        const transformedConversations = data.map(conv => {
+          const otherParticipant = conv.participant_1 === user.id 
+            ? conv.participant2 
+            : conv.participant1;
+          
+          return {
+            id: conv.id,
+            otherUserId: otherParticipant?.id,
+            recipientName: otherParticipant?.name || 'Unknown User',
+            recipientAvatar: otherParticipant?.profile_image,
+            recipientRole: otherParticipant?.role || 'user',
+            lastMessage: 'Start a conversation',
+            lastActivity: conv.last_message_at || conv.created_at,
+            unreadCount: 0 // Can be implemented later
+          };
+        });
 
-      setConversations(enhancedConversations);
-      setLoading(false);
-    });
-
-    return () => {
-      if (typeof unsubscribe === 'function') {
-        unsubscribe();
+        setConversations(transformedConversations);
+      } catch (error) {
+        console.error('Error loading conversations:', error);
+      } finally {
+        setLoading(false);
       }
     };
-  }, []);
+
+    loadConversations();
+  }, [user?.id]);
 
   const formatTime = (timestamp) => {
     if (!timestamp) return 'Unknown';

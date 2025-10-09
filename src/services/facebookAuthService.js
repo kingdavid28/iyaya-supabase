@@ -6,7 +6,7 @@ import {
   signInWithCredential,
   updateProfile 
 } from 'firebase/auth';
-import { getAuthSync } from '../config/firebase';
+import { getAuthSync } from '../config/supabase';
 
 // Complete the auth session when the app comes back into focus
 WebBrowser.maybeCompleteAuthSession();

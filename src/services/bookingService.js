@@ -2,6 +2,9 @@ import { API_BASE_URL } from '../config/api';
 import { getAuthToken } from '../utils/auth';
 import { logger } from '../utils/logger';
 
+// Note: This service now uses Supabase for most operations
+// but maintains the same interface for backward compatibility
+
 /**
  * Booking Service
  * Handles all booking-related API calls
@@ -47,107 +50,143 @@ class BookingService {
   // Get all bookings for current user
   async getBookings(filters = {}) {
     try {
-      const queryParams = new URLSearchParams();
+      // Import supabaseService dynamically to avoid circular imports
+      const { supabaseService } = await import('./supabaseService');
+      const { supabase } = await import('../config/supabase');
       
-      Object.keys(filters).forEach(key => {
-        if (filters[key] !== undefined && filters[key] !== null && filters[key] !== '') {
-          queryParams.append(key, filters[key]);
-        }
-      });
-
-      const endpoint = `/my${queryParams.toString() ? `?${queryParams.toString()}` : ''}`;
-      const response = await this.makeRequest(endpoint);
-      
-      console.log('📋 BookingService - Raw response:', response);
-      console.log('📋 BookingService - Bookings data:', response.bookings);
-      
-      if (response.bookings && response.bookings.length > 0) {
-        console.log('📋 BookingService - First booking structure:', response.bookings[0]);
-        console.log('📋 BookingService - First booking caregiver:', response.bookings[0].caregiverId);
+      const { data: { user }, error } = await supabase.auth.getUser();
+      if (error || !user) {
+        throw new Error('User not authenticated');
       }
       
-      return response.bookings || response.data || [];
+      // Get user profile to determine role
+      const profile = await supabaseService.getProfile(user.id);
+      const role = profile?.role || 'parent';
+      
+      console.log('📋 Fetching bookings for user:', user.id, 'role:', role);
+      const bookings = await supabaseService.getMyBookings(user.id, role);
+      
+      console.log('📋 BookingService - Fetched bookings:', bookings?.length || 0);
+      if (bookings && bookings.length > 0) {
+        console.log('📋 BookingService - First booking structure:', bookings[0]);
+      }
+      
+      return bookings || [];
     } catch (error) {
       logger.error('Get bookings failed:', error);
-      throw new Error('Failed to load bookings');
+      console.error('❌ Get bookings error details:', error.message);
+      throw new Error(error.message || 'Failed to load bookings');
     }
   }
 
   // Get a specific booking by ID
   async getBookingById(bookingId) {
     try {
-      const response = await this.makeRequest(`/${bookingId}`);
-      return response.data;
+      // Import supabaseService dynamically to avoid circular imports
+      const { supabaseService } = await import('./supabaseService');
+      const { supabase } = await import('../config/supabase');
+      
+      const { data: { user }, error } = await supabase.auth.getUser();
+      if (error || !user) {
+        throw new Error('User not authenticated');
+      }
+      
+      console.log('📋 Fetching booking by ID:', bookingId, 'for user:', user.id);
+      const booking = await supabaseService.getBookingById(bookingId, user.id);
+      
+      return booking;
     } catch (error) {
       logger.error('Get booking by ID failed:', error);
-      throw new Error('Failed to load booking details');
+      console.error('❌ Get booking by ID error details:', error.message);
+      throw new Error(error.message || 'Failed to load booking details');
     }
   }
 
   // Create a new booking
   async createBooking(bookingData) {
     try {
-      const response = await this.makeRequest('/', {
-        method: 'POST',
-        body: bookingData,
-      });
-      return response.data;
+      // Import supabaseService dynamically to avoid circular imports
+      const { supabaseService } = await import('./supabaseService');
+      
+      console.log('📝 Creating booking with data:', bookingData);
+      const result = await supabaseService.createBooking(bookingData);
+      console.log('✅ Booking created successfully:', result);
+      
+      return result;
     } catch (error) {
       logger.error('Create booking failed:', error);
-      throw new Error('Failed to create booking');
+      console.error('❌ Booking creation error details:', error.message);
+      throw new Error(error.message || 'Failed to create booking');
     }
   }
 
   // Update booking status
   async updateBookingStatus(bookingId, status, feedback = null) {
     try {
-      const response = await this.makeRequest(`/${bookingId}/status`, {
-        method: 'PATCH',
-        body: { status, feedback },
-      });
-      return response.data;
+      // Import supabaseService dynamically to avoid circular imports
+      const { supabaseService } = await import('./supabaseService');
+      
+      console.log('📝 Updating booking status:', bookingId, 'to:', status);
+      const result = await supabaseService.updateBookingStatus(bookingId, status, feedback);
+      console.log('✅ Booking status updated successfully:', result);
+      
+      return result;
     } catch (error) {
       logger.error('Update booking status failed:', error);
-      throw new Error('Failed to update booking status');
+      console.error('❌ Update booking status error details:', error.message);
+      throw new Error(error.message || 'Failed to update booking status');
     }
   }
 
   // Cancel a booking
   async cancelBooking(bookingId, reason) {
     try {
-      const response = await this.makeRequest(`/${bookingId}`, {
-        method: 'DELETE',
-        body: { reason },
-      });
-      return response.data;
+      // Import supabaseService dynamically to avoid circular imports
+      const { supabaseService } = await import('./supabaseService');
+      
+      console.log('📝 Cancelling booking:', bookingId, 'reason:', reason);
+      const result = await supabaseService.updateBookingStatus(bookingId, 'cancelled', reason);
+      console.log('✅ Booking cancelled successfully:', result);
+      
+      return result;
     } catch (error) {
       logger.error('Cancel booking failed:', error);
-      throw new Error('Failed to cancel booking');
+      console.error('❌ Cancel booking error details:', error.message);
+      throw new Error(error.message || 'Failed to cancel booking');
     }
   }
 
   // Upload payment proof
   async uploadPaymentProof(bookingId, paymentData) {
     try {
-      const response = await this.makeRequest(`/${bookingId}/payment-proof`, {
-        method: 'POST',
-        body: paymentData,
-      });
-      return response.data;
+      // Import supabaseService dynamically to avoid circular imports
+      const { supabaseService } = await import('./supabaseService');
+      
+      console.log('📝 Uploading payment proof for booking:', bookingId);
+      
+      let paymentProofUrl;
+      if (paymentData.imageBase64) {
+        // Upload image to storage first
+        paymentProofUrl = await supabaseService.uploadPaymentProofImage(bookingId, paymentData.imageBase64);
+      } else {
+        // Direct payment proof data
+        const result = await supabaseService.uploadPaymentProof(bookingId, paymentData);
+        paymentProofUrl = result.payment_proof;
+      }
+      
+      console.log('✅ Payment proof uploaded successfully:', paymentProofUrl);
+      return { url: paymentProofUrl };
     } catch (error) {
       logger.error('Upload payment proof failed:', error);
-      throw new Error('Failed to upload payment proof');
+      console.error('❌ Upload payment proof error details:', error.message);
+      throw new Error(error.message || 'Failed to upload payment proof');
     }
   }
 
   // Update booking status (for caregiver actions)
   async updateStatus(bookingId, status) {
     try {
-      const response = await this.makeRequest(`/${bookingId}/status`, {
-        method: 'PATCH',
-        body: { status },
-      });
-      return response.data;
+      return await this.updateBookingStatus(bookingId, status);
     } catch (error) {
       logger.error('Update booking status failed:', error);
       throw new Error('Failed to update booking status');

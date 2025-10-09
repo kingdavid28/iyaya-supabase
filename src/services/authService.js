@@ -1,75 +1,20 @@
-import AsyncStorage from "@react-native-async-storage/async-storage";
-import { authAPI, api } from "../config/api";
-import { STORAGE_KEYS } from "../config/constants";
+// Legacy authService - now redirects to Supabase AuthContext
+// This file is kept for backward compatibility but no longer uses old API
 import { logger } from "../utils/logger";
 
 class AuthService {
   // Authentication Methods
   async login(email, password) {
-    try {
-      logger.info("Attempting login for:", email);
-      const res = await authAPI.login({ email, password });
-      const token = res?.token;
-      if (!token) throw new Error("Login failed: no token returned");
-
-      // Store token and user info
-      await AsyncStorage.setItem(STORAGE_KEYS.AUTH_TOKEN, token);
-      await AsyncStorage.setItem(STORAGE_KEYS.USER_EMAIL, email);
-
-      logger.info("Login successful");
-      // Fetch profile for downstream consumers
-      let profile = null;
-      try {
-        profile = await authAPI.getProfile();
-      } catch (error) {
-        console.warn('Profile fetch error:', error);
-      }
-      return { user: profile, token };
-    } catch (error) {
-      logger.error("Login failed:", error);
-      throw this.handleAuthError(error);
-    }
+    throw new Error('Use AuthContext.signIn instead - old backend is deprecated');
   }
 
   async register(userData) {
-    try {
-      const { email } = userData;
-      logger.info("Attempting registration for:", email);
-      const res = await authAPI.register(userData);
-      const token = res?.token;
-      if (token) await AsyncStorage.setItem(STORAGE_KEYS.AUTH_TOKEN, token);
-      let profile = null;
-      try {
-        profile = await authAPI.getProfile();
-      } catch (error) {
-        console.warn('Profile fetch error:', error);
-      }
-      logger.info("Registration successful");
-      return { user: profile, token };
-    } catch (error) {
-      logger.error("Registration failed:", error);
-      throw this.handleAuthError(error);
-    }
+    throw new Error('Use AuthContext.signUp instead - old backend is deprecated');
   }
 
   async logout() {
-    try {
-      console.log("🚪 AuthService: Starting logout...");
-
-      // Clear all auth data first
-      await this.clearAuthData();
-
-      logger.info("Logout successful");
-    } catch (error) {
-      console.error(
-        "❌ AuthService logout error:",
-        error.message || JSON.stringify(error)
-      );
-      logger.error("Logout failed:", error);
-
-      // Don't throw error - allow logout to continue
-      // throw this.handleAuthError(error)
-    }
+    // Legacy method - AuthContext handles logout now
+    logger.info("Legacy logout called - use AuthContext.signOut instead");
   }
 
   async resetPassword(_email) {
@@ -78,31 +23,9 @@ class AuthService {
 
   // Auth State Management
   onAuthStateChanged(callback) {
-    // No Firebase listener; immediately invoke with a simple user object if token exists
-    let cancelled = false;
-    (async () => {
-      try {
-        const token = await AsyncStorage.getItem(STORAGE_KEYS.AUTH_TOKEN);
-        if (cancelled) return;
-        if (token) {
-          let profile = null;
-          try {
-            profile = await authAPI.getProfile();
-          } catch (error) {
-            console.warn('Profile fetch error:', error);
-          }
-          callback(profile);
-        } else {
-          callback(null);
-        }
-      } catch (error) {
-        console.warn('Auth state error:', error);
-        callback(null);
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
+    // Legacy method - AuthContext handles auth state now
+    callback(null);
+    return () => {};
   }
 
   getCurrentUserId() {
@@ -112,34 +35,13 @@ class AuthService {
   }
 
   async getCurrentToken() {
-    try {
-      // First try to get token from storage
-      let storedToken = await AsyncStorage.getItem(STORAGE_KEYS.AUTH_TOKEN);
-      if (storedToken) {
-        return storedToken;
-      }
-
-      return null;
-    } catch (error) {
-      logger.error("Error getting token:", error);
-      await this.clearAuthData();
-      return null;
-    }
+    // Legacy method - Supabase handles tokens now
+    return null;
   }
 
   async clearAuthData() {
-    try {
-      await AsyncStorage.removeItem(STORAGE_KEYS.AUTH_TOKEN);
-      await AsyncStorage.removeItem(STORAGE_KEYS.USER_EMAIL);
-      // Also clear shim token if present
-      try {
-        await AsyncStorage.removeItem("@shim_id_token");
-      } catch (error) {
-        console.warn('Shim token clear error:', error);
-      }
-    } catch (error) {
-      logger.error("Error clearing auth data:", error);
-    }
+    // Legacy method - no longer needed with Supabase
+    logger.info("Legacy clearAuthData called");
   }
 
   async refreshToken() {
@@ -169,41 +71,9 @@ class AuthService {
 export const authService = new AuthService();
 
 export const login = async (email, password) => {
-  try {
-    const response = await authAPI.login({ email, password });
-    return response;
-  } catch (error) {
-    logger.error("Login failed:", {
-      error: error.message,
-      code: error.code,
-      timeout: error.timeout,
-    });
-    throw error;
-  }
+  throw new Error('Use AuthContext.signIn instead - old backend is deprecated');
 };
 
 export const getProfile = async () => {
-  try {
-    const response = await api.get("/auth/profile", {
-      timeout: 60000, // 60 second timeout
-      retries: 2, // Allow 2 retries
-    });
-
-    return {
-      success: true,
-      data: response.data,
-    };
-  } catch (error) {
-    console.error("Get profile API error:", {
-      message: error.message,
-      code: error.code,
-      timeout: error.timeout,
-    });
-
-    return {
-      success: false,
-      error: error.message,
-      isTimeout: error.code === "ECONNABORTED",
-    };
-  }
+  throw new Error('Use AuthContext.getUserProfile instead - old backend is deprecated');
 };

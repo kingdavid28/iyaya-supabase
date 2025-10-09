@@ -1,9 +1,12 @@
 import { CommonActions } from '@react-navigation/native';
 
 export const navigateToUserDashboard = (navigation, userRole) => {
-  const dashboardRoute = userRole === 'parent' ? 'ParentDashboard' : 'CaregiverDashboard';
+  console.log('🧭 Navigation called with role:', userRole, 'type:', typeof userRole);
   
-  console.log(`🧭 Navigating to ${dashboardRoute} for role: ${userRole}`);
+  const dashboardRoute = userRole === 'caregiver' ? 'CaregiverDashboard' : 'ParentDashboard';
+  
+  console.log(`🧭 Role comparison: '${userRole}' === 'caregiver' = ${userRole === 'caregiver'}`);
+  console.log(`🧭 Final dashboard route: ${dashboardRoute}`);
   
   navigation.dispatch(
     CommonActions.reset({

@@ -2,6 +2,8 @@ const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const User = require('../models/User');
 const Caregiver = require('../models/Caregiver');
+const Contract = require('../models/Contract');
+const Notification = require('../models/Notification');
 const ErrorResponse = require('../utils/errorResponse');
 const auditService = require('../services/auditService');
 const emailService = require('../services/emailService');
@@ -13,16 +15,12 @@ const path = require('path');
 function normalizeRole(input) {
   const role = String(input || '').toLowerCase();
   if (role === 'caregiver') return 'caregiver';
-  return 'parent'; // Default for any other input
+  return 'parent'; // Default to parent for any other input
 }
 
 // Helper function to generate tokens
 const generateTokens = (user) => {
-  // Map legacy roles for JWT tokens
-  let tokenRole = user.role;
-  if (user.role === 'client' || user.userType === 'client') {
-    tokenRole = 'parent';
-  }
+  const tokenRole = user.role === 'caregiver' ? 'caregiver' : 'parent';
   
   const accessToken = jwt.sign(
     { id: user._id, role: tokenRole },
@@ -38,6 +36,56 @@ const generateTokens = (user) => {
 
   return { accessToken, refreshToken };
 };
+
+// Notify parents about new caregiver signup
+const notifyParentsOfNewCaregiver = async (caregiverUser) => {
+  try {
+    // Get all parent users with verified emails
+    const parents = await User.find({ 
+      role: 'parent',
+      'verification.emailVerified': true 
+    }).select('_id name email');
+
+    console.log(`📢 Notifying ${parents.length} parents about new caregiver: ${caregiverUser.name}`);
+
+    // Create in-app notifications for each parent
+    for (const parent of parents) {
+      try {
+        await Notification.create({
+          userId: parent._id,
+          type: 'NEW_CAREGIVER',
+          title: 'New Caregiver Available',
+          message: `${caregiverUser.name} just joined iYaya as a caregiver`,
+          data: { caregiverId: caregiverUser._id }
+        });
+        console.log(`📱 Notification created for parent ${parent.name}`);
+      } catch (error) {
+        console.warn(`Failed to notify parent ${parent._id}:`, error.message);
+      }
+    }
+  } catch (error) {
+    console.error('Error notifying parents of new caregiver:', error);
+    throw error;
+  }
+};
+
+// Helper: check if user is admin (no admin role in simplified system)
+function isAdmin(user) {
+  return false; // No admin role in simplified system
+}
+
+// Helper: check if user has contract with parent (client)
+async function hasActiveContractWithParent(requesterId, parentId) {
+  if (!requesterId || !parentId) return false;
+  const contract = await Contract.findOne({
+    $or: [
+      { clientId: parentId, providerId: requesterId },
+      { clientId: requesterId, providerId: parentId }
+    ],
+    status: { $in: ['active', 'completed'] }
+  });
+  return !!contract;
+}
 
 // Firebase user sync endpoint for social authentication
 exports.firebaseSync = async (req, res, next) => {
@@ -211,6 +259,7 @@ exports.firebaseSync = async (req, res, next) => {
     });
   }
 };
+
 exports.uploadProfileImageBase64 = async (req, res, next) => {
   try {
     const { imageBase64, mimeType } = req.body || {};
@@ -278,6 +327,7 @@ exports.updateProfile = async (req, res, next) => {
     if (typeof name === 'string') update.name = name;
     if (typeof phone === 'string') update.phone = phone;
     if (profileImage) update.profileImage = profileImage;
+    
     // Allow parents to update children via /auth/profile as well
     if (Array.isArray(children)) {
       try {
@@ -299,6 +349,7 @@ exports.updateProfile = async (req, res, next) => {
         return res.status(400).json({ success: false, error: 'Invalid children data' });
       }
     }
+    
     // Handle both string and object address formats
     if (address) {
       if (typeof address === 'string') {
@@ -450,60 +501,6 @@ exports.updateRole = async (req, res, next) => {
 };
 
 // Get current authenticated user
-const Contract = require('../models/Contract');
-const Notification = require('../models/Notification');
-
-// Notify parents about new caregiver signup
-const notifyParentsOfNewCaregiver = async (caregiverUser) => {
-  try {
-    // Get all parent users with verified emails
-    const parents = await User.find({ 
-      role: 'parent',
-      'verification.emailVerified': true 
-    }).select('_id name email');
-
-    console.log(`📢 Notifying ${parents.length} parents about new caregiver: ${caregiverUser.name}`);
-
-    // Create in-app notifications for each parent
-    for (const parent of parents) {
-      try {
-        await Notification.create({
-          userId: parent._id,
-          type: 'NEW_CAREGIVER',
-          title: 'New Caregiver Available',
-          message: `${caregiverUser.name} just joined iYaya as a caregiver`,
-          data: { caregiverId: caregiverUser._id }
-        });
-        console.log(`📱 Notification created for parent ${parent.name}`);
-      } catch (error) {
-        console.warn(`Failed to notify parent ${parent._id}:`, error.message);
-      }
-    }
-  } catch (error) {
-    console.error('Error notifying parents of new caregiver:', error);
-    throw error;
-  }
-};
-
-// Helper: check if user is admin (no admin role in simplified system)
-function isAdmin(user) {
-  return false; // No admin role in simplified system
-}
-
-// Helper: check if user has contract with parent (client)
-async function hasActiveContractWithParent(requesterId, parentId) {
-  if (!requesterId || !parentId) return false;
-  const contract = await Contract.findOne({
-    $or: [
-      { clientId: parentId, providerId: requesterId },
-      { clientId: requesterId, providerId: parentId }
-    ],
-    status: { $in: ['active', 'completed'] }
-  });
-  return !!contract;
-}
-
-// Get current authenticated user (works with both Firebase and custom JWT)
 exports.getCurrentUser = async (req, res, next) => {
   try {
     // For JWT users
@@ -512,7 +509,6 @@ exports.getCurrentUser = async (req, res, next) => {
       return next(new ErrorResponse('User not found', 404));
     }
 
-    
     // If self-access (user requesting own profile), return all info
     if (req.user.id === String(user._id)) {
       const obj = user.toObject ? user.toObject() : user;
@@ -577,7 +573,6 @@ exports.login = async (req, res, next) => {
 
     if (!user) {
       console.log('❌ User not found in database for email:', email);
-
       return res.status(401).json({ success: false, error: 'Invalid credentials' });
     }
 
@@ -657,7 +652,6 @@ exports.register = async (req, res, next) => {
     try {
       const verificationToken = await user.createVerificationToken();
 
-      
       // Send verification email
       await emailService.sendVerificationEmail(user.email, user.name, verificationToken);
       console.log('📧 Verification email sent to:', user.email);
@@ -959,8 +953,6 @@ exports.confirmPasswordReset = async (req, res, next) => {
   }
 };
 
-
-
 // Verify email with token
 exports.verifyEmail = async (req, res, next) => {
   const { token } = req.params;
@@ -1122,88 +1114,6 @@ exports.resendVerification = async (req, res, next) => {
   }
 };
 
-// Firebase sync - create/update user from Firebase
-exports.firebaseSync = async (req, res, next) => {
-  try {
-    const { 
-      firebaseUid, 
-      email, 
-      name, 
-      firstName, 
-      lastName, 
-      middleInitial, 
-      birthDate, 
-      phone, 
-      role, 
-      emailVerified 
-    } = req.body;
-    
-    let user = await User.findOne({ firebaseUid });
-    
-    if (!user) {
-      user = await User.create({
-        firebaseUid,
-        email,
-        name,
-        firstName,
-        lastName,
-        middleInitial,
-        birthDate,
-        phone,
-        role: normalizeRole(role),
-        verification: { emailVerified: emailVerified || false }
-      });
-      
-      // Auto-create caregiver profile if role is caregiver
-      if (role === 'caregiver') {
-        try {
-          await Caregiver.create({
-            userId: user._id,
-            name: name || `${firstName || ''} ${lastName || ''}`.trim() || 'Caregiver',
-            bio: '',
-            skills: [],
-            certifications: [],
-            ageCareRanges: [],
-            availability: {
-              days: [],
-              hours: { start: '08:00', end: '18:00' },
-              flexible: false
-            },
-            verification: {
-              profileComplete: false,
-              identityVerified: false,
-              certificationsVerified: false,
-              referencesVerified: false,
-              trustScore: 0,
-              badges: []
-            }
-          });
-        } catch (cgErr) {
-          console.warn('Failed to create caregiver profile:', cgErr.message);
-        }
-      }
-    } else {
-      // Update existing user
-      if (user.verification) {
-        user.verification.emailVerified = emailVerified || false;
-      } else {
-        user.verification = { emailVerified: emailVerified || false };
-      }
-      if (firstName) user.firstName = firstName;
-      if (lastName) user.lastName = lastName;
-      if (middleInitial) user.middleInitial = middleInitial;
-      if (birthDate) user.birthDate = birthDate;
-      if (phone) user.phone = phone;
-      await user.save();
-    }
-    
-    res.status(200).json({ success: true, user });
-  } catch (err) {
-    console.error('Firebase sync error:', err);
-    return res.status(500).json({ success: false, error: 'Firebase sync failed' });
-  }
-};
-
 // Send custom verification email
 exports.sendCustomVerification = async (req, res, next) => {
   try {
@@ -1328,7 +1238,7 @@ exports.getFirebaseProfile = async (req, res, next) => {
             lastName: user.lastName,
             birthDate: user.birthDate,
             phone: user.phone,
-            role: user.role
+            role: user.role ?? null
           });
           let profileData = {
             id: user._id,
@@ -1340,7 +1250,7 @@ exports.getFirebaseProfile = async (req, res, next) => {
             middleInitial: user.middleInitial,
             birthDate: user.birthDate,
             phone: user.phone,
-            role: user.role === 'caregiver' ? 'caregiver' : 'parent',
+            role: user.role ?? null,
             profileImage: user.profileImage,
             address: user.address,
             location: user.address?.street || user.address,
@@ -1356,10 +1266,9 @@ exports.getFirebaseProfile = async (req, res, next) => {
                 bio: caregiverProfile.bio,
                 skills: caregiverProfile.skills,
                 certifications: caregiverProfile.certifications,
-                hourlyRate: caregiverProfile.hourlyRate,
+                ageCareRanges: caregiverProfile.ageCareRanges,
                 availability: caregiverProfile.availability,
-                rating: caregiverProfile.rating,
-                reviewCount: caregiverProfile.reviewCount
+                verification: caregiverProfile.verification
               };
             }
           }
@@ -1372,7 +1281,7 @@ exports.getFirebaseProfile = async (req, res, next) => {
     }
     
     // Return default profile if user not found
-    res.status(200).json({ role: 'parent' });
+    res.status(200).json({ role: null });
   } catch (err) {
     console.error('Firebase profile error:', err);
     next(new ErrorResponse('Failed to get Firebase profile', 500));
@@ -1414,24 +1323,4 @@ exports.getUserByFirebaseUid = async (req, res, next) => {
   }
 };
 
-// Make sure all required methods are exported
-module.exports = {
-  getCurrentUser: exports.getCurrentUser,
-  login: exports.login,
-  logout: exports.logout,
-  register: exports.register,
-  refreshToken: exports.refreshToken,
-  updateChildren: exports.updateChildren,
-  updateProfile: exports.updateProfile,
-  updateRole: exports.updateRole,
-  uploadProfileImageBase64: exports.uploadProfileImageBase64,
-  resetPassword: exports.resetPassword,
-  confirmPasswordReset: exports.confirmPasswordReset,
-  checkEmailExists: exports.checkEmailExists,
-  verifyEmail: exports.verifyEmail,
-  resendVerification: exports.resendVerification,
-  firebaseSync: exports.firebaseSync,
-  getFirebaseProfile: exports.getFirebaseProfile,
-  sendCustomVerification: exports.sendCustomVerification,
-  getUserByFirebaseUid: exports.getUserByFirebaseUid
-};
+module.exports = exports;

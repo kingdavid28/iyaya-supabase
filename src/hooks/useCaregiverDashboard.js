@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useFocusEffect } from '@react-navigation/native';
-import { apiService } from '../services';
+import { supabaseService } from '../services/supabaseService';
+import { supabase } from '../config/supabase';
 import { useAuth } from '../contexts/AuthContext';
 import { formatAddress } from '../utils/addressUtils';
 
@@ -33,60 +34,75 @@ export const useCaregiverDashboard = () => {
   const [dataLoaded, setDataLoaded] = useState(false);
   const loadingRef = useRef(false);
 
-  // Load profile data with caching
+  // Load profile data from Supabase
   const loadProfile = useCallback(async () => {
     if (!user?.id || loadingRef.current) return;
 
     try {
       loadingRef.current = true;
-      console.log('🔄 Loading enhanced profile data...');
+      console.log('🔄 Loading profile data from Supabase...');
 
-      // Retry with token refresh
-      let caregiverResponse;
+      // Get user profile from users table
+      const userProfile = await supabaseService.getProfile(user.id);
+      
+      // Get caregiver-specific profile from caregiver_profiles table
+      let caregiverProfile = null;
       try {
-        caregiverResponse = await apiService.caregivers.getProfile();
+        const { data } = await supabase
+          .from('caregiver_profiles')
+          .select('*')
+          .eq('user_id', user.id)
+          .single();
+        caregiverProfile = data;
       } catch (error) {
-        console.log('🔍 API Error details:', error);
-        if (error?.code === 'INVALID_TOKEN' || error?.response?.data?.code === 'INVALID_TOKEN' || error?.originalError?.code === 'INVALID_TOKEN' || error?.retryable) {
-          console.log('🔄 Token invalid, refreshing and retrying...');
-          const { firebaseAuthService } = await import('../services/firebaseAuthService');
-          const currentUser = firebaseAuthService.getCurrentUser();
-          if (currentUser) {
-            const newToken = await currentUser.getIdToken(true);
-            console.log('🔑 New token obtained:', newToken ? 'Yes' : 'No');
-          }
-          console.log('🔄 Retrying API call...');
-          caregiverResponse = await apiService.caregivers.getProfile();
-          console.log('✅ Retry successful');
-        } else {
-          throw error;
-        }
+        console.log('🔍 No caregiver profile found:', error.message);
       }
-      const caregiverProfile = caregiverResponse?.caregiver || caregiverResponse?.data?.caregiver || caregiverResponse || {};
 
-      if (caregiverProfile && Object.keys(caregiverProfile).length > 0) {
-        setProfile(prev => ({
-          ...prev,
-          name: caregiverProfile.name || user?.name || prev.name,
-          email: caregiverProfile.email || user?.email || prev.email,
-          phone: caregiverProfile.phone || user?.phone || prev.phone,
-          location: caregiverProfile.location || (caregiverProfile.address ? `${caregiverProfile.address.city || ''}${caregiverProfile.address.city && caregiverProfile.address.province ? ', ' : ''}${caregiverProfile.address.province || ''}` : user?.location || prev.location),
-          address: caregiverProfile.address || prev.address,
-          profileImage: caregiverProfile.profileImage || user?.profileImage || prev.profileImage,
-          hourlyRate: caregiverProfile.hourlyRate || caregiverProfile.rate || prev.hourlyRate,
-          experience: caregiverProfile.experience || prev.experience,
-          bio: caregiverProfile.bio || prev.bio,
-          skills: caregiverProfile.skills || prev.skills || [],
-          ageCareRanges: caregiverProfile.ageCareRanges || prev.ageCareRanges || [],
-          certifications: caregiverProfile.certifications || prev.certifications || [],
-          availability: caregiverProfile.availability || prev.availability,
-          rating: caregiverProfile.rating || prev.rating,
-          reviews: caregiverProfile.reviewCount || prev.reviews,
-          completedJobs: caregiverProfile.completedJobs || prev.completedJobs,
-          responseRate: caregiverProfile.responseRate || prev.responseRate,
-        }));
-        console.log('✅ Profile updated from API');
-      }
+      // Combine user and caregiver profile data
+      const combinedProfile = {
+        // User table data
+        name: userProfile?.name || user?.name,
+        email: userProfile?.email || user?.email,
+        phone: userProfile?.phone || user?.phone,
+        bio: userProfile?.bio,
+        profile_image: userProfile?.profile_image,
+        address: userProfile?.address,
+        location: userProfile?.location,
+        hourly_rate: userProfile?.hourly_rate,
+        skills: userProfile?.skills || [],
+        experience: userProfile?.experience,
+        
+        // Caregiver profile data (if exists)
+        ...(caregiverProfile && {
+          hourly_rate: caregiverProfile.hourly_rate || userProfile?.hourly_rate,
+          skills: caregiverProfile.skills || userProfile?.skills || [],
+          certifications: caregiverProfile.certifications || [],
+          availability: caregiverProfile.availability,
+          background_check_status: caregiverProfile.background_check_status,
+        })
+      };
+
+      setProfile(prev => ({
+        ...prev,
+        name: combinedProfile.name || prev.name,
+        email: combinedProfile.email || prev.email,
+        phone: combinedProfile.phone || prev.phone,
+        location: combinedProfile.location || prev.location,
+        address: combinedProfile.address || prev.address,
+        profileImage: combinedProfile.profile_image || prev.profileImage,
+        hourlyRate: combinedProfile.hourly_rate || prev.hourlyRate,
+        experience: combinedProfile.experience || prev.experience,
+        bio: combinedProfile.bio || prev.bio,
+        skills: combinedProfile.skills || prev.skills || [],
+        certifications: combinedProfile.certifications || prev.certifications || [],
+        availability: combinedProfile.availability || prev.availability,
+        rating: prev.rating, // Keep existing rating
+        reviews: prev.reviews, // Keep existing reviews
+        completedJobs: prev.completedJobs, // Keep existing completed jobs
+        responseRate: prev.responseRate, // Keep existing response rate
+      }));
+      
+      console.log('✅ Profile updated from Supabase');
     } catch (error) {
       console.error('❌ Error loading profile:', error?.message || error);
     } finally {
@@ -94,94 +110,81 @@ export const useCaregiverDashboard = () => {
     }
   }, [user?.id]);
 
-  // Fetch jobs
+  // Fetch jobs from Supabase
   const fetchJobs = useCallback(async () => {
     if (!user?.id || user?.role !== 'caregiver') return;
 
     setJobsLoading(true);
     try {
-      const res = await apiService.jobs.getAvailable();
-      const jobsList = res?.data?.jobs || res?.jobs || [];
+      console.log('📋 Fetching available jobs from Supabase...');
+      const jobsList = await supabaseService.getJobs({ status: 'active' });
+      console.log('📋 Available jobs from Supabase:', jobsList);
 
       const transformedJobs = jobsList.map(job => ({
-        id: job._id || job.id,
+        id: job.id,
+        _id: job.id,
         title: job.title || 'Childcare Position',
-        family: job.clientName || job.employerName || 'Family',
-        location: job.location || 'Cebu City',
+        family: job.users?.name || 'Family',
+        location: job.location || 'Location TBD',
         distance: '2-5 km away',
-        hourlyRate: job.hourlyRate || job.rate || 300,
-        schedule: job.startTime && job.endTime ? `${job.startTime} - ${job.endTime}` : 'Flexible hours',
-        requirements: Array.isArray(job.requirements) ? job.requirements : ['Experience with children'],
+        hourlyRate: job.hourly_rate || job.hourlyRate || 300,
+        schedule: job.start_time && job.end_time ? `${job.start_time} - ${job.end_time}` : 'Flexible hours',
+        requirements: ['Experience with children'],
         postedDate: 'Recently posted',
         urgent: job.urgent || false,
-        children: job.numberOfChildren || 1,
-        ages: job.childrenAges || 'Various ages',
-        description: job.description || ''
+        children: job.number_of_children || 1,
+        ages: job.children_ages || 'Various ages',
+        description: job.description || '',
+        date: job.date,
+        startTime: job.start_time,
+        endTime: job.end_time,
+        parentId: job.parent_id
       }));
 
+      console.log('📋 Transformed jobs:', transformedJobs);
       setJobs(transformedJobs);
     } catch (error) {
-      console.error('Error fetching jobs:', {
-        message: error?.message,
-        status: error?.status,
-        statusCode: error?.statusCode,
-        code: error?.code,
-        originalError: error?.originalError,
-        stack: error?.stack
-      });
+      console.error('❌ Error fetching jobs:', error);
       setJobs([]);
-      // Re-throw to let error handler process it
-      throw error;
     } finally {
       setJobsLoading(false);
     }
   }, [user?.id, user?.role]);
 
-  // Fetch applications
+  // Fetch applications from Supabase
   const fetchApplications = useCallback(async () => {
     if (!user?.id || user?.role !== 'caregiver') return;
 
     try {
-      console.log('📋 Fetching applications for caregiver:', user?.id);
-      const res = await apiService.applications.getMy();
-      console.log('📋 Applications API response:', res);
+      console.log('📋 Fetching applications from Supabase...');
+      const applications = await supabaseService.getMyApplications(user.id);
+      console.log('📋 Applications from Supabase:', applications);
 
-      const list = res?.data?.applications || res?.applications || [];
-      console.log('📋 Applications count:', list.length);
-
-      const normalized = list.map(a => ({
-        id: a._id || a.id || Date.now(),
-        jobId: a.jobId?._id || a.jobId,
-        jobTitle: a.jobId?.title || a.jobId?.name || 'Childcare Position',
-        employerName: a.jobId?.clientName || a.jobId?.clientId?.name || 'Family',
-        parentId: a.parentId || a.jobId?.clientId?._id || a.jobId?.clientId,
-        family: a.jobId?.clientName || a.jobId?.clientId?.name || 'Family',
+      const normalized = applications.map(a => ({
+        id: a.id,
+        _id: a.id,
+        jobId: a.job_id,
+        jobTitle: a.jobs?.title || 'Childcare Position',
+        employerName: a.jobs?.users?.name || 'Family',
+        parentId: a.jobs?.parent_id,
+        family: a.jobs?.users?.name || 'Family',
         status: a.status || 'pending',
-        appliedDate: a.createdAt || new Date().toISOString(),
-        hourlyRate: a.proposedRate || a.jobId?.hourlyRate || 200,
-        location: a.jobId?.location || 'Location not specified',
-        jobDate: a.jobId?.date || new Date().toISOString(),
-        message: a.message || a.coverLetter || ''
+        appliedDate: a.applied_at || a.created_at,
+        hourlyRate: a.jobs?.hourly_rate || 200,
+        location: a.jobs?.location || 'Location not specified',
+        jobDate: a.jobs?.date,
+        message: a.message || ''
       }));
 
       console.log('📋 Normalized applications:', normalized);
       setApplications(normalized);
     } catch (error) {
-      console.error('Error fetching applications:', {
-        message: error?.message,
-        status: error?.status,
-        statusCode: error?.statusCode,
-        code: error?.code,
-        originalError: error?.originalError,
-        stack: error?.stack
-      });
+      console.error('Error fetching applications:', error);
       setApplications([]);
-      // Re-throw to let error handler process it
-      throw error;
     }
   }, [user?.id, user?.role]);
 
-  // Fetch bookings
+  // Fetch bookings from Supabase
   const fetchBookings = useCallback(async () => {
     console.log('📅 fetchBookings called with user:', { id: user?.id, role: user?.role });
     if (!user?.id || user?.role !== 'caregiver') {
@@ -190,28 +193,28 @@ export const useCaregiverDashboard = () => {
     }
 
     try {
-      console.log('📅 Fetching bookings for caregiver:', user?.id);
-      const res = await apiService.bookings.getMy();
-      console.log('📅 Bookings API response:', res);
+      console.log('📅 Fetching bookings from Supabase...');
+      const bookingsList = await supabaseService.getMyBookings(user.id, 'caregiver');
+      console.log('📅 Bookings from Supabase:', bookingsList);
 
-      const list = Array.isArray(res?.bookings) ? res.bookings : [];
-      console.log('📅 Bookings count:', list.length);
-
-      if (list.length === 0) {
-        console.log('📅 No bookings found in database for caregiver:', user?.id);
-      }
-
-      const normalized = list.map((b, idx) => ({
-        id: b._id || b.id || idx + 1,
-        family: b.clientId?.name || b.family || b.customerName || 'Family',
-        caregiver: b.caregiver?.name || b.caregiverId?.name || 'Caregiver',
-        clientId: b.clientId,
-        parentId: b.clientId?._id || b.clientId || b.parentId || b.userId,
-        date: b.date || b.startDate || new Date().toISOString(),
-        time: b.time || (b.startTime && b.endTime ? `${b.startTime} - ${b.endTime}` : ''),
+      const normalized = bookingsList.map((b, idx) => ({
+        id: b.id || idx + 1,
+        _id: b.id,
+        family: b.parent?.name || b.family || 'Family',
+        caregiver: b.caregiver?.name || user?.name || 'Caregiver',
+        clientId: b.parent,
+        parentId: b.parent_id,
+        date: b.date,
+        time: b.time || (b.start_time && b.end_time ? `${b.start_time} - ${b.end_time}` : ''),
         status: b.status || 'pending',
-        children: Array.isArray(b.children) ? b.children.length : (b.children || 0),
-        location: formatAddress(b.location || b.address)
+        children: Array.isArray(b.selected_children) ? b.selected_children.length : 1,
+        location: b.address || 'Location TBD',
+        address: b.address,
+        contactPhone: b.contact_phone,
+        specialInstructions: b.special_instructions,
+        emergencyContact: b.emergency_contact,
+        totalAmount: b.total_amount,
+        hourlyRate: b.hourly_rate
       }));
 
       console.log('📅 Normalized bookings:', normalized);
@@ -232,7 +235,7 @@ export const useCaregiverDashboard = () => {
         fetchBookings()
       ]).finally(() => setDataLoaded(true));
     }
-  }, [user?.id, dataLoaded]);
+  }, [user?.id, dataLoaded, loadProfile, fetchJobs, fetchApplications, fetchBookings]);
 
   // Refresh data when tabs become active
   useEffect(() => {

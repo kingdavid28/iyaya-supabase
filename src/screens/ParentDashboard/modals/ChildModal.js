@@ -41,6 +41,13 @@ const ChildModal = ({
       animationType="slide"
       style={styles.modalContent}
     >
+      <KeyboardAvoidingWrapper>
+        <ScrollView 
+          style={styles.scrollView}
+          contentContainerStyle={styles.scrollContent}
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
+        >
           <Text style={styles.modalTitle}>
             {editing ? "Edit Child" : "Add Child"}
           </Text>
@@ -116,6 +123,8 @@ const ChildModal = ({
               {editing ? "Save Changes" : "Add Child"}
             </Button>
           </View>
+        </ScrollView>
+      </KeyboardAvoidingWrapper>
     </ModalWrapper>
   );
 };
@@ -176,6 +185,13 @@ const styles = StyleSheet.create({
   },
   buttonContent: {
     paddingVertical: 8,
+  },
+  scrollView: {
+    flex: 1,
+  },
+  scrollContent: {
+    flexGrow: 1,
+    paddingBottom: 20,
   },
 });
 

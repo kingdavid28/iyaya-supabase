@@ -221,16 +221,11 @@ router.post('/firebase-sync',
   )
 );
 
-router.post('/logout',
-  authLimiter,
-  authenticate,
-  authController.logout
-);
-
-router.post('/refresh-token',
-  authLimiter,
-  validation.validate('refreshTokens'),
-  authController.refreshToken
+router.get('/firebase-profile',
+  profileLimiter,
+  authController.getFirebaseProfile || ((req, res) =>
+    res.status(503).json({ error: 'Firebase profile service unavailable' })
+  )
 );
 
 router.post('/reset-password',

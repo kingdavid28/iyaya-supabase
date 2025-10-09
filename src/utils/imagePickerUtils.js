@@ -1,17 +1,16 @@
 // src/utils/imagePickerUtils.js
 import * as ImagePicker from 'expo-image-picker';
 import * as Permissions from 'expo-permissions';
-import { Platform } from 'react-native';
+import { Platform, Image } from 'react-native';
 import * as FileSystem from 'expo-file-system';
 
 // Default options for image picker
 const defaultOptions = {
-  mediaTypes: ImagePicker.MediaTypeOptions.Images,
+  mediaTypes: 'Images',
   allowsEditing: true,
-  aspect: [4, 3],
+  aspect: [1, 1],
   quality: 0.8,
-  base64: false,
-  exif: false,
+  base64: true,
 };
 
 // Check and request camera roll permissions
@@ -109,9 +108,9 @@ export const resizeImage = async (uri, maxWidth, maxHeight) => {
     }
 
     const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      mediaTypes: 'Images',
       allowsEditing: true,
-      aspect: [4, 3],
+      aspect: [1, 1],
       quality: 0.8,
       base64: true,
     });
@@ -151,11 +150,6 @@ export const imageToBase64 = async (uri) => {
 // Get image metadata (dimensions, size, etc.)
 export const getImageInfo = async (uri) => {
   try {
-    const result = await ImagePicker.getMediaLibraryPermissionsAsync();
-    if (!result.granted) {
-      await getCameraRollPermissions();
-    }
-
     const imageInfo = await FileSystem.getInfoAsync(uri, { size: true });
     if (!imageInfo.exists) {
       throw new Error('Image file not found');
@@ -188,10 +182,11 @@ export const compressImage = async (uri, options = {}) => {
     const { quality = 0.8, base64 = false } = options;
     
     const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      mediaTypes: 'Images',
       allowsEditing: true,
+      aspect: [1, 1],
       quality,
-      base64,
+      base64: true,
     });
 
     if (result.canceled) {

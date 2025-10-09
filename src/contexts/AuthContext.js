@@ -1,340 +1,311 @@
-import AsyncStorage from "@react-native-async-storage/async-storage";
-import React, { createContext, useContext, useEffect, useState } from "react";
-import { ActivityIndicator, View } from "react-native";
-import { authAPI } from "../config/api";
-import { STORAGE_KEYS } from "../config/constants";
-import { firebaseAuthService } from "../services/firebaseAuthService";
+import React, { createContext, useContext, useEffect, useState } from 'react'
+import { ActivityIndicator, View } from 'react-native'
+import { supabase } from '../config/supabase'
 
-// Import safety functions for Firebase initialization - FIXED: Only initialize once
-import { getAuthSync, initializeFirebase } from '../config/firebase';
-
-// Global flag to prevent multiple initializations across the app
-let globalAuthInitialized = false;
-
-export const AuthContext = createContext();
+export const AuthContext = createContext()
 
 export const AuthProvider = ({ children }) => {
-  const [isLoading, setIsLoading] = useState(true);
-  const [user, setUser] = useState(null);
-  const [error, setError] = useState(null);
-  const [hasLoggedOut, setHasLoggedOut] = useState(false);
-  const [authInitialized, setAuthInitialized] = useState(false);
-
-  // Normalize user object to ensure consistent property names
-  const normalizeUser = (userData) => {
-    if (!userData) return null;
-
-    return {
-      // Use id consistently (prefer _id from MongoDB if available)
-      id: userData._id || userData.id || userData.uid,
-      // Preserve all other properties
-      ...userData,
-      // Ensure we don't have duplicate properties
-      _id: undefined,
-      uid: undefined,
-    };
-  };
+  const [user, setUser] = useState(null)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState(null)
 
   useEffect(() => {
-    let unsubscribe = null;
-
-    const initializeAuth = async () => {
-      try {
-        console.log('🔄 Initializing AuthContext with safety checks...');
-
-        // Only initialize Firebase once globally
-        if (!globalAuthInitialized) {
-          await initializeFirebase();
-          globalAuthInitialized = true;
-        }
-
-        // Get auth instance safely
-        const auth = getAuthSync();
-        console.log('✅ AuthContext: Firebase initialized, setting up listener');
-
-        // Set up auth state listener with error handling
-        unsubscribe = firebaseAuthService.onAuthStateChanged(async (user) => {
-          console.log('🔐 Auth state changed:', user ? 'User logged in' : 'User logged out');
-
-          if (user && user.emailVerified) {
-            try {
-              const token = await user.getIdToken();
-              await AsyncStorage.setItem(STORAGE_KEYS.AUTH_TOKEN, token);
-              console.log('💾 Token stored in auth listener:', !!token);
-
-              // Get user profile from MongoDB
-              const response = await fetch(`${process.env.EXPO_PUBLIC_API_URL || 'http://192.168.1.9:5000'}/api/auth/firebase-profile`, {
-                headers: {
-                  'Authorization': `Bearer ${token}`
-                }
-              });
-
-              let profile = { role: 'parent' };
-              if (response.ok) {
-                profile = await response.json();
-                console.log('🔍 Profile data received in auth listener:', profile);
-              } else {
-                console.log('❌ Profile fetch failed in auth listener:', response.status);
-              }
-
-              const normalizedUser = normalizeUser({
-                id: user.uid,
-                email: user.email,
-                name: user.displayName || profile.name,
-                emailVerified: user.emailVerified,
-                role: profile.role || 'parent',
-                firstName: profile.firstName,
-                lastName: profile.lastName,
-                middleInitial: profile.middleInitial,
-                birthDate: profile.birthDate,
-                phone: profile.phone,
-                profileImage: profile.profileImage,
-                address: profile.address,
-                children: profile.children,
-                caregiverProfile: profile.caregiverProfile,
-                // Include MongoDB _id if available
-                _id: profile._id
-              });
-
-              setUser(normalizedUser);
-            } catch (profileError) {
-              console.warn('Failed to get profile:', profileError.message);
-              setUser(normalizeUser({
-                id: user.uid,
-                email: user.email,
-                name: user.displayName,
-                emailVerified: user.emailVerified,
-                role: 'parent'
-              }));
-            }
-          } else {
-            setUser(null);
-            await AsyncStorage.removeItem(STORAGE_KEYS.AUTH_TOKEN);
-          }
-          setIsLoading(false);
-        });
-
-        setAuthInitialized(true);
-
-      } catch (error) {
-        console.error('❌ AuthContext initialization failed:', error);
-        setError(error.message);
-        setIsLoading(false);
-        setAuthInitialized(true); // Mark as initialized anyway to avoid blocking
-      }
-    };
-
-    initializeAuth();
-
-    return () => {
-      if (unsubscribe) {
-        unsubscribe();
-      }
-    };
-  }, []);
-
-  const login = async (email, password) => {
-    try {
-      setIsLoading(true);
-      setError(null);
-      setHasLoggedOut(false);
-
-      console.log('🔐 Attempting Firebase login with:', { email });
-      const res = await firebaseAuthService.login(email, password);
-      console.log('✅ Firebase login successful:', res);
-
-      if (res?.token) {
-        await AsyncStorage.setItem(STORAGE_KEYS.AUTH_TOKEN, res.token);
-        console.log('💾 Token stored successfully:', !!res.token);
+    // Get initial session and user profile
+    supabase.auth.getSession().then(async ({ data: { session } }) => {
+      if (session?.user) {
+        const userWithProfile = await fetchUserWithProfile(session.user)
+        setUser(userWithProfile)
       } else {
-        console.log('⚠️ No token in login response');
+        setUser(null)
       }
+      setLoading(false)
+    })
 
-      // Normalize the user object before setting it
-      if (res.user) {
-        setUser(normalizeUser(res.user));
+    // Listen for auth changes
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      async (event, session) => {
+        console.log('Auth event:', event)
+        if (session?.user) {
+          const userWithProfile = await fetchUserWithProfile(session.user)
+          setUser(userWithProfile)
+        } else {
+          setUser(null)
+        }
+        setLoading(false)
       }
+    )
 
-      return { success: true, user: res.user };
-    } catch (err) {
-      console.log('❌ Login error:', err.message);
-      const errorMessage = err?.message || "Login failed";
-      setError(errorMessage);
-      throw new Error(errorMessage);
-    } finally {
-      setIsLoading(false);
-    }
-  };
+    return () => subscription.unsubscribe()
+  }, [])
 
-  // Facebook login method
-  const loginWithFacebook = async (facebookResult) => {
+  const fetchUserWithProfile = async (authUser) => {
     try {
-      setIsLoading(true);
-      setError(null);
-      setHasLoggedOut(false);
-
-      console.log('🔐 Processing Facebook login result:', facebookResult);
-
-      // Store the token if available
-      if (facebookResult?.token) {
-        await AsyncStorage.setItem(STORAGE_KEYS.AUTH_TOKEN, facebookResult.token);
-        console.log('💾 Facebook token stored successfully');
+      console.log('🔍 Fetching profile for user:', authUser.id)
+      const { data, error } = await supabase
+        .from('users')
+        .select('*')
+        .eq('id', authUser.id)
+      
+      if (error) {
+        console.error('❌ Error fetching user profile:', error)
+        return { ...authUser, role: 'parent' } // Default role
       }
-
-      // Normalize and set the user
-      if (facebookResult.user) {
-        const normalizedUser = normalizeUser(facebookResult.user);
-        setUser(normalizedUser);
-        console.log('✅ Facebook user set in context:', normalizedUser);
+      
+      const profile = data && data.length > 0 ? data[0] : null
+      console.log('👤 User profile found:', profile)
+      
+      const userWithProfile = {
+        ...authUser,
+        role: profile?.role || 'parent',
+        name: profile?.name || authUser.user_metadata?.name,
+        profile
       }
-
-      return { success: true, user: facebookResult.user };
+      
+      console.log('✅ Final user object with role:', userWithProfile.role)
+      return userWithProfile
     } catch (err) {
-      console.log('❌ Facebook login error:', err.message);
-      const errorMessage = err?.message || "Facebook login failed";
-      setError(errorMessage);
-      throw new Error(errorMessage);
-    } finally {
-      setIsLoading(false);
+      console.error('❌ Error fetching user profile:', err)
+      return { ...authUser, role: 'parent' } // Default role
     }
-  };
+  }
 
-  const signup = async (userData) => {
+  const signUp = async (email, password, userData) => {
     try {
-      setIsLoading(true);
-      setError(null);
-      setHasLoggedOut(false);
+      setError(null)
+      setLoading(true)
 
-      console.log('🚀 Starting Firebase signup for:', userData.email);
+      const { data, error } = await supabase.auth.signUp({
+        email,
+        password,
+        options: {
+          emailRedirectTo: 'https://myiyrmiiywwgismcpith.supabase.co/auth/v1/callback',
+          data: {
+            name: userData.name,
+            role: userData.role,
+            first_name: userData.firstName,
+            last_name: userData.lastName,
+            phone: userData.phone,
+          }
+        }
+      })
+      
+      if (error) throw error
 
-      const res = await firebaseAuthService.signup(userData);
-      console.log('✅ Firebase signup successful:', res);
+      // Create user profile in public.users table using service role
+      if (data.user) {
+        console.log('🔄 Creating user profile for:', data.user.id)
+        
+        try {
+          // Use service role client to bypass RLS during signup
+          const { createClient } = await import('@supabase/supabase-js')
+          const serviceClient = createClient(
+            process.env.EXPO_PUBLIC_SUPABASE_URL,
+            process.env.EXPO_PUBLIC_SUPABASE_SERVICE_ROLE_KEY
+          )
+          
+          const { data: profileData, error: profileError } = await serviceClient
+            .from('users')
+            .insert([{
+              id: data.user.id,
+              email: data.user.email,
+              name: userData.name,
+              role: userData.role,
+              first_name: userData.firstName,
+              last_name: userData.lastName,
+              phone: userData.phone,
+              email_verified: false,
+              auth_provider: 'supabase',
+              status: 'active'
+            }])
+            .select()
 
-      return res;
+          if (profileError) {
+            console.error('❌ Profile creation failed:', profileError)
+          } else {
+            console.log('✅ Profile created successfully:', profileData)
+          }
+        } catch (serviceError) {
+          console.error('❌ Service client error:', serviceError)
+        }
+      }
+
+      return data
     } catch (err) {
-      console.error('❌ Signup error:', err.message);
-      const errorMessage = err?.message || "Signup failed";
-      setError(errorMessage);
-      throw new Error(errorMessage);
+      setError(err.message)
+      throw err
     } finally {
-      setIsLoading(false);
+      setLoading(false)
     }
-  };
+  }
 
-  // Safe sign out function with Firebase safety checks
+  const signIn = async (email, password) => {
+    try {
+      setError(null)
+      setLoading(true)
+
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email,
+        password
+      })
+      
+      if (error) throw error
+
+      // Check if email is verified (temporarily disabled)
+      // if (data.user && !data.user.email_confirmed_at) {
+      //   await supabase.auth.signOut()
+      //   throw new Error('Please verify your email before signing in. Check your inbox for the verification link.')
+      // }
+
+      return data
+    } catch (err) {
+      setError(err.message)
+      throw err
+    } finally {
+      setLoading(false)
+    }
+  }
+
   const signOut = async () => {
     try {
-      console.log('🚪 Starting Firebase signOut with safety checks...');
-      setIsLoading(true);
-
-      // Use Firebase auth service which has safety checks
-      await firebaseAuthService.signOut();
-      await AsyncStorage.removeItem(STORAGE_KEYS.AUTH_TOKEN);
-
-      setUser(null);
-      setError(null);
-      setHasLoggedOut(true);
-      console.log('✅ Firebase signOut completed');
+      setError(null)
+      setLoading(true)
+      const { error } = await supabase.auth.signOut()
+      if (error) throw error
+      setUser(null)
     } catch (err) {
-      console.log('❌ Logout error:', err);
-      throw err;
+      setError(err.message)
+      throw err
     } finally {
-      setIsLoading(false);
+      setLoading(false)
     }
-  };
-
-  const verifyEmailToken = async (token) => {
-    try {
-      setIsLoading(true);
-      setError(null);
-
-      console.log('🔐 Verifying email token:', token);
-      const result = await authAPI.verifyEmail(token);
-      console.log('✅ Verification API response:', result);
-
-      if (result.success && result.token) {
-        // Store the new token
-        await AsyncStorage.setItem(STORAGE_KEYS.AUTH_TOKEN, result.token);
-        console.log('💾 Token stored successfully');
-
-        // Use user data from verification response if available
-        let userData = result.user;
-
-        // If no user data in response, fetch profile
-        if (!userData) {
-          const profile = await authAPI.getProfile();
-          userData = profile?.data || profile;
-        }
-
-        console.log('👤 Setting user data:', userData);
-        // Normalize the user object before setting it
-        setUser(normalizeUser(userData));
-        return { success: true, user: userData };
-      }
-
-      throw new Error(result.message || 'Email verification failed');
-    } catch (error) {
-      console.error('❌ Email verification error:', error);
-      setError(error.message);
-      throw error;
-    } finally {
-      setIsLoading(false);
-    }
-  };
+  }
 
   const resetPassword = async (email) => {
     try {
-      setError(null);
-      const result = await firebaseAuthService.resetPassword(email);
-      return result;
+      setError(null)
+      const { error } = await supabase.auth.resetPasswordForEmail(email, {
+        redirectTo: 'your-app://reset-password'
+      })
+      if (error) throw error
     } catch (err) {
-      const errorMessage = err?.message || "Password reset failed";
-      setError(errorMessage);
-      throw new Error(errorMessage);
+      setError(err.message)
+      throw err
     }
-  };
+  }
+
+  const resendVerification = async (email) => {
+    try {
+      setError(null)
+      console.log('🔄 Resending verification email to:', email)
+      const { error } = await supabase.auth.resend({
+        type: 'signup',
+        email,
+        options: {
+          emailRedirectTo: 'https://myiyrmiiywwgismcpith.supabase.co/auth/v1/callback'
+        }
+      })
+      if (error) {
+        console.error('❌ Resend error:', error)
+        throw error
+      }
+      console.log('✅ Verification email resent successfully')
+      return { success: true, message: 'Verification email sent. Please check your inbox and spam folder.' }
+    } catch (err) {
+      console.error('❌ Resend failed:', err)
+      setError(err.message)
+      throw err
+    }
+  }
+
+  const updatePassword = async (newPassword) => {
+    try {
+      setError(null)
+      const { error } = await supabase.auth.updateUser({
+        password: newPassword
+      })
+      if (error) throw error
+    } catch (err) {
+      setError(err.message)
+      throw err
+    }
+  }
+
+  const signInWithOAuth = async (provider) => {
+    try {
+      setError(null)
+      const { data, error } = await supabase.auth.signInWithOAuth({
+        provider,
+        options: {
+          redirectTo: 'https://myiyrmiiywwgismcpith.supabase.co/auth/v1/callback'
+        }
+      })
+      if (error) throw error
+      return data
+    } catch (err) {
+      setError(err.message)
+      throw err
+    }
+  }
+
+  const signInWithFacebook = () => signInWithOAuth('facebook')
+  const signInWithGoogle = () => signInWithOAuth('google')
+
+  const getCurrentUser = () => {
+    return user
+  }
+
+  const getUserProfile = async () => {
+    if (!user) return null
+
+    try {
+      const { data, error } = await supabase
+        .from('users')
+        .select('*')
+        .eq('id', user.id)
+
+      if (error) throw error
+      return data && data.length > 0 ? data[0] : null
+    } catch (err) {
+      console.error('Error fetching user profile:', err)
+      return null
+    }
+  }
 
   const value = {
     user,
-    loading: isLoading || !authInitialized, // Include auth initialization state
+    loading,
     error,
-    login,
-    loginWithFacebook,
-    signup,
+    signUp,
+    signIn,
     signOut,
     resetPassword,
-    verifyEmailToken,
-    // Safe current user getter
-    getCurrentUser: () => {
-      try {
-        return firebaseAuthService.getCurrentUser();
-      } catch (error) {
-        console.error('❌ Get current user error:', error);
-        return null;
-      }
-    }
-  };
+    updatePassword,
+    resendVerification,
+    signInWithFacebook,
+    signInWithGoogle,
+    getCurrentUser,
+    getUserProfile
+  }
 
   return (
     <AuthContext.Provider value={value}>
-      {isLoading ? (
-        <View style={{ flex: 1, justifyContent: "center", alignItems: "center" }}>
+      {loading ? (
+        <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
           <ActivityIndicator size="large" />
         </View>
       ) : (
         children
       )}
     </AuthContext.Provider>
-  );
-};
+  )
+}
 
-// Custom hook to use the auth context
 export const useAuth = () => {
-  const context = useContext(AuthContext);
-  if (context === undefined) {
-    throw new Error("useAuth must be used within an AuthProvider");
+  const context = useContext(AuthContext)
+  if (!context) {
+    throw new Error('useAuth must be used within AuthProvider')
   }
-  return context;
-};
+  return context
+}
 
-export default AuthContext;
+export default AuthContext

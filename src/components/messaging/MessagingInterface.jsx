@@ -4,12 +4,12 @@ import { View, StyleSheet, ScrollView, Alert } from 'react-native';
 import { Text, Surface, ActivityIndicator, Snackbar } from 'react-native-paper';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import * as ImagePicker from 'expo-image-picker';
-import { useAuth } from '../../../contexts/AuthContext';
+import { useAuth } from '../../contexts/AuthContext';
 import ConversationList from './ConversationList';
 import MessageInput from './MessageInput';
 import MessageList from './MessageList';
-import { messagingService } from '../../../services/firebaseMessagingService';
-import { firebaseRealtimeService } from '../../../services/firebaseRealtimeService';
+import { messagingService, realtimeService } from '../../services';
+import { supabase } from '../../config/supabase';
 
 const MessagingInterface = () => {
   const navigation = useNavigation();
@@ -31,8 +31,9 @@ const MessagingInterface = () => {
     const initialize = async () => {
       try {
         setAuthError(null);
-        await firebaseRealtimeService.initializeRealtimeAuth();
-        setIsAuthenticated(true);
+        // Check Supabase auth session
+        const { data: { session } } = await supabase.auth.getSession();
+        setIsAuthenticated(!!session?.user);
       } catch (error) {
         console.error('Auth initialization error:', error);
         setAuthError('Failed to initialize messaging. Please check your connection.');
@@ -44,9 +45,9 @@ const MessagingInterface = () => {
     initialize();
 
     // Listen for auth state changes
-    const unsubscribe = firebaseRealtimeService.addAuthStateListener((authenticated) => {
-      setIsAuthenticated(authenticated);
-      if (!authenticated) {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      setIsAuthenticated(!!session?.user);
+      if (!session?.user) {
         setAuthError('Authentication lost. Please restart the app.');
         setSnackbarMessage('Authentication lost. Please restart the app.');
         setSnackbarVisible(true);
@@ -54,10 +55,7 @@ const MessagingInterface = () => {
     });
 
     return () => {
-      unsubscribe?.();
-      if (selectedConversation) {
-        messagingService.stopListening(selectedConversation.id);
-      }
+      subscription.unsubscribe();
     };
   }, []);
 
@@ -77,7 +75,10 @@ const MessagingInterface = () => {
     if (!selectedConversation) return;
 
     try {
-      await messagingService.sendMessage(selectedConversation.otherUserId, messageText);
+      await messagingService.sendMessage({
+        recipientId: selectedConversation.otherUserId,
+        content: messageText
+      });
     } catch (error) {
       console.error('Send message error:', error);
       setSnackbarMessage('Failed to send message. Please try again.');
@@ -88,7 +89,7 @@ const MessagingInterface = () => {
   const handleImagePick = async () => {
     try {
       const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        mediaTypes: ImagePicker.MediaType.Images,
         allowsEditing: true,
         aspect: [4, 3],
         quality: 0.8,
@@ -105,13 +106,8 @@ const MessagingInterface = () => {
   };
 
   const handleTyping = (text) => {
-    if (selectedConversation?.id) {
-      if (text.trim()) {
-        messagingService.setTypingStatus(selectedConversation.id, true);
-      } else {
-        messagingService.setTypingStatus(selectedConversation.id, false);
-      }
-    }
+    // Typing indicators can be implemented later with Supabase presence
+    // For now, this is a placeholder
   };
 
   const handleSelectConversation = (conversation) => {

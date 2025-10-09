@@ -2,8 +2,8 @@
 import React, { useState, useEffect } from 'react';
 import { View, FlatList, StyleSheet } from 'react-native';
 import { Text, ActivityIndicator } from 'react-native-paper';
-import { useAuth } from '../../core/contexts/AuthContext';
-import { messagingService } from '../../services/messagingService';
+import { useAuth } from '../../contexts/AuthContext';
+import { messagingService, realtimeService } from '../../services';
 import MessageCard from './MessageCard';
 
 const MessageList = ({ conversation }) => {
@@ -17,24 +17,39 @@ const MessageList = ({ conversation }) => {
       return;
     }
 
-    setLoading(true);
-    const unsubscribe = messagingService.listenToMessages(conversation.id, (newMessages) => {
-      setMessages(newMessages);
-      setLoading(false);
+    const loadMessages = async () => {
+      setLoading(true);
+      try {
+        const { data } = await messagingService.getMessages(conversation.id);
+        setMessages(data.messages || []);
+      } catch (error) {
+        console.error('Error loading messages:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadMessages();
+
+    // Subscribe to real-time message updates
+    const subscription = realtimeService.subscribeToMessages(conversation.id, (payload) => {
+      if (payload.eventType === 'INSERT') {
+        setMessages(prev => [...prev, payload.new]);
+      }
     });
 
     return () => {
-      unsubscribe?.();
+      subscription?.unsubscribe();
     };
   }, [conversation?.id]);
 
   const renderMessage = ({ item }) => (
     <MessageCard
       message={item}
-      isOwn={item.senderId === user?.id}
+      isOwn={item.sender_id === user?.id}
       showAvatar={true}
-      senderName={item.senderId === user?.id ? 'You' : conversation?.recipientName}
-      senderAvatar={item.senderId === user?.id ? null : conversation?.recipientAvatar}
+      senderName={item.sender_id === user?.id ? 'You' : conversation?.recipientName}
+      senderAvatar={item.sender_id === user?.id ? null : conversation?.recipientAvatar}
     />
   );
 
@@ -72,7 +87,7 @@ const MessageList = ({ conversation }) => {
   return (
     <FlatList
       data={messages}
-      keyExtractor={(item) => item.id || item.timestamp.toString()}
+      keyExtractor={(item) => item.id || item.created_at}
       renderItem={renderMessage}
       style={styles.container}
       contentContainerStyle={styles.contentContainer}

@@ -23,20 +23,17 @@ const isValidJWT = (token) => {
 
 export const getAuthToken = async () => {
   try {
-    // First try to get Firebase token
-    const { firebaseAuthService } = await import('../services/firebaseAuthService');
-    const currentUser = firebaseAuthService.getCurrentUser();
+    // First try to get Supabase token
+    const { supabase } = await import('../config/supabase');
+    const { data: { session } } = await supabase.auth.getSession();
     
-    if (currentUser) {
-      console.log('🔄 Getting Firebase token for API calls');
-      const token = await currentUser.getIdToken();
-      if (token) {
-        console.log('✅ Firebase token obtained');
-        // Store the fresh token
-        const { STORAGE_KEYS } = await import('../config/constants');
-        await AsyncStorage.setItem(STORAGE_KEYS.AUTH_TOKEN, token);
-        return token;
-      }
+    if (session?.access_token) {
+      console.log('🔄 Getting Supabase token for API calls');
+      console.log('✅ Supabase token obtained');
+      // Store the fresh token
+      const { STORAGE_KEYS } = await import('../config/constants');
+      await AsyncStorage.setItem(STORAGE_KEYS.AUTH_TOKEN, session.access_token);
+      return session.access_token;
     }
     
     // Fallback to stored tokens

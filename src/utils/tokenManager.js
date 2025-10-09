@@ -1,5 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { firebaseAuthService } from '../services/firebaseAuthService';
+import { supabase } from '../config/supabase';
 import { STORAGE_KEYS } from '../config/constants';
 import { performanceMonitor } from './performanceMonitor';
 
@@ -40,20 +40,24 @@ class TokenManager {
   }
 
   async _refreshToken() {
-    console.log('🔄 Getting Firebase token, force refresh: false');
+    console.log('🔄 Getting Supabase token, force refresh: false');
     performanceMonitor.trackTokenRefresh();
     performanceMonitor.startTimer('token-refresh');
     
     try {
-      const currentUser = firebaseAuthService.getCurrentUser();
-      if (!currentUser) {
+      const { data: { session }, error } = await supabase.auth.getSession();
+      if (error || !session) {
         console.log('No authenticated user - returning null silently');
         performanceMonitor.endTimer('token-refresh');
         return null;
       }
 
-      const token = await currentUser.getIdToken(false); // Don't force refresh
-      await AsyncStorage.setItem(STORAGE_KEYS.AUTH_TOKEN, token);
+      const token = session.access_token;
+      
+      if (token) {
+        await AsyncStorage.setItem(STORAGE_KEYS.AUTH_TOKEN, token);
+      }
+      
       performanceMonitor.endTimer('token-refresh');
       return token;
     } catch (error) {

@@ -61,7 +61,7 @@ const DocumentUpload = ({ label, documentType, onUploadComplete, initialUri = ''
         res = await uploadsAPI.base64Upload({ imageBase64, mimeType, folder, name });
       } catch (uploadError) {
         console.log('Upload API failed, trying auth API:', uploadError.message);
-        res = await authAPI.uploadProfileImageBase64(imageBase64, mimeType);
+        res = await authAPI.uploadProfileImage(uri);
       }
       
       const url = res?.data?.url || res?.url;

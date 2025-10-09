@@ -14,8 +14,8 @@ import { ErrorBoundary, LoadingSpinner } from '../shared/ui';
 // Auth Context
 import { AuthProvider } from '../contexts/AuthContext';
 
-// Firebase - Direct import for initialization
-import { initializeFirebase, getAuthSync } from '../config/firebase';
+// Supabase - Direct import for initialization
+import { supabase } from '../config/supabase';
 
 // Log filter
 import '../utils/logFilter';
@@ -31,37 +31,37 @@ LogBox.ignoreLogs([
 
 SplashScreen.preventAutoHideAsync();
 
-// Enhanced Firebase Provider that ensures Auth is ready
-const FirebaseAuthProvider = ({ children }) => {
-  const [firebaseReady, setFirebaseReady] = useState(false);
+// Enhanced Supabase Provider that ensures Auth is ready
+const SupabaseAuthProvider = ({ children }) => {
+  const [supabaseReady, setSupabaseReady] = useState(false);
   const [error, setError] = useState(null);
 
   useEffect(() => {
-    const initFirebase = async () => {
+    const initSupabase = async () => {
       try {
-        console.log('🔥 Initializing Firebase with Auth...');
-        await initializeFirebase();
-
-        // Test that auth is actually available
-        const auth = getAuthSync();
-        console.log('✅ Firebase Auth is ready');
-
-        setFirebaseReady(true);
+        console.log('🔥 Initializing Supabase with Auth...');
+        
+        // Test Supabase connection
+        const { data, error } = await supabase.auth.getSession();
+        if (error) throw error;
+        
+        console.log('✅ Supabase Auth is ready');
+        setSupabaseReady(true);
       } catch (err) {
-        console.error('❌ Firebase Auth initialization failed:', err);
+        console.error('❌ Supabase Auth initialization failed:', err);
         setError(err);
-        setFirebaseReady(true); // Continue anyway
+        setSupabaseReady(true); // Continue anyway
       }
     };
 
-    initFirebase();
+    initSupabase();
   }, []);
 
   if (error) {
     return (
       <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#f9fafb' }}>
         <Text style={{ color: 'red', fontSize: 16, textAlign: 'center', padding: 20 }}>
-          Firebase Error
+          Supabase Error
         </Text>
         <Text style={{ color: '#666', fontSize: 14, textAlign: 'center', padding: 20 }}>
           {error.message}
@@ -70,15 +70,15 @@ const FirebaseAuthProvider = ({ children }) => {
     );
   }
 
-  if (!firebaseReady) {
+  if (!supabaseReady) {
     return (
       <View style={{ flex: 1, backgroundColor: '#f9fafb' }}>
-        <LoadingSpinner text="Initializing Firebase Auth..." />
+        <LoadingSpinner text="Initializing Supabase Auth..." />
       </View>
     );
   }
 
-  // Only render AuthProvider when Firebase is definitely ready
+  // Only render AuthProvider when Supabase is definitely ready
   return (
     <AuthProvider>
       {children}
@@ -94,9 +94,9 @@ export default function App() {
       try {
         console.log('🚀 Initializing Iyaya app...');
 
-        // Pre-initialize Firebase to ensure it's ready
-        await initializeFirebase().catch(error => {
-          console.warn('⚠️ Firebase init warning (continuing):', error.message);
+        // Pre-initialize Supabase to ensure it's ready
+        await supabase.auth.getSession().catch(error => {
+          console.warn('⚠️ Supabase init warning (continuing):', error.message);
         });
 
         await new Promise(resolve => setTimeout(resolve, 500));
@@ -127,13 +127,13 @@ export default function App() {
         <AppProvider>
           <ProfileDataProvider>
             <PrivacyProvider>
-              {/* Wrap with FirebaseAuthProvider to ensure proper initialization order */}
-              <FirebaseAuthProvider>
+              {/* Wrap with SupabaseAuthProvider to ensure proper initialization order */}
+              <SupabaseAuthProvider>
                 <AppIntegration>
                   <AppNavigator />
                   <StatusBar style="auto" />
                 </AppIntegration>
-              </FirebaseAuthProvider>
+              </SupabaseAuthProvider>
             </PrivacyProvider>
           </ProfileDataProvider>
         </AppProvider>

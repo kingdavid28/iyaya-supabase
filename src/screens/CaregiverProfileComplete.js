@@ -10,43 +10,108 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../contexts/AuthContext';
-import { profileService } from '../services/profileService';
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import { STORAGE_KEYS } from '../config/constants';
+// Removed old import - using updated Supabase service
 import { getCurrentSocketURL } from '../config/api';
+import { supabase } from '../config/supabase';
 
-const CaregiverProfileComplete = ({ navigation }) => {
+const CaregiverProfileComplete = ({ navigation, route }) => {
   const { user } = useAuth();
   const [profile, setProfile] = useState(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
-  useEffect(() => {
-    loadProfile();
-  }, []);
-
   const loadProfile = async () => {
+    if (!user?.id) {
+      console.log('❌ No user ID available');
+      return;
+    }
+    
     try {
-      // Force token refresh
-      const { firebaseAuthService } = await import('../services/firebaseAuthService');
-      const currentUser = firebaseAuthService.getCurrentUser();
-      if (currentUser) {
-        await currentUser.getIdToken(true);
-      }
+      setLoading(true);
+      console.log('🔄 Loading profile for user:', user.id);
       
-      const token = await AsyncStorage.getItem(STORAGE_KEYS.AUTH_TOKEN);
-      if (!token) {
-        throw new Error('No authentication token found');
-      }
-      const profileData = await profileService.getCaregiverProfile(token);
-      setProfile(profileData);
+      // Get user data from users table
+      const { data: userData, error: userError } = await supabase
+        .from('users')
+        .select('*')
+        .eq('id', user.id)
+        .single();
+      
+      console.log('👤 User data:', userData);
+      console.log('❌ User error:', userError);
+      
+      if (userError) throw userError;
+      
+      // Get caregiver profile data from caregiver_profiles table
+      const { data: caregiverData, error: caregiverError } = await supabase
+        .from('caregiver_profiles')
+        .select('*')
+        .eq('user_id', user.id)
+        .single();
+      
+      console.log('👨‍💼 Caregiver data:', caregiverData);
+      console.log('❌ Caregiver error:', caregiverError);
+      
+      // The issue is that EnhancedCaregiverProfileWizard saves complex data but it's not being stored properly
+      // Let's check if the data exists in any format and extract it
+      
+      // Try to get complex data from any available source
+      const getComplexData = (field) => {
+        // Check caregiver_profiles table first
+        if (caregiverData?.[field] && Array.isArray(caregiverData[field]) && caregiverData[field].length > 0) {
+          return caregiverData[field];
+        }
+        // Check snake_case version
+        const snakeField = field.replace(/([A-Z])/g, '_$1').toLowerCase();
+        if (caregiverData?.[snakeField] && Array.isArray(caregiverData[snakeField]) && caregiverData[snakeField].length > 0) {
+          return caregiverData[snakeField];
+        }
+        // Check users table
+        if (userData?.[field] && Array.isArray(userData[field]) && userData[field].length > 0) {
+          return userData[field];
+        }
+        if (userData?.[snakeField] && Array.isArray(userData[snakeField]) && userData[snakeField].length > 0) {
+          return userData[snakeField];
+        }
+        return [];
+      };
+      
+      const combinedProfile = {
+        // Basic info from users table
+        name: userData?.name,
+        bio: userData?.bio,
+        profileImage: userData?.profile_image,
+        skills: userData?.skills || [],
+        hourlyRate: userData?.hourly_rate,
+        
+        // Experience from caregiver_profiles table (preferred) or users table (fallback)
+        experience: caregiverData?.experience ? 
+          (typeof caregiverData.experience === 'string' ? 
+            { description: caregiverData.experience } : 
+            caregiverData.experience
+          ) : 
+          { description: userData?.experience },
+        
+        // Complex data with comprehensive fallback
+        certifications: getComplexData('certifications'),
+        availability: caregiverData?.availability || userData?.availability || { days: [] },
+        ageCareRanges: getComplexData('ageCareRanges'),
+        emergencyContacts: getComplexData('emergencyContacts'),
+        backgroundCheckStatus: caregiverData?.background_check_status
+      };
+      
+      console.log('📊 Combined profile data:', combinedProfile);
+      setProfile(combinedProfile);
     } catch (error) {
-      console.error('Profile load error:', error);
-      Alert.alert('Error', 'Failed to load profile: ' + error.message);
+      console.error('❌ Profile load error:', error);
     } finally {
       setLoading(false);
     }
   };
+
+  useEffect(() => {
+    loadProfile();
+  }, [user?.id]);
 
   const onRefresh = async () => {
     setRefreshing(true);
@@ -186,9 +251,11 @@ const CaregiverProfileComplete = ({ navigation }) => {
         
         <View style={styles.experienceContainer}>
           <Text style={styles.subTitle}>Experience</Text>
-          <Text style={styles.experienceText}>
-            {profile?.experience?.years || 0} years, {profile?.experience?.months || 0} months
-          </Text>
+          {profile?.experience?.years || profile?.experience?.months ? (
+            <Text style={styles.experienceText}>
+              {profile.experience.years || 0} years, {profile.experience.months || 0} months
+            </Text>
+          ) : null}
           <Text style={styles.experienceDescription}>
             {profile?.experience?.description || 'Add your experience description'}
           </Text>
@@ -255,10 +322,12 @@ const CaregiverProfileComplete = ({ navigation }) => {
           profile.certifications.map((cert, index) => (
             <View key={index} style={styles.certificationItem}>
               <View style={styles.certificationHeader}>
-                <Text style={styles.certificationName}>{cert.name}</Text>
-                {cert.verified && <Ionicons name="checkmark-circle" size={16} color="#4CAF50" />}
+                <Text style={styles.certificationName}>
+                  {typeof cert === 'string' ? cert : (cert?.name || cert)}
+                </Text>
+                {cert?.verified && <Ionicons name="checkmark-circle" size={16} color="#4CAF50" />}
               </View>
-              {cert.issuedBy && <Text style={styles.certificationIssuer}>Issued by: {cert.issuedBy}</Text>}
+              {cert?.issuedBy && <Text style={styles.certificationIssuer}>Issued by: {cert.issuedBy}</Text>}
             </View>
           ))
         ) : (

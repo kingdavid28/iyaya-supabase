@@ -6,7 +6,7 @@ import {
   sendPasswordResetEmail,
   updateProfile
 } from 'firebase/auth';
-import { getFirebaseAuth } from '../../config/firebase';
+import { getFirebaseAuth } from '../../config/supabase';
 
 export const firebaseAuthService = {
   async signup(userData) {

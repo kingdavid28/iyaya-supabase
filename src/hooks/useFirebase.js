@@ -1,6 +1,6 @@
 // hooks/useFirebase.js
 import { useEffect, useState } from 'react';
-import { initializeFirebase } from '../config/firebase';
+import { initializeFirebase } from '../config/supabase';
 
 export const useFirebase = () => {
   const [isReady, setIsReady] = useState(false);

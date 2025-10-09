@@ -3,30 +3,23 @@ import { View, Text, Platform, TouchableOpacity } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import ProfileImage from '../../../components/ui/feedback/ProfileImage';
 import { LinearGradient } from 'expo-linear-gradient';
-import { getCurrentSocketURL } from '../../../config/api';
 import { useAuth } from '../../../contexts/AuthContext';
 import { calculateAge } from '../../../utils/dateUtils';
-import { __DEV__ } from '../../../config/constants';
 import { useNavigation } from '@react-navigation/native';
-
 const CaregiverProfileSection = ({ profile, activeTab }) => {
   const { user } = useAuth();
   const navigation = useNavigation();
   
-  const userAge = user?.birthDate ? calculateAge(user.birthDate) : null;
-  const caregiverName = profile?.name || user?.name;
-  const displayName = caregiverName;
+  const displayName = profile?.name || user?.name;
+  const displayLocation = profile?.location || profile?.address || user?.address || 'Location not set';
 
   const handleEditProfile = () => {
-    navigation.navigate('EnhancedCaregiverProfileWizard', { 
-      isEdit: true, 
-      existingProfile: profile 
+    navigation.navigate('EnhancedCaregiverProfileWizard', {
+      isEdit: true,
+      existingProfile: profile
     });
   };
 
-
-
-  // Only render on mobile platforms and Dashboard tab
   if (Platform.OS === 'web' || activeTab !== 'dashboard') {
     return null;
   }
@@ -40,15 +33,15 @@ const CaregiverProfileSection = ({ profile, activeTab }) => {
         style={styles.profileCard}
       >
         <View style={styles.profileContent}>
-          <TouchableOpacity 
+          <TouchableOpacity
             style={styles.editButton}
             onPress={handleEditProfile}
           >
             <Ionicons name="pencil" size={16} color="#3b82f6" />
           </TouchableOpacity>
           <View style={styles.leftSection}>
-            <ProfileImage 
-              imageUrl={profile?.imageUrl || profile?.profileImage || profile?.image || profile?.photoUrl || user?.profileImage || user?.avatar}
+            <ProfileImage
+              imageUrl={profile?.profile_image || profile?.imageUrl || profile?.profileImage || profile?.image || profile?.photoUrl || user?.profileImage || user?.avatar}
               size={80}
               style={styles.profileImageContainer}
               borderColor="#3b82f6"
@@ -58,24 +51,8 @@ const CaregiverProfileSection = ({ profile, activeTab }) => {
               {displayName ? `Welcome back, ${displayName}! 👋` : 'Welcome back! 👋'}
             </Text>
             <View style={styles.profileDetails}>
-              {userAge ? (
-                <Text style={styles.profileDetailText}>🎂 {userAge} years old</Text>
-              ) : null}
               <Text style={styles.profileDetailText}>📧 {user?.email || 'No email'}</Text>
-              {user?.phone ? (
-                <Text style={styles.profileDetailText}>📱 {user.phone}</Text>
-              ) : null}
-              <Text style={styles.profileDetailText}>📍 {profile?.location || (profile?.address ? `${profile.address.city || ''}${profile.address.city && profile.address.province ? ', ' : ''}${profile.address.province || ''}` : user?.address?.street || 'Location not set')}</Text>
-              {profile?.hourlyRate ? (
-                <Text style={styles.profileDetailText}>💰 ₱{profile.hourlyRate}/hr</Text>
-              ) : null}
-              {profile?.experience ? (
-                <Text style={styles.profileDetailText}>
-                  ⭐ {typeof profile.experience === 'object' 
-                    ? `${profile.experience.years || 0} years experience` 
-                    : profile.experience}
-                </Text>
-              ) : null}
+              <Text style={styles.profileDetailText}>📍 {displayLocation}</Text>
             </View>
           </View>
         </View>
@@ -166,6 +143,7 @@ const styles = {
     color: '#6b7280',
     lineHeight: 20,
   },
+
 };
 
 export default CaregiverProfileSection;

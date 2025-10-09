@@ -24,7 +24,7 @@ import FacebookSignInButton from '../components/auth/FacebookSignInButton';
 const ParentAuth = ({ navigation, route }) => {
   const theme = useTheme();
   const { dispatch } = useApp();
-  const { user: authUser, login, signup, verifyEmailToken } = useAuth();
+  const { user: authUser, signIn, signUp, verifyEmailToken } = useAuth();
   
   // Use focus effect for navigation to ensure proper timing
   useFocusEffect(
@@ -59,12 +59,65 @@ const ParentAuth = ({ navigation, route }) => {
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
+  // Calculate age from birth date
+  const calculateAge = (birthDate) => {
+    const today = new Date();
+    const birth = new Date(birthDate);
+    let age = today.getFullYear() - birth.getFullYear();
+    const monthDiff = today.getMonth() - birth.getMonth();
+    if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birth.getDate())) {
+      age--;
+    }
+    return age;
+  };
+
   // Handle form submission
-  const handleSubmit = () => {
-    const formWithRole = { ...formData, role: 'parent' };
-    const result = handleFormSubmit(mode, formWithRole, validateCurrentForm);
-    if (mode === 'reset' && result) {
-      setMode('login');
+  const handleSubmit = async () => {
+    try {
+      if (mode === 'signup') {
+        // Validate age requirement
+        if (formData.birthDate) {
+          const age = calculateAge(formData.birthDate);
+          if (age < 18) {
+            Alert.alert(
+              'Age Requirement',
+              'You must be at least 18 years old to create an account.',
+              [{ text: 'OK' }]
+            );
+            return;
+          }
+        }
+        
+        const userData = {
+          name: `${formData.firstName} ${formData.lastName}`,
+          firstName: formData.firstName,
+          lastName: formData.lastName,
+          phone: formData.phone,
+          role: 'parent'
+        };
+        await signUp(formData.email, formData.password, userData);
+        
+        // Show email verification notification
+        Alert.alert(
+          'Check Your Email',
+          `We've sent a verification link to ${formData.email}. Please check your email and click the link to verify your account before signing in.`,
+          [
+            {
+              text: 'OK',
+              onPress: () => {
+                // Switch to login mode after signup
+                setMode('login');
+                resetForm();
+              }
+            }
+          ]
+        );
+      } else if (mode === 'login') {
+        await signIn(formData.email, formData.password);
+      }
+    } catch (error) {
+      console.error('Auth error:', error.message);
+      // Error is handled by AuthContext
     }
   };
 
@@ -174,7 +227,11 @@ const ParentAuth = ({ navigation, route }) => {
                     <CustomDateTimePicker
                       label="Birth Date *"
                       value={formData.birthDate ? new Date(formData.birthDate) : null}
-                      onDateChange={(date) => handleChange('birthDate', date.toISOString().split('T')[0])}
+                      onDateChange={(date) => {
+                        if (date && !isNaN(date.getTime())) {
+                          handleChange('birthDate', date.toISOString().split('T')[0])
+                        }
+                      }}
                       mode="date"
                       placeholder="Select birth date"
                       maximumDate={new Date()}

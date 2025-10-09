@@ -2,7 +2,7 @@
 import React from 'react';
 import { View, StyleSheet } from 'react-native';
 import { Text, ActivityIndicator } from 'react-native-paper';
-import { useAuth } from '../../core/contexts/AuthContext';
+import { useAuth } from '../../contexts/AuthContext';
 import MessagingInterface from '../../components/messaging/MessagingInterface';
 
 const ParentMessaging = () => {

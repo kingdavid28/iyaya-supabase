@@ -2,21 +2,26 @@ import React, { useState } from 'react';
 import { View, Text, StyleSheet, Alert } from 'react-native';
 import { Button } from 'react-native-paper';
 import { LinearGradient } from 'expo-linear-gradient';
-import { sendEmailVerification } from 'firebase/auth';
-import { firebaseAuthService } from '../services/firebaseAuthService';
+import { useAuth } from '../contexts/AuthContext';
+import { supabase } from '../config/supabase';
 
 const EmailVerificationPendingScreen = ({ navigation, route }) => {
   const [isResending, setIsResending] = useState(false);
   const [isChecking, setIsChecking] = useState(false);
   const { email } = route.params || {};
+  const { user } = useAuth();
 
   const handleResendVerification = async () => {
     try {
       setIsResending(true);
-      const currentUser = firebaseAuthService.getCurrentUser();
       
-      if (currentUser) {
-        await sendEmailVerification(currentUser);
+      if (email) {
+        const { error } = await supabase.auth.resend({
+          type: 'signup',
+          email: email
+        });
+        
+        if (error) throw error;
         Alert.alert('Email Sent', 'Verification email has been sent to your inbox.');
       }
     } catch (error) {
@@ -29,18 +34,17 @@ const EmailVerificationPendingScreen = ({ navigation, route }) => {
   const handleCheckVerification = async () => {
     try {
       setIsChecking(true);
-      const currentUser = firebaseAuthService.getCurrentUser();
       
-      if (currentUser) {
-        await currentUser.reload();
-        
-        if (currentUser.emailVerified) {
-          Alert.alert('Email Verified!', 'You can now sign in.', [
-            { text: 'Sign In', onPress: () => navigation.navigate('Welcome') }
-          ]);
-        } else {
-          Alert.alert('Not Verified Yet', 'Please check your inbox.');
-        }
+      const { data, error } = await supabase.auth.getUser();
+      
+      if (error) throw error;
+      
+      if (data.user && data.user.email_confirmed_at) {
+        Alert.alert('Email Verified!', 'You can now sign in.', [
+          { text: 'Sign In', onPress: () => navigation.navigate('Welcome') }
+        ]);
+      } else {
+        Alert.alert('Not Verified Yet', 'Please check your inbox and click the verification link.');
       }
     } catch (error) {
       Alert.alert('Error', 'Failed to check verification status');

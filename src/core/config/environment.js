@@ -2,14 +2,10 @@
 const isDev = __DEV__;
 
 export const Config = {
-  // API Configuration
-  API_BASE_URL: isDev 
-    ? 'http://10.162.42.117:5000/api'
-    : 'https://api.iyaya.com/api',
+  // API Configuration - Now using Supabase
+  API_BASE_URL: process.env.EXPO_PUBLIC_SUPABASE_URL || 'https://myiyrmiiywwgismcpith.supabase.co',
   
-  SOCKET_URL: isDev
-    ? 'http://10.162.42.117:5000'
-    : 'https://api.iyaya.com',
+  SOCKET_URL: process.env.EXPO_PUBLIC_SUPABASE_URL || 'https://myiyrmiiywwgismcpith.supabase.co',
 
   // App Configuration
   APP_NAME: 'Iyaya',

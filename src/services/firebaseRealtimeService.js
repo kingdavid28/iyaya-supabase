@@ -1,5 +1,5 @@
 // firebaseRealtimeService.js - Firebase for real-time features only
-import { getFirebaseDatabase, getAuthSync, ref, onValue, off, push, set, query, orderByChild, onAuthStateChanged, signInAnonymously } from '../config/firebase';
+import { getFirebaseDatabase, getAuthSync, ref, onValue, off, push, set, query, orderByChild, onAuthStateChanged, signInAnonymously } from '../config/supabase';
 
 class FirebaseRealtimeService {
   constructor() {

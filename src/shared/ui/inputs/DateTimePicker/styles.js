@@ -1,4 +1,4 @@
-import { StyleSheet } from 'react-native';
+import { StyleSheet, Platform } from 'react-native';
 
 export const styles = StyleSheet.create({
   container: {
@@ -102,5 +102,24 @@ export const styles = StyleSheet.create({
   
   picker: {
     backgroundColor: '#fff',
+  },
+  
+  // Web-specific styles
+  webDateInput: {
+    flex: 1,
+    fontSize: 16,
+    color: '#333',
+    backgroundColor: 'transparent',
+    ...(Platform.OS === 'web' && {
+      border: 'none',
+      outline: 'none',
+      fontFamily: 'inherit',
+    }),
+    paddingRight: 10,
+  },
+  
+  webDateIcon: {
+    pointerEvents: 'none',
+    marginLeft: 8,
   },
 });
