@@ -32,7 +32,7 @@
             <div class='fl pad1y space-right2'>
                 <span class="strong">0% </span>
                 <span class="quiet">Branches</span>
-                <span class='fraction'>0/193</span>
+                <span class='fraction'>0/194</span>
             </div>
         
             
@@ -994,7 +994,9 @@
 <a name='L929'></a><a href='#L929'>929</a>
 <a name='L930'></a><a href='#L930'>930</a>
 <a name='L931'></a><a href='#L931'>931</a>
-<a name='L932'></a><a href='#L932'>932</a></td><td class="line-coverage quiet"><span class="cline-any cline-neutral">&nbsp;</span>
+<a name='L932'></a><a href='#L932'>932</a>
+<a name='L933'></a><a href='#L933'>933</a>
+<a name='L934'></a><a href='#L934'>934</a></td><td class="line-coverage quiet"><span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
@@ -1756,7 +1758,9 @@
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
@@ -1935,8 +1939,8 @@ import { usePrivacy } from '../../components/features/privacy/PrivacyManager';
 import { useAuth } from '../../contexts/AuthContext';
 import { useParentDashboard } from '../../hooks/useParentDashboard';
 &nbsp;
-// API imports
-import { childrenAPI, authAPI, bookingsAPI, jobsAPI, messagingService } from '../../config/api';
+// Supabase service import
+import { supabaseService } from '../../services/supabaseService';
 &nbsp;
 // Utility imports
 import { applyFilters, countActiveFilters } from '../../utils/caregiverUtils';
@@ -1976,14 +1980,14 @@ const DEFAULT_FILTERS = <span class="cstat-no" title="statement not covered" >{<
 };
 &nbsp;
 const DEFAULT_CAREGIVER = <span class="cstat-no" title="statement not covered" >{</span>
-  _id: '1',
-  userId: '1',
-  name: 'Ana Dela Cruz',
-  avatar: 'https://example.com/avatar.jpg',
-  rating: 4.8,
-  reviews: 124,
-  hourlyRate: 350,
-  rate: '₱350/hr'
+  _id: null,
+  userId: null,
+  name: 'Select a Caregiver',
+  avatar: null,
+  rating: 0,
+  reviewCount: 0,
+  hourlyRate: 0,
+  rate: '₱0/hr'
 };
 &nbsp;
 const ParentDashboard = <span class="cstat-no" title="statement not covered" ><span class="fstat-no" title="function not covered" >()</span> =&gt; {</span>
@@ -2103,7 +2107,7 @@ const ParentDashboard = <span class="cstat-no" title="statement not covered" ><s
         name: profile.name || '',
         contact: profile.email || profile.contact || '',
         location: profile.location || profile.address || '',
-        image: profile.profileImage || profile.avatar || ''
+        image: profile.profile_image || profile.profileImage || profile.avatar || ''
       });
     }
   }, [profile]);
@@ -2224,7 +2228,7 @@ const ParentDashboard = <span class="cstat-no" title="statement not covered" ><s
           style: 'destructive',
           onPress: <span class="fstat-no" title="function not covered" >as</span>ync () =&gt; {
 <span class="cstat-no" title="statement not covered" >            try {</span>
-<span class="cstat-no" title="statement not covered" >              await childrenAPI.delete(child._id || child.id);</span>
+<span class="cstat-no" title="statement not covered" >              await supabaseService.deleteChild(child._id || child.id);</span>
 <span class="cstat-no" title="statement not covered" >              await fetchChildren();</span>
 <span class="cstat-no" title="statement not covered" >              Alert.alert('Success', 'Child deleted successfully!');</span>
             } catch (error) {
@@ -2250,7 +2254,7 @@ const ParentDashboard = <span class="cstat-no" title="statement not covered" ><s
 &nbsp;
 <span class="cstat-no" title="statement not covered" >    try {</span>
 <span class="cstat-no" title="statement not covered" >      if (childForm.editingId) {</span>
-<span class="cstat-no" title="statement not covered" >        await childrenAPI.update(childForm.editingId, childData);</span>
+<span class="cstat-no" title="statement not covered" >        await supabaseService.updateChild(childForm.editingId, childData);</span>
       } else {
         // Check if child already exists before creating
         const existingChild = <span class="cstat-no" title="statement not covered" >children.find(<span class="fstat-no" title="function not covered" >ch</span>ild =&gt;</span>
@@ -2285,7 +2289,7 @@ const ParentDashboard = <span class="cstat-no" title="statement not covered" ><s
 &nbsp;
         // Try to create the child
 <span class="cstat-no" title="statement not covered" >        try {</span>
-<span class="cstat-no" title="statement not covered" >          await childrenAPI.create(childData);</span>
+<span class="cstat-no" title="statement not covered" >          await supabaseService.addChild(user.id, childData);</span>
         } catch (createError) {
           // If creation fails due to "already exists", try to find and update existing child
 <span class="cstat-no" title="statement not covered" >          if (createError.message &amp;&amp; createError.message.includes('already exists')) {</span>
@@ -2303,7 +2307,7 @@ const ParentDashboard = <span class="cstat-no" title="statement not covered" ><s
                     text: 'Update',
                     onPress: <span class="fstat-no" title="function not covered" >as</span>ync () =&gt; {
 <span class="cstat-no" title="statement not covered" >                      try {</span>
-<span class="cstat-no" title="statement not covered" >                        await childrenAPI.update(existingChild._id || existingChild.id, childData);</span>
+<span class="cstat-no" title="statement not covered" >                        await supabaseService.updateChild(existingChild._id || existingChild.id, childData);</span>
 <span class="cstat-no" title="statement not covered" >                        await fetchChildren();</span>
 <span class="cstat-no" title="statement not covered" >                        toggleModal('child', false);</span>
 <span class="cstat-no" title="statement not covered" >                        setChildForm({ name: '', age: '', allergies: '', notes: '', editingId: null });</span>
@@ -2366,14 +2370,14 @@ const ParentDashboard = <span class="cstat-no" title="statement not covered" ><s
 &nbsp;
 <span class="cstat-no" title="statement not covered" >    try {</span>
       // Ensure connection exists in Firebase
-<span class="cstat-no" title="statement not covered" >      await firebaseMessagingService.createConnection(user.uid, caregiver._id || caregiver.id);</span>
+<span class="cstat-no" title="statement not covered" >      await firebaseMessagingService.createConnection(user.id, caregiver._id || caregiver.id);</span>
 &nbsp;
     } catch (error) {
 <span class="cstat-no" title="statement not covered" >      console.log('Connection setup warning:', error.message);</span>
     }
 &nbsp;
 <span class="cstat-no" title="statement not covered" >    navigation.navigate('CaregiverChat', {</span>
-      userId: user.uid,
+      userId: user.id,
       caregiverId: caregiver._id || caregiver.id,
       caregiverName: caregiver.name
     });
@@ -2381,7 +2385,7 @@ const ParentDashboard = <span class="cstat-no" title="statement not covered" ><s
 &nbsp;
   const handleViewReviews = <span class="cstat-no" title="statement not covered" >useCallback(<span class="fstat-no" title="function not covered" >(c</span>aregiver) =&gt; {</span>
 <span class="cstat-no" title="statement not covered" >    navigation.navigate('CaregiverReviews', {</span>
-      userId: user.uid,
+      userId: user.id,
       caregiverId: caregiver._id || caregiver.id
     });
   }, [navigation, user]);
@@ -2436,7 +2440,7 @@ const ParentDashboard = <span class="cstat-no" title="statement not covered" ><s
     };
 &nbsp;
 <span class="cstat-no" title="statement not covered" >    try {</span>
-      const booking = <span class="cstat-no" title="statement not covered" >await bookingsAPI.create(payload);</span>
+      const booking = <span class="cstat-no" title="statement not covered" >await supabaseService.createBooking(payload);</span>
 &nbsp;
 <span class="cstat-no" title="statement not covered" >      setActiveTab('bookings');</span>
 <span class="cstat-no" title="statement not covered" >      await fetchBookings();</span>
@@ -2453,7 +2457,7 @@ const ParentDashboard = <span class="cstat-no" title="statement not covered" ><s
   const handleCancelBooking = <span class="cstat-no" title="statement not covered" >useCallback(<span class="fstat-no" title="function not covered" >as</span>ync (bookingId) =&gt; {</span>
 <span class="cstat-no" title="statement not covered" >    try {</span>
 <span class="cstat-no" title="statement not covered" >      setRefreshing(true);</span>
-<span class="cstat-no" title="statement not covered" >      await bookingsAPI.cancel(bookingId);</span>
+<span class="cstat-no" title="statement not covered" >      await supabaseService.cancelBooking(bookingId);</span>
     } catch (error) {
 <span class="cstat-no" title="statement not covered" >      console.warn('Failed to cancel booking:', error?.message || error);</span>
     } finally {
@@ -2475,7 +2479,7 @@ const ParentDashboard = <span class="cstat-no" title="statement not covered" ><s
 <span class="cstat-no" title="statement not covered" >    if (!paymentData.bookingId || !paymentData.base64) <span class="cstat-no" title="statement not covered" >return;</span></span>
 &nbsp;
 <span class="cstat-no" title="statement not covered" >    try {</span>
-<span class="cstat-no" title="statement not covered" >      await bookingsAPI.uploadPaymentProof(paymentData.bookingId, paymentData.base64, paymentData.mimeType);</span>
+<span class="cstat-no" title="statement not covered" >      await supabaseService.uploadPaymentProof(paymentData.bookingId, paymentData.base64, paymentData.mimeType);</span>
 <span class="cstat-no" title="statement not covered" >      toggleModal('payment', false);</span>
 <span class="cstat-no" title="statement not covered" >      setPaymentData({ bookingId: null, base64: '', mimeType: 'image/jpeg' });</span>
 <span class="cstat-no" title="statement not covered" >      await fetchBookings();</span>
@@ -2537,7 +2541,7 @@ const ParentDashboard = <span class="cstat-no" title="statement not covered" ><s
           text: 'Complete',
           onPress: <span class="fstat-no" title="function not covered" >as</span>ync () =&gt; {
 <span class="cstat-no" title="statement not covered" >            try {</span>
-<span class="cstat-no" title="statement not covered" >              await jobsAPI.update(jobId, { status: 'completed' });</span>
+<span class="cstat-no" title="statement not covered" >              await supabaseService.updateJob(jobId, { status: 'completed' });</span>
 <span class="cstat-no" title="statement not covered" >              await fetchJobs();</span>
 <span class="cstat-no" title="statement not covered" >              Alert.alert('Success', 'Job marked as completed');</span>
             } catch (error) {
@@ -2561,7 +2565,7 @@ const ParentDashboard = <span class="cstat-no" title="statement not covered" ><s
           style: 'destructive',
           onPress: <span class="fstat-no" title="function not covered" >as</span>ync () =&gt; {
 <span class="cstat-no" title="statement not covered" >            try {</span>
-<span class="cstat-no" title="statement not covered" >              await jobsAPI.delete(jobId);</span>
+<span class="cstat-no" title="statement not covered" >              await supabaseService.deleteJob(jobId);</span>
 <span class="cstat-no" title="statement not covered" >              Alert.alert('Success', 'Job deleted successfully');</span>
 <span class="cstat-no" title="statement not covered" >              await fetchJobs();</span>
             } catch (error) {
@@ -2608,7 +2612,7 @@ const ParentDashboard = <span class="cstat-no" title="statement not covered" ><s
             encoding: 'base64',
           });
 &nbsp;
-          const imageResult = <span class="cstat-no" title="statement not covered" >await authAPI.uploadProfileImage(base64Image, 'image/jpeg');</span>
+          const imageResult = <span class="cstat-no" title="statement not covered" >await supabaseService.uploadProfileImage(user.id, base64Image);</span>
           const imageUrl = <span class="cstat-no" title="statement not covered" >imageResult?.data?.url || imageResult?.url || imageResult?.data?.profileImageUrl;</span>
 &nbsp;
 <span class="cstat-no" title="statement not covered" >          if (imageUrl) {</span>
@@ -2634,7 +2638,7 @@ const ParentDashboard = <span class="cstat-no" title="statement not covered" ><s
 <span class="cstat-no" title="statement not covered" >        throw new Error('Authentication required. Please log in again.');</span>
       }
 &nbsp;
-      const result = <span class="cstat-no" title="statement not covered" >await authAPI.updateProfile(updateData);</span>
+      const result = <span class="cstat-no" title="statement not covered" >await supabaseService.updateProfile(user.id, updateData);</span>
 &nbsp;
 <span class="cstat-no" title="statement not covered" >      if (result?.data) {</span>
 <span class="cstat-no" title="statement not covered" >        console.log('Profile update result:', result.data);</span>
@@ -2678,6 +2682,7 @@ const ParentDashboard = <span class="cstat-no" title="statement not covered" ><s
             profileImage={profileForm.image}
             profileContact={profileForm.contact}
             profileLocation={profile?.location || profile?.address || profileForm.location}
+            userData={profile}
             caregivers={caregivers || []}
             onBookCaregiver={handleBookCaregiver}
             onMessageCaregiver={handleMessageCaregiver}
@@ -2689,14 +2694,15 @@ const ParentDashboard = <span class="cstat-no" title="statement not covered" ><s
       case 'search':
 <span class="cstat-no" title="statement not covered" >        return (</span>
           &lt;SearchTab
-            caregivers={filteredCaregivers}
+            caregivers={caregivers}
+            filteredCaregivers={filteredCaregivers}
             onViewCaregiver={handleViewCaregiver}
             onMessageCaregiver={handleMessageCaregiver}
             onViewReviews={handleViewReviews}
             onBookCaregiver={handleBookCaregiver}
             searchQuery={searchQuery}
             onSearch={handleSearch}
-            onFilterPress={<span class="fstat-no" title="function not covered" >()</span> =&gt; <span class="cstat-no" title="statement not covered" >toggleModal('filter', true)}</span>
+            onOpenFilter={<span class="fstat-no" title="function not covered" >()</span> =&gt; <span class="cstat-no" title="statement not covered" >toggleModal('filter', true)}</span>
             activeFilters={activeFilters}
             loading={loading || searchLoading}
           /&gt;
@@ -2863,7 +2869,7 @@ export default ParentDashboard;</pre></td></tr></table></pre>
             <div class='footer quiet pad2 space-top1 center small'>
                 Code coverage generated by
                 <a href="https://istanbul.js.org/" target="_blank" rel="noopener noreferrer">istanbul</a>
-                at 2025-09-28T07:32:27.971Z
+                at 2025-10-09T07:22:01.297Z
             </div>
         <script src="../../prettify.js"></script>
         <script>

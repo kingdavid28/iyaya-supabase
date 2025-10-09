@@ -5,23 +5,28 @@ import {
   FlatList,
   TouchableOpacity,
   StyleSheet,
-  Alert
+  Alert,
+  Image
 } from 'react-native';
 import { Card } from 'react-native-paper';
 import { Ionicons } from '@expo/vector-icons';
-import { messagingAPI, realtimeService } from '../../../services';
+import supabaseService from '../../../services/supabaseService';
+import { useAuth } from '../../../contexts/AuthContext';
 
 const MessagesTab = ({ navigation, refreshing, onRefresh }) => {
+  const { user } = useAuth();
   const [conversations, setConversations] = useState([]);
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
+    const userId = user?.id;
+    if (!userId) return;
+
     loadConversations();
     
     // Setup real-time subscription for new conversations
-    const subscription = realtimeService.subscribeToMessages('*', (payload) => {
+    const subscription = supabaseService.subscribeToMessages('*', (payload) => {
       if (payload.eventType === 'INSERT') {
-        // Reload conversations when new messages arrive
         loadConversations();
       }
     });
@@ -31,13 +36,30 @@ const MessagesTab = ({ navigation, refreshing, onRefresh }) => {
         subscription.unsubscribe();
       }
     };
-  }, []);
+  }, [user?.id]);
 
   const loadConversations = async () => {
     try {
       setLoading(true);
-      const response = await messagingAPI.getConversations();
-      setConversations(response.data || []);
+      const userId = user?.id;
+      if (!userId) return;
+      
+      const conversations = await supabaseService.getConversations(userId);
+      
+      // Transform conversations for display
+      const transformedConversations = conversations.map(conv => {
+        const otherParticipant = conv.participant_1 === userId ? conv.participant2 : conv.participant1;
+        return {
+          id: conv.id,
+          name: otherParticipant?.name || 'User',
+          lastMessage: 'Tap to view messages',
+          timestamp: conv.last_message_at,
+          avatar: otherParticipant?.profile_image,
+          participantId: otherParticipant?.id
+        };
+      });
+      
+      setConversations(transformedConversations);
     } catch (error) {
       console.error('Error loading conversations:', error);
       setConversations([]);
@@ -63,10 +85,25 @@ const MessagesTab = ({ navigation, refreshing, onRefresh }) => {
     </View>
   );
 
+  const handleConversationPress = (item) => {
+    navigation.navigate('Chat', {
+      userId: user?.id,
+      userType: 'parent',
+      targetUserId: item.participantId,
+      targetUserName: item.name,
+      targetUserType: 'caregiver',
+      conversationId: item.id
+    });
+  };
+
   const ConversationItem = ({ item }) => (
-    <TouchableOpacity style={styles.conversationItem}>
+    <TouchableOpacity style={styles.conversationItem} onPress={() => handleConversationPress(item)}>
       <View style={styles.avatar}>
-        <Ionicons name="person-circle" size={40} color="#3B82F6" />
+        {item.avatar ? (
+          <Image source={{ uri: item.avatar }} style={{ width: 40, height: 40, borderRadius: 20 }} />
+        ) : (
+          <Ionicons name="person-circle" size={40} color="#3B82F6" />
+        )}
       </View>
       <View style={styles.conversationInfo}>
         <Text style={styles.conversationName}>{item.name || 'User'}</Text>

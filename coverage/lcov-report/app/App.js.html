@@ -25,14 +25,14 @@
             <div class='fl pad1y space-right2'>
                 <span class="strong">0% </span>
                 <span class="quiet">Statements</span>
-                <span class='fraction'>0/38</span>
+                <span class='fraction'>0/39</span>
             </div>
         
             
             <div class='fl pad1y space-right2'>
                 <span class="strong">0% </span>
                 <span class="quiet">Branches</span>
-                <span class='fraction'>0/6</span>
+                <span class='fraction'>0/8</span>
             </div>
         
             
@@ -247,12 +247,12 @@
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
@@ -363,8 +363,8 @@ import { ErrorBoundary, LoadingSpinner } from '../shared/ui';
 // Auth Context
 import { AuthProvider } from '../contexts/AuthContext';
 &nbsp;
-// Firebase - Direct import for initialization
-import { initializeFirebase, getAuthSync } from '../config/firebase';
+// Supabase - Direct import for initialization
+import { supabase } from '../config/supabase';
 &nbsp;
 // Log filter
 import '../utils/logFilter';
@@ -380,37 +380,37 @@ import AppNavigator from './navigation/AppNavigator';
 &nbsp;
 <span class="cstat-no" title="statement not covered" >SplashScreen.preventAutoHideAsync();</span>
 &nbsp;
-// Enhanced Firebase Provider that ensures Auth is ready
-const FirebaseAuthProvider = <span class="cstat-no" title="statement not covered" ><span class="fstat-no" title="function not covered" >({</span> children }) =&gt; {</span>
-  const [firebaseReady, setFirebaseReady] = <span class="cstat-no" title="statement not covered" >useState(false);</span>
+// Enhanced Supabase Provider that ensures Auth is ready
+const SupabaseAuthProvider = <span class="cstat-no" title="statement not covered" ><span class="fstat-no" title="function not covered" >({</span> children }) =&gt; {</span>
+  const [supabaseReady, setSupabaseReady] = <span class="cstat-no" title="statement not covered" >useState(false);</span>
   const [error, setError] = <span class="cstat-no" title="statement not covered" >useState(null);</span>
 &nbsp;
 <span class="cstat-no" title="statement not covered" >  useEffect(<span class="fstat-no" title="function not covered" >()</span> =&gt; {</span>
-    const initFirebase = <span class="cstat-no" title="statement not covered" ><span class="fstat-no" title="function not covered" >as</span>ync () =&gt; {</span>
+    const initSupabase = <span class="cstat-no" title="statement not covered" ><span class="fstat-no" title="function not covered" >as</span>ync () =&gt; {</span>
 <span class="cstat-no" title="statement not covered" >      try {</span>
-<span class="cstat-no" title="statement not covered" >        console.log('🔥 Initializing Firebase with Auth...');</span>
-<span class="cstat-no" title="statement not covered" >        await initializeFirebase();</span>
-&nbsp;
-        // Test that auth is actually available
-        const auth = <span class="cstat-no" title="statement not covered" >getAuthSync();</span>
-<span class="cstat-no" title="statement not covered" >        console.log('✅ Firebase Auth is ready');</span>
-&nbsp;
-<span class="cstat-no" title="statement not covered" >        setFirebaseReady(true);</span>
+<span class="cstat-no" title="statement not covered" >        console.log('🔥 Initializing Supabase with Auth...');</span>
+        
+        // Test Supabase connection
+        const { data, error } = <span class="cstat-no" title="statement not covered" >await supabase.auth.getSession();</span>
+<span class="cstat-no" title="statement not covered" >        if (error) <span class="cstat-no" title="statement not covered" >throw error;</span></span>
+        
+<span class="cstat-no" title="statement not covered" >        console.log('✅ Supabase Auth is ready');</span>
+<span class="cstat-no" title="statement not covered" >        setSupabaseReady(true);</span>
       } catch (err) {
-<span class="cstat-no" title="statement not covered" >        console.error('❌ Firebase Auth initialization failed:', err);</span>
+<span class="cstat-no" title="statement not covered" >        console.error('❌ Supabase Auth initialization failed:', err);</span>
 <span class="cstat-no" title="statement not covered" >        setError(err);</span>
-<span class="cstat-no" title="statement not covered" >        setFirebaseReady(true); </span>// Continue anyway
+<span class="cstat-no" title="statement not covered" >        setSupabaseReady(true); </span>// Continue anyway
       }
     };
 &nbsp;
-<span class="cstat-no" title="statement not covered" >    initFirebase();</span>
+<span class="cstat-no" title="statement not covered" >    initSupabase();</span>
   }, []);
 &nbsp;
 <span class="cstat-no" title="statement not covered" >  if (error) {</span>
 <span class="cstat-no" title="statement not covered" >    return (</span>
       &lt;View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#f9fafb' }}&gt;
         &lt;Text style={{ color: 'red', fontSize: 16, textAlign: 'center', padding: 20 }}&gt;
-          Firebase Error
+          Supabase Error
         &lt;/Text&gt;
         &lt;Text style={{ color: '#666', fontSize: 14, textAlign: 'center', padding: 20 }}&gt;
           {error.message}
@@ -419,15 +419,15 @@ const FirebaseAuthProvider = <span class="cstat-no" title="statement not covered
     );
   }
 &nbsp;
-<span class="cstat-no" title="statement not covered" >  if (!firebaseReady) {</span>
+<span class="cstat-no" title="statement not covered" >  if (!supabaseReady) {</span>
 <span class="cstat-no" title="statement not covered" >    return (</span>
       &lt;View style={{ flex: 1, backgroundColor: '#f9fafb' }}&gt;
-        &lt;LoadingSpinner text="Initializing Firebase Auth..." /&gt;
+        &lt;LoadingSpinner text="Initializing Supabase Auth..." /&gt;
       &lt;/View&gt;
     );
   }
 &nbsp;
-  // Only render AuthProvider when Firebase is definitely ready
+  // Only render AuthProvider when Supabase is definitely ready
 <span class="cstat-no" title="statement not covered" >  return (</span>
     &lt;AuthProvider&gt;
       {children}
@@ -443,9 +443,9 @@ export default function <span class="fstat-no" title="function not covered" >App
 <span class="cstat-no" title="statement not covered" >      try {</span>
 <span class="cstat-no" title="statement not covered" >        console.log('🚀 Initializing Iyaya app...');</span>
 &nbsp;
-        // Pre-initialize Firebase to ensure it's ready
-<span class="cstat-no" title="statement not covered" >        await initializeFirebase().catch(<span class="fstat-no" title="function not covered" >er</span>ror =&gt; {</span>
-<span class="cstat-no" title="statement not covered" >          console.warn('⚠️ Firebase init warning (continuing):', error.message);</span>
+        // Pre-initialize Supabase to ensure it's ready
+<span class="cstat-no" title="statement not covered" >        await supabase.auth.getSession().catch(<span class="fstat-no" title="function not covered" >er</span>ror =&gt; {</span>
+<span class="cstat-no" title="statement not covered" >          console.warn('⚠️ Supabase init warning (continuing):', error.message);</span>
         });
 &nbsp;
 <span class="cstat-no" title="statement not covered" >        await new Promise(<span class="fstat-no" title="function not covered" >re</span>solve =&gt; <span class="cstat-no" title="statement not covered" >setTimeout(resolve, 500))</span>;</span>
@@ -476,13 +476,13 @@ export default function <span class="fstat-no" title="function not covered" >App
         &lt;AppProvider&gt;
           &lt;ProfileDataProvider&gt;
             &lt;PrivacyProvider&gt;
-              {/* Wrap with FirebaseAuthProvider to ensure proper initialization order */}
-              &lt;FirebaseAuthProvider&gt;
+              {/* Wrap with SupabaseAuthProvider to ensure proper initialization order */}
+              &lt;SupabaseAuthProvider&gt;
                 &lt;AppIntegration&gt;
                   &lt;AppNavigator /&gt;
                   &lt;StatusBar style="auto" /&gt;
                 &lt;/AppIntegration&gt;
-              &lt;/FirebaseAuthProvider&gt;
+              &lt;/SupabaseAuthProvider&gt;
             &lt;/PrivacyProvider&gt;
           &lt;/ProfileDataProvider&gt;
         &lt;/AppProvider&gt;
@@ -496,7 +496,7 @@ export default function <span class="fstat-no" title="function not covered" >App
             <div class='footer quiet pad2 space-top1 center small'>
                 Code coverage generated by
                 <a href="https://istanbul.js.org/" target="_blank" rel="noopener noreferrer">istanbul</a>
-                at 2025-09-28T07:32:27.971Z
+                at 2025-10-09T07:22:01.297Z
             </div>
         <script src="../prettify.js"></script>
         <script>

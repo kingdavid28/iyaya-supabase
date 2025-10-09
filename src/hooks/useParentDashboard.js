@@ -188,13 +188,10 @@ export const useParentDashboard = () => {
 
     try {
       console.log('👶 Fetching children for parent:', user?.id);
-      const res = await apiService.children.getMy();
-      console.log('👶 Children API response:', res);
+      const list = await apiService.children.getChildren(user.id);
+      console.log('👶 Children from getChildren:', list);
 
-      // Handle different response structures
-      const list = res?.data || res?.children || [];
-
-      const normalized = list.map((child, idx) => ({
+      const normalized = (list || []).map((child, idx) => ({
         id: child.id || child._id || idx + 1,
         _id: child.id || child._id,
         name: child.name || child.firstName || 'Child',
@@ -216,14 +213,7 @@ export const useParentDashboard = () => {
       console.log('👶 Normalized children:', normalized);
       setChildren(normalized);
     } catch (error) {
-      console.error('❌ Error fetching children:', {
-        message: error?.message,
-        status: error?.status,
-        statusCode: error?.statusCode,
-        code: error?.code,
-        originalError: error?.originalError,
-        stack: error?.stack
-      });
+      console.error('❌ Error fetching children:', error);
       setChildren([]);
     }
   }, [user?.id, user?.role]);

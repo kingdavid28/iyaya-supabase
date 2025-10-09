@@ -25,14 +25,14 @@
             <div class='fl pad1y space-right2'>
                 <span class="strong">0% </span>
                 <span class="quiet">Statements</span>
-                <span class='fraction'>0/41</span>
+                <span class='fraction'>0/42</span>
             </div>
         
             
             <div class='fl pad1y space-right2'>
                 <span class="strong">0% </span>
                 <span class="quiet">Branches</span>
-                <span class='fraction'>0/10</span>
+                <span class='fraction'>0/14</span>
             </div>
         
             
@@ -46,7 +46,7 @@
             <div class='fl pad1y space-right2'>
                 <span class="strong">0% </span>
                 <span class="quiet">Lines</span>
-                <span class='fraction'>0/41</span>
+                <span class='fraction'>0/42</span>
             </div>
         
             
@@ -141,7 +141,11 @@
 <a name='L76'></a><a href='#L76'>76</a>
 <a name='L77'></a><a href='#L77'>77</a>
 <a name='L78'></a><a href='#L78'>78</a>
-<a name='L79'></a><a href='#L79'>79</a></td><td class="line-coverage quiet"><span class="cline-any cline-neutral">&nbsp;</span>
+<a name='L79'></a><a href='#L79'>79</a>
+<a name='L80'></a><a href='#L80'>80</a>
+<a name='L81'></a><a href='#L81'>81</a>
+<a name='L82'></a><a href='#L82'>82</a>
+<a name='L83'></a><a href='#L83'>83</a></td><td class="line-coverage quiet"><span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
@@ -196,7 +200,11 @@
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
@@ -220,7 +228,7 @@
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span></td><td class="text"><pre class="prettyprint lang-js">import AsyncStorage from '@react-native-async-storage/async-storage';
-import { firebaseAuthService } from '../services/firebaseAuthService';
+import { supabase } from '../config/supabase';
 import { STORAGE_KEYS } from '../config/constants';
 import { performanceMonitor } from './performanceMonitor';
 &nbsp;
@@ -261,20 +269,24 @@ class TokenManager {
   }
 &nbsp;
 <span class="fstat-no" title="function not covered" >  as</span>ync _refreshToken() {
-<span class="cstat-no" title="statement not covered" >    console.log('🔄 Getting Firebase token, force refresh: false');</span>
+<span class="cstat-no" title="statement not covered" >    console.log('🔄 Getting Supabase token, force refresh: false');</span>
 <span class="cstat-no" title="statement not covered" >    performanceMonitor.trackTokenRefresh();</span>
 <span class="cstat-no" title="statement not covered" >    performanceMonitor.startTimer('token-refresh');</span>
     
 <span class="cstat-no" title="statement not covered" >    try {</span>
-      const currentUser = <span class="cstat-no" title="statement not covered" >firebaseAuthService.getCurrentUser();</span>
-<span class="cstat-no" title="statement not covered" >      if (!currentUser) {</span>
+      const { data: { session }, error } = <span class="cstat-no" title="statement not covered" >await supabase.auth.getSession();</span>
+<span class="cstat-no" title="statement not covered" >      if (error || !session) {</span>
 <span class="cstat-no" title="statement not covered" >        console.log('No authenticated user - returning null silently');</span>
 <span class="cstat-no" title="statement not covered" >        performanceMonitor.endTimer('token-refresh');</span>
 <span class="cstat-no" title="statement not covered" >        return null;</span>
       }
 &nbsp;
-      const token = <span class="cstat-no" title="statement not covered" >await currentUser.getIdToken(false);</span> // Don't force refresh
-<span class="cstat-no" title="statement not covered" >      await AsyncStorage.setItem(STORAGE_KEYS.AUTH_TOKEN, token);</span>
+      const token = <span class="cstat-no" title="statement not covered" >session.access_token;</span>
+      
+<span class="cstat-no" title="statement not covered" >      if (token) {</span>
+<span class="cstat-no" title="statement not covered" >        await AsyncStorage.setItem(STORAGE_KEYS.AUTH_TOKEN, token);</span>
+      }
+      
 <span class="cstat-no" title="statement not covered" >      performanceMonitor.endTimer('token-refresh');</span>
 <span class="cstat-no" title="statement not covered" >      return token;</span>
     } catch (error) {
@@ -304,7 +316,7 @@ export const tokenManager = <span class="cstat-no" title="statement not covered"
             <div class='footer quiet pad2 space-top1 center small'>
                 Code coverage generated by
                 <a href="https://istanbul.js.org/" target="_blank" rel="noopener noreferrer">istanbul</a>
-                at 2025-09-28T07:32:27.971Z
+                at 2025-10-09T07:22:01.297Z
             </div>
         <script src="../prettify.js"></script>
         <script>

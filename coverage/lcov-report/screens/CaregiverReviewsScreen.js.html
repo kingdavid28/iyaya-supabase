@@ -25,28 +25,28 @@
             <div class='fl pad1y space-right2'>
                 <span class="strong">0% </span>
                 <span class="quiet">Statements</span>
-                <span class='fraction'>0/44</span>
+                <span class='fraction'>0/40</span>
             </div>
         
             
             <div class='fl pad1y space-right2'>
                 <span class="strong">0% </span>
                 <span class="quiet">Branches</span>
-                <span class='fraction'>0/8</span>
+                <span class='fraction'>0/14</span>
             </div>
         
             
             <div class='fl pad1y space-right2'>
                 <span class="strong">0% </span>
                 <span class="quiet">Functions</span>
-                <span class='fraction'>0/13</span>
+                <span class='fraction'>0/9</span>
             </div>
         
             
             <div class='fl pad1y space-right2'>
                 <span class="strong">0% </span>
                 <span class="quiet">Lines</span>
-                <span class='fraction'>0/43</span>
+                <span class='fraction'>0/38</span>
             </div>
         
             
@@ -307,8 +307,7 @@
 <a name='L242'></a><a href='#L242'>242</a>
 <a name='L243'></a><a href='#L243'>243</a>
 <a name='L244'></a><a href='#L244'>244</a>
-<a name='L245'></a><a href='#L245'>245</a>
-<a name='L246'></a><a href='#L246'>246</a></td><td class="line-coverage quiet"><span class="cline-any cline-neutral">&nbsp;</span>
+<a name='L245'></a><a href='#L245'>245</a></td><td class="line-coverage quiet"><span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
@@ -349,28 +348,16 @@
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
@@ -384,16 +371,27 @@
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
@@ -563,7 +561,7 @@ import {
   StyleSheet,
   Alert
 } from 'react-native';
-import { getFirebaseDatabase, ref, onValue, push, set, query, orderByChild } from '../config/firebase';
+import { supabase } from '../config/supabase';
 import { StarRatingInput, StarRatingDisplay } from 'react-native-star-rating-widget';
 &nbsp;
 const ReviewItem = <span class="cstat-no" title="statement not covered" ><span class="fstat-no" title="function not covered" >({</span> review }) =&gt; (</span>
@@ -577,7 +575,7 @@ const ReviewItem = <span class="cstat-no" title="statement not covered" ><span c
       &lt;Text style={styles.comment}&gt;{review.comment}&lt;/Text&gt;
     )}
     &lt;Text style={styles.timestamp}&gt;
-      {new Date(review.timestamp).toLocaleDateString()}
+      {new Date(review.created_at).toLocaleDateString()}
     &lt;/Text&gt;
   &lt;/View&gt;
 );
@@ -592,33 +590,21 @@ const CaregiverReviewsScreen = <span class="cstat-no" title="statement not cover
   // Fetch reviews
 <span class="cstat-no" title="statement not covered" >  useEffect(<span class="fstat-no" title="function not covered" >()</span> =&gt; {</span>
     const fetchReviews = <span class="cstat-no" title="statement not covered" ><span class="fstat-no" title="function not covered" >as</span>ync () =&gt; {</span>
-      const database = <span class="cstat-no" title="statement not covered" >await getFirebaseDatabase();</span>
-      const reviewsRef = <span class="cstat-no" title="statement not covered" >ref(database, `reviews/${caregiverId}`);</span>
-      const reviewsQuery = <span class="cstat-no" title="statement not covered" >query(reviewsRef, orderByChild('timestamp'));</span>
+<span class="cstat-no" title="statement not covered" >      try {</span>
+        const { data, error } = <span class="cstat-no" title="statement not covered" >await supabase</span>
+          .from('reviews')
+          .select('*')
+          .eq('caregiver_id', caregiverId)
+          .order('created_at', { ascending: false });
 &nbsp;
-      const unsubscribe = <span class="cstat-no" title="statement not covered" >onValue(reviewsQuery, <span class="fstat-no" title="function not covered" >(s</span>napshot) =&gt; {</span>
-        const reviewsData = <span class="cstat-no" title="statement not covered" >[];</span>
-<span class="cstat-no" title="statement not covered" >        snapshot.forEach(<span class="fstat-no" title="function not covered" >(c</span>hildSnapshot) =&gt; {</span>
-<span class="cstat-no" title="statement not covered" >          reviewsData.push({</span>
-            id: childSnapshot.key,
-            parentId: childSnapshot.val().parentId,
-            rating: childSnapshot.val().rating,
-            comment: childSnapshot.val().comment,
-            timestamp: childSnapshot.val().timestamp
-          });
-        });
-<span class="cstat-no" title="statement not covered" >        setReviews(reviewsData);</span>
-      });
-&nbsp;
-<span class="cstat-no" title="statement not covered" >      return unsubscribe;</span>
+<span class="cstat-no" title="statement not covered" >        if (error) <span class="cstat-no" title="statement not covered" >throw error;</span></span>
+<span class="cstat-no" title="statement not covered" >        setReviews(data || []);</span>
+      } catch (error) {
+<span class="cstat-no" title="statement not covered" >        console.error('Error fetching reviews:', error);</span>
+      }
     };
 &nbsp;
-    let unsubscribe;
-<span class="cstat-no" title="statement not covered" >    fetchReviews().then(<span class="fstat-no" title="function not covered" >(u</span>nsub) =&gt; {</span>
-<span class="cstat-no" title="statement not covered" >      unsubscribe = unsub;</span>
-    });
-&nbsp;
-<span class="cstat-no" title="statement not covered" >    return <span class="fstat-no" title="function not covered" >()</span> =&gt; <span class="cstat-no" title="statement not covered" >unsubscribe &amp;&amp; unsubscribe();</span></span>
+<span class="cstat-no" title="statement not covered" >    fetchReviews();</span>
   }, [caregiverId]);
 &nbsp;
   const submitReview = <span class="cstat-no" title="statement not covered" ><span class="fstat-no" title="function not covered" >as</span>ync () =&gt; {</span>
@@ -628,18 +614,29 @@ const CaregiverReviewsScreen = <span class="cstat-no" title="statement not cover
     }
 &nbsp;
 <span class="cstat-no" title="statement not covered" >    try {</span>
-      const database = <span class="cstat-no" title="statement not covered" >await getFirebaseDatabase();</span>
-      const reviewRef = <span class="cstat-no" title="statement not covered" >push(ref(database, `reviews/${caregiverId}`));</span>
-<span class="cstat-no" title="statement not covered" >      await set(reviewRef, {</span>
-        parentId: userId,
-        rating: rating,
-        comment: comment,
-        timestamp: Date.now()
-      });
+      const { error } = <span class="cstat-no" title="statement not covered" >await supabase</span>
+        .from('reviews')
+        .insert({
+          caregiver_id: caregiverId,
+          parent_id: userId,
+          rating: rating,
+          comment: comment
+        });
+&nbsp;
+<span class="cstat-no" title="statement not covered" >      if (error) <span class="cstat-no" title="statement not covered" >throw error;</span></span>
+&nbsp;
 <span class="cstat-no" title="statement not covered" >      setRating(0);</span>
 <span class="cstat-no" title="statement not covered" >      setComment('');</span>
 <span class="cstat-no" title="statement not covered" >      setShowReviewForm(false);</span>
 <span class="cstat-no" title="statement not covered" >      Alert.alert('Success', 'Review submitted successfully');</span>
+      
+      // Refresh reviews
+      const { data } = <span class="cstat-no" title="statement not covered" >await supabase</span>
+        .from('reviews')
+        .select('*')
+        .eq('caregiver_id', caregiverId)
+        .order('created_at', { ascending: false });
+<span class="cstat-no" title="statement not covered" >      setReviews(data || []);</span>
     } catch (error) {
 <span class="cstat-no" title="statement not covered" >      Alert.alert('Error', 'Failed to submit review');</span>
 <span class="cstat-no" title="statement not covered" >      console.error('Error submitting review:', error);</span>
@@ -805,7 +802,7 @@ export default CaregiverReviewsScreen;</pre></td></tr></table></pre>
             <div class='footer quiet pad2 space-top1 center small'>
                 Code coverage generated by
                 <a href="https://istanbul.js.org/" target="_blank" rel="noopener noreferrer">istanbul</a>
-                at 2025-09-28T07:32:27.971Z
+                at 2025-10-09T07:22:01.297Z
             </div>
         <script src="../prettify.js"></script>
         <script>

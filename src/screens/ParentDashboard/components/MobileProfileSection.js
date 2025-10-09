@@ -8,17 +8,47 @@ import { useAuth } from '../../../contexts/AuthContext';
 import { calculateAge, formatBirthDate } from '../../../utils/dateUtils';
 
 const MobileProfileSection = ({ greetingName, profileImage, profileContact, profileLocation, activeTab, userData, onClose, navigation }) => {
-  const { user } = useAuth();
-  
+  const { user, getUserProfile } = useAuth();
+  const [profileData, setProfileData] = React.useState(userData || user);
 
+  React.useEffect(() => {
+    const fetchProfile = async () => {
+      if (!userData && user?.id) {
+        try {
+          const freshProfile = await getUserProfile();
+          if (freshProfile) {
+            setProfileData({ ...user, ...freshProfile });
+          }
+        } catch (error) {
+          console.warn('Failed to fetch fresh profile:', error);
+        }
+      }
+    };
+    
+    fetchProfile();
+  }, [user?.id, userData, getUserProfile]);
+
+  React.useEffect(() => {
+    if (userData) {
+      setProfileData(userData);
+    }
+  }, [userData]);
+
+  console.log('📱 MobileProfileSection - Profile data:', {
+    hasUserData: !!userData,
+    hasUser: !!user,
+    profileDataKeys: profileData ? Object.keys(profileData) : [],
+    name: profileData?.name,
+    firstName: profileData?.firstName || profileData?.first_name,
+    lastName: profileData?.lastName || profileData?.last_name,
+    email: profileData?.email,
+    role: profileData?.role
+  });
   
-  // Use userData prop if available, fallback to user context
-  const profileData = userData || user;
-  
-  const userAge = profileData?.birthDate ? calculateAge(profileData.birthDate) : null;
+  const userAge = profileData?.birthDate || profileData?.birth_date ? calculateAge(profileData.birthDate || profileData.birth_date) : null;
   const fullName = profileData?.name || profileData?.displayName || greetingName;
-  const displayName = profileData?.firstName && profileData?.lastName 
-    ? `${profileData.firstName} ${profileData.middleInitial ? profileData.middleInitial + '. ' : ''}${profileData.lastName}`.trim()
+  const displayName = profileData?.firstName || profileData?.first_name || profileData?.lastName || profileData?.last_name
+    ? `${profileData.firstName || profileData.first_name || ''} ${profileData.middleInitial ? profileData.middleInitial + '. ' : ''}${profileData.lastName || profileData.last_name || ''}`.trim()
     : fullName;
   
   // Get the most current profile image - prioritize profileImage prop which comes from parent dashboard state
@@ -73,12 +103,15 @@ const MobileProfileSection = ({ greetingName, profileImage, profileContact, prof
                 <Text style={styles.mobileProfileDetailText}>🎂 {userAge} years old</Text>
               )}
               <Text style={styles.mobileProfileDetailText}>📧 {String(profileData?.email || profileContact || 'No email')}</Text>
-              {profileData?.phone && (
-                <Text style={styles.mobileProfileDetailText}>📱 {String(profileData.phone)}</Text>
+              {(profileData?.phone || profileData?.contact_phone) && (
+                <Text style={styles.mobileProfileDetailText}>📱 {String(profileData.phone || profileData.contact_phone)}</Text>
               )}
               <Text style={styles.mobileProfileDetailText}>📍 {String(profileLocation || profileData?.location || profileData?.address || 'Location not set')}</Text>
-              {profileData?.role === 'caregiver' && profileData?.caregiverProfile?.hourlyRate && (
-                <Text style={styles.mobileProfileDetailText}>💰 ₱{profileData.caregiverProfile.hourlyRate}/hr</Text>
+              {profileData?.role === 'parent' && profileData?.children?.length > 0 && (
+                <Text style={styles.mobileProfileDetailText}>👶 {profileData.children.length} child{profileData.children.length > 1 ? 'ren' : ''}</Text>
+              )}
+              {profileData?.role === 'caregiver' && (profileData?.hourlyRate || profileData?.hourly_rate) && (
+                <Text style={styles.mobileProfileDetailText}>💰 ₱{profileData.hourlyRate || profileData.hourly_rate}/hr</Text>
               )}
             </View>
           </View>

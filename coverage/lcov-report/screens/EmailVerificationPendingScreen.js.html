@@ -25,14 +25,14 @@
             <div class='fl pad1y space-right2'>
                 <span class="strong">0% </span>
                 <span class="quiet">Statements</span>
-                <span class='fraction'>0/28</span>
+                <span class='fraction'>0/30</span>
             </div>
         
             
             <div class='fl pad1y space-right2'>
                 <span class="strong">0% </span>
                 <span class="quiet">Branches</span>
-                <span class='fraction'>0/8</span>
+                <span class='fraction'>0/12</span>
             </div>
         
             
@@ -159,7 +159,11 @@
 <a name='L94'></a><a href='#L94'>94</a>
 <a name='L95'></a><a href='#L95'>95</a>
 <a name='L96'></a><a href='#L96'>96</a>
-<a name='L97'></a><a href='#L97'>97</a></td><td class="line-coverage quiet"><span class="cline-any cline-neutral">&nbsp;</span>
+<a name='L97'></a><a href='#L97'>97</a>
+<a name='L98'></a><a href='#L98'>98</a>
+<a name='L99'></a><a href='#L99'>99</a>
+<a name='L100'></a><a href='#L100'>100</a>
+<a name='L101'></a><a href='#L101'>101</a></td><td class="line-coverage quiet"><span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
@@ -170,24 +174,8 @@
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
@@ -195,13 +183,33 @@
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
@@ -259,21 +267,26 @@
 import { View, Text, StyleSheet, Alert } from 'react-native';
 import { Button } from 'react-native-paper';
 import { LinearGradient } from 'expo-linear-gradient';
-import { sendEmailVerification } from 'firebase/auth';
-import { firebaseAuthService } from '../services/firebaseAuthService';
+import { useAuth } from '../contexts/AuthContext';
+import { supabase } from '../config/supabase';
 &nbsp;
 const EmailVerificationPendingScreen = <span class="cstat-no" title="statement not covered" ><span class="fstat-no" title="function not covered" >({</span> navigation, route }) =&gt; {</span>
   const [isResending, setIsResending] = <span class="cstat-no" title="statement not covered" >useState(false);</span>
   const [isChecking, setIsChecking] = <span class="cstat-no" title="statement not covered" >useState(false);</span>
   const { email } = <span class="cstat-no" title="statement not covered" >route.params || {};</span>
+  const { user } = <span class="cstat-no" title="statement not covered" >useAuth();</span>
 &nbsp;
   const handleResendVerification = <span class="cstat-no" title="statement not covered" ><span class="fstat-no" title="function not covered" >as</span>ync () =&gt; {</span>
 <span class="cstat-no" title="statement not covered" >    try {</span>
 <span class="cstat-no" title="statement not covered" >      setIsResending(true);</span>
-      const currentUser = <span class="cstat-no" title="statement not covered" >firebaseAuthService.getCurrentUser();</span>
       
-<span class="cstat-no" title="statement not covered" >      if (currentUser) {</span>
-<span class="cstat-no" title="statement not covered" >        await sendEmailVerification(currentUser);</span>
+<span class="cstat-no" title="statement not covered" >      if (email) {</span>
+        const { error } = <span class="cstat-no" title="statement not covered" >await supabase.auth.resend({</span>
+          type: 'signup',
+          email: email
+        });
+        
+<span class="cstat-no" title="statement not covered" >        if (error) <span class="cstat-no" title="statement not covered" >throw error;</span></span>
 <span class="cstat-no" title="statement not covered" >        Alert.alert('Email Sent', 'Verification email has been sent to your inbox.');</span>
       }
     } catch (error) {
@@ -286,18 +299,17 @@ const EmailVerificationPendingScreen = <span class="cstat-no" title="statement n
   const handleCheckVerification = <span class="cstat-no" title="statement not covered" ><span class="fstat-no" title="function not covered" >as</span>ync () =&gt; {</span>
 <span class="cstat-no" title="statement not covered" >    try {</span>
 <span class="cstat-no" title="statement not covered" >      setIsChecking(true);</span>
-      const currentUser = <span class="cstat-no" title="statement not covered" >firebaseAuthService.getCurrentUser();</span>
       
-<span class="cstat-no" title="statement not covered" >      if (currentUser) {</span>
-<span class="cstat-no" title="statement not covered" >        await currentUser.reload();</span>
-        
-<span class="cstat-no" title="statement not covered" >        if (currentUser.emailVerified) {</span>
-<span class="cstat-no" title="statement not covered" >          Alert.alert('Email Verified!', 'You can now sign in.', [</span>
-            { text: 'Sign In', onPress: <span class="fstat-no" title="function not covered" >()</span> =&gt; <span class="cstat-no" title="statement not covered" >navigation.navigate('Welcome') </span>}
-          ]);
-        } else {
-<span class="cstat-no" title="statement not covered" >          Alert.alert('Not Verified Yet', 'Please check your inbox.');</span>
-        }
+      const { data, error } = <span class="cstat-no" title="statement not covered" >await supabase.auth.getUser();</span>
+      
+<span class="cstat-no" title="statement not covered" >      if (error) <span class="cstat-no" title="statement not covered" >throw error;</span></span>
+      
+<span class="cstat-no" title="statement not covered" >      if (data.user &amp;&amp; data.user.email_confirmed_at) {</span>
+<span class="cstat-no" title="statement not covered" >        Alert.alert('Email Verified!', 'You can now sign in.', [</span>
+          { text: 'Sign In', onPress: <span class="fstat-no" title="function not covered" >()</span> =&gt; <span class="cstat-no" title="statement not covered" >navigation.navigate('Welcome') </span>}
+        ]);
+      } else {
+<span class="cstat-no" title="statement not covered" >        Alert.alert('Not Verified Yet', 'Please check your inbox and click the verification link.');</span>
       }
     } catch (error) {
 <span class="cstat-no" title="statement not covered" >      Alert.alert('Error', 'Failed to check verification status');</span>
@@ -358,7 +370,7 @@ export default EmailVerificationPendingScreen;</pre></td></tr></table></pre>
             <div class='footer quiet pad2 space-top1 center small'>
                 Code coverage generated by
                 <a href="https://istanbul.js.org/" target="_blank" rel="noopener noreferrer">istanbul</a>
-                at 2025-09-28T07:32:27.971Z
+                at 2025-10-09T07:22:01.297Z
             </div>
         <script src="../prettify.js"></script>
         <script>

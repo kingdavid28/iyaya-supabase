@@ -47,7 +47,13 @@ export const AuthProvider = ({ children }) => {
         .eq('id', authUser.id)
       
       if (error) {
-        console.error('❌ Error fetching user profile:', error)
+        console.error('❌ Error fetching user profile:', {
+          message: error?.message,
+          code: error?.code,
+          details: error?.details,
+          hint: error?.hint,
+          error: error
+        })
         return { ...authUser, role: 'parent' } // Default role
       }
       
@@ -64,7 +70,13 @@ export const AuthProvider = ({ children }) => {
       console.log('✅ Final user object with role:', userWithProfile.role)
       return userWithProfile
     } catch (err) {
-      console.error('❌ Error fetching user profile:', err)
+      console.error('❌ Error fetching user profile:', {
+        message: err?.message,
+        code: err?.code,
+        details: err?.details,
+        hint: err?.hint,
+        error: err
+      })
       return { ...authUser, role: 'parent' } // Default role
     }
   }
@@ -120,7 +132,11 @@ export const AuthProvider = ({ children }) => {
             .select()
 
           if (profileError) {
-            console.error('❌ Profile creation failed:', profileError)
+            if (profileError.code === '23505') {
+              console.log('✅ User profile already exists, skipping creation')
+            } else {
+              console.error('❌ Profile creation failed:', profileError)
+            }
           } else {
             console.log('✅ Profile created successfully:', profileData)
           }

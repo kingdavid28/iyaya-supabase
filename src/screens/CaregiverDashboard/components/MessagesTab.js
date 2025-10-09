@@ -3,7 +3,7 @@ import { View, Text, FlatList, TouchableOpacity, RefreshControl, Image, Keyboard
 import { Ionicons } from '@expo/vector-icons';
 import { Card } from 'react-native-paper';
 import { useAuth } from '../../../contexts/AuthContext';
-import { messagingAPI, realtimeService } from '../../../services';
+import supabaseService from '../../../services/supabaseService';
 import { styles } from '../../styles/CaregiverDashboard.styles';
 
 const MessagesTab = ({ navigation, refreshing, onRefresh }) => {
@@ -23,9 +23,24 @@ const MessagesTab = ({ navigation, refreshing, onRefresh }) => {
     const loadConversations = async () => {
       try {
         setLoading(true);
-        const response = await messagingAPI.getConversations();
-        console.log('📨 MessagesTab: Received conversations:', response.data);
-        setConversations(response.data || []);
+        const conversations = await supabaseService.getConversations(userIdToUse);
+        console.log('📨 MessagesTab: Received conversations:', conversations);
+        
+        // Transform conversations for display
+        const transformedConversations = conversations.map(conv => {
+          const otherParticipant = conv.participant_1 === userIdToUse ? conv.participant2 : conv.participant1;
+          return {
+            id: conv.id,
+            parentId: otherParticipant?.id,
+            parentName: otherParticipant?.name || 'Parent',
+            parentAvatar: otherParticipant?.profile_image,
+            lastMessage: 'Tap to view messages',
+            lastMessageTime: conv.last_message_at,
+            isRead: true // Will be updated with actual read status
+          };
+        });
+        
+        setConversations(transformedConversations);
       } catch (error) {
         console.error('Error loading conversations:', error);
         setConversations([]);
@@ -37,7 +52,7 @@ const MessagesTab = ({ navigation, refreshing, onRefresh }) => {
     loadConversations();
     
     // Setup real-time subscription
-    const subscription = realtimeService.subscribeToMessages('*', () => {
+    const subscription = supabaseService.subscribeToMessages('*', () => {
       loadConversations();
     });
 
@@ -64,15 +79,11 @@ const MessagesTab = ({ navigation, refreshing, onRefresh }) => {
       conversation: conversation
     });
 
-    // Mark messages as read when opening conversation using consistent conversation ID
+    // Mark messages as read when opening conversation
     const userIdToUse = user?.id || user?.uid;
-    if (userIdToUse && conversation.parentId) {
-      // Create consistent conversation ID
-      const [id1, id2] = [userIdToUse, conversation.parentId].sort();
-      const conversationId = `${id1}_${id2}`;
-
-      console.log('👁️ Marking messages as read with conversation ID:', conversationId);
-      await messagingAPI.markAsRead(conversationId);
+    if (userIdToUse && conversation.id) {
+      console.log('👁️ Marking messages as read for conversation:', conversation.id);
+      await supabaseService.markMessagesAsRead(conversation.id, userIdToUse);
     }
 
     navigation.navigate('Chat', {

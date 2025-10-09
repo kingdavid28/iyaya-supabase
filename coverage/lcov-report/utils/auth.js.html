@@ -25,14 +25,14 @@
             <div class='fl pad1y space-right2'>
                 <span class="strong">0% </span>
                 <span class="quiet">Statements</span>
-                <span class='fraction'>0/60</span>
+                <span class='fraction'>0/58</span>
             </div>
         
             
             <div class='fl pad1y space-right2'>
                 <span class="strong">0% </span>
                 <span class="quiet">Branches</span>
-                <span class='fraction'>0/22</span>
+                <span class='fraction'>0/20</span>
             </div>
         
             
@@ -46,7 +46,7 @@
             <div class='fl pad1y space-right2'>
                 <span class="strong">0% </span>
                 <span class="quiet">Lines</span>
-                <span class='fraction'>0/56</span>
+                <span class='fraction'>0/54</span>
             </div>
         
             
@@ -168,10 +168,7 @@
 <a name='L103'></a><a href='#L103'>103</a>
 <a name='L104'></a><a href='#L104'>104</a>
 <a name='L105'></a><a href='#L105'>105</a>
-<a name='L106'></a><a href='#L106'>106</a>
-<a name='L107'></a><a href='#L107'>107</a>
-<a name='L108'></a><a href='#L108'>108</a>
-<a name='L109'></a><a href='#L109'>109</a></td><td class="line-coverage quiet"><span class="cline-any cline-neutral">&nbsp;</span>
+<a name='L106'></a><a href='#L106'>106</a></td><td class="line-coverage quiet"><span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
@@ -203,13 +200,10 @@
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
@@ -304,20 +298,17 @@ const isValidJWT = <span class="cstat-no" title="statement not covered" ><span c
 &nbsp;
 export const getAuthToken = <span class="cstat-no" title="statement not covered" ><span class="fstat-no" title="function not covered" >as</span>ync () =&gt; {</span>
 <span class="cstat-no" title="statement not covered" >  try {</span>
-    // First try to get Firebase token
-    const { firebaseAuthService } = <span class="cstat-no" title="statement not covered" >await import('../services/firebaseAuthService');</span>
-    const currentUser = <span class="cstat-no" title="statement not covered" >firebaseAuthService.getCurrentUser();</span>
+    // First try to get Supabase token
+    const { supabase } = <span class="cstat-no" title="statement not covered" >await import('../config/supabase');</span>
+    const { data: { session } } = <span class="cstat-no" title="statement not covered" >await supabase.auth.getSession();</span>
     
-<span class="cstat-no" title="statement not covered" >    if (currentUser) {</span>
-<span class="cstat-no" title="statement not covered" >      console.log('🔄 Getting Firebase token for API calls');</span>
-      const token = <span class="cstat-no" title="statement not covered" >await currentUser.getIdToken();</span>
-<span class="cstat-no" title="statement not covered" >      if (token) {</span>
-<span class="cstat-no" title="statement not covered" >        console.log('✅ Firebase token obtained');</span>
-        // Store the fresh token
-        const { STORAGE_KEYS } = <span class="cstat-no" title="statement not covered" >await import('../config/constants');</span>
-<span class="cstat-no" title="statement not covered" >        await AsyncStorage.setItem(STORAGE_KEYS.AUTH_TOKEN, token);</span>
-<span class="cstat-no" title="statement not covered" >        return token;</span>
-      }
+<span class="cstat-no" title="statement not covered" >    if (session?.access_token) {</span>
+<span class="cstat-no" title="statement not covered" >      console.log('🔄 Getting Supabase token for API calls');</span>
+<span class="cstat-no" title="statement not covered" >      console.log('✅ Supabase token obtained');</span>
+      // Store the fresh token
+      const { STORAGE_KEYS } = <span class="cstat-no" title="statement not covered" >await import('../config/constants');</span>
+<span class="cstat-no" title="statement not covered" >      await AsyncStorage.setItem(STORAGE_KEYS.AUTH_TOKEN, session.access_token);</span>
+<span class="cstat-no" title="statement not covered" >      return session.access_token;</span>
     }
     
     // Fallback to stored tokens
@@ -394,7 +385,7 @@ export const clearAuthData = <span class="cstat-no" title="statement not covered
             <div class='footer quiet pad2 space-top1 center small'>
                 Code coverage generated by
                 <a href="https://istanbul.js.org/" target="_blank" rel="noopener noreferrer">istanbul</a>
-                at 2025-09-28T07:32:27.971Z
+                at 2025-10-09T07:22:01.297Z
             </div>
         <script src="../prettify.js"></script>
         <script>

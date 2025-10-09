@@ -1,4 +1,3 @@
-// src/components/bookings/BookingItem.js
 import React from 'react';
 import {
   View,
@@ -6,280 +5,408 @@ import {
   Image,
   StyleSheet,
   TouchableOpacity,
-  ActivityIndicator
+  Linking,
+  Alert,
+  Platform
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
 import { format } from 'date-fns';
-
-// Import with proper path - adjust based on your project structure
-import { getProfileImageUrl } from '../../../utils/imageUtils';
 
 const BookingItem = ({
   booking,
   user,
-  onPress,
-  onAccept,
-  onDecline,
-  onComplete,
-  showActions = true
+  onCancelBooking,
+  onUploadPayment,
+  onViewBookingDetails,
+  onWriteReview,
+  onMessageCaregiver,
+  onCallCaregiver
 }) => {
-  // Format date and time
   const formatDate = (dateString) => {
     try {
       if (!dateString) return 'No date';
       const date = new Date(dateString);
-      return format(date, 'MMM d, yyyy h:mm a');
+      return format(date, 'MMM d, yyyy');
     } catch (error) {
-      console.error('Error formatting date:', error);
       return 'Invalid date';
     }
   };
 
-  // Safe image URL getter with fallback
-  const getSafeImageUrl = () => {
+  const formatTime = (timeString) => {
+    if (!timeString) return '';
     try {
-      const imageUrl = getProfileImageUrl(user);
-      if (imageUrl) {
-        return { uri: imageUrl };
-      }
-      // Return a simple placeholder object instead of calling getPlaceholderImage()
-      return {
-        uri: 'data:image/svg+xml;base64,' + btoa(`
-          <svg width="56" height="56" viewBox="0 0 56 56" xmlns="http://www.w3.org/2000/svg">
-            <rect width="56" height="56" fill="#F3F4F6" rx="28"/>
-            <circle cx="28" cy="22" r="8" fill="#9CA3AF"/>
-            <path d="M16 44 C16 38, 40 38, 40 44" fill="#9CA3AF"/>
-          </svg>
-        `)
-      };
+      const [hours, minutes] = timeString.split(':');
+      const hour = parseInt(hours);
+      const ampm = hour >= 12 ? 'PM' : 'AM';
+      const displayHour = hour % 12 || 12;
+      return `${displayHour}:${minutes} ${ampm}`;
     } catch (error) {
-      console.error(' Error getting profile image:', error);
-      return {
-        uri: 'data:image/svg+xml;base64,' + btoa(`
-          <svg width="56" height="56" viewBox="0 0 56 56" xmlns="http://www.w3.org/2000/svg">
-            <rect width="56" height="56" fill="#F3F4F6" rx="28"/>
-            <circle cx="28" cy="22" r="8" fill="#9CA3AF"/>
-            <path d="M16 44 C16 38, 40 38, 40 44" fill="#9CA3AF"/>
-          </svg>
-        `)
-      };
+      return timeString;
     }
   };
 
-  const imageSource = getSafeImageUrl();
-  const isImageString = typeof imageSource === 'string';
+  const getStatusColor = (status) => {
+    switch (status?.toLowerCase()) {
+      case 'pending': return '#F59E0B';
+      case 'confirmed': return '#10B981';
+      case 'completed': return '#3B82F6';
+      case 'cancelled': return '#EF4444';
+      default: return '#9CA3AF';
+    }
+  };
 
-  const renderStatusBadge = () => {
-    if (!booking?.status) return null;
+  const getStatusText = (status) => {
+    switch (status?.toLowerCase()) {
+      case 'pending': return 'Pending';
+      case 'confirmed': return 'Confirmed';
+      case 'completed': return 'Completed';
+      case 'cancelled': return 'Cancelled';
+      default: return status || 'Unknown';
+    }
+  };
 
-    const statusColors = {
-      pending: '#F59E0B', // amber
-      confirmed: '#10B981', // green
-      completed: '#3B82F6', // blue
-      cancelled: '#EF4444', // red
-      declined: '#9CA3AF' // gray
-    };
+  const handleLocationPress = () => {
+    const address = booking?.address || booking?.location;
+    if (!address) {
+      Alert.alert('No Address', 'Location information is not available');
+      return;
+    }
 
-    return (
-      <View style={[styles.statusBadge, { backgroundColor: statusColors[booking.status] || '#9CA3AF' }]}>
-        <Text style={styles.statusText}>
-          {booking.status.charAt(0).toUpperCase() + booking.status.slice(1)}
-        </Text>
-      </View>
+    const encodedAddress = encodeURIComponent(address);
+    const url = Platform.select({
+      ios: `maps://app?q=${encodedAddress}`,
+      android: `geo:0,0?q=${encodedAddress}`,
+    });
+
+    Alert.alert(
+      'Open Location',
+      `Open ${address} in maps?`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Open Maps',
+          onPress: () => {
+            Linking.openURL(url).catch(() => {
+              const fallbackUrl = `https://www.google.com/maps/search/?api=1&query=${encodedAddress}`;
+              Linking.openURL(fallbackUrl);
+            });
+          }
+        }
+      ]
     );
   };
 
-  const renderActionButtons = () => {
-    if (!showActions || booking.status !== 'pending') return null;
-
-    return (
-      <View style={styles.actionButtons}>
-        <TouchableOpacity
-          style={[styles.actionButton, styles.declineButton]}
-          onPress={onDecline}
-        >
-          <Ionicons name="close" size={20} color="white" />
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={[styles.actionButton, styles.acceptButton]}
-          onPress={onAccept}
-        >
-          <Ionicons name="checkmark" size={20} color="white" />
-        </TouchableOpacity>
-      </View>
-    );
+  const handleMessagePress = () => {
+    if (onMessageCaregiver && user) {
+      onMessageCaregiver(user);
+    }
   };
+
+
+
+  const caregiverName = user?.name || booking?.caregiver_name || 'Unknown Caregiver';
+  const caregiverImage = user?.profileImage || user?.avatar || user?.profile_image;
+  const bookingDate = formatDate(booking?.date);
+  const startTime = formatTime(booking?.start_time || booking?.startTime);
+  const endTime = formatTime(booking?.end_time || booking?.endTime);
+  const timeDisplay = booking?.time || (startTime && endTime ? `${startTime} - ${endTime}` : '');
+  const totalAmount = booking?.total_amount || booking?.totalAmount || booking?.totalCost || 0;
+  const address = booking?.address || booking?.location;
 
   return (
-    <TouchableOpacity
-      style={styles.container}
-      onPress={onPress}
-      activeOpacity={0.8}
-    >
-      <View style={styles.imageContainer}>
-        {isImageString ? (
-          <Image
-            source={imageSource}
-            style={styles.profileImage}
-            onError={() => console.log(' Image failed to load')}
-          />
-        ) : (
-          <Image
-            source={imageSource}
-            style={styles.profileImage}
-          />
-        )}
-        {renderStatusBadge()}
-      </View>
+    <View style={styles.container}>
+      {/* Header with gradient */}
+      <LinearGradient
+        colors={['#667eea', '#764ba2']}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 0 }}
+        style={styles.header}
+      >
+        <View style={styles.headerContent}>
+          <View style={styles.caregiverInfo}>
+            <View style={styles.avatar}>
+              {caregiverImage ? (
+                <Image
+                  source={{ uri: caregiverImage }}
+                  style={styles.avatar}
+                  onError={() => console.log('Avatar failed to load')}
+                />
+              ) : (
+                <View style={[styles.avatar, styles.avatarPlaceholder]}>
+                  <Ionicons name="person" size={24} color="#9CA3AF" />
+                </View>
+              )}
+            </View>
+            <View style={styles.caregiverDetails}>
+              <Text style={styles.caregiverName}>{caregiverName}</Text>
+              <Text style={styles.bookingDate}>{bookingDate}</Text>
+            </View>
+          </View>
+          <View style={[styles.statusBadge, { backgroundColor: getStatusColor(booking?.status) }]}>
+            <Text style={styles.statusText}>{getStatusText(booking?.status)}</Text>
+          </View>
+        </View>
+      </LinearGradient>
 
-      <View style={styles.details}>
-        <View style={styles.header}>
-          <Text style={styles.name} numberOfLines={1}>
-            {user?.displayName || user?.name || 'Unknown User'}
-          </Text>
-          {booking?.createdAt && (
-            <Text style={styles.timeAgo}>
-              {formatDate(booking.createdAt)}
-            </Text>
-          )}
+      {/* Booking Details */}
+      <View style={styles.content}>
+        {/* Time and Rate Info */}
+        <View style={styles.infoRow}>
+          <View style={styles.infoItem}>
+            <Ionicons name="time-outline" size={16} color="#6B7280" />
+            <Text style={styles.infoText}>{timeDisplay || 'Time TBD'}</Text>
+          </View>
+          <View style={styles.infoItem}>
+            <Ionicons name="cash-outline" size={16} color="#6B7280" />
+            <Text style={styles.infoText}>₱{totalAmount}</Text>
+          </View>
         </View>
 
-        {booking?.serviceName && (
-          <Text style={styles.service} numberOfLines={1}>
-            {booking.serviceName}
-          </Text>
+        {/* Location */}
+        {address && (
+          <TouchableOpacity style={styles.locationContainer} onPress={handleLocationPress}>
+            <View style={styles.locationContent}>
+              <Ionicons name="location-outline" size={16} color="#8B5CF6" />
+              <Text style={styles.locationText} numberOfLines={2}>{address}</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={16} color="#8B5CF6" />
+          </TouchableOpacity>
         )}
 
-        {booking?.dateTime && (
-          <View style={styles.infoRow}>
-            <Ionicons name="time-outline" size={16} color="#6B7280" />
-            <Text style={styles.infoText}>
-              {formatDate(booking.dateTime)}
+        {/* Children Info */}
+        {booking?.selected_children && booking.selected_children.length > 0 && (
+          <View style={styles.childrenContainer}>
+            <Ionicons name="people-outline" size={16} color="#6B7280" />
+            <Text style={styles.childrenText}>
+              {booking.selected_children.length} child{booking.selected_children.length > 1 ? 'ren' : ''}
             </Text>
           </View>
         )}
 
-        {booking?.location && (
-          <View style={styles.infoRow}>
-            <Ionicons name="location-outline" size={16} color="#6B7280" />
-            <Text style={styles.infoText} numberOfLines={1}>
-              {booking.location}
+        {/* Special Instructions */}
+        {booking?.special_instructions && (
+          <View style={styles.notesContainer}>
+            <Text style={styles.notesLabel}>Special Instructions:</Text>
+            <Text style={styles.notesText} numberOfLines={2}>
+              {booking.special_instructions}
             </Text>
           </View>
         )}
 
-        {booking?.notes && (
-          <Text style={styles.notes} numberOfLines={2}>
-            {booking.notes}
-          </Text>
-        )}
+        {/* Action Buttons */}
+        <View style={styles.actionButtons}>
+          <TouchableOpacity style={styles.messageButton} onPress={handleMessagePress}>
+            <Ionicons name="chatbubble-outline" size={18} color="#FFFFFF" />
+            <Text style={styles.buttonText}>Message</Text>
+          </TouchableOpacity>
+          
+          {booking?.status === 'pending' && (
+            <TouchableOpacity 
+              style={styles.cancelButton} 
+              onPress={() => onCancelBooking(booking?.id || booking?._id)}
+            >
+              <Ionicons name="close-outline" size={18} color="#FFFFFF" />
+              <Text style={styles.buttonText}>Cancel</Text>
+            </TouchableOpacity>
+          )}
+        </View>
       </View>
-
-      {renderActionButtons()}
-    </TouchableOpacity>
+    </View>
   );
 };
 
 const styles = StyleSheet.create({
   container: {
-    flexDirection: 'row',
-    padding: 16,
     backgroundColor: '#FFFFFF',
-    borderRadius: 12,
-    marginVertical: 6,
+    borderRadius: 16,
     marginHorizontal: 16,
+    marginVertical: 8,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
+    shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.1,
-    shadowRadius: 2,
-    elevation: 2,
-  },
-  imageContainer: {
-    position: 'relative',
-    marginRight: 12,
-  },
-  profileImage: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    backgroundColor: '#F3F4F6',
-  },
-  statusBadge: {
-    position: 'absolute',
-    bottom: 0,
-    right: 0,
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 10,
-    minWidth: 20,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  statusText: {
-    color: 'white',
-    fontSize: 10,
-    fontWeight: '600',
-  },
-  details: {
-    flex: 1,
-    justifyContent: 'center',
+    shadowRadius: 8,
+    elevation: 5,
+    overflow: 'hidden',
   },
   header: {
+    paddingHorizontal: 16,
+    paddingVertical: 16,
+  },
+  headerContent: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 4,
   },
-  name: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#111827',
+  caregiverInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
     flex: 1,
-    marginRight: 8,
   },
-  timeAgo: {
-    fontSize: 12,
-    color: '#9CA3AF',
+  avatar: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: '#F3F4F6',
+    marginRight: 12,
   },
-  service: {
+  avatarPlaceholder: {
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  caregiverDetails: {
+    flex: 1,
+  },
+  caregiverName: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#FFFFFF',
+    marginBottom: 2,
+  },
+  bookingDate: {
     fontSize: 14,
-    color: '#4B5563',
-    marginBottom: 4,
+    color: 'rgba(255, 255, 255, 0.9)',
+  },
+  statusBadge: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 20,
+    marginLeft: 12,
+  },
+  statusText: {
+    color: '#FFFFFF',
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  content: {
+    padding: 16,
   },
   infoRow: {
     flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 16,
+  },
+  infoItem: {
+    flexDirection: 'row',
     alignItems: 'center',
-    marginTop: 2,
+    backgroundColor: '#F8FAFC',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 20,
+    flex: 0.48,
   },
   infoText: {
-    fontSize: 13,
-    color: '#6B7280',
+    fontSize: 14,
+    color: '#374151',
+    fontWeight: '500',
     marginLeft: 6,
   },
-  notes: {
-    fontSize: 13,
-    color: '#4B5563',
-    marginTop: 6,
-    fontStyle: 'italic',
+  locationContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#F3F0FF',
+    paddingHorizontal: 12,
+    paddingVertical: 12,
+    borderRadius: 12,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+  },
+  locationContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+  },
+  locationText: {
+    fontSize: 14,
+    color: '#8B5CF6',
+    fontWeight: '500',
+    marginLeft: 8,
+    flex: 1,
+  },
+  childrenContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  childrenText: {
+    fontSize: 14,
+    color: '#6B7280',
+    marginLeft: 8,
+  },
+  notesContainer: {
+    backgroundColor: '#F9FAFB',
+    padding: 12,
+    borderRadius: 8,
+    marginBottom: 16,
+  },
+  notesLabel: {
+    fontSize: 12,
+    color: '#6B7280',
+    fontWeight: '600',
+    marginBottom: 4,
+  },
+  notesText: {
+    fontSize: 14,
+    color: '#374151',
+    lineHeight: 20,
   },
   actionButtons: {
     flexDirection: 'row',
-    marginLeft: 8,
-    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 8,
   },
-  actionButton: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
+  messageButton: {
+    backgroundColor: '#3B82F6',
+    flexDirection: 'row',
+    alignItems: 'center',
     justifyContent: 'center',
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 12,
+    flex: 1,
+    shadowColor: '#3B82F6',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  confirmButton: {
+    backgroundColor: '#10B981',
+    flexDirection: 'row',
     alignItems: 'center',
-    marginLeft: 8,
+    justifyContent: 'center',
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 12,
+    flex: 1,
+    shadowColor: '#10B981',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    elevation: 3,
   },
-  acceptButton: {
-    backgroundColor: '#10B981', // green
+  cancelButton: {
+    backgroundColor: '#EF4444',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 12,
+    flex: 1,
+    shadowColor: '#EF4444',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    elevation: 3,
   },
-  declineButton: {
-    backgroundColor: '#EF4444', // red
+  buttonText: {
+    color: '#FFFFFF',
+    fontSize: 14,
+    fontWeight: '600',
+    marginLeft: 6,
   },
 });
 

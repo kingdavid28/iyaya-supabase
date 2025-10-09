@@ -2,487 +2,323 @@ import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
   Text,
+  FlatList,
   TextInput,
   TouchableOpacity,
-  FlatList,
   StyleSheet,
-  Alert,
   KeyboardAvoidingView,
   Platform,
-  Image,
-  Keyboard
+  Alert
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { Card } from 'react-native-paper';
-import { messagingAPI, realtimeService } from '../services';
+import supabaseService from '../services/supabaseService';
 import { useAuth } from '../contexts/AuthContext';
 
-// MessageItem component with simplified features
-const MessageItem = ({ message, isCurrentUser, onEdit, onDelete, onLongPress }) => {
-  const handleLongPress = () => {
-    if (isCurrentUser && !message.deleted) {
-      onLongPress && onLongPress(message);
-    }
-  };
-
-  const renderFileContent = () => {
-    // Simplified file content rendering
-    if (!message.file) return null;
-
-    if (message.file.type?.startsWith('image/')) {
-      return (
-        <Image
-          source={{ uri: message.file.url || `data:${message.file.type};base64,${message.file.base64}` }}
-          style={styles.messageImage}
-          resizeMode="cover"
-        />
-      );
-    }
-
-    return (
-      <View style={styles.fileContainer}>
-        <Ionicons name="document" size={20} color="#666" />
-        <Text style={styles.fileName}>{message.file.name}</Text>
-      </View>
-    );
-  };
-
-  const getStatusIcon = () => {
-    if (!isCurrentUser) return null;
-
-    switch (message.status) {
-      case 'sent':
-        return <Ionicons name="checkmark" size={12} color="#9CA3AF" />;
-      case 'delivered':
-        return <Ionicons name="checkmark-done" size={12} color="#9CA3AF" />;
-      case 'read':
-        return <Ionicons name="checkmark-done" size={12} color="#4CAF50" />;
-      case 'queued':
-        return <Ionicons name="time" size={12} color="#f59e0b" />;
-      case 'failed':
-        return <Ionicons name="alert-circle" size={12} color="#ef4444" />;
-      default:
-        return null;
-    }
-  };
-
-  return (
-    <TouchableOpacity
-      style={[
-        styles.messageBubble,
-        isCurrentUser ? styles.currentUserMessage : styles.otherUserMessage,
-        message.deleted && styles.deletedMessage,
-        message.status === 'queued' && styles.queuedMessage,
-        message.status === 'failed' && styles.failedMessage
-      ]}
-      onLongPress={handleLongPress}
-      delayLongPress={500}
-    >
-      {renderFileContent()}
-      <Text style={[
-        styles.messageText,
-        isCurrentUser ? styles.currentUserMessageText : styles.otherUserMessageText,
-        message.deleted && styles.deletedMessageText,
-        message.status === 'queued' && styles.queuedMessageText,
-        message.status === 'failed' && styles.failedMessageText
-      ]}>
-        {message.deleted ? 'This message was deleted' : message.text}
-        {message.edited && !message.deleted && (
-          <Text style={styles.editedIndicator}> (edited)</Text>
-        )}
-        {message.status === 'queued' && (
-          <Text style={styles.statusText}> (sending...)</Text>
-        )}
-        {message.status === 'failed' && (
-          <Text style={styles.statusText}> (failed to send)</Text>
-        )}
-      </Text>
-      <View style={styles.messageFooter}>
-        <Text style={styles.messageTime}>
-          {new Date(message.timestamp).toLocaleTimeString()}
-        </Text>
-        {getStatusIcon()}
-      </View>
-    </TouchableOpacity>
-  );
-};
-
-// Unified ChatScreen component
-const ChatScreen = ({ route }) => {
-  const { userId: routeUserId, userType, targetUserId, targetUserName, targetUserType } = route.params;
+const ChatScreen = ({ route, navigation }) => {
   const { user } = useAuth();
-
-  // Use route parameter first, then fallback to auth user ID
-  const currentUserId = routeUserId || user?.id || user?.uid;
+  const {
+    userId,
+    userType,
+    targetUserId,
+    targetUserName,
+    targetUserType,
+    conversationId: initialConversationId
+  } = route.params;
 
   const [messages, setMessages] = useState([]);
   const [newMessage, setNewMessage] = useState('');
-  const [isSending, setIsSending] = useState(false);
-  const [conversationId, setConversationId] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [conversationId, setConversationId] = useState(initialConversationId);
+  const flatListRef = useRef(null);
 
-  // Create consistent conversation ID
   useEffect(() => {
-    if (!currentUserId || !targetUserId) return;
+    initializeChat();
+  }, []);
 
-    const [id1, id2] = [currentUserId, targetUserId].sort();
-    const convId = `${id1}_${id2}`;
-    setConversationId(convId);
-  }, [currentUserId, targetUserId]);
-
-  // Fetch messages and setup real-time subscription
   useEffect(() => {
-    if (!currentUserId || !targetUserId || !conversationId) return;
+    if (conversationId) {
+      loadMessages();
+      
+      // Setup real-time subscription
+      const subscription = supabaseService.subscribeToMessages(conversationId, (payload) => {
+        if (payload.eventType === 'INSERT') {
+          const newMessage = payload.new;
+          setMessages(prev => [...prev, transformMessage(newMessage)]);
+          scrollToBottom();
+        }
+      });
 
-    let subscription;
-
-    const setupMessaging = async () => {
-      try {
-        // Get or create conversation
-        const conversation = await messagingAPI.startConversation(targetUserId);
-        const realConversationId = conversation.data?.id || conversationId;
-
-        // Load existing messages
-        const response = await messagingAPI.getMessages(realConversationId);
-        setMessages(response.data?.messages || []);
-
-        // Setup real-time subscription
-        subscription = realtimeService.subscribeToMessages(realConversationId, (payload) => {
-          if (payload.eventType === 'INSERT') {
-            setMessages(prev => [payload.new, ...prev]);
-          }
-        });
-
-        // Mark messages as read
-        await messagingAPI.markAsRead(realConversationId);
-      } catch (error) {
-        console.error('Error setting up messaging:', error);
-      }
-    };
-
-    setupMessaging();
-
-    return () => {
-      if (subscription) {
-        subscription.unsubscribe();
-      }
-    };
-  }, [currentUserId, targetUserId, conversationId]);
-
-  // Send message
-  const sendMessage = async () => {
-    if (!newMessage.trim() || !currentUserId || !targetUserId) {
-      return;
+      return () => {
+        if (subscription) {
+          subscription.unsubscribe();
+        }
+      };
     }
+  }, [conversationId]);
 
-    const messageText = newMessage.trim();
-    setIsSending(true);
+  const initializeChat = async () => {
+    try {
+      let convId = conversationId;
+      
+      if (!convId) {
+        // Create or get conversation
+        const conversation = await supabaseService.getOrCreateConversation(userId, targetUserId);
+        convId = conversation.id;
+        setConversationId(convId);
+      }
+      
+      await loadMessages(convId);
+    } catch (error) {
+      console.error('Error initializing chat:', error);
+      Alert.alert('Error', 'Failed to load conversation');
+    }
+  };
+
+  const loadMessages = async (convId = conversationId) => {
+    try {
+      setLoading(true);
+      const messagesData = await supabaseService.getMessages(convId);
+      const transformedMessages = messagesData.map(transformMessage);
+      setMessages(transformedMessages);
+      
+      // Mark messages as read
+      await supabaseService.markMessagesAsRead(convId, userId);
+      
+      setTimeout(scrollToBottom, 100);
+    } catch (error) {
+      console.error('Error loading messages:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const transformMessage = (message) => ({
+    id: message.id,
+    text: message.content,
+    createdAt: new Date(message.created_at),
+    user: {
+      _id: message.sender_id,
+      name: message.sender?.name || 'User',
+      avatar: message.sender?.profile_image
+    },
+    isOwn: message.sender_id === userId
+  });
+
+  const sendMessage = async () => {
+    if (!newMessage.trim() || !conversationId) return;
 
     try {
-      await messagingAPI.sendMessage({
-        recipientId: targetUserId,
-        content: messageText
-      });
+      const messageText = newMessage.trim();
       setNewMessage('');
+
+      await supabaseService.sendMessage(conversationId, userId, messageText);
+      
+      // Send notification to recipient
+      await supabaseService.notifyNewMessage(conversationId, userId, targetUserId);
+      
     } catch (error) {
       console.error('Error sending message:', error);
-      Alert.alert('Error', 'Failed to send message. Please try again.');
-    } finally {
-      setIsSending(false);
+      Alert.alert('Error', 'Failed to send message');
     }
   };
 
-  // Get theme colors based on user type
-  const getThemeColors = () => {
-    if (userType === 'parent') {
-      return {
-        primary: '#db2777', // Pink for parents
-        secondary: '#5bbafa', // Blue accent
-      };
-    } else if (userType === 'caregiver') {
-      return {
-        primary: '#5bbafa', // Blue for caregivers
-        secondary: '#db2777', // Pink accent
-      };
+  const scrollToBottom = () => {
+    if (flatListRef.current && messages.length > 0) {
+      flatListRef.current.scrollToEnd({ animated: true });
     }
-    return {
-      primary: '#3b82f6', // Default blue
-      secondary: '#6b7280', // Gray accent
-    };
   };
 
-  const themeColors = getThemeColors();
+  const renderMessage = ({ item }) => (
+    <View style={[
+      styles.messageContainer,
+      item.isOwn ? styles.ownMessage : styles.otherMessage
+    ]}>
+      <Text style={[
+        styles.messageText,
+        item.isOwn ? styles.ownMessageText : styles.otherMessageText
+      ]}>
+        {item.text}
+      </Text>
+      <Text style={styles.messageTime}>
+        {item.createdAt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+      </Text>
+    </View>
+  );
+
+  const EmptyState = () => (
+    <View style={styles.emptyContainer}>
+      <Ionicons name="chatbubble-ellipses-outline" size={64} color="#9CA3AF" />
+      <Text style={styles.emptyTitle}>Start the conversation</Text>
+      <Text style={styles.emptySubtitle}>
+        Send a message to {targetUserName}
+      </Text>
+    </View>
+  );
 
   return (
-    <KeyboardAvoidingView
-      style={styles.container}
-      behavior={Platform.OS === 'ios' ? 'padding' : 'padding'}
-      keyboardVerticalOffset={Platform.OS === 'ios' ? 100 : 120}
-      enabled={true}
-    >
-      <Card style={styles.messagesCard}>
-        <View style={styles.chatHeader}>
-          <Text style={styles.chatTitle}>{targetUserName}</Text>
-        </View>
+    <SafeAreaView style={styles.container}>
+      <View style={styles.header}>
+        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
+          <Ionicons name="arrow-back" size={24} color="#1F2937" />
+        </TouchableOpacity>
+        <Text style={styles.headerTitle}>{targetUserName}</Text>
+        <View style={styles.headerRight} />
+      </View>
 
+      <KeyboardAvoidingView 
+        style={styles.chatContainer}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
+      >
         <FlatList
+          ref={flatListRef}
           data={messages}
-          renderItem={({ item }) => (
-            <MessageItem
-              message={item}
-              isCurrentUser={item.senderId === currentUserId}
-              onLongPress={() => {}}
-            />
-          )}
+          renderItem={renderMessage}
           keyExtractor={(item) => item.id}
-          style={styles.list}
-          inverted={true}
-          showsVerticalScrollIndicator={false}
-          contentContainerStyle={{
-            flexGrow: 1,
-            justifyContent: 'flex-end',
-            padding: 16,
-          }}
+          style={styles.messagesList}
+          contentContainerStyle={messages.length === 0 ? styles.emptyList : undefined}
+          ListEmptyComponent={!loading ? EmptyState : null}
+          onContentSizeChange={scrollToBottom}
+          onLayout={scrollToBottom}
         />
-      </Card>
 
-      <Card style={styles.inputCard}>
         <View style={styles.inputContainer}>
           <TextInput
-            style={[styles.input, { borderColor: isSending ? themeColors.primary : '#E5E7EB' }]}
+            style={styles.textInput}
             value={newMessage}
             onChangeText={setNewMessage}
-            placeholder="Type your message..."
+            placeholder="Type a message..."
             multiline
-            maxLength={500}
-            editable={!isSending}
+            maxLength={1000}
           />
           <TouchableOpacity
-            style={[
-              styles.sendButton,
-              {
-                backgroundColor: themeColors.primary,
-                opacity: (newMessage.trim() && !isSending) ? 1 : 0.5
-              }
-            ]}
+            style={[styles.sendButton, !newMessage.trim() && styles.sendButtonDisabled]}
             onPress={sendMessage}
-            disabled={!newMessage.trim() || isSending}
+            disabled={!newMessage.trim()}
           >
             <Ionicons name="send" size={20} color="#FFFFFF" />
           </TouchableOpacity>
         </View>
-      </Card>
-    </KeyboardAvoidingView>
+      </KeyboardAvoidingView>
+    </SafeAreaView>
   );
 };
 
 const styles = StyleSheet.create({
-container: {
+  container: {
     flex: 1,
     backgroundColor: '#F5F5F5',
   },
-  messagesCard: {
-    flex: 1,
-    margin: 8,
-    marginBottom: 4,
-    borderRadius: 12,
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    backgroundColor: '#FFFFFF',
+    borderBottomWidth: 1,
+    borderBottomColor: '#E5E7EB',
   },
-  list: {
-    flex: 1,
-    padding: 16,
+  backButton: {
+    padding: 8,
   },
-  inputCard: {
-    margin: 8,
+  headerTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#1F2937',
+  },
+  headerRight: {
+    width: 40,
+  },
+  chatContainer: {
+    flex: 1,
+  },
+  messagesList: {
+    flex: 1,
+    paddingHorizontal: 16,
+  },
+  emptyContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 40,
+  },
+  emptyTitle: {
+    fontSize: 20,
+    fontWeight: '600',
+    color: '#374151',
+    marginTop: 16,
+    marginBottom: 8,
+  },
+  emptySubtitle: {
+    fontSize: 16,
+    color: '#6B7280',
+    textAlign: 'center',
+  },
+  emptyList: {
+    flex: 1,
+  },
+  messageContainer: {
+    marginVertical: 4,
+    maxWidth: '80%',
+    padding: 12,
+    borderRadius: 16,
+  },
+  ownMessage: {
+    alignSelf: 'flex-end',
+    backgroundColor: '#3B82F6',
+  },
+  otherMessage: {
+    alignSelf: 'flex-start',
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+  },
+  messageText: {
+    fontSize: 16,
+    lineHeight: 20,
+  },
+  ownMessageText: {
+    color: '#FFFFFF',
+  },
+  otherMessageText: {
+    color: '#1F2937',
+  },
+  messageTime: {
+    fontSize: 12,
     marginTop: 4,
-    borderRadius: 12,
+    opacity: 0.7,
   },
   inputContainer: {
     flexDirection: 'row',
-    padding: 16,
     alignItems: 'flex-end',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    backgroundColor: '#FFFFFF',
+    borderTopWidth: 1,
+    borderTopColor: '#E5E7EB',
   },
-  input: {
+  textInput: {
     flex: 1,
     borderWidth: 1,
+    borderColor: '#D1D5DB',
     borderRadius: 20,
     paddingHorizontal: 16,
     paddingVertical: 12,
     marginRight: 12,
     maxHeight: 100,
     fontSize: 16,
-    backgroundColor: '#ffffff',
   },
   sendButton: {
+    backgroundColor: '#3B82F6',
     borderRadius: 20,
-    paddingVertical: 12,
-    paddingHorizontal: 16,
+    padding: 12,
+    alignItems: 'center',
     justifyContent: 'center',
-    alignItems: 'center',
-    minWidth: 44,
   },
-  messageBubble: {
-    maxWidth: '75%',
-    padding: 12,
-    borderRadius: 18,
-    marginBottom: 8,
-  },
-  currentUserMessage: {
-    alignSelf: 'flex-end',
-    borderBottomRightRadius: 4,
-  },
-  otherUserMessage: {
-    alignSelf: 'flex-start',
-    backgroundColor: '#FFFFFF',
-    borderBottomLeftRadius: 4,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 2,
-    elevation: 2,
-  },
-  queuedMessage: {
-    opacity: 0.7,
-  },
-  failedMessage: {
-    borderColor: '#ef4444',
-    borderWidth: 1,
-  },
-  messageText: {
-    fontSize: 16,
-    lineHeight: 20,
-  },
-  currentUserMessageText: {
-    color: '#FFFFFF',
-  },
-  otherUserMessageText: {
-    color: '#374151',
-  },
-  queuedMessageText: {
-    opacity: 0.8,
-  },
-  failedMessageText: {
-    color: '#ef4444',
-  },
-  messageTime: {
-    fontSize: 11,
-    marginTop: 4,
-    opacity: 0.7,
-  },
-  messageFooter: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginTop: 4,
-  },
-  statusIcon: {
-    marginLeft: 4,
-  },
-  statusText: {
-    fontSize: 10,
-    fontStyle: 'italic',
-    opacity: 0.6,
-  },
-  editedIndicator: {
-    fontSize: 10,
-    fontStyle: 'italic',
-    opacity: 0.6,
-  },
-  deletedMessage: {
-    opacity: 0.6,
-  },
-  deletedMessageText: {
-    fontStyle: 'italic',
-    color: '#9CA3AF',
-  },
-  messageImage: {
-    width: 200,
-    height: 150,
-    borderRadius: 8,
-    marginBottom: 8,
-  },
-  fileContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: 8,
-    backgroundColor: '#F3F4F6',
-    borderRadius: 8,
-    marginBottom: 8,
-  },
-  fileName: {
-    marginLeft: 8,
-    fontSize: 14,
-    color: '#374151',
-  },
-  searchCard: {
-    margin: 8,
-    marginBottom: 4,
-    borderRadius: 12,
-  },
-  searchContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: 12,
-  },
-  searchInput: {
-    flex: 1,
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
-    borderRadius: 20,
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    fontSize: 14,
-  },
-  searchButton: {
-    marginLeft: 8,
-    padding: 8,
-  },
-  closeSearchButton: {
-    marginLeft: 4,
-    padding: 8,
-  },
-  chatHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    padding: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: '#E5E7EB',
-  },
-  chatTitle: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: '#1F2937',
-  },
-  editingHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    padding: 12,
-    borderTopLeftRadius: 12,
-    borderTopRightRadius: 12,
-  },
-  editingText: {
-    fontSize: 14,
-    fontWeight: '500',
-  },
-  connectionStatus: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    gap: 6,
-  },
-  connectionStatusText: {
-    fontSize: 12,
-    fontWeight: '500',
-  },
-  searchResultsHeader: {
-    padding: 16,
-    alignItems: 'center',
-  },
-  searchResultsText: {
-    fontSize: 14,
-    color: '#6B7280',
-    fontWeight: '500',
+  sendButtonDisabled: {
+    backgroundColor: '#9CA3AF',
   },
 });
 

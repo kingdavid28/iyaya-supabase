@@ -52,16 +52,16 @@ class BookingService {
     try {
       // Import supabaseService dynamically to avoid circular imports
       const { supabaseService } = await import('./supabaseService');
-      const { supabase } = await import('../config/supabase');
       
-      const { data: { user }, error } = await supabase.auth.getUser();
-      if (error || !user) {
-        throw new Error('User not authenticated');
+      const user = await supabaseService._getCurrentUser();
+      if (!user) {
+        console.warn('⚠️ User not authenticated in getBookings');
+        return [];
       }
       
       // Get user profile to determine role
       const profile = await supabaseService.getProfile(user.id);
-      const role = profile?.role || 'parent';
+      const role = profile?.role || user.user_metadata?.role || 'parent';
       
       console.log('📋 Fetching bookings for user:', user.id, 'role:', role);
       const bookings = await supabaseService.getMyBookings(user.id, role);
@@ -75,7 +75,7 @@ class BookingService {
     } catch (error) {
       logger.error('Get bookings failed:', error);
       console.error('❌ Get bookings error details:', error.message);
-      throw new Error(error.message || 'Failed to load bookings');
+      return [];
     }
   }
 
@@ -84,11 +84,11 @@ class BookingService {
     try {
       // Import supabaseService dynamically to avoid circular imports
       const { supabaseService } = await import('./supabaseService');
-      const { supabase } = await import('../config/supabase');
       
-      const { data: { user }, error } = await supabase.auth.getUser();
-      if (error || !user) {
-        throw new Error('User not authenticated');
+      const user = await supabaseService._getCurrentUser();
+      if (!user) {
+        console.warn('⚠️ User not authenticated in getBookingById');
+        return null;
       }
       
       console.log('📋 Fetching booking by ID:', bookingId, 'for user:', user.id);
@@ -98,7 +98,7 @@ class BookingService {
     } catch (error) {
       logger.error('Get booking by ID failed:', error);
       console.error('❌ Get booking by ID error details:', error.message);
-      throw new Error(error.message || 'Failed to load booking details');
+      return null;
     }
   }
 

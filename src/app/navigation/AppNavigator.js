@@ -26,6 +26,10 @@ import ParentProfile from "../../screens/ParentProfile";
 import ChatScreen from "../../screens/ChatScreen";
 import CaregiverReviewsScreen from "../../screens/CaregiverReviewsScreen";
 
+// New Supabase screens
+import NotificationsScreen from "../../components/NotificationsScreen";
+import ReviewsSection from "../../components/ReviewsSection";
+
 // Legacy screen imports (to be migrated)
 import AvailabilityManagementScreen from "../../screens/AvailabilityManagementScreen";
 import BookingManagementScreen from "../../screens/BookingManagementScreen";
@@ -130,9 +134,10 @@ const AppNavigatorWithAuth = () => {
 
         <Stack.Screen name="CaregiverProfileComplete" component={CaregiverProfileComplete} options={{ headerShown: false }} />
         <Stack.Screen name="ParentProfile" component={ParentProfile} options={{ title: "My Profile", headerBackTitle: "Back" }} />
-        <Stack.Screen name="Chat" component={ChatScreen} options={{ title: "Chat" }} />
+        <Stack.Screen name="Chat" component={ChatScreen} options={{ headerShown: false }} />
         <Stack.Screen name="CaregiverChat" component={CaregiverChat} options={{ title: "Chat with Caregiver" }} />
         <Stack.Screen name="CaregiverReviews" component={CaregiverReviewsScreen} options={{ title: "Caregiver Reviews" }} />
+        <Stack.Screen name="Notifications" component={NotificationsScreen} options={{ headerShown: false }} />
       </Stack.Navigator>
     </NavigationContainer>
   );

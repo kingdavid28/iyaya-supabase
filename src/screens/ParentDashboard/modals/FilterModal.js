@@ -6,10 +6,14 @@ import {
   TouchableOpacity,
   StyleSheet,
   Switch,
+  Modal,
+  Dimensions,
 } from 'react-native';
 import { Slider } from '@miblanchard/react-native-slider';
 import { X, RotateCcw } from 'lucide-react-native';
-import { ModalWrapper } from '../../../shared/ui';
+import { SafeAreaView } from 'react-native-safe-area-context';
+
+const { height: screenHeight } = Dimensions.get('window');
 
 const DAYS_OF_WEEK = [
   { key: 'monday', label: 'Mon' },
@@ -99,21 +103,27 @@ const FilterModal = ({ visible, onClose, filters = {}, onApplyFilters }) => {
   };
 
   return (
-    <ModalWrapper visible={visible} onClose={onClose} animationType="slide">
-      <View style={styles.container}>
-        {/* Header */}
-        <View style={styles.header}>
-          <Text style={styles.title}>Filter Caregivers</Text>
-          <View style={styles.headerActions}>
-            <TouchableOpacity onPress={resetFilters} style={styles.resetButton}>
-              <RotateCcw size={20} color="#6B7280" />
-              <Text style={styles.resetText}>Reset</Text>
-            </TouchableOpacity>
-            <TouchableOpacity onPress={onClose} style={styles.closeButton}>
-              <X size={24} color="#6B7280" />
-            </TouchableOpacity>
+    <Modal
+      visible={visible}
+      animationType="slide"
+      presentationStyle="pageSheet"
+      onRequestClose={onClose}
+    >
+      <SafeAreaView style={styles.modalContainer}>
+        <View style={styles.container}>
+          {/* Header */}
+          <View style={styles.header}>
+            <Text style={styles.title}>Filter Caregivers</Text>
+            <View style={styles.headerActions}>
+              <TouchableOpacity onPress={resetFilters} style={styles.resetButton}>
+                <RotateCcw size={20} color="#6B7280" />
+                <Text style={styles.resetText}>Reset</Text>
+              </TouchableOpacity>
+              <TouchableOpacity onPress={onClose} style={styles.closeButton}>
+                <X size={24} color="#6B7280" />
+              </TouchableOpacity>
+            </View>
           </View>
-        </View>
 
         <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
           {/* Instructions */}
@@ -300,25 +310,29 @@ const FilterModal = ({ visible, onClose, filters = {}, onApplyFilters }) => {
           </TouchableOpacity>
         </View>
       </View>
-    </ModalWrapper>
+      </SafeAreaView>
+    </Modal>
   );
 };
 
 const styles = StyleSheet.create({
-  container: {
-    backgroundColor: 'white',
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
-    maxHeight: '90%',
+  modalContainer: {
     flex: 1,
+    backgroundColor: '#FFFFFF',
+  },
+  container: {
+    flex: 1,
+    backgroundColor: 'white',
   },
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    padding: 20,
+    paddingHorizontal: 20,
+    paddingVertical: 16,
     borderBottomWidth: 1,
     borderBottomColor: '#E5E7EB',
+    backgroundColor: '#FFFFFF',
   },
   title: {
     fontSize: 20,
@@ -350,9 +364,10 @@ const styles = StyleSheet.create({
   content: {
     flex: 1,
     paddingHorizontal: 20,
+    paddingTop: 8,
   },
   section: {
-    marginVertical: 20,
+    marginBottom: 24,
   },
   sectionTitle: {
     fontSize: 18,
@@ -450,9 +465,11 @@ const styles = StyleSheet.create({
   },
   footer: {
     flexDirection: 'row',
-    padding: 20,
+    paddingHorizontal: 20,
+    paddingVertical: 16,
     borderTopWidth: 1,
     borderTopColor: '#E5E7EB',
+    backgroundColor: '#FFFFFF',
     gap: 12,
   },
   cancelButton: {
@@ -487,7 +504,8 @@ const styles = StyleSheet.create({
     backgroundColor: '#F8FAFC',
     padding: 16,
     borderRadius: 12,
-    marginVertical: 16,
+    marginTop: 8,
+    marginBottom: 16,
     borderLeftWidth: 4,
     borderLeftColor: '#8B5CF6',
   },

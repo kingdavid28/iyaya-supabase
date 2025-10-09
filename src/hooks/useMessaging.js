@@ -1,123 +1,98 @@
-import { useState, useEffect, useCallback } from 'react';
-import messagingService from '../services/firebaseMessagingService';
+import { useState, useEffect } from 'react';
+import supabaseService from '../services/supabaseService';
 import { useAuth } from '../contexts/AuthContext';
 
-/**
- * Custom hook for messaging functionality
- * Provides conversation management and real-time updates
- */
-export const useMessaging = (userRole = 'parent') => {
+export const useMessaging = () => {
+  const { user } = useAuth();
   const [conversations, setConversations] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
-  const { user } = useAuth();
 
-  // Set current user in messaging service
   useEffect(() => {
-    if (user?.uid) {
-      messagingService.setCurrentUser(user.uid);
-    }
-  }, [user]);
+    if (!user?.id) return;
 
-  const loadConversations = useCallback(async () => {
+    loadConversations();
+  }, [user?.id]);
+
+  const loadConversations = async () => {
     try {
       setLoading(true);
-      setError(null);
-      const data = await messagingService.getConversations();
-      setConversations(data);
-    } catch (err) {
-      setError(err.message);
-      console.error('Error loading conversations:', err);
+      const conversationsData = await supabaseService.getConversations(user.id);
+      
+      // Transform conversations for display
+      const transformedConversations = conversationsData.map(conv => {
+        const otherParticipant = conv.participant_1 === user.id ? conv.participant2 : conv.participant1;
+        return {
+          id: conv.id,
+          participantId: otherParticipant?.id,
+          participantName: otherParticipant?.name || 'User',
+          participantAvatar: otherParticipant?.profile_image,
+          lastMessageTime: conv.last_message_at,
+          // Will be populated with actual last message
+          lastMessage: 'Tap to view messages'
+        };
+      });
+      
+      setConversations(transformedConversations);
+    } catch (error) {
+      console.error('Error loading conversations:', error);
+      setConversations([]);
     } finally {
       setLoading(false);
     }
-  }, []);
+  };
 
-  // Set up real-time listener
-  useEffect(() => {
-    loadConversations();
-
-    const unsubscribe = messagingService.subscribeToConversations((updatedConversations) => {
-      setConversations(updatedConversations);
-    });
-
-    return () => {
-      if (unsubscribe) unsubscribe();
-    };
-  }, [loadConversations]);
-
-  // Send a message
-  const sendMessage = useCallback(async (recipientId, messageText, messageType = 'text', fileData = null) => {
+  const getOrCreateConversation = async (targetUserId) => {
     try {
-      if (!user?.uid) {
-        throw new Error('User not authenticated');
-      }
-
-      const messageId = await messagingService.sendMessage(
-        user.uid,
-        recipientId,
-        messageText,
-        messageType,
-        fileData
-      );
-
-      return messageId;
-    } catch (err) {
-      console.error('Error sending message:', err);
-      throw err;
+      const conversation = await supabaseService.getOrCreateConversation(user.id, targetUserId);
+      return conversation;
+    } catch (error) {
+      console.error('Error getting/creating conversation:', error);
+      return null;
     }
-  }, [user]);
+  };
 
-  // Mark messages as read
-  const markAsRead = useCallback(async (conversationId, messageIds) => {
+  const sendMessage = async (conversationId, content) => {
     try {
-      await messagingService.markAsRead(conversationId, messageIds);
-    } catch (err) {
-      console.error('Error marking messages as read:', err);
-      throw err;
+      const message = await supabaseService.sendMessage(conversationId, user.id, content);
+      return message;
+    } catch (error) {
+      console.error('Error sending message:', error);
+      return null;
     }
-  }, []);
+  };
 
-  // Get messages for a conversation
-  const getMessages = useCallback(async (conversationId) => {
+  const getMessages = async (conversationId, limit = 50) => {
     try {
-      const messages = await messagingService.getMessages(conversationId);
+      const messages = await supabaseService.getMessages(conversationId, limit);
       return messages;
-    } catch (err) {
-      console.error('Error getting messages:', err);
-      throw err;
+    } catch (error) {
+      console.error('Error getting messages:', error);
+      return [];
     }
-  }, []);
+  };
 
-  // Create connection with another user
-  const createConnection = useCallback(async (otherUserId) => {
+  const markMessagesAsRead = async (conversationId) => {
     try {
-      if (!user?.uid) {
-        throw new Error('User not authenticated');
-      }
-
-      await messagingService.createConnection(user.uid, otherUserId);
-    } catch (err) {
-      console.error('Error creating connection:', err);
-      throw err;
+      await supabaseService.markMessagesAsRead(conversationId, user.id);
+    } catch (error) {
+      console.error('Error marking messages as read:', error);
     }
-  }, [user]);
+  };
 
-  // Subscribe to messages for a specific conversation
-  const subscribeToMessages = useCallback((conversationId, callback) => {
-    return messagingService.subscribeToMessages(conversationId, callback);
-  }, []);
+  const subscribeToMessages = (conversationId, callback) => {
+    return supabaseService.subscribeToMessages(conversationId, callback);
+  };
 
   return {
     conversations,
     loading,
-    error,
     loadConversations,
+    getOrCreateConversation,
     sendMessage,
-    markAsRead,
     getMessages,
-    createConnection,
-    subscribeToMessages,
-    userRole,
+    markMessagesAsRead,
+    subscribeToMessages
   };
 };
+
+export default useMessaging;

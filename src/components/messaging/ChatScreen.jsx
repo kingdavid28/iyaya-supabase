@@ -24,7 +24,7 @@ import {
 import * as ImagePicker from 'expo-image-picker';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import { useAuth } from '../../core/contexts/AuthContext';
-import { messagingService } from '../../services/messagingService';
+import { messagingService } from '../../services/MessagingService';
 import MessageInput from './MessageInput';
 
 const ChatScreen = () => {

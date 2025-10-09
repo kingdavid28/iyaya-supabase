@@ -35,152 +35,487 @@ import { styles } from './styles/CaregiverDashboard.styles';
 import { useCaregiverDashboard } from '../hooks/useCaregiverDashboard';
 import CaregiverProfileSection from './CaregiverDashboard/components/CaregiverProfileSection';
 import { PrivacyNotificationModal } from '../components/ui/modals/PrivacyNotificationModal';
-import firebaseMessagingService from '../services/firebaseMessagingService';
+
 import MessageItemLocal from '../components/messaging/MessageItemLocal';
 import ReviewItemLocal from '../components/messaging/ReviewItemLocal';
 
 function JobCard({ job, showActions = true, onApply, hasApplied, onLearnMore, jobCardStyle, gridMode = false }) {
   const applied = typeof hasApplied === 'function' ? hasApplied(job.id) : false
-  const maxRequirementChips = gridMode ? 2 : 3
+  
   return (
-    <Card style={[styles.jobCard, jobCardStyle]}>
-      <Card.Content style={{ padding: 16 }}>
-        <View style={styles.jobHeader}>
-          <View>
-            <Text style={styles.jobTitle} numberOfLines={gridMode ? 2 : undefined}>{job.title}</Text>
-            <View style={styles.jobMeta}>
-              <Ionicons name="people" size={16} color="#6B7280" />
-              <Text style={styles.jobMetaText}>
-                {job.children} {job.children === 1 ? 'child' : 'children'} • {job.ages}
-              </Text>
-              <Ionicons name="location" size={16} color="#6B7280" style={styles.jobMetaIcon} />
-              <Text style={styles.jobMetaText}>{job.distance}</Text>
-            </View>
+    <View style={[
+      {
+        backgroundColor: '#FFFFFF',
+        borderRadius: 16,
+        marginVertical: 8,
+        marginHorizontal: 16,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.1,
+        shadowRadius: 8,
+        elevation: 5,
+        overflow: 'hidden',
+        minHeight: 280
+      },
+      jobCardStyle
+    ]}>
+      {/* Header with gradient */}
+      <LinearGradient
+        colors={['#667eea', '#764ba2']}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 0 }}
+        style={{
+          paddingHorizontal: 16,
+          paddingVertical: 16,
+        }}
+      >
+        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+          <View style={{ flex: 1 }}>
+            <Text style={{
+              fontSize: 18,
+              fontWeight: '700',
+              color: '#FFFFFF',
+              marginBottom: 4
+            }} numberOfLines={2}>
+              {job.title}
+            </Text>
+            <Text style={{
+              fontSize: 14,
+              color: 'rgba(255, 255, 255, 0.9)',
+              fontWeight: '500'
+            }}>
+              {job.family || 'Family'}
+            </Text>
           </View>
           {job.urgent && (
-            <View style={styles.urgentBadge}>
-              <Text style={styles.urgentBadgeText}>Urgent</Text>
+            <View style={{
+              backgroundColor: '#EF4444',
+              paddingHorizontal: 12,
+              paddingVertical: 6,
+              borderRadius: 20,
+              marginLeft: 12,
+            }}>
+              <Text style={{
+                color: '#FFFFFF',
+                fontSize: 12,
+                fontWeight: '600',
+              }}>
+                Urgent
+              </Text>
             </View>
           )}
         </View>
+      </LinearGradient>
 
-        <View style={styles.jobDetails}>
-          <View style={styles.jobDetailRow}>
+      {/* Content */}
+      <View style={{ padding: 16, flex: 1 }}>
+        {/* Details Grid */}
+        <View style={{ 
+          flexDirection: 'row', 
+          flexWrap: 'wrap',
+          marginBottom: 16
+        }}>
+          <View style={{
+            flexDirection: 'row',
+            alignItems: 'center',
+            backgroundColor: '#F8FAFC',
+            paddingHorizontal: 12,
+            paddingVertical: 8,
+            borderRadius: 20,
+            marginRight: 8,
+            marginBottom: 8,
+            flex: 0.48,
+          }}>
             <Ionicons name="time" size={16} color="#6B7280" />
-            <Text style={styles.jobDetailText}>{job.schedule}</Text>
+            <Text style={{
+              marginLeft: 6,
+              fontSize: 13,
+              color: '#374151',
+              fontWeight: '500'
+            }} numberOfLines={1}>
+              {job.schedule || 'Flexible'}
+            </Text>
           </View>
-          <View style={styles.jobDetailRow}>
-            <Ionicons name="cash" size={16} color="#6B7280" />
-            <Text style={styles.jobDetailText}>₱{job.hourlyRate}/hr</Text>
+
+          <View style={{
+            flexDirection: 'row',
+            alignItems: 'center',
+            backgroundColor: '#F0FDF4',
+            paddingHorizontal: 12,
+            paddingVertical: 8,
+            borderRadius: 20,
+            marginBottom: 8,
+            flex: 0.48,
+          }}>
+            <Ionicons name="cash" size={16} color="#059669" />
+            <Text style={{
+              marginLeft: 6,
+              fontSize: 13,
+              color: '#059669',
+              fontWeight: '600'
+            }}>
+              ₱{job.hourlyRate}/hr
+            </Text>
           </View>
         </View>
 
+        {/* Children and Location Info */}
+        <View style={{
+          flexDirection: 'row',
+          alignItems: 'center',
+          marginBottom: 12,
+        }}>
+          <Ionicons name="people" size={16} color="#6B7280" />
+          <Text style={{
+            marginLeft: 6,
+            fontSize: 14,
+            color: '#6B7280',
+            marginRight: 16
+          }}>
+            {job.children} {job.children === 1 ? 'child' : 'children'}
+          </Text>
+          <Ionicons name="location" size={16} color="#6B7280" />
+          <Text style={{
+            marginLeft: 6,
+            fontSize: 14,
+            color: '#6B7280',
+            flex: 1
+          }} numberOfLines={1}>
+            {job.distance || job.location}
+          </Text>
+        </View>
+
+        {/* Requirements */}
         {job.requirements && job.requirements.length > 0 && (
-          <View style={styles.requirementsContainer}>
-            {job.requirements.slice(0, maxRequirementChips).map((req, index) => (
-              <View key={index} style={styles.requirementTag}>
-                <Text style={styles.requirementText}>{req}</Text>
+          <View style={{
+            flexDirection: 'row',
+            flexWrap: 'wrap',
+            marginBottom: 16
+          }}>
+            {job.requirements.slice(0, 2).map((req, index) => (
+              <View key={index} style={{
+                backgroundColor: '#F3F0FF',
+                paddingHorizontal: 8,
+                paddingVertical: 4,
+                borderRadius: 12,
+                marginRight: 6,
+                marginBottom: 4,
+              }}>
+                <Text style={{
+                  fontSize: 12,
+                  color: '#8B5CF6',
+                  fontWeight: '500'
+                }}>
+                  {req}
+                </Text>
               </View>
             ))}
-            {job.requirements.length > maxRequirementChips && (
-              <Text style={styles.moreRequirementsText}>
-                +{job.requirements.length - maxRequirementChips} more
+            {job.requirements.length > 2 && (
+              <Text style={{
+                fontSize: 12,
+                color: '#6B7280',
+                alignSelf: 'center'
+              }}>
+                +{job.requirements.length - 2} more
               </Text>
             )}
           </View>
         )}
 
+        {/* Actions */}
         {showActions && (
-          <View style={styles.jobFooter}>
-            <Text style={styles.postedDate}>Posted {job.postedDate}</Text>
-            <View style={styles.jobActionButtons}>
-              <Button 
-                mode="outlined" 
-                style={styles.secondaryButton}
-                labelStyle={styles.secondaryButtonText}
-                onPress={() => onLearnMore && onLearnMore(job)}
+          <View style={{ flexDirection: 'row', gap: 8, marginTop: 'auto' }}>
+            <Pressable
+              onPress={() => onLearnMore && onLearnMore(job)}
+              style={{
+                flex: 1,
+                backgroundColor: '#F8FAFC',
+                paddingVertical: 12,
+                paddingHorizontal: 16,
+                borderRadius: 12,
+                alignItems: 'center',
+                borderWidth: 1,
+                borderColor: '#CBD5E1'
+              }}
+            >
+              <Text style={{
+                color: '#475569',
+                fontSize: 14,
+                fontWeight: '600'
+              }}>
+                Details
+              </Text>
+            </Pressable>
+
+            {applied ? (
+              <View style={{
+                flex: 1,
+                backgroundColor: '#10B981',
+                paddingVertical: 12,
+                paddingHorizontal: 16,
+                borderRadius: 12,
+                alignItems: 'center',
+                flexDirection: 'row',
+                justifyContent: 'center'
+              }}>
+                <Ionicons name="checkmark-circle" size={16} color="#FFFFFF" style={{ marginRight: 6 }} />
+                <Text style={{
+                  color: '#FFFFFF',
+                  fontSize: 14,
+                  fontWeight: '600'
+                }}>
+                  Applied
+                </Text>
+              </View>
+            ) : (
+              <Pressable
+                onPress={() => onApply && onApply(job)}
+                style={{
+                  flex: 1,
+                  backgroundColor: '#3B82F6',
+                  paddingVertical: 12,
+                  paddingHorizontal: 16,
+                  borderRadius: 12,
+                  alignItems: 'center',
+                  shadowColor: '#3B82F6',
+                  shadowOffset: { width: 0, height: 2 },
+                  shadowOpacity: 0.2,
+                  shadowRadius: 4,
+                  elevation: 3
+                }}
               >
-                Learn More
-              </Button>
-              {applied ? (
-                <View style={[styles.appliedBadge]}>
-                  <View style={styles.appliedBadgeContent}>
-                    <Ionicons name="checkmark-circle" size={16} color="#4CAF50" style={{ marginRight: 6 }} />
-                    <Text style={styles.appliedBadgeText}>Applied</Text>
-                  </View>
-                </View>
-              ) : (
-                <Button 
-                  mode="contained" 
-                  style={styles.primaryButton}
-                  labelStyle={styles.primaryButtonText}
-                  onPress={() => onApply && onApply(job)}
-                >
-                  Apply Now
-                </Button>
-              )}
-            </View>
+                <Text style={{
+                  color: '#FFFFFF',
+                  fontSize: 14,
+                  fontWeight: '600'
+                }}>
+                  Apply
+                </Text>
+              </Pressable>
+            )}
           </View>
         )}
-      </Card.Content>
-    </Card>
+      </View>
+    </View>
   )
 }
 
 function ApplicationCard({ application, onViewDetails, onMessage }) {
+  const getStatusColor = (status) => {
+    switch (status?.toLowerCase()) {
+      case 'pending': return '#F59E0B';
+      case 'accepted': return '#10B981';
+      case 'rejected': return '#EF4444';
+      case 'withdrawn': return '#6B7280';
+      default: return '#9CA3AF';
+    }
+  };
+
+  const getStatusText = (status) => {
+    switch (status?.toLowerCase()) {
+      case 'pending': return 'Pending';
+      case 'accepted': return 'Accepted';
+      case 'rejected': return 'Rejected';
+      case 'withdrawn': return 'Withdrawn';
+      default: return status || 'Unknown';
+    }
+  };
+
   return (
-    <Card style={styles.applicationCard}>
-      <Card.Content style={styles.applicationContent}>
-        <View style={styles.applicationHeader}>
-          <View>
-            <Text style={styles.applicationJobTitle}>{application.jobTitle}</Text>
-            <Text style={styles.applicationFamily}>{application.family}</Text>
+    <View style={{
+      backgroundColor: '#FFFFFF',
+      borderRadius: 16,
+      marginVertical: 8,
+      marginHorizontal: 16,
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 4 },
+      shadowOpacity: 0.1,
+      shadowRadius: 8,
+      elevation: 5,
+      overflow: 'hidden',
+      minHeight: 280
+    }}>
+      {/* Header with gradient */}
+      <LinearGradient
+        colors={['#667eea', '#764ba2']}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 0 }}
+        style={{
+          paddingHorizontal: 16,
+          paddingVertical: 16,
+        }}
+      >
+        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+          <View style={{ flex: 1 }}>
+            <Text style={{
+              fontSize: 18,
+              fontWeight: '700',
+              color: '#FFFFFF',
+              marginBottom: 4
+            }} numberOfLines={1}>
+              {application.jobTitle}
+            </Text>
+            <Text style={{
+              fontSize: 14,
+              color: 'rgba(255, 255, 255, 0.9)',
+              fontWeight: '500'
+            }}>
+              {application.family}
+            </Text>
           </View>
-          <StatusBadge status={application.status} />
+          <View style={{
+            backgroundColor: getStatusColor(application.status),
+            paddingHorizontal: 12,
+            paddingVertical: 6,
+            borderRadius: 20,
+            marginLeft: 12,
+          }}>
+            <Text style={{
+              color: '#FFFFFF',
+              fontSize: 12,
+              fontWeight: '600',
+            }}>
+              {getStatusText(application.status)}
+            </Text>
+          </View>
         </View>
+      </LinearGradient>
 
-        <View style={styles.applicationDetails}>
-          <View style={styles.applicationDetailRow}>
+      {/* Content */}
+      <View style={{ padding: 16, flex: 1 }}>
+        {/* Details Grid */}
+        <View style={{ 
+          flexDirection: 'row', 
+          flexWrap: 'wrap',
+          marginBottom: 16
+        }}>
+          <View style={{
+            flexDirection: 'row',
+            alignItems: 'center',
+            backgroundColor: '#F8FAFC',
+            paddingHorizontal: 12,
+            paddingVertical: 8,
+            borderRadius: 20,
+            marginRight: 8,
+            marginBottom: 8,
+            flex: 0.48,
+          }}>
             <Ionicons name="calendar" size={16} color="#6B7280" />
-            <Text style={styles.applicationDetailText}>
-              Applied on {new Date(application.appliedDate).toLocaleDateString()}
+            <Text style={{
+              marginLeft: 6,
+              fontSize: 13,
+              color: '#374151',
+              fontWeight: '500'
+            }} numberOfLines={1}>
+              {new Date(application.appliedDate).toLocaleDateString()}
             </Text>
           </View>
-          <View style={styles.applicationDetailRow}>
-            <Ionicons name="cash" size={16} color="#6B7280" />
-            <Text style={styles.applicationDetailText}>
-              ${application.hourlyRate}/hr
+
+          <View style={{
+            flexDirection: 'row',
+            alignItems: 'center',
+            backgroundColor: '#F0FDF4',
+            paddingHorizontal: 12,
+            paddingVertical: 8,
+            borderRadius: 20,
+            marginBottom: 8,
+            flex: 0.48,
+          }}>
+            <Ionicons name="cash" size={16} color="#059669" />
+            <Text style={{
+              marginLeft: 6,
+              fontSize: 13,
+              color: '#059669',
+              fontWeight: '600'
+            }}>
+              ₱{application.hourlyRate}/hr
             </Text>
           </View>
         </View>
 
-        <View style={styles.applicationActions}>
-          <Button 
-            mode="outlined" 
-            style={styles.applicationButton}
-            labelStyle={styles.applicationButtonText}
+        {/* Cover Letter Preview */}
+        {application.coverLetter && (
+          <View style={{
+            backgroundColor: '#F9FAFB',
+            padding: 12,
+            borderRadius: 8,
+            marginBottom: 16,
+          }}>
+            <Text style={{
+              fontSize: 12,
+              color: '#6B7280',
+              fontWeight: '600',
+              marginBottom: 4,
+            }}>
+              Cover Letter:
+            </Text>
+            <Text style={{
+              fontSize: 14,
+              color: '#374151',
+              lineHeight: 20,
+            }} numberOfLines={2}>
+              {application.coverLetter}
+            </Text>
+          </View>
+        )}
+
+        {/* Actions */}
+        <View style={{ flexDirection: 'row', gap: 8, marginTop: 'auto' }}>
+          <Pressable
             onPress={() => onViewDetails && onViewDetails(application)}
+            style={{
+              flex: 1,
+              backgroundColor: '#F8FAFC',
+              paddingVertical: 12,
+              paddingHorizontal: 16,
+              borderRadius: 12,
+              alignItems: 'center',
+              borderWidth: 1,
+              borderColor: '#CBD5E1'
+            }}
           >
-            View Details
-          </Button>
+            <Text style={{
+              color: '#475569',
+              fontSize: 14,
+              fontWeight: '600'
+            }}>
+              Details
+            </Text>
+          </Pressable>
+
           {application.status === 'accepted' && (
-            <Button 
-              mode="contained" 
-              style={[styles.applicationButton, { marginLeft: 8 }]}
-              labelStyle={styles.applicationButtonText}
+            <Pressable
               onPress={() => onMessage && onMessage(application)}
+              style={{
+                flex: 1,
+                backgroundColor: '#3B82F6',
+                paddingVertical: 12,
+                paddingHorizontal: 16,
+                borderRadius: 12,
+                alignItems: 'center',
+                shadowColor: '#3B82F6',
+                shadowOffset: { width: 0, height: 2 },
+                shadowOpacity: 0.2,
+                shadowRadius: 4,
+                elevation: 3
+              }}
             >
-              Message Family
-            </Button>
+              <Text style={{
+                color: '#FFFFFF',
+                fontSize: 14,
+                fontWeight: '600'
+              }}>
+                Message
+              </Text>
+            </Pressable>
           )}
         </View>
-      </Card.Content>
-    </Card>
+      </View>
+    </View>
   )
 }
 
 function BookingCard({ booking, onMessage, onViewDetails, onConfirmAttendance }) {
-
   const handleLocationPress = () => {
     if (booking.location) {
       const mapsUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(booking.location)}`;
@@ -191,82 +526,258 @@ function BookingCard({ booking, onMessage, onViewDetails, onConfirmAttendance })
     }
   };
 
+  const getStatusColor = (status) => {
+    switch (status) {
+      case 'pending': return '#F59E0B';
+      case 'confirmed': return '#10B981';
+      case 'completed': return '#3B82F6';
+      case 'cancelled': return '#EF4444';
+      default: return '#6B7280';
+    }
+  };
+
+  const getStatusBgColor = (status) => {
+    switch (status) {
+      case 'pending': return '#FEF3C7';
+      case 'confirmed': return '#D1FAE5';
+      case 'completed': return '#DBEAFE';
+      case 'cancelled': return '#FEE2E2';
+      default: return '#F3F4F6';
+    }
+  };
+
   return (
-    <Card style={styles.bookingCard} accessibilityLabel={`Booking with ${booking.family}`}>
-      <Card.Content style={styles.bookingContent}>
-        <View style={styles.bookingHeader}>
-          <View style={styles.bookingTitleSection}>
-            <Text style={styles.bookingFamily} numberOfLines={1}>{booking.family}</Text>
-            <Text style={styles.bookingDate}>{formatDate(booking.date)}</Text>
+    <View style={{
+      backgroundColor: '#FFFFFF',
+      borderRadius: 16,
+      marginVertical: 8,
+      marginHorizontal: 16,
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.1,
+      shadowRadius: 8,
+      elevation: 4,
+      borderWidth: 1,
+      borderColor: '#F1F5F9'
+    }}>
+      {/* Header with gradient */}
+      <LinearGradient
+        colors={['#F8FAFC', '#F1F5F9']}
+        style={{
+          borderTopLeftRadius: 16,
+          borderTopRightRadius: 16,
+          padding: 16,
+          borderBottomWidth: 1,
+          borderBottomColor: '#E2E8F0'
+        }}
+      >
+        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+          <View style={{ flex: 1 }}>
+            <Text style={{
+              fontSize: 18,
+              fontWeight: '700',
+              color: '#1E293B',
+              marginBottom: 4
+            }} numberOfLines={1}>
+              {booking.family || 'Family'}
+            </Text>
+            <Text style={{
+              fontSize: 14,
+              color: '#64748B',
+              fontWeight: '500'
+            }}>
+              {formatDate(booking.date)}
+            </Text>
           </View>
-          <StatusBadge status={booking.status} />
+          <View style={{
+            backgroundColor: getStatusBgColor(booking.status),
+            paddingHorizontal: 12,
+            paddingVertical: 6,
+            borderRadius: 20,
+            borderWidth: 1,
+            borderColor: getStatusColor(booking.status) + '20'
+          }}>
+            <Text style={{
+              color: getStatusColor(booking.status),
+              fontSize: 12,
+              fontWeight: '600',
+              textTransform: 'capitalize'
+            }}>
+              {booking.status}
+            </Text>
+          </View>
         </View>
+      </LinearGradient>
 
-        <View style={styles.bookingDetails}>
-          <View style={styles.bookingDetailRow}>
-            <View style={styles.bookingDetailItem}>
-              <Ionicons name="time-outline" size={18} color="#6B7280" />
-              <Text style={styles.bookingDetailText}>{booking.time}</Text>
-            </View>
-            <View style={styles.bookingDetailItem}>
-              <Ionicons name="people-outline" size={18} color="#6B7280" />
-              <Text style={styles.bookingDetailText}>
-                {booking.children} {booking.children === 1 ? 'child' : 'children'}
+      {/* Content */}
+      <View style={{ padding: 16 }}>
+        {/* Details Grid */}
+        <View style={{ 
+          flexDirection: 'row', 
+          flexWrap: 'wrap',
+          marginBottom: 16
+        }}>
+          <View style={{
+            flexDirection: 'row',
+            alignItems: 'center',
+            backgroundColor: '#F8FAFC',
+            paddingHorizontal: 12,
+            paddingVertical: 8,
+            borderRadius: 12,
+            marginRight: 8,
+            marginBottom: 8,
+            borderWidth: 1,
+            borderColor: '#E2E8F0'
+          }}>
+            <Ionicons name="time" size={16} color="#3B82F6" />
+            <Text style={{
+              marginLeft: 6,
+              fontSize: 13,
+              color: '#475569',
+              fontWeight: '500'
+            }}>
+              {booking.time || 'Time TBD'}
+            </Text>
+          </View>
+
+          <View style={{
+            flexDirection: 'row',
+            alignItems: 'center',
+            backgroundColor: '#F8FAFC',
+            paddingHorizontal: 12,
+            paddingVertical: 8,
+            borderRadius: 12,
+            marginRight: 8,
+            marginBottom: 8,
+            borderWidth: 1,
+            borderColor: '#E2E8F0'
+          }}>
+            <Ionicons name="people" size={16} color="#10B981" />
+            <Text style={{
+              marginLeft: 6,
+              fontSize: 13,
+              color: '#475569',
+              fontWeight: '500'
+            }}>
+              {booking.children || 1} {(booking.children || 1) === 1 ? 'child' : 'children'}
+            </Text>
+          </View>
+
+          {booking.hourlyRate && (
+            <View style={{
+              flexDirection: 'row',
+              alignItems: 'center',
+              backgroundColor: '#F0FDF4',
+              paddingHorizontal: 12,
+              paddingVertical: 8,
+              borderRadius: 12,
+              marginBottom: 8,
+              borderWidth: 1,
+              borderColor: '#BBF7D0'
+            }}>
+              <Ionicons name="cash" size={16} color="#059669" />
+              <Text style={{
+                marginLeft: 6,
+                fontSize: 13,
+                color: '#059669',
+                fontWeight: '600'
+              }}>
+                ₱{booking.hourlyRate}/hr
               </Text>
             </View>
-          </View>
-          
-          <View style={styles.bookingLocationRow}>
-            <Ionicons name="location-outline" size={18} color="#6B7280" />
-            <Pressable 
-              onPress={handleLocationPress}
-              style={styles.locationButton}
-              accessibilityLabel="Open location in maps"
-              accessibilityHint={`Navigate to ${booking.location}`}
-            >
-              <Text style={styles.bookingLocationText} numberOfLines={1}>
-                {booking.location}
-              </Text>
-              <Ionicons name="open-outline" size={14} color="#2563EB" style={styles.locationIcon} />
-            </Pressable>
-          </View>
+          )}
         </View>
 
-        <View style={styles.bookingActions}>
-          <Button 
-            mode="outlined" 
-            style={styles.bookingSecondaryButton}
-            labelStyle={styles.bookingSecondaryButtonText}
-            onPress={() => onViewDetails && onViewDetails(booking)}
-            accessibilityLabel="View booking details"
+        {/* Location */}
+        {booking.location && (
+          <Pressable 
+            onPress={handleLocationPress}
+            style={{
+              flexDirection: 'row',
+              alignItems: 'center',
+              backgroundColor: '#FEF7FF',
+              padding: 12,
+              borderRadius: 12,
+              marginBottom: 16,
+              borderWidth: 1,
+              borderColor: '#E9D5FF'
+            }}
           >
-            Details
-          </Button>
-          {booking.status === 'pending' && (
-            <Button 
-              mode="contained" 
-              style={styles.bookingConfirmButton}
-              labelStyle={styles.bookingConfirmButtonText}
-              onPress={() => onConfirmAttendance && onConfirmAttendance(booking)}
-              accessibilityLabel="Confirm attendance for this booking"
-            >
-              Confirm
-            </Button>
-          )}
-          {booking.status === 'confirmed' && (
-            <Button 
-              mode="contained" 
-              style={styles.bookingPrimaryButton}
-              labelStyle={styles.bookingPrimaryButtonText}
-              onPress={onMessage}
-              accessibilityLabel="Send message to family"
-            >
-              Message
-            </Button>
-          )}
-        </View>
-      </Card.Content>
-    </Card>
+            <Ionicons name="location" size={18} color="#7C3AED" />
+            <Text style={{
+              flex: 1,
+              marginLeft: 8,
+              fontSize: 14,
+              color: '#581C87',
+              fontWeight: '500'
+            }} numberOfLines={1}>
+              {booking.location}
+            </Text>
+            <Ionicons name="open-outline" size={16} color="#7C3AED" />
+          </Pressable>
+        )}
+
+        {/* Actions */}
+        {(booking.status === 'pending' || booking.status === 'confirmed') && (
+          <View style={{ flexDirection: 'row', gap: 8, marginTop: 8 }}>
+            {booking.status === 'pending' && (
+              <Pressable
+                onPress={() => onConfirmAttendance && onConfirmAttendance(booking)}
+                style={{
+                  flex: 1,
+                  backgroundColor: '#10B981',
+                  paddingVertical: 12,
+                  paddingHorizontal: 16,
+                  borderRadius: 12,
+                  alignItems: 'center',
+                  shadowColor: '#10B981',
+                  shadowOffset: { width: 0, height: 2 },
+                  shadowOpacity: 0.2,
+                  shadowRadius: 4,
+                  elevation: 3
+                }}
+              >
+                <Text style={{
+                  color: '#FFFFFF',
+                  fontSize: 14,
+                  fontWeight: '600'
+                }}>
+                  Confirm
+                </Text>
+              </Pressable>
+            )}
+
+            {booking.status === 'confirmed' && (
+              <Pressable
+                onPress={() => onMessage && onMessage(booking)}
+                style={{
+                  flex: 1,
+                  backgroundColor: '#3B82F6',
+                  paddingVertical: 12,
+                  paddingHorizontal: 16,
+                  borderRadius: 12,
+                  alignItems: 'center',
+                  shadowColor: '#3B82F6',
+                  shadowOffset: { width: 0, height: 2 },
+                  shadowOpacity: 0.2,
+                  shadowRadius: 4,
+                  elevation: 3
+                }}
+              >
+                <Text style={{
+                  color: '#FFFFFF',
+                  fontSize: 14,
+                  fontWeight: '600'
+                }}>
+                  Message
+                </Text>
+              </Pressable>
+            )}
+          </View>
+        )}
+
+      </View>
+    </View>
   )
 }
 
@@ -337,42 +848,49 @@ function CaregiverDashboard({ onLogout, route }) {
     }
   }, [loadProfile, fetchJobs, fetchApplications, fetchBookings]);
 
-  // Fetch conversations using unified Firebase service
+  // Fetch conversations using Supabase
   useEffect(() => {
     if (!user?.id) return;
 
-    const unsubscribe = firebaseMessagingService.getConversations(user.id, (conversations) => {
-      console.log('📨 Caregiver received conversations:', conversations.length);
-      setParents(conversations.map(conv => ({
-        id: conv.parentId || conv.id,
-        name: conv.parentName || conv.caregiverName || 'Parent',
-        profileImage: conv.parentAvatar || conv.caregiverAvatar || null
-      })));
-    }, 'caregiver');
+    const loadConversations = async () => {
+      try {
+        const conversations = await supabaseService.getConversations(user.id);
+        console.log('📨 Caregiver received conversations:', conversations.length);
+        setParents(conversations.map(conv => {
+          const otherParticipant = conv.participant_1 === user.id ? conv.participant_2 : conv.participant_1;
+          const otherUser = conv.participant_1 === user.id ? conv.participant2 : conv.participant1;
+          return {
+            id: otherParticipant,
+            name: otherUser?.name || 'Parent',
+            profileImage: otherUser?.profile_image || null
+          };
+        }));
+      } catch (error) {
+        console.error('Error loading conversations:', error);
+        setParents([]);
+      }
+    };
 
-    return () => unsubscribe();
+    loadConversations();
   }, [user?.id]);
 
   // Fetch messages for selected parent
   useEffect(() => {
     if (!selectedParent || !user?.id) return;
 
-    // Create consistent conversation ID: always use smaller ID first
-    const [id1, id2] = [user.id, selectedParent.id].sort();
-    const conversationId = `${id1}_${id2}`;
+    const loadMessages = async () => {
+      try {
+        const conversation = await supabaseService.getOrCreateConversation(user.id, selectedParent.id);
+        const messagesData = await supabaseService.getMessages(conversation.id);
+        console.log('📨 Received messages:', messagesData.length);
+        setMessages(messagesData);
+      } catch (error) {
+        console.error('Error loading messages:', error);
+        setMessages([]);
+      }
+    };
 
-    console.log('📨 Fetching messages for conversation:', {
-      caregiverId: selectedParent.id,
-      userId: user.id,
-      conversationId
-    });
-
-    const unsubscribe = firebaseMessagingService.getMessages(user.id, selectedParent.id, (messagesData) => {
-      console.log('📨 Received messages:', messagesData.length);
-      setMessages(messagesData.reverse()); // Reverse to show latest at bottom
-    }, conversationId);
-
-    return () => unsubscribe();
+    loadMessages();
   }, [selectedParent, user?.id]);
 
   // Fetch reviews using Supabase
@@ -471,7 +989,8 @@ function CaregiverDashboard({ onLogout, route }) {
         setSelectedParent(existingParent);
         setChatActive(true);
         // Mark messages as read when opening chat
-        await firebaseMessagingService.markMessagesAsRead(user.id, existingParent.id);
+        const conversation = await supabaseService.getOrCreateConversation(user.id, existingParent.id);
+        await supabaseService.markMessagesAsRead(conversation.id, user.id);
         showToast(`Opened conversation with ${existingParent.name}`, 'success');
       } else {
         // No existing conversation found
@@ -501,7 +1020,7 @@ function CaregiverDashboard({ onLogout, route }) {
     }
   }
 
-  // Send messages using unified Firebase service
+  // Send messages using Supabase
   const sendMessage = async () => {
     if (!newMessage?.trim() || !selectedParent || !user?.id) {
       console.warn('❌ Missing data:', {
@@ -513,30 +1032,22 @@ function CaregiverDashboard({ onLogout, route }) {
     }
 
     try {
-      // Create connection if it doesn't exist
-      try {
-        console.log('🔗 Ensuring Firebase connection exists:', { caregiverId: user.id, parentId: selectedParent.id });
-        await firebaseMessagingService.createConnection(user.id, selectedParent.id);
-        console.log('✅ Firebase connection ensured');
-      } catch (connectionError) {
-        console.warn('⚠️ Failed to ensure Firebase connection:', connectionError.message);
-        // Continue with sending message even if connection creation fails
-      }
-
-      // Create consistent conversation ID: always use smaller ID first
-      const [id1, id2] = [user.id, selectedParent.id].sort();
-      const conversationId = `${id1}_${id2}`;
-
+      const conversation = await supabaseService.getOrCreateConversation(user.id, selectedParent.id);
+      
       console.log('📨 Caregiver sending message:', {
         senderId: user.id,
-        receiverId: selectedParent.id, // Parent ID
-        conversationId,
+        receiverId: selectedParent.id,
+        conversationId: conversation.id,
         message: newMessage.trim()
       });
 
-      await firebaseMessagingService.sendMessage(user.id, selectedParent.id, newMessage, 'text', null, conversationId);
+      await supabaseService.sendMessage(conversation.id, user.id, newMessage.trim());
       setNewMessage('');
       console.log('✅ Caregiver message sent successfully');
+      
+      // Reload messages to show the new one
+      const messagesData = await supabaseService.getMessages(conversation.id);
+      setMessages(messagesData);
     } catch (error) {
       console.error('❌ Error sending caregiver message:', error);
       showToast('Failed to send message: ' + error.message, 'error');
@@ -568,12 +1079,12 @@ function CaregiverDashboard({ onLogout, route }) {
 
         if (parentId && parentId !== user?.id) {
           try {
-            console.log('🔗 Creating Firebase connection for application:', { caregiverId: user.id, parentId });
-            await firebaseMessagingService.createConnection(user.id, parentId);
-            console.log('✅ Firebase connection created successfully');
+            console.log('🔗 Creating Supabase conversation for application:', { caregiverId: user.id, parentId });
+            await supabaseService.getOrCreateConversation(user.id, parentId);
+            console.log('✅ Supabase conversation created successfully');
           } catch (connectionError) {
-            console.warn('⚠️ Failed to create Firebase connection:', connectionError.message);
-            // Don't fail the application if connection creation fails
+            console.warn('⚠️ Failed to create Supabase conversation:', connectionError.message);
+            // Don't fail the application if conversation creation fails
           }
         }
 
@@ -781,7 +1292,8 @@ function CaregiverDashboard({ onLogout, route }) {
                     setSelectedParent(item);
                     setChatActive(true);
                     // Mark messages as read when opening chat
-                    await firebaseMessagingService.markMessagesAsRead(user.id, item.id);
+                    const conversation = await supabaseService.getOrCreateConversation(user.id, item.id);
+                    await supabaseService.markMessagesAsRead(conversation.id, user.id);
                   }}
                 >
                   <Ionicons name="person-circle" size={40} color="#3B82F6" />
@@ -1208,11 +1720,7 @@ function CaregiverDashboard({ onLogout, route }) {
                 <BookingCard
                   key={booking.id || index}
                   booking={booking}
-                  onMessage={() => handleBookingMessage(booking)}
-                  onViewDetails={() => {
-                    setSelectedBooking(booking)
-                    setShowBookingDetails(true)
-                  }}
+                  onMessage={handleBookingMessage}
                   onConfirmAttendance={handleConfirmAttendance}
                 />
               ))}
@@ -1365,8 +1873,8 @@ function CaregiverDashboard({ onLogout, route }) {
                   <BookingCard
                     key={booking.id || index}
                     booking={booking}
-                    onMessage={() => handleBookingMessage(booking)}
-                    onViewDetails={() => {
+                    onMessage={handleBookingMessage}
+                    onViewDetails={(booking) => {
                       setSelectedBooking(booking)
                       setShowBookingDetails(true)
                     }}

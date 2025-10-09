@@ -25,28 +25,28 @@
             <div class='fl pad1y space-right2'>
                 <span class="strong">0% </span>
                 <span class="quiet">Statements</span>
-                <span class='fraction'>0/55</span>
+                <span class='fraction'>0/60</span>
             </div>
         
             
             <div class='fl pad1y space-right2'>
                 <span class="strong">0% </span>
                 <span class="quiet">Branches</span>
-                <span class='fraction'>0/56</span>
+                <span class='fraction'>0/64</span>
             </div>
         
             
             <div class='fl pad1y space-right2'>
                 <span class="strong">0% </span>
                 <span class="quiet">Functions</span>
-                <span class='fraction'>0/12</span>
+                <span class='fraction'>0/13</span>
             </div>
         
             
             <div class='fl pad1y space-right2'>
                 <span class="strong">0% </span>
                 <span class="quiet">Lines</span>
-                <span class='fraction'>0/52</span>
+                <span class='fraction'>0/56</span>
             </div>
         
             
@@ -431,9 +431,7 @@
 <a name='L366'></a><a href='#L366'>366</a>
 <a name='L367'></a><a href='#L367'>367</a>
 <a name='L368'></a><a href='#L368'>368</a>
-<a name='L369'></a><a href='#L369'>369</a>
-<a name='L370'></a><a href='#L370'>370</a>
-<a name='L371'></a><a href='#L371'>371</a></td><td class="line-coverage quiet"><span class="cline-any cline-neutral">&nbsp;</span>
+<a name='L369'></a><a href='#L369'>369</a></td><td class="line-coverage quiet"><span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
@@ -485,25 +483,12 @@
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
@@ -511,7 +496,6 @@
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
@@ -520,7 +504,19 @@
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
@@ -821,7 +817,7 @@ import {
 import { useNavigation, useRoute } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../contexts/AuthContext';
-import firebaseMessagingService from '../services/firebaseMessagingService';
+import { messagingAPI, realtimeService } from '../services';
 &nbsp;
 export default function <span class="fstat-no" title="function not covered" >CaregiverChat(</span>{ route }) {
   const { user } = <span class="cstat-no" title="statement not covered" >useAuth();</span>
@@ -853,18 +849,20 @@ export default function <span class="fstat-no" title="function not covered" >Car
         const convId = <span class="cstat-no" title="statement not covered" >`${id1}_${id2}`;</span>
 <span class="cstat-no" title="statement not covered" >        setConversationId(convId);</span>
 &nbsp;
-        // Fetch existing messages
-        const unsubscribe = <span class="cstat-no" title="statement not covered" >firebaseMessagingService.getMessages(</span>
-          user.id,
-          caregiverId,
-<span class="fstat-no" title="function not covered" >          (m</span>essagesData) =&gt; {
-<span class="cstat-no" title="statement not covered" >            setMessages(messagesData.reverse());</span>
-          },
-          convId
-        );
+        // Get or create conversation and fetch messages
+        const conversation = <span class="cstat-no" title="statement not covered" >await messagingAPI.startConversation(caregiverId);</span>
+        const response = <span class="cstat-no" title="statement not covered" >await messagingAPI.getMessages(conversation.data?.id || convId);</span>
+<span class="cstat-no" title="statement not covered" >        setMessages(response.data?.messages || []);</span>
+        
+        // Setup real-time subscription
+        const subscription = <span class="cstat-no" title="statement not covered" >realtimeService.subscribeToMessages(conversation.data?.id || convId, <span class="fstat-no" title="function not covered" >(p</span>ayload) =&gt; {</span>
+<span class="cstat-no" title="statement not covered" >          if (payload.eventType === 'INSERT') {</span>
+<span class="cstat-no" title="statement not covered" >            setMessages(<span class="fstat-no" title="function not covered" >pr</span>ev =&gt; <span class="cstat-no" title="statement not covered" >[...prev, payload.new])</span>;</span>
+          }
+        });
 &nbsp;
 <span class="cstat-no" title="statement not covered" >        return <span class="fstat-no" title="function not covered" >()</span> =&gt; {</span>
-<span class="cstat-no" title="statement not covered" >          if (unsubscribe) <span class="cstat-no" title="statement not covered" >unsubscribe();</span></span>
+<span class="cstat-no" title="statement not covered" >          if (subscription) <span class="cstat-no" title="statement not covered" >subscription.unsubscribe();</span></span>
         };
       } catch (error) {
 <span class="cstat-no" title="statement not covered" >        console.error('Error initializing chat:', error);</span>
@@ -886,14 +884,10 @@ export default function <span class="fstat-no" title="function not covered" >Car
       const [id1, id2] = <span class="cstat-no" title="statement not covered" >[user.id, caregiverId].sort();</span>
       const convId = <span class="cstat-no" title="statement not covered" >`${id1}_${id2}`;</span>
 &nbsp;
-<span class="cstat-no" title="statement not covered" >      await firebaseMessagingService.sendMessage(</span>
-        user.id,
-        caregiverId,
-        newMessage.trim(),
-        'text',
-        null,
-        convId
-      );
+<span class="cstat-no" title="statement not covered" >      await messagingAPI.sendMessage({</span>
+        recipientId: caregiverId,
+        content: newMessage.trim()
+      });
 &nbsp;
 <span class="cstat-no" title="statement not covered" >      setNewMessage('');</span>
     } catch (error) {
@@ -1180,7 +1174,7 @@ const styles = <span class="cstat-no" title="statement not covered" >StyleSheet.
             <div class='footer quiet pad2 space-top1 center small'>
                 Code coverage generated by
                 <a href="https://istanbul.js.org/" target="_blank" rel="noopener noreferrer">istanbul</a>
-                at 2025-09-28T07:32:27.971Z
+                at 2025-10-09T07:22:01.297Z
             </div>
         <script src="../prettify.js"></script>
         <script>

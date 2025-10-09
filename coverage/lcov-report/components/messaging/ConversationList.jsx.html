@@ -25,7 +25,7 @@
             <div class='fl pad1y space-right2'>
                 <span class="strong">0% </span>
                 <span class="quiet">Statements</span>
-                <span class='fraction'>0/49</span>
+                <span class='fraction'>0/46</span>
             </div>
         
             
@@ -39,14 +39,14 @@
             <div class='fl pad1y space-right2'>
                 <span class="strong">0% </span>
                 <span class="quiet">Functions</span>
-                <span class='fraction'>0/11</span>
+                <span class='fraction'>0/10</span>
             </div>
         
             
             <div class='fl pad1y space-right2'>
                 <span class="strong">0% </span>
                 <span class="quiet">Lines</span>
-                <span class='fraction'>0/48</span>
+                <span class='fraction'>0/45</span>
             </div>
         
             
@@ -379,12 +379,7 @@
 <a name='L314'></a><a href='#L314'>314</a>
 <a name='L315'></a><a href='#L315'>315</a>
 <a name='L316'></a><a href='#L316'>316</a>
-<a name='L317'></a><a href='#L317'>317</a>
-<a name='L318'></a><a href='#L318'>318</a>
-<a name='L319'></a><a href='#L319'>319</a>
-<a name='L320'></a><a href='#L320'>320</a>
-<a name='L321'></a><a href='#L321'>321</a></td><td class="line-coverage quiet"><span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
+<a name='L317'></a><a href='#L317'>317</a></td><td class="line-coverage quiet"><span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
@@ -417,19 +412,14 @@
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
@@ -440,15 +430,17 @@
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
@@ -720,9 +712,8 @@ import {
   Surface,
 } from 'react-native-paper';
 import { MessageCircle, Clock } from 'lucide-react-native';
-import { useAuth } from '../../../contexts/AuthContext';
-import { messagingService } from '../../../services/firebaseMessagingService';
-import { authService } from '../../../services/authService';
+import { useAuth } from '../../contexts/AuthContext';
+import { messagingService } from '../../services';
 &nbsp;
 const ConversationList = <span class="cstat-no" title="statement not covered" ><span class="fstat-no" title="function not covered" >({</span> onSelectConversation, selectedConversation, navigation }) =&gt; {</span>
   const { user } = <span class="cstat-no" title="statement not covered" >useAuth();</span>
@@ -730,46 +721,43 @@ const ConversationList = <span class="cstat-no" title="statement not covered" ><
   const [loading, setLoading] = <span class="cstat-no" title="statement not covered" >useState(true);</span>
 &nbsp;
 <span class="cstat-no" title="statement not covered" >  useEffect(<span class="fstat-no" title="function not covered" >()</span> =&gt; {</span>
-    const userId = <span class="cstat-no" title="statement not covered" >authService.getCurrentUserId();</span>
-<span class="cstat-no" title="statement not covered" >    if (!userId) {</span>
-<span class="cstat-no" title="statement not covered" >      setLoading(false);</span>
-<span class="cstat-no" title="statement not covered" >      return;</span>
-    }
+    const loadConversations = <span class="cstat-no" title="statement not covered" ><span class="fstat-no" title="function not covered" >as</span>ync () =&gt; {</span>
+<span class="cstat-no" title="statement not covered" >      if (!user?.id) {</span>
+<span class="cstat-no" title="statement not covered" >        setLoading(false);</span>
+<span class="cstat-no" title="statement not covered" >        return;</span>
+      }
 &nbsp;
-    const unsubscribe = <span class="cstat-no" title="statement not covered" >messagingService.listenToUserConversations(userId, <span class="fstat-no" title="function not covered" >as</span>ync (firebaseConversations) =&gt; {</span>
-      // Enhance with user profile data from MongoDB
-      const enhancedConversations = <span class="cstat-no" title="statement not covered" >await Promise.all(</span>
-        firebaseConversations.map(<span class="fstat-no" title="function not covered" >as</span>ync (conv) =&gt; {
-<span class="cstat-no" title="statement not covered" >          try {</span>
-            const userProfile = <span class="cstat-no" title="statement not covered" >await messagingService.getConversationMetadata(conv.id);</span>
-<span class="cstat-no" title="statement not covered" >            return {</span>
-              ...conv,
-              recipientName: userProfile?.name || 'Unknown User',
-              recipientAvatar: userProfile?.profileImage || null,
-              recipientRole: userProfile?.role || 'user',
-            };
-          } catch (error) {
-<span class="cstat-no" title="statement not covered" >            console.warn('Error fetching user profile:', error);</span>
-<span class="cstat-no" title="statement not covered" >            return {</span>
-              ...conv,
-              recipientName: 'Unknown User',
-              recipientAvatar: null,
-              recipientRole: 'user',
-            };
-          }
-        })
-      );
+<span class="cstat-no" title="statement not covered" >      try {</span>
+        const { data } = <span class="cstat-no" title="statement not covered" >await messagingService.getConversations();</span>
+        
+        // Transform Supabase conversations to match expected format
+        const transformedConversations = <span class="cstat-no" title="statement not covered" >data.map(<span class="fstat-no" title="function not covered" >co</span>nv =&gt; {</span>
+          const otherParticipant = <span class="cstat-no" title="statement not covered" >conv.participant_1 === user.id </span>
+            ? conv.participant2 
+            : conv.participant1;
+          
+<span class="cstat-no" title="statement not covered" >          return {</span>
+            id: conv.id,
+            otherUserId: otherParticipant?.id,
+            recipientName: otherParticipant?.name || 'Unknown User',
+            recipientAvatar: otherParticipant?.profile_image,
+            recipientRole: otherParticipant?.role || 'user',
+            lastMessage: 'Start a conversation',
+            lastActivity: conv.last_message_at || conv.created_at,
+            unreadCount: 0 // Can be implemented later
+          };
+        });
 &nbsp;
-<span class="cstat-no" title="statement not covered" >      setConversations(enhancedConversations);</span>
-<span class="cstat-no" title="statement not covered" >      setLoading(false);</span>
-    });
-&nbsp;
-<span class="cstat-no" title="statement not covered" >    return <span class="fstat-no" title="function not covered" >()</span> =&gt; {</span>
-<span class="cstat-no" title="statement not covered" >      if (typeof unsubscribe === 'function') {</span>
-<span class="cstat-no" title="statement not covered" >        unsubscribe();</span>
+<span class="cstat-no" title="statement not covered" >        setConversations(transformedConversations);</span>
+      } catch (error) {
+<span class="cstat-no" title="statement not covered" >        console.error('Error loading conversations:', error);</span>
+      } finally {
+<span class="cstat-no" title="statement not covered" >        setLoading(false);</span>
       }
     };
-  }, []);
+&nbsp;
+<span class="cstat-no" title="statement not covered" >    loadConversations();</span>
+  }, [user?.id]);
 &nbsp;
   const formatTime = <span class="cstat-no" title="statement not covered" ><span class="fstat-no" title="function not covered" >(t</span>imestamp) =&gt; {</span>
 <span class="cstat-no" title="statement not covered" >    if (!timestamp) <span class="cstat-no" title="statement not covered" >return 'Unknown';</span></span>
@@ -1030,7 +1018,7 @@ export default ConversationList;
             <div class='footer quiet pad2 space-top1 center small'>
                 Code coverage generated by
                 <a href="https://istanbul.js.org/" target="_blank" rel="noopener noreferrer">istanbul</a>
-                at 2025-09-28T07:32:27.971Z
+                at 2025-10-09T07:22:01.297Z
             </div>
         <script src="../../prettify.js"></script>
         <script>

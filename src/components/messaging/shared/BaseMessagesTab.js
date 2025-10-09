@@ -10,7 +10,7 @@ import {
   Alert,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import messagingService from '../../../services/firebaseMessagingService';
+import { supabaseService } from '../../../services/supabaseService';
 import { useAuth } from '../../../contexts/AuthContext';
 
 // Base MessagesTab component with common functionality
@@ -32,35 +32,62 @@ const BaseMessagesTab = ({
 
   // Set current user in messaging service
   useEffect(() => {
-    if (user?.uid) {
-      messagingService.setCurrentUser(user.uid);
+    if (user?.id) {
+      console.log('Setting current user for messaging:', user.id);
     }
   }, [user]);
 
   const loadConversations = useCallback(async () => {
     try {
       setLoading(true);
-      const data = await messagingService.getConversations();
-      setConversations(data);
+      if (!user?.id) {
+        setConversations([]);
+        return;
+      }
+      const data = await supabaseService.getConversations(user.id);
+      
+      // Transform data to match expected format
+      const transformedData = data.map(conv => {
+        const otherParticipant = conv.participant_1 === user.id ? conv.participant_2 : conv.participant_1;
+        const otherUser = conv.participant_1 === user.id ? conv.participant2 : conv.participant1;
+        
+        return {
+          id: conv.id,
+          participantId: otherParticipant,
+          participantName: otherUser?.name || 'User',
+          participantAvatar: otherUser?.profile_image,
+          lastMessage: 'Start a conversation',
+          lastMessageTime: conv.last_message_at,
+          unreadCount: 0
+        };
+      });
+      
+      setConversations(transformedData);
     } catch (error) {
       console.error('Error loading conversations:', error);
+      setConversations([]);
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [user?.id]);
 
   useEffect(() => {
     loadConversations();
 
-    // Set up real-time listener
-    const unsubscribe = messagingService.subscribeToConversations((updatedConversations) => {
-      setConversations(updatedConversations);
-    });
+    // Set up real-time listener for conversations
+    let subscription;
+    if (user?.id) {
+      subscription = supabaseService.subscribeToMessages(user.id, () => {
+        loadConversations();
+      });
+    }
 
     return () => {
-      if (unsubscribe) unsubscribe();
+      if (subscription) {
+        subscription.unsubscribe();
+      }
     };
-  }, [loadConversations]);
+  }, [loadConversations, user?.id]);
 
   const handleRefresh = useCallback(async () => {
     await loadConversations();

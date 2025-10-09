@@ -143,6 +143,12 @@ const ParentDashboard = () => {
   const [filteredCaregivers, setFilteredCaregivers] = useState([]);
   const [filters, setFilters] = useState(DEFAULT_FILTERS);
   const [activeFilters, setActiveFilters] = useState(0);
+  const [quickFilters, setQuickFilters] = useState({
+    availableNow: false,
+    nearMe: false,
+    topRated: false,
+    certified: false
+  });
 
   // Form states
   const [childForm, setChildForm] = useState({
@@ -276,12 +282,13 @@ const ParentDashboard = () => {
   }, [toggleModal]);
 
   const openEditChild = useCallback((child) => {
+    console.log('🔍 Opening edit for child:', child);
     setChildForm({
       name: child.name || '',
       age: String(child.age ?? ''),
       allergies: child.allergies || '',
-      notes: child.preferences || '',
-      editingId: child._id || child.id
+      notes: child.preferences || child.notes || '',
+      editingId: child.id || child._id
     });
     toggleModal('child', true);
   }, [toggleModal]);
@@ -297,7 +304,8 @@ const ParentDashboard = () => {
           style: 'destructive',
           onPress: async () => {
             try {
-              await supabaseService.deleteChild(child._id || child.id);
+              console.log('🗑️ Deleting child:', child);
+              await supabaseService.deleteChild(child.id || child._id);
               await fetchChildren();
               Alert.alert('Success', 'Child deleted successfully!');
             } catch (error) {
@@ -399,6 +407,11 @@ const ParentDashboard = () => {
       await fetchChildren();
       toggleModal('child', false);
       setChildForm({ name: '', age: '', allergies: '', notes: '', editingId: null });
+      
+      // Trigger a full refresh to update all components
+      setTimeout(() => {
+        onRefresh();
+      }, 100);
 
       Alert.alert('Success', childForm.editingId ? 'Child updated successfully!' : 'Child added successfully!');
     } catch (error) {
@@ -434,21 +447,19 @@ const ParentDashboard = () => {
   };
 
   const handleMessageCaregiver = useCallback(async (caregiver) => {
-    // Create connection in Firebase before navigating
-    const firebaseMessagingService = (await import('../../services/firebaseMessagingService')).default;
-
     try {
-      // Ensure connection exists in Firebase
-      await firebaseMessagingService.createConnection(user.id, caregiver._id || caregiver.id);
-
+      // Create or get conversation in Supabase
+      await supabaseService.getOrCreateConversation(user.id, caregiver._id || caregiver.id);
     } catch (error) {
       console.log('Connection setup warning:', error.message);
     }
 
-    navigation.navigate('CaregiverChat', {
+    navigation.navigate('Chat', {
       userId: user.id,
-      caregiverId: caregiver._id || caregiver.id,
-      caregiverName: caregiver.name
+      targetUserId: caregiver._id || caregiver.id,
+      targetUserName: caregiver.name,
+      userType: 'parent',
+      targetUserType: 'caregiver'
     });
   }, [navigation, user]);
 
@@ -589,6 +600,54 @@ const ParentDashboard = () => {
     const filtered = applyFilters(currentResults, newFilters);
     setFilteredCaregivers(filtered);
   };
+
+  const handleQuickFilter = useCallback((filterKey) => {
+    if (filterKey === 'clear') {
+      setQuickFilters({
+        availableNow: false,
+        nearMe: false,
+        topRated: false,
+        certified: false
+      });
+      setFilters(DEFAULT_FILTERS);
+      setActiveFilters(0);
+      setFilteredCaregivers([]);
+      return;
+    }
+
+    setQuickFilters(prev => {
+      const newQuickFilters = {
+        ...prev,
+        [filterKey]: !prev[filterKey]
+      };
+
+      // Apply quick filters to caregivers
+      let filtered = caregivers;
+
+      if (newQuickFilters.availableNow) {
+        filtered = filtered.filter(c => c.availableNow || c.availability?.availableNow);
+      }
+
+      if (newQuickFilters.nearMe) {
+        // Filter by distance (assuming we have location data)
+        filtered = filtered.filter(c => c.distance <= 10);
+      }
+
+      if (newQuickFilters.topRated) {
+        filtered = filtered.filter(c => (c.rating || 0) >= 4.5);
+      }
+
+      if (newQuickFilters.certified) {
+        filtered = filtered.filter(c => 
+          c.certifications?.length > 0 || 
+          c.skills?.some(skill => skill.toLowerCase().includes('certified'))
+        );
+      }
+
+      setFilteredCaregivers(filtered);
+      return newQuickFilters;
+    });
+  }, [caregivers]);
 
   // Job management functions
   const handleCreateJob = useCallback(() => {
@@ -758,6 +817,9 @@ const ParentDashboard = () => {
             onViewReviews={handleViewReviews}
             navigation={navigation}
             loading={loading}
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            setActiveTab={setActiveTab}
           />
         );
       case 'search':
@@ -772,8 +834,12 @@ const ParentDashboard = () => {
             searchQuery={searchQuery}
             onSearch={handleSearch}
             onOpenFilter={() => toggleModal('filter', true)}
+            onQuickFilter={handleQuickFilter}
+            quickFilters={quickFilters}
             activeFilters={activeFilters}
             loading={loading || searchLoading}
+            refreshing={refreshing}
+            onRefresh={onRefresh}
           />
         );
       case 'bookings':
