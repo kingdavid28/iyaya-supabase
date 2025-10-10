@@ -32,7 +32,7 @@
             <div class='fl pad1y space-right2'>
                 <span class="strong">0% </span>
                 <span class="quiet">Branches</span>
-                <span class='fraction'>0/43</span>
+                <span class='fraction'>0/36</span>
             </div>
         
             
@@ -350,25 +350,18 @@
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
@@ -376,14 +369,21 @@
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
@@ -583,16 +583,16 @@ class BookingService {
 <span class="cstat-no" title="statement not covered" >    try {</span>
       // Import supabaseService dynamically to avoid circular imports
       const { supabaseService } = <span class="cstat-no" title="statement not covered" >await import('./supabaseService');</span>
-      const { supabase } = <span class="cstat-no" title="statement not covered" >await import('../config/supabase');</span>
       
-      const { data: { user }, error } = <span class="cstat-no" title="statement not covered" >await supabase.auth.getUser();</span>
-<span class="cstat-no" title="statement not covered" >      if (error || !user) {</span>
-<span class="cstat-no" title="statement not covered" >        throw new Error('User not authenticated');</span>
+      const user = <span class="cstat-no" title="statement not covered" >await supabaseService._getCurrentUser();</span>
+<span class="cstat-no" title="statement not covered" >      if (!user) {</span>
+<span class="cstat-no" title="statement not covered" >        console.warn('⚠️ User not authenticated in getBookings');</span>
+<span class="cstat-no" title="statement not covered" >        return [];</span>
       }
       
       // Get user profile to determine role
       const profile = <span class="cstat-no" title="statement not covered" >await supabaseService.getProfile(user.id);</span>
-      const role = <span class="cstat-no" title="statement not covered" >profile?.role || 'parent';</span>
+      const role = <span class="cstat-no" title="statement not covered" >profile?.role || user.user_metadata?.role || 'parent';</span>
       
 <span class="cstat-no" title="statement not covered" >      console.log('📋 Fetching bookings for user:', user.id, 'role:', role);</span>
       const bookings = <span class="cstat-no" title="statement not covered" >await supabaseService.getMyBookings(user.id, role);</span>
@@ -606,7 +606,7 @@ class BookingService {
     } catch (error) {
 <span class="cstat-no" title="statement not covered" >      logger.error('Get bookings failed:', error);</span>
 <span class="cstat-no" title="statement not covered" >      console.error('❌ Get bookings error details:', error.message);</span>
-<span class="cstat-no" title="statement not covered" >      throw new Error(error.message || 'Failed to load bookings');</span>
+<span class="cstat-no" title="statement not covered" >      return [];</span>
     }
   }
 &nbsp;
@@ -615,11 +615,11 @@ class BookingService {
 <span class="cstat-no" title="statement not covered" >    try {</span>
       // Import supabaseService dynamically to avoid circular imports
       const { supabaseService } = <span class="cstat-no" title="statement not covered" >await import('./supabaseService');</span>
-      const { supabase } = <span class="cstat-no" title="statement not covered" >await import('../config/supabase');</span>
       
-      const { data: { user }, error } = <span class="cstat-no" title="statement not covered" >await supabase.auth.getUser();</span>
-<span class="cstat-no" title="statement not covered" >      if (error || !user) {</span>
-<span class="cstat-no" title="statement not covered" >        throw new Error('User not authenticated');</span>
+      const user = <span class="cstat-no" title="statement not covered" >await supabaseService._getCurrentUser();</span>
+<span class="cstat-no" title="statement not covered" >      if (!user) {</span>
+<span class="cstat-no" title="statement not covered" >        console.warn('⚠️ User not authenticated in getBookingById');</span>
+<span class="cstat-no" title="statement not covered" >        return null;</span>
       }
       
 <span class="cstat-no" title="statement not covered" >      console.log('📋 Fetching booking by ID:', bookingId, 'for user:', user.id);</span>
@@ -629,7 +629,7 @@ class BookingService {
     } catch (error) {
 <span class="cstat-no" title="statement not covered" >      logger.error('Get booking by ID failed:', error);</span>
 <span class="cstat-no" title="statement not covered" >      console.error('❌ Get booking by ID error details:', error.message);</span>
-<span class="cstat-no" title="statement not covered" >      throw new Error(error.message || 'Failed to load booking details');</span>
+<span class="cstat-no" title="statement not covered" >      return null;</span>
     }
   }
 &nbsp;
@@ -769,7 +769,7 @@ export default new BookingService();
             <div class='footer quiet pad2 space-top1 center small'>
                 Code coverage generated by
                 <a href="https://istanbul.js.org/" target="_blank" rel="noopener noreferrer">istanbul</a>
-                at 2025-10-09T07:22:01.297Z
+                at 2025-10-10T03:02:29.884Z
             </div>
         <script src="../prettify.js"></script>
         <script>
