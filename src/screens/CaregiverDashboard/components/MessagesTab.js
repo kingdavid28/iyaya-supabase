@@ -11,6 +11,15 @@ const MessagesTab = ({ navigation, refreshing, onRefresh }) => {
   const [conversations, setConversations] = useState([]);
   const [loading, setLoading] = useState(true);
 
+  const getInitials = (name = '') => {
+    if (!name) return 'P';
+    const parts = name.trim().split(' ');
+    if (parts.length === 1) {
+      return parts[0].charAt(0).toUpperCase();
+    }
+    return `${parts[0].charAt(0)}${parts[parts.length - 1].charAt(0)}`.toUpperCase();
+  };
+
   useEffect(() => {
     const userIdToUse = user?.id || user?.uid;
     if (!userIdToUse) {
@@ -34,7 +43,7 @@ const MessagesTab = ({ navigation, refreshing, onRefresh }) => {
             parentId: otherParticipant?.id,
             parentName: otherParticipant?.name || 'Parent',
             parentAvatar: otherParticipant?.profile_image,
-            lastMessage: 'Tap to view messages',
+            lastMessage: conv.last_message_preview || 'Tap to view messages',
             lastMessageTime: conv.last_message_at,
             isRead: true // Will be updated with actual read status
           };
@@ -98,6 +107,7 @@ const MessagesTab = ({ navigation, refreshing, onRefresh }) => {
   const renderConversationItem = ({ item }) => (
     <TouchableOpacity onPress={() => handleConversationPress(item)}>
       <View style={messageStyles.conversationItem}>
+        <View style={messageStyles.conversationAccent} />
         <View style={messageStyles.conversationContent}>
           <View style={messageStyles.avatarContainer}>
             {item.parentAvatar ? (
@@ -107,7 +117,7 @@ const MessagesTab = ({ navigation, refreshing, onRefresh }) => {
               />
             ) : (
               <View style={messageStyles.defaultAvatar}>
-                <Ionicons name="person" size={24} color="#5bbafa" />
+                <Text style={messageStyles.avatarInitials}>{getInitials(item.parentName)}</Text>
               </View>
             )}
             {!item.isRead && <View style={messageStyles.unreadDot} />}
@@ -116,25 +126,32 @@ const MessagesTab = ({ navigation, refreshing, onRefresh }) => {
           <View style={messageStyles.messageInfo}>
             <View style={messageStyles.messageHeader}>
               <Text style={messageStyles.parentName}>{item.parentName || 'Parent'}</Text>
-              <Text style={messageStyles.messageTime}>
-                {formatTime(item.lastMessageTime)}
+              <View style={messageStyles.metaRight}>
+                <Ionicons name="time-outline" size={14} color="#94A3B8" style={messageStyles.timeIcon} />
+                <Text style={messageStyles.messageTime}>
+                  {formatTime(item.lastMessageTime)}
+                </Text>
+              </View>
+            </View>
+            <View style={messageStyles.messagePreviewRow}>
+              <Ionicons name="chatbubble-ellipses-outline" size={16} color="#6B7280" style={messageStyles.previewIcon} />
+              <Text
+                style={[
+                  messageStyles.lastMessage,
+                  !item.isRead && messageStyles.unreadMessage
+                ]}
+                numberOfLines={1}
+              >
+                {item.lastMessage}
               </Text>
             </View>
-            <Text
-              style={[
-                messageStyles.lastMessage,
-                !item.isRead && messageStyles.unreadMessage
-              ]}
-              numberOfLines={1}
-            >
-              {item.lastMessage}
-            </Text>
           </View>
 
           <Ionicons
             name="chevron-forward"
             size={20}
             color="#9CA3AF"
+            style={messageStyles.chevronIcon}
           />
         </View>
       </View>
@@ -167,6 +184,18 @@ const MessagesTab = ({ navigation, refreshing, onRefresh }) => {
           data={conversations}
           renderItem={renderConversationItem}
           keyExtractor={(item) => item.id}
+          ListHeaderComponent={
+            <View style={messageStyles.listHeader}>
+              <View>
+                <Text style={messageStyles.headerTitle}>Recent Conversations</Text>
+                <Text style={messageStyles.headerSubtitle}>Stay in touch with families and respond quickly.</Text>
+              </View>
+              <View style={messageStyles.headerBadge}>
+                <Ionicons name="flash-outline" size={14} color="#2563EB" />
+                <Text style={messageStyles.headerBadgeText}>{conversations.length}</Text>
+              </View>
+            </View>
+          }
           refreshControl={
             <RefreshControl
               refreshing={refreshing}
@@ -196,40 +225,57 @@ const messageStyles = {
   conversationsCard: {
     flex: 1,
     margin: 8,
-    borderRadius: 12,
+    borderRadius: 16,
+    backgroundColor: '#F8FAFC',
+    paddingVertical: 8,
   },
   conversationItem: {
+    flexDirection: 'row',
+    alignItems: 'stretch',
     backgroundColor: '#FFFFFF',
     marginHorizontal: 16,
-    marginVertical: 4,
-    borderRadius: 12,
-    elevation: 1,
-    shadowColor: '#000',
+    marginVertical: 6,
+    borderRadius: 14,
+    elevation: 3,
+    shadowColor: '#0F172A',
     shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 2,
+    shadowOpacity: 0.08,
+    shadowRadius: 6,
+  },
+  conversationAccent: {
+    width: 4,
+    borderTopLeftRadius: 14,
+    borderBottomLeftRadius: 14,
+    backgroundColor: '#38BDF8',
   },
   conversationContent: {
     flexDirection: 'row',
     alignItems: 'center',
-    padding: 16,
+    flex: 1,
+    paddingVertical: 16,
+    paddingHorizontal: 18,
   },
   avatarContainer: {
     position: 'relative',
-    marginRight: 12,
+    marginRight: 16,
   },
   avatar: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
+    width: 52,
+    height: 52,
+    borderRadius: 26,
   },
   defaultAvatar: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    backgroundColor: '#F3F4F6',
+    width: 52,
+    height: 52,
+    borderRadius: 26,
+    backgroundColor: '#E0F2FE',
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  avatarInitials: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#0284C7',
   },
   unreadDot: {
     position: 'absolute',
@@ -238,35 +284,94 @@ const messageStyles = {
     width: 12,
     height: 12,
     borderRadius: 6,
-    backgroundColor: '#5bbafa',
+    backgroundColor: '#FB7185',
     borderWidth: 2,
     borderColor: '#FFFFFF',
   },
   messageInfo: {
     flex: 1,
+    marginRight: 12,
   },
   messageHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 4,
+    marginBottom: 6,
   },
   parentName: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#1F2937',
+    color: '#0F172A',
+  },
+  metaRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#EEF2FF',
+    borderRadius: 12,
+    paddingVertical: 2,
+    paddingHorizontal: 8,
+  },
+  timeIcon: {
+    marginRight: 2,
   },
   messageTime: {
-    fontSize: 12,
-    color: '#9CA3AF',
+    fontSize: 11,
+    fontWeight: '500',
+    color: '#64748B',
+  },
+  messagePreviewRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  previewIcon: {
+    marginTop: 1,
   },
   lastMessage: {
+    flex: 1,
     fontSize: 14,
-    color: '#6B7280',
+    color: '#475569',
   },
   unreadMessage: {
-    fontWeight: '500',
-    color: '#374151',
+    fontWeight: '600',
+    color: '#1F2937',
+  },
+  listHeader: {
+    paddingHorizontal: 24,
+    paddingTop: 12,
+    paddingBottom: 6,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  headerTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#0F172A',
+  },
+  headerSubtitle: {
+    fontSize: 12,
+    color: '#64748B',
+    marginTop: 2,
+  },
+  headerBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#DBEAFE',
+    borderRadius: 999,
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+  },
+  headerBadgeText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#1D4ED8',
+  },
+  chevronIcon: {
+    alignSelf: 'flex-start',
+    marginTop: 25,
   },
   emptyState: {
     flex: 1,
@@ -277,13 +382,13 @@ const messageStyles = {
   emptyTitle: {
     fontSize: 18,
     fontWeight: '600',
-    color: '#374151',
+    color: '#1E293B',
     marginTop: 16,
     marginBottom: 8,
   },
   emptySubtitle: {
     fontSize: 14,
-    color: '#9CA3AF',
+    color: '#64748B',
     textAlign: 'center',
     lineHeight: 20,
   },
