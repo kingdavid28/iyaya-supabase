@@ -1,9 +1,9 @@
 import React from 'react';
 import { View, Text, FlatList, ActivityIndicator, RefreshControl, TextInput, TouchableOpacity, ScrollView } from 'react-native';
-import { SlidersHorizontal, Search, MapPin, Star, Clock, Award } from 'lucide-react-native';
+import { SlidersHorizontal, Search } from 'lucide-react-native';
 import { styles, colors } from '../../styles/ParentDashboard.styles';
 import CaregiverCard from './CaregiverCard';
-import { caregiversAPI } from '../../../services';
+import { userService } from '../../../services/supabase';
 
 
 const SearchTab = ({
@@ -28,12 +28,7 @@ const SearchTab = ({
   const showAllCaregivers = !searchQuery && displayData.length > 0;
   const showEmptyState = displayData.length === 0;
 
-  const quickFilterOptions = [
-    { key: 'availableNow', label: 'Available Now', icon: Clock, color: '#10B981' },
-    { key: 'nearMe', label: 'Near Me', icon: MapPin, color: '#3B82F6' },
-    { key: 'topRated', label: 'Top Rated', icon: Star, color: '#F59E0B' },
-    { key: 'certified', label: 'Certified', icon: Award, color: '#8B5CF6' },
-  ];
+  const quickFilterOptions = [];
 
   return (
     <View style={[styles.caregiversContent, { flex: 1 }]}>
@@ -74,49 +69,13 @@ const SearchTab = ({
         />
       </View>
 
-      {/* Quick Filters */}
-      <ScrollView 
-        horizontal 
-        showsHorizontalScrollIndicator={false}
-        style={searchTabStyles.quickFiltersContainer}
-        contentContainerStyle={searchTabStyles.quickFiltersContent}
-      >
-        {quickFilterOptions.map((filter) => {
-          const IconComponent = filter.icon;
-          const isActive = quickFilters[filter.key];
-          
-          return (
-            <TouchableOpacity
-              key={filter.key}
-              style={[
-                searchTabStyles.quickFilterButton,
-                isActive && { 
-                  backgroundColor: filter.color + '15',
-                  borderColor: filter.color 
-                }
-              ]}
-              onPress={() => onQuickFilter && onQuickFilter(filter.key)}
-            >
-              <IconComponent 
-                size={16} 
-                color={isActive ? filter.color : '#6B7280'} 
-              />
-              <Text style={[
-                searchTabStyles.quickFilterText,
-                isActive && { color: filter.color, fontWeight: '600' }
-              ]}>
-                {filter.label}
-              </Text>
-            </TouchableOpacity>
-          );
-        })}
-      </ScrollView>
+
 
       {/* Active Filters Summary */}
-      {(activeFilters > 0 || Object.values(quickFilters).some(Boolean)) && (
+      {activeFilters > 0 && (
         <View style={searchTabStyles.activeFiltersContainer}>
           <Text style={searchTabStyles.activeFiltersText}>
-            {activeFilters + Object.values(quickFilters).filter(Boolean).length} filters active
+            {activeFilters} filters active
           </Text>
           <TouchableOpacity 
             style={searchTabStyles.clearFiltersButton}
@@ -273,35 +232,7 @@ const searchTabStyles = {
     shadowRadius: 4,
     elevation: 2,
   },
-  quickFiltersContainer: {
-    marginBottom: 12,
-  },
-  quickFiltersContent: {
-    paddingHorizontal: 16,
-    gap: 8,
-  },
-  quickFilterButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderWidth: 1.5,
-    borderColor: '#E5E7EB',
-    borderRadius: 20,
-    backgroundColor: '#FFFFFF',
-    marginRight: 8,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 2,
-    elevation: 1,
-  },
-  quickFilterText: {
-    fontSize: 14,
-    color: '#6B7280',
-    fontWeight: '500',
-    marginLeft: 6,
-  },
+
   activeFiltersContainer: {
     flexDirection: 'row',
     justifyContent: 'space-between',

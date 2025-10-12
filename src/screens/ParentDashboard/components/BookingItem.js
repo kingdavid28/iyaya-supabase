@@ -116,9 +116,9 @@ const BookingItem = ({
 
   return (
     <View style={styles.container}>
-      {/* Header with gradient */}
+      {/* Header with parent theme gradient */}
       <LinearGradient
-        colors={['#667eea', '#764ba2']}
+        colors={['#ebc5dd', '#ccc8e8']}
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 0 }}
         style={styles.header}
@@ -159,7 +159,7 @@ const BookingItem = ({
           </View>
           <View style={styles.infoItem}>
             <Ionicons name="cash-outline" size={16} color="#6B7280" />
-            <Text style={styles.infoText}>₱{totalAmount}</Text>
+            <Text style={styles.infoText}>₱{totalAmount} (₱{booking?.hourly_rate || booking?.hourlyRate || 300}/hr)</Text>
           </View>
         </View>
 
@@ -174,13 +174,23 @@ const BookingItem = ({
           </TouchableOpacity>
         )}
 
-        {/* Children Info */}
+        {/* Children Info with Names */}
         {booking?.selected_children && booking.selected_children.length > 0 && (
           <View style={styles.childrenContainer}>
             <Ionicons name="people-outline" size={16} color="#6B7280" />
-            <Text style={styles.childrenText}>
-              {booking.selected_children.length} child{booking.selected_children.length > 1 ? 'ren' : ''}
-            </Text>
+            <View style={styles.childrenInfo}>
+              <Text style={styles.childrenCount}>
+                {booking.selected_children.length} {booking.selected_children.length === 1 ? 'child' : 'children'}
+              </Text>
+              {booking.selected_children.slice(0, 3).map((child, index) => (
+                <Text key={index} style={styles.childName}>
+                  {typeof child === 'string' ? child : child.name || `Child ${index + 1}`}
+                </Text>
+              ))}
+              {booking.selected_children.length > 3 && (
+                <Text style={styles.moreChildren}>+{booking.selected_children.length - 3} more</Text>
+              )}
+            </View>
           </View>
         )}
 
@@ -194,8 +204,34 @@ const BookingItem = ({
           </View>
         )}
 
+        {/* Contact Information */}
+        {(booking?.contact_phone || booking?.emergency_contact) && (
+          <View style={styles.contactContainer}>
+            {booking?.contact_phone && (
+              <View style={styles.contactRow}>
+                <Ionicons name="call-outline" size={16} color="#6B7280" />
+                <Text style={styles.contactText}>{booking.contact_phone}</Text>
+              </View>
+            )}
+            {booking?.emergency_contact && (
+              <View style={styles.emergencyContactRow}>
+                <Ionicons name="warning-outline" size={16} color="#EF4444" />
+                <Text style={styles.emergencyContactText}>Emergency: {booking.emergency_contact}</Text>
+              </View>
+            )}
+          </View>
+        )}
+
         {/* Action Buttons */}
         <View style={styles.actionButtons}>
+          <TouchableOpacity 
+            style={styles.detailsButton} 
+            onPress={() => onViewBookingDetails && onViewBookingDetails(booking?.id || booking?._id)}
+          >
+            <Ionicons name="eye-outline" size={18} color="#FFFFFF" />
+            <Text style={styles.buttonText}>Details</Text>
+          </TouchableOpacity>
+          
           <TouchableOpacity style={styles.messageButton} onPress={handleMessagePress}>
             <Ionicons name="chatbubble-outline" size={18} color="#FFFFFF" />
             <Text style={styles.buttonText}>Message</Text>
@@ -327,13 +363,62 @@ const styles = StyleSheet.create({
   },
   childrenContainer: {
     flexDirection: 'row',
-    alignItems: 'center',
+    alignItems: 'flex-start',
     marginBottom: 12,
   },
-  childrenText: {
+  childrenInfo: {
+    marginLeft: 8,
+    flex: 1,
+  },
+  childrenCount: {
     fontSize: 14,
     color: '#6B7280',
+    fontWeight: '600',
+    marginBottom: 4,
+  },
+  childName: {
+    fontSize: 13,
+    color: '#374151',
+    marginBottom: 2,
+    paddingLeft: 8,
+  },
+  moreChildren: {
+    fontSize: 12,
+    color: '#9CA3AF',
+    fontStyle: 'italic',
+    paddingLeft: 8,
+  },
+  contactContainer: {
+    backgroundColor: '#F8FAFC',
+    padding: 12,
+    borderRadius: 8,
+    marginBottom: 16,
+  },
+  contactRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 6,
+  },
+  contactText: {
+    fontSize: 14,
+    color: '#374151',
     marginLeft: 8,
+    fontWeight: '500',
+  },
+  emergencyContactRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FEF2F2',
+    padding: 8,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: '#FECACA',
+  },
+  emergencyContactText: {
+    fontSize: 13,
+    color: '#EF4444',
+    marginLeft: 8,
+    fontWeight: '600',
   },
   notesContainer: {
     backgroundColor: '#F9FAFB',
@@ -357,8 +442,23 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     gap: 8,
   },
+  detailsButton: {
+    backgroundColor: '#6B7280',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 12,
+    flex: 1,
+    shadowColor: '#6B7280',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    elevation: 3,
+  },
   messageButton: {
-    backgroundColor: '#3B82F6',
+    backgroundColor: '#db2777',
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
@@ -366,27 +466,13 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     borderRadius: 12,
     flex: 1,
-    shadowColor: '#3B82F6',
+    shadowColor: '#db2777',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.2,
     shadowRadius: 4,
     elevation: 3,
   },
-  confirmButton: {
-    backgroundColor: '#10B981',
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 12,
-    paddingHorizontal: 16,
-    borderRadius: 12,
-    flex: 1,
-    shadowColor: '#10B981',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
-    shadowRadius: 4,
-    elevation: 3,
-  },
+
   cancelButton: {
     backgroundColor: '#EF4444',
     flexDirection: 'row',

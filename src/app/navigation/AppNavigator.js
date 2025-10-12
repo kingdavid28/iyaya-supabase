@@ -41,7 +41,6 @@ import OnboardingScreen from "../../screens/OnboardingScreen";
 import PaymentConfirmationScreen from "../../screens/PaymentConfirmationScreen";
 import ProfileScreen from "../../screens/profile/ProfileScreen";
 import EmailVerificationPendingScreen from "../../screens/EmailVerificationPendingScreen";
-import DemoScreen from "../../screens/DemoScreen";
 
 import CaregiverChat from "../../screens/CaregiverChat";
 
@@ -130,8 +129,6 @@ const AppNavigatorWithAuth = () => {
         <Stack.Screen name="EmailVerification" component={EmailVerificationScreen} options={{ title: "Verifying Email", headerShown: false }} />
         <Stack.Screen name="VerificationSuccess" component={VerificationSuccessScreen} options={{ title: "Verification Complete", headerShown: false }} />
         <Stack.Screen name="EmailVerificationPending" component={EmailVerificationPendingScreen} options={{ title: "Verify Your Email", headerShown: false }} />
-        <Stack.Screen name="Demo" component={DemoScreen} options={{ title: "Component Demo", headerBackTitle: "Back" }} />
-
         <Stack.Screen name="CaregiverProfileComplete" component={CaregiverProfileComplete} options={{ headerShown: false }} />
         <Stack.Screen name="ParentProfile" component={ParentProfile} options={{ title: "My Profile", headerBackTitle: "Back" }} />
         <Stack.Screen name="Chat" component={ChatScreen} options={{ headerShown: false }} />

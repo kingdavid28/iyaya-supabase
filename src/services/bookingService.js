@@ -51,20 +51,20 @@ class BookingService {
   async getBookings(filters = {}) {
     try {
       // Import supabaseService dynamically to avoid circular imports
-      const { supabaseService } = await import('./supabaseService');
+      const { supabaseService } = await import('./supabase');
       
-      const user = await supabaseService._getCurrentUser();
+      const user = await supabaseService.user._getCurrentUser();
       if (!user) {
         console.warn('⚠️ User not authenticated in getBookings');
         return [];
       }
       
       // Get user profile to determine role
-      const profile = await supabaseService.getProfile(user.id);
+      const profile = await supabaseService.user.getProfile(user.id);
       const role = profile?.role || user.user_metadata?.role || 'parent';
       
       console.log('📋 Fetching bookings for user:', user.id, 'role:', role);
-      const bookings = await supabaseService.getMyBookings(user.id, role);
+      const bookings = await supabaseService.bookings.getMyBookings(user.id, role);
       
       console.log('📋 BookingService - Fetched bookings:', bookings?.length || 0);
       if (bookings && bookings.length > 0) {
@@ -83,16 +83,16 @@ class BookingService {
   async getBookingById(bookingId) {
     try {
       // Import supabaseService dynamically to avoid circular imports
-      const { supabaseService } = await import('./supabaseService');
+      const { supabaseService } = await import('./supabase');
       
-      const user = await supabaseService._getCurrentUser();
+      const user = await supabaseService.user._getCurrentUser();
       if (!user) {
         console.warn('⚠️ User not authenticated in getBookingById');
         return null;
       }
       
       console.log('📋 Fetching booking by ID:', bookingId, 'for user:', user.id);
-      const booking = await supabaseService.getBookingById(bookingId, user.id);
+      const booking = await supabaseService.bookings.getBookingById(bookingId, user.id);
       
       return booking;
     } catch (error) {
@@ -106,10 +106,10 @@ class BookingService {
   async createBooking(bookingData) {
     try {
       // Import supabaseService dynamically to avoid circular imports
-      const { supabaseService } = await import('./supabaseService');
+      const { supabaseService } = await import('./supabase');
       
       console.log('📝 Creating booking with data:', bookingData);
-      const result = await supabaseService.createBooking(bookingData);
+      const result = await supabaseService.bookings.createBooking(bookingData);
       console.log('✅ Booking created successfully:', result);
       
       return result;
@@ -124,10 +124,10 @@ class BookingService {
   async updateBookingStatus(bookingId, status, feedback = null) {
     try {
       // Import supabaseService dynamically to avoid circular imports
-      const { supabaseService } = await import('./supabaseService');
+      const { supabaseService } = await import('./supabase');
       
       console.log('📝 Updating booking status:', bookingId, 'to:', status);
-      const result = await supabaseService.updateBookingStatus(bookingId, status, feedback);
+      const result = await supabaseService.bookings.updateBookingStatus(bookingId, status);
       console.log('✅ Booking status updated successfully:', result);
       
       return result;
@@ -142,10 +142,10 @@ class BookingService {
   async cancelBooking(bookingId, reason) {
     try {
       // Import supabaseService dynamically to avoid circular imports
-      const { supabaseService } = await import('./supabaseService');
+      const { supabaseService } = await import('./supabase');
       
       console.log('📝 Cancelling booking:', bookingId, 'reason:', reason);
-      const result = await supabaseService.updateBookingStatus(bookingId, 'cancelled', reason);
+      const result = await supabaseService.bookings.updateBookingStatus(bookingId, 'cancelled');
       console.log('✅ Booking cancelled successfully:', result);
       
       return result;
@@ -160,17 +160,17 @@ class BookingService {
   async uploadPaymentProof(bookingId, paymentData) {
     try {
       // Import supabaseService dynamically to avoid circular imports
-      const { supabaseService } = await import('./supabaseService');
+      const { supabaseService } = await import('./supabase');
       
       console.log('📝 Uploading payment proof for booking:', bookingId);
       
       let paymentProofUrl;
       if (paymentData.imageBase64) {
         // Upload image to storage first
-        paymentProofUrl = await supabaseService.uploadPaymentProofImage(bookingId, paymentData.imageBase64);
+        paymentProofUrl = await supabaseService.storage.uploadPaymentProofImage(bookingId, paymentData.imageBase64);
       } else {
         // Direct payment proof data
-        const result = await supabaseService.uploadPaymentProof(bookingId, paymentData);
+        const result = await supabaseService.bookings.uploadPaymentProof(bookingId, paymentData);
         paymentProofUrl = result.payment_proof;
       }
       

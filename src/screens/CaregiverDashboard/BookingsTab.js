@@ -1,21 +1,120 @@
 import React from 'react';
-import { ScrollView, View, Text, RefreshControl, ActivityIndicator } from 'react-native';
+import { ScrollView, View, Text, RefreshControl, ActivityIndicator, TouchableOpacity } from 'react-native';
 import { Chip } from 'react-native-paper';
 import { Ionicons } from '@expo/vector-icons';
 import { EmptyState } from '../../shared/ui';
 import { styles } from '../styles/CaregiverDashboard.styles';
 
-const BookingCard = ({ booking }) => (
-  <View style={bookingCardStyles.card}>
-    <View style={bookingCardStyles.header}>
-      <Text style={bookingCardStyles.familyName}>{booking.family || 'Family'}</Text>
-      <Text style={bookingCardStyles.status}>{booking.status}</Text>
+const BookingCard = React.memo(({ booking, onMessageFamily, onConfirmBooking, onViewDetails }) => {
+  const formatTime = (timeString) => {
+    if (!timeString) return '';
+    try {
+      const [hours, minutes] = timeString.split(':');
+      const hour = parseInt(hours);
+      const ampm = hour >= 12 ? 'PM' : 'AM';
+      const displayHour = hour % 12 || 12;
+      return `${displayHour}:${minutes} ${ampm}`;
+    } catch (error) {
+      return timeString;
+    }
+  };
+
+  const getStatusColor = (status) => {
+    switch (status?.toLowerCase()) {
+      case 'pending': return '#F59E0B';
+      case 'confirmed': return '#10B981';
+      case 'completed': return '#3B82F6';
+      case 'cancelled': return '#EF4444';
+      default: return '#9CA3AF';
+    }
+  };
+
+  const startTime = formatTime(booking?.start_time || booking?.startTime);
+  const endTime = formatTime(booking?.end_time || booking?.endTime);
+  const timeDisplay = booking?.time || (startTime && endTime ? `${startTime} - ${endTime}` : 'Time TBD');
+  const childrenCount = booking?.selected_children?.length || booking?.numberOfChildren || 1;
+  const location = booking?.address || booking?.location;
+
+  return (
+    <View style={bookingCardStyles.card}>
+      <View style={bookingCardStyles.header}>
+        <Text style={bookingCardStyles.familyName}>{booking.family || 'Family'}</Text>
+        <View style={[bookingCardStyles.statusBadge, { backgroundColor: getStatusColor(booking.status) }]}>
+          <Text style={bookingCardStyles.statusText}>{booking.status || 'Unknown'}</Text>
+        </View>
+      </View>
+      
+      <View style={bookingCardStyles.details}>
+        <View style={bookingCardStyles.detailRow}>
+          <Ionicons name="calendar-outline" size={16} color="#6b7280" />
+          <Text style={bookingCardStyles.detailText}>{booking.date || 'Date TBD'}</Text>
+        </View>
+        
+        <View style={bookingCardStyles.detailRow}>
+          <Ionicons name="time-outline" size={16} color="#6b7280" />
+          <Text style={bookingCardStyles.detailText}>{timeDisplay}</Text>
+        </View>
+        
+        <View style={bookingCardStyles.detailRow}>
+          <Ionicons name="people-outline" size={16} color="#6b7280" />
+          <Text style={bookingCardStyles.detailText}>
+            {childrenCount} {childrenCount === 1 ? 'child' : 'children'}
+          </Text>
+        </View>
+        
+        {location && (
+          <View style={bookingCardStyles.detailRow}>
+            <Ionicons name="location-outline" size={16} color="#6b7280" />
+            <Text style={bookingCardStyles.detailText} numberOfLines={1}>{location}</Text>
+          </View>
+        )}
+      </View>
+      
+      {booking?.special_instructions && (
+        <View style={bookingCardStyles.instructionsContainer}>
+          <Text style={bookingCardStyles.instructionsText} numberOfLines={2}>
+            {booking.special_instructions}
+          </Text>
+        </View>
+      )}
+      
+      <View style={bookingCardStyles.footer}>
+        <View style={bookingCardStyles.amountContainer}>
+          <Text style={bookingCardStyles.amount}>₱{booking.totalAmount || booking.total_amount || 0}</Text>
+          <Text style={bookingCardStyles.hourlyRate}>₱{booking.hourlyRate || booking.hourly_rate || 300}/hr</Text>
+        </View>
+        
+        <View style={bookingCardStyles.actionButtons}>
+          {booking.status === 'pending' && (
+            <TouchableOpacity 
+              style={bookingCardStyles.confirmButton}
+              onPress={() => onConfirmBooking && onConfirmBooking(booking.id || booking._id)}
+            >
+              <Ionicons name="checkmark" size={16} color="#FFFFFF" />
+              <Text style={bookingCardStyles.buttonText}>Confirm</Text>
+            </TouchableOpacity>
+          )}
+          
+          <TouchableOpacity 
+            style={bookingCardStyles.detailsButton}
+            onPress={() => onViewDetails && onViewDetails(booking)}
+          >
+            <Ionicons name="eye-outline" size={16} color="#FFFFFF" />
+            <Text style={bookingCardStyles.buttonText}>Details</Text>
+          </TouchableOpacity>
+          
+          <TouchableOpacity 
+            style={bookingCardStyles.messageButton}
+            onPress={() => onMessageFamily && onMessageFamily(booking)}
+          >
+            <Ionicons name="chatbubble-outline" size={16} color="#FFFFFF" />
+            <Text style={bookingCardStyles.buttonText}>Message</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
     </View>
-    <Text style={bookingCardStyles.date}>{booking.date}</Text>
-    <Text style={bookingCardStyles.time}>{booking.time}</Text>
-    <Text style={bookingCardStyles.amount}>₱{booking.totalAmount}</Text>
-  </View>
-);
+  );
+});
 
 const bookingCardStyles = {
   card: {
@@ -33,32 +132,119 @@ const bookingCardStyles = {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 8,
+    marginBottom: 12,
   },
   familyName: {
     fontSize: 16,
     fontWeight: '600',
     color: '#111827',
+    flex: 1,
   },
-  status: {
+  statusBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
+  },
+  statusText: {
     fontSize: 12,
-    color: '#6b7280',
+    fontWeight: '600',
+    color: '#fff',
     textTransform: 'capitalize',
   },
-  date: {
-    fontSize: 14,
-    color: '#374151',
-    marginBottom: 4,
+  details: {
+    marginBottom: 12,
   },
-  time: {
+  detailRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 6,
+  },
+  detailText: {
     fontSize: 14,
     color: '#6b7280',
-    marginBottom: 8,
+    marginLeft: 8,
+    flex: 1,
+  },
+  instructionsContainer: {
+    backgroundColor: '#f9fafb',
+    padding: 10,
+    borderRadius: 8,
+    marginBottom: 12,
+    borderLeftWidth: 3,
+    borderLeftColor: '#3b82f6',
+  },
+  instructionsText: {
+    fontSize: 13,
+    color: '#374151',
+    fontStyle: 'italic',
+    lineHeight: 18,
+  },
+  footer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  amountContainer: {
+    flex: 1,
   },
   amount: {
-    fontSize: 16,
-    fontWeight: '600',
+    fontSize: 18,
+    fontWeight: '700',
     color: '#059669',
+  },
+  hourlyRate: {
+    fontSize: 14,
+    color: '#6b7280',
+    fontWeight: '500',
+  },
+  actionButtons: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  confirmButton: {
+    backgroundColor: '#10B981',
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 8,
+    shadowColor: '#10B981',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 3,
+    elevation: 2,
+  },
+  detailsButton: {
+    backgroundColor: '#6B7280',
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 8,
+    shadowColor: '#6B7280',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 3,
+    elevation: 2,
+  },
+  messageButton: {
+    backgroundColor: '#3B82F6',
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 8,
+    shadowColor: '#3B82F6',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 3,
+    elevation: 2,
+  },
+  buttonText: {
+    color: '#FFFFFF',
+    fontSize: 12,
+    fontWeight: '600',
+    marginLeft: 4,
   },
 };
 
@@ -66,6 +252,8 @@ export default function BookingsTab({
   bookings, 
   onBookingView, 
   onMessageFamily,
+  onConfirmBooking,
+  onViewDetails,
   refreshing = false,
   onRefresh,
   loading = false
@@ -116,8 +304,11 @@ export default function BookingsTab({
         {bookings.length > 0 ? (
           bookings.map((booking) => (
             <BookingCard
-              key={booking.id}
+              key={booking.id || booking._id}
               booking={booking}
+              onMessageFamily={onMessageFamily}
+              onConfirmBooking={onConfirmBooking}
+              onViewDetails={onViewDetails}
             />
           ))
         ) : (

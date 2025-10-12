@@ -1,4 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { supabaseService } from './supabase';
 import { API_BASE_URL } from '../config/api';
 import { STORAGE_KEYS } from '../config/constants';
 
@@ -51,14 +52,29 @@ class SettingsService {
 
   // Profile Settings
   async getProfile() {
-    return this.makeRequest('/auth/profile');
+    try {
+      const profile = await supabaseService.user.getProfile();
+      return profile || this.getMockData('/auth/profile');
+    } catch (error) {
+      console.log('Settings profile error:', error.message);
+      return this.getMockData('/auth/profile');
+    }
   }
 
   async updateProfile(data) {
-    return this.makeRequest('/auth/profile', {
-      method: 'PUT',
-      body: JSON.stringify(data),
-    });
+    try {
+      const user = await supabaseService.user._getCurrentUser();
+      if (!user) throw new Error('Authentication required');
+      
+      const updatedProfile = await supabaseService.user.updateProfile(user.id, data);
+      return updatedProfile;
+    } catch (error) {
+      console.log('Settings update profile error:', error.message);
+      return this.makeRequest('/auth/profile', {
+        method: 'PUT',
+        body: JSON.stringify(data),
+      });
+    }
   }
 
   // Privacy Settings
@@ -76,11 +92,24 @@ class SettingsService {
   // Information Requests
   async getPendingRequests() {
     try {
+      // Try Supabase notifications first
+      const user = await supabaseService.user._getCurrentUser();
+      if (user) {
+        const notifications = await supabaseService.notifications.getNotifications(user.id);
+        const requests = notifications.filter(n => n.type === 'info_request' && !n.read) || [];
+        return {
+          success: true,
+          data: requests,
+          requests: requests
+        };
+      }
+      
+      // Fallback to API
       const response = await this.makeRequest('/privacy/requests/pending');
       return {
         success: true,
         data: response.requests || [],
-        requests: response.requests || [] // For backward compatibility
+        requests: response.requests || []
       };
     } catch (error) {
       console.error('Error fetching pending requests:', error);

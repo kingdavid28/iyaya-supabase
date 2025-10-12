@@ -1,30 +1,13 @@
 // services/childService.js
-import { EnhancedAPIService } from './index';
+import { supabaseService } from './supabase';
 
 class ChildService {
-  constructor() {
-    this.api = new EnhancedAPIService();
-  }
-
   async createChild(childData) {
     try {
-      // Ensure we don't send an ID if it's a new child
-      const dataToSend = { ...childData };
-
-      // Remove ID if this is a new child creation
-      if (dataToSend.id) {
-        delete dataToSend.id;
-      }
-
-      // Generate a temporary client-side ID for tracking
-      const tempId = `temp_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-
-      const response = await this.api.request('POST', '/children', dataToSend);
-
-      return {
-        ...response,
-        tempId // Return the temp ID for client-side tracking
-      };
+      const user = await supabaseService.user._getCurrentUser();
+      if (!user) throw new Error('Authentication required');
+      
+      return await supabaseService.children.addChild(user.id, childData);
     } catch (error) {
       console.error('Error creating child:', error);
       throw error;
@@ -33,18 +16,16 @@ class ChildService {
 
   async updateChild(childId, childData) {
     try {
-      const response = await this.api.request('PUT', `/children/${childId}`, childData);
-      return response;
+      return await supabaseService.children.updateChild(childId, childData);
     } catch (error) {
       console.error('Error updating child:', error);
       throw error;
     }
   }
 
-  async getChildren() {
+  async getChildren(parentId = null) {
     try {
-      const response = await this.api.request('GET', '/children');
-      return response;
+      return await supabaseService.children.getChildren(parentId);
     } catch (error) {
       console.error('Error fetching children:', error);
       throw error;
@@ -53,8 +34,7 @@ class ChildService {
 
   async deleteChild(childId) {
     try {
-      const response = await this.api.request('DELETE', `/children/${childId}`);
-      return response;
+      return await supabaseService.children.deleteChild(childId);
     } catch (error) {
       console.error('Error deleting child:', error);
       throw error;
@@ -68,3 +48,4 @@ class ChildService {
 }
 
 export const childService = new ChildService();
+export default childService;

@@ -1,57 +1,47 @@
 import React, { useState, useEffect } from 'react';
-import { 
-  View, 
-  Text, 
-  TextInput, 
-  TouchableOpacity, 
-  StyleSheet, 
-  Modal, 
-  ScrollView, 
+import {
+  View,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  StyleSheet,
+  Modal,
+  ScrollView,
   Alert,
   ActivityIndicator,
-  Keyboard,
   KeyboardAvoidingView,
   Platform
 } from 'react-native';
-import { 
-  X, 
-  Clock, 
-  MapPin, 
-  DollarSign, 
-  Calendar, 
-  User, 
+import {
+  X,
+  Clock,
+  MapPin,
+  DollarSign,
+  Calendar,
   Check,
   AlertCircle,
   Plus
 } from 'lucide-react-native';
 import jobService from '../../../services/jobService';
 import { useAuth } from '../../../contexts/AuthContext';
-import { getCurrentDeviceLocation, searchLocation } from '../../../utils/locationUtils';
+import { getCurrentDeviceLocation } from '../../../utils/locationUtils';
 
 import CustomDateTimePicker from '../../../shared/ui/inputs/DateTimePicker';
-import TimePicker from '../../../shared/ui/inputs/TimePicker';
 
-// Try to load DateTimePicker if available. Falls back gracefully if not installed.
-let DateTimePicker = null;
-try {
-   
-  DateTimePicker = require('@react-native-community/datetimepicker').default;
-} catch (e) {
-  DateTimePicker = null;
-}
+const SUGGESTED_SKILLS = [
+  'CPR Certified',
+  'First Aid Training',
+  'Experience with Infants',
+  'Meal Preparation',
+  'Light Housekeeping'
+];
 
 const JobPostingModal = ({ visible, onClose, onJobPosted }) => {
   const { user } = useAuth();
   const [step, setStep] = useState(1);
   const [loading, setLoading] = useState(false);
   const [errors, setErrors] = useState({});
-  const [showStartPicker, setShowStartPicker] = useState(false);
-  const [showEndPicker, setShowEndPicker] = useState(false);
   const [locationLoading, setLocationLoading] = useState(false);
-  const [locationSearchVisible, setLocationSearchVisible] = useState(false);
-  const [locationSearchText, setLocationSearchText] = useState('');
-  const [locationSearchResults, setLocationSearchResults] = useState([]);
-  const [locationSearchLoading, setLocationSearchLoading] = useState(false);
   
   const [jobData, setJobData] = useState({
     title: '',
@@ -167,30 +157,6 @@ const JobPostingModal = ({ visible, onClose, onJobPosted }) => {
     }
   };
 
-  const handleLocationSearch = async () => {
-    if (!locationSearchText.trim()) return;
-    
-    try {
-      setLocationSearchLoading(true);
-      const result = await searchLocation(locationSearchText);
-      setLocationSearchResults([result]);
-    } catch (error) {
-      Alert.alert('Search Failed', error.message || 'Failed to search location.');
-    } finally {
-      setLocationSearchLoading(false);
-    }
-  };
-
-  const selectLocationFromSearch = (location) => {
-    if (location && location.address) {
-      const formattedAddress = `${location.address.street || ''} ${location.address.city || ''}, ${location.address.province || ''}`;
-      setJobData({ ...jobData, location: formattedAddress.trim() });
-      setLocationSearchVisible(false);
-      setLocationSearchText('');
-      setLocationSearchResults([]);
-    }
-  };
-
   const handleSubmit = async () => {
     try {
       setLoading(true);
@@ -250,6 +216,31 @@ const JobPostingModal = ({ visible, onClose, onJobPosted }) => {
     }
   };
 
+  const formatCurrency = (value) => {
+    if (!value) return '—';
+    const numeric = Number(value);
+    if (Number.isNaN(numeric)) {
+      return value;
+    }
+
+    return `₱${numeric.toLocaleString('en-PH', { minimumFractionDigits: 0 })} / hour`;
+  };
+
+  const renderSummaryRow = ({ icon, label, value, multiline = false }) => (
+    <View key={label} style={styles.summaryRow}>
+      {icon && React.cloneElement(icon, { style: styles.summaryIcon })}
+      <View style={styles.summaryTextContainer}>
+        <Text style={styles.summaryLabel}>{label}</Text>
+        <Text
+          style={[styles.summaryValue, multiline && styles.summaryValueMultiline]}
+          numberOfLines={multiline ? undefined : 2}
+        >
+          {value || '—'}
+        </Text>
+      </View>
+    </View>
+  );
+
   const renderStep = () => {
     switch (step) {
       case 1:
@@ -294,16 +285,9 @@ const JobPostingModal = ({ visible, onClose, onJobPosted }) => {
                     {locationLoading ? 'Getting Location...' : 'Use GPS'}
                   </Text>
                 </TouchableOpacity>
-                
-                <TouchableOpacity
-                  style={styles.searchButton}
-                  onPress={() => setLocationSearchVisible(true)}
-                >
-                  <Text style={styles.searchButtonText}>Search</Text>
-                </TouchableOpacity>
               </View>
-              
-              <View style={[styles.inputGroup, errors.location && styles.inputError]}> 
+
+              <View style={[styles.inputGroup, errors.location && styles.inputError]}>
                 <MapPin size={20} color="#6B7280" style={styles.inputIcon} />
                 <TextInput
                   style={[styles.input, styles.inputWithIcon]}
@@ -314,7 +298,7 @@ const JobPostingModal = ({ visible, onClose, onJobPosted }) => {
               </View>
               {errors.location && <Text style={styles.errorText}>{errors.location}</Text>}
             </View>
-            
+
             <View>
               <Text style={styles.label}>Hourly Rate (₱) *</Text>
               <View style={[styles.inputGroup, errors.rate && styles.inputError]}>
@@ -329,14 +313,89 @@ const JobPostingModal = ({ visible, onClose, onJobPosted }) => {
               </View>
               {errors.rate && <Text style={styles.errorText}>{errors.rate}</Text>}
             </View>
+
+            <View style={styles.sectionDivider} />
+
+            <View>
+              <Text style={styles.label}>Skills & Requirements</Text>
+              <Text style={styles.labelHint}>Select all that apply or add your own.</Text>
+              <View style={styles.suggestedSkillsContainer}>
+                {SUGGESTED_SKILLS.map((skill) => {
+                  const isSelected = jobData.requirements.includes(skill);
+                  return (
+                    <TouchableOpacity
+                      key={skill}
+                      style={[styles.skillChip, isSelected && styles.skillChipSelected]}
+                      onPress={() => {
+                        if (isSelected) {
+                          setJobData((prev) => ({
+                            ...prev,
+                            requirements: prev.requirements.filter((req) => req !== skill)
+                          }));
+                        } else {
+                          setJobData((prev) => ({
+                            ...prev,
+                            requirements: [...prev.requirements, skill]
+                          }));
+                        }
+                      }}
+                    >
+                      <Text style={[styles.skillChipText, isSelected && styles.skillChipTextSelected]}>
+                        {skill}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+
+              <View style={styles.requirementInputContainer}>
+                <TextInput
+                  style={[styles.input, styles.requirementInput]}
+                  placeholder="e.g., Tutoring Experience"
+                  value={jobData.requirementsInput || ''}
+                  onChangeText={(text) => setJobData({ ...jobData, requirementsInput: text })}
+                  onSubmitEditing={handleAddRequirement}
+                />
+                <TouchableOpacity
+                  style={styles.addButton}
+                  onPress={handleAddRequirement}
+                >
+                  <Plus size={20} color="#fff" />
+                </TouchableOpacity>
+              </View>
+
+              {jobData.requirements.length > 0 && (
+                <View style={styles.requirementsList}>
+                  {jobData.requirements.map((req, index) => (
+                    <View key={`${req}-${index}`} style={styles.requirementItem}>
+                      <Check size={16} color="#10B981" style={styles.requirementIcon} />
+                      <Text style={styles.requirementText}>{req}</Text>
+                      <TouchableOpacity
+                        style={styles.removeButton}
+                        onPress={() => handleRemoveRequirement(index)}
+                      >
+                        <X size={16} color="#EF4444" />
+                      </TouchableOpacity>
+                    </View>
+                  ))}
+                </View>
+              )}
+
+              <View style={styles.noteContainer}>
+                <AlertCircle size={16} color="#6B7280" style={styles.noteIcon} />
+                <Text style={styles.noteText}>
+                  Adding clear skills helps you find the best match for your family's needs.
+                </Text>
+              </View>
+            </View>
           </View>
         );
-        
+
       case 2:
         return (
           <View style={styles.stepContainer}>
             <Text style={styles.stepTitle}>Schedule</Text>
-            
+
             <CustomDateTimePicker
               label="Start Date *"
               value={jobData.startDate ? new Date(jobData.startDate) : new Date()}
@@ -345,7 +404,7 @@ const JobPostingModal = ({ visible, onClose, onJobPosted }) => {
               format="long"
               error={errors.startDate}
             />
-            
+
             <CustomDateTimePicker
               label="End Date (Optional)"
               value={jobData.endDate ? new Date(jobData.endDate) : new Date()}
@@ -353,7 +412,7 @@ const JobPostingModal = ({ visible, onClose, onJobPosted }) => {
               minimumDate={jobData.startDate ? new Date(jobData.startDate) : new Date()}
               format="long"
             />
-            
+
             <View>
               <Text style={styles.label}>Working Hours *</Text>
               <View style={[styles.inputGroup, errors.workingHours && styles.inputError]}>
@@ -369,95 +428,59 @@ const JobPostingModal = ({ visible, onClose, onJobPosted }) => {
             </View>
           </View>
         );
-        
-      case 3: {
-        const suggestedSkills = [
-          'CPR Certified',
-          'First Aid Training',
-          'Experience with Infants',
-          'Meal Preparation',
-          'Light Housekeeping'
-        ];
-        
+
+      case 3:
         return (
           <View style={styles.stepContainer}>
-            <Text style={styles.stepTitle}>Skills</Text>
-            
-            <View>
-              <Text style={styles.label}>Suggested Skills</Text>
-              <View style={styles.suggestedSkillsContainer}>
-                {suggestedSkills.map((skill, index) => {
-                  const isSelected = jobData.requirements.includes(skill);
-                  return (
-                    <TouchableOpacity
-                      key={index}
-                      style={[styles.skillChip, isSelected && styles.skillChipSelected]}
-                      onPress={() => {
-                        if (isSelected) {
-                          setJobData(prev => ({
-                            ...prev,
-                            requirements: prev.requirements.filter(req => req !== skill)
-                          }));
-                        } else {
-                          setJobData(prev => ({
-                            ...prev,
-                            requirements: [...prev.requirements, skill]
-                          }));
-                        }
-                      }}
-                    >
-                      <Text style={[styles.skillChipText, isSelected && styles.skillChipTextSelected]}>
-                        {skill}
-                      </Text>
-                    </TouchableOpacity>
-                  );
-                })}
-              </View>
-              
-              <Text style={[styles.label, { marginTop: 16 }]}>Add Custom Skill</Text>
-              <View style={styles.requirementInputContainer}>
-                <TextInput
-                  style={[styles.input, styles.requirementInput]}
-                  placeholder="e.g., Tutoring Experience"
-                  value={jobData.requirementsInput || ''}
-                  onChangeText={(text) => setJobData({ ...jobData, requirementsInput: text })}
-                  onSubmitEditing={handleAddRequirement}
-                />
-                <TouchableOpacity 
-                  style={styles.addButton}
-                  onPress={handleAddRequirement}
-                >
-                  <Plus size={20} color="#fff" />
-                </TouchableOpacity>
-              </View>
-              
-              {jobData.requirements.length > 0 && (
-                <View style={styles.requirementsList}>
+            <Text style={styles.stepTitle}>Review & Post</Text>
+            <Text style={styles.reviewDescription}>
+              Please review the summary below. Use the Back button if you need to edit anything before posting.
+            </Text>
+
+            <View style={styles.summaryCard}>
+              <Text style={styles.summarySectionTitle}>Job Information</Text>
+              {renderSummaryRow({
+                icon: <MapPin size={18} color="#4F46E5" />, label: 'Location', value: jobData.location?.trim()
+              })}
+              {renderSummaryRow({
+                icon: <DollarSign size={18} color="#0EA5E9" />, label: 'Hourly Rate', value: formatCurrency(jobData.rate)
+              })}
+              <View style={styles.summaryDivider} />
+              <Text style={styles.summaryLabel}>Job Title</Text>
+              <Text style={styles.summaryValueMultiline}>{jobData.title || '—'}</Text>
+              <Text style={[styles.summaryLabel, styles.summaryLabelSpacer]}>Description</Text>
+              <Text style={styles.summaryValueMultiline}>{jobData.description?.trim() || '—'}</Text>
+            </View>
+
+            <View style={styles.summaryCard}>
+              <Text style={styles.summarySectionTitle}>Schedule</Text>
+              {renderSummaryRow({
+                icon: <Calendar size={18} color="#22C55E" />, label: 'Start Date', value: formatDate(jobData.startDate)
+              })}
+              {renderSummaryRow({
+                icon: <Calendar size={18} color="#F59E0B" />, label: 'End Date', value: jobData.endDate ? formatDate(jobData.endDate) : 'Not specified'
+              })}
+              {renderSummaryRow({
+                icon: <Clock size={18} color="#8B5CF6" />, label: 'Working Hours', value: jobData.workingHours?.trim()
+              })}
+            </View>
+
+            <View style={styles.summaryCard}>
+              <Text style={styles.summarySectionTitle}>Skills & Requirements</Text>
+              {jobData.requirements.length > 0 ? (
+                <View style={styles.summaryChipContainer}>
                   {jobData.requirements.map((req, index) => (
-                    <View key={index} style={styles.requirementItem}>
-                      <Check size={16} color="#10B981" style={styles.requirementIcon} />
-                      <Text style={styles.requirementText}>{req}</Text>
-                      <TouchableOpacity 
-                        style={styles.removeButton}
-                        onPress={() => handleRemoveRequirement(index)}
-                      >
-                        <X size={16} color="#EF4444" />
-                      </TouchableOpacity>
+                    <View key={`${req}-${index}`} style={styles.summaryChip}>
+                      <Text style={styles.summaryChipText}>{req}</Text>
                     </View>
                   ))}
                 </View>
+              ) : (
+                <Text style={styles.summaryPlaceholder}>No additional skills provided.</Text>
               )}
-            </View>
-            
-            <View style={styles.noteContainer}>
-              <AlertCircle size={16} color="#6B7280" style={styles.noteIcon} />
-              <Text style={styles.noteText}>
-                Adding clear skills helps you find the best match for your family's needs.
-              </Text>
             </View>
           </View>
         );
-      }
         
       default:
         return null;
@@ -468,142 +491,87 @@ const JobPostingModal = ({ visible, onClose, onJobPosted }) => {
     <Modal
       visible={visible}
       animationType="slide"
-      transparent={true}
+      transparent
       onRequestClose={onClose}
     >
       <View style={styles.modalOverlay}>
-        <KeyboardAvoidingView 
+        <KeyboardAvoidingView
           style={{ flex: 1 }}
           behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
           keyboardVerticalOffset={Platform.OS === 'ios' ? 100 : 0}
         >
           <View style={styles.modalContainer}>
-          <View style={styles.modalHeader}>
-            <Text style={styles.modalTitle}>
-              {step === 1 ? 'Job Details' : step === 2 ? 'Schedule' : 'Review & Post'}
-            </Text>
-            <TouchableOpacity onPress={onClose} style={styles.closeButton}>
-              <X size={24} color="#6B7280" />
-            </TouchableOpacity>
-          </View>
-          
-          <ScrollView style={styles.modalContent}>
-            <View style={styles.stepIndicatorContainer}>
-              {[1, 2, 3].map((stepNum) => (
-                <React.Fragment key={stepNum}>
-                  <View 
-                    style={[
-                      styles.stepIndicator, 
-                      step === stepNum && styles.stepIndicatorActive,
-                      step > stepNum && styles.stepIndicatorCompleted
-                    ]}
-                  >
-                    {step > stepNum ? (
-                      <Check size={16} color="#fff" />
-                    ) : (
-                      <Text style={[
-                        styles.stepText,
-                        (step === stepNum || step < stepNum) && styles.stepTextActive
-                      ]}>
-                        {stepNum}
-                      </Text>
-                    )}
-                  </View>
-                  {stepNum < 3 && <View style={styles.stepLine} />}
-                </React.Fragment>
-              ))}
-            </View>
-            
-            {renderStep()}
-          </ScrollView>
-          
-          <View style={styles.modalFooter}>
-            <View style={styles.footerContent}>
-              {step > 1 && (
-                <TouchableOpacity
-                  style={[styles.button, styles.secondaryButton]}
-                  onPress={handleBack}
-                  disabled={loading}
-                >
-                  <Text style={styles.secondaryButtonText}>Back</Text>
-                </TouchableOpacity>
-              )}
-              
-              <TouchableOpacity
-                style={[styles.button, styles.primaryButton, loading && styles.buttonDisabled]}
-                onPress={handleNext}
-                disabled={loading}
-              >
-                {loading ? (
-                  <ActivityIndicator color="#fff" />
-                ) : (
-                  <Text style={styles.primaryButtonText}>
-                    {step === 3 ? 'Post Job' : 'Continue'}
-                  </Text>
-                )}
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>
+                {step === 1 ? 'Job Details' : step === 2 ? 'Schedule' : 'Review & Post'}
+              </Text>
+              <TouchableOpacity onPress={onClose} style={styles.closeButton}>
+                <X size={24} color="#6B7280" />
               </TouchableOpacity>
             </View>
-          </View>
+
+            <ScrollView style={styles.modalContent}>
+              <View style={styles.stepIndicatorContainer}>
+                {[1, 2, 3].map((stepNum) => (
+                  <React.Fragment key={stepNum}>
+                    <View
+                      style={[
+                        styles.stepIndicator,
+                        step === stepNum && styles.stepIndicatorActive,
+                        step > stepNum && styles.stepIndicatorCompleted,
+                      ]}
+                    >
+                      {step > stepNum ? (
+                        <Check size={16} color="#fff" />
+                      ) : (
+                        <Text
+                          style={[
+                            styles.stepText,
+                            (step === stepNum || step < stepNum) && styles.stepTextActive,
+                          ]}
+                        >
+                          {stepNum}
+                        </Text>
+                      )}
+                    </View>
+                    {stepNum < 3 && <View style={styles.stepLine} />}
+                  </React.Fragment>
+                ))}
+              </View>
+
+              {renderStep()}
+            </ScrollView>
+
+            <View style={styles.modalFooter}>
+              <View style={styles.footerContent}>
+                {step > 1 && (
+                  <TouchableOpacity
+                    style={[styles.button, styles.secondaryButton]}
+                    onPress={handleBack}
+                    disabled={loading}
+                  >
+                    <Text style={styles.secondaryButtonText}>Back</Text>
+                  </TouchableOpacity>
+                )}
+
+                <TouchableOpacity
+                  style={[styles.button, styles.primaryButton, loading && styles.buttonDisabled]}
+                  onPress={handleNext}
+                  disabled={loading}
+                >
+                  {loading ? (
+                    <ActivityIndicator color="#fff" />
+                  ) : (
+                    <Text style={styles.primaryButtonText}>
+                      {step === 3 ? 'Post Job' : 'Continue'}
+                    </Text>
+                  )}
+                </TouchableOpacity>
+              </View>
+            </View>
           </View>
         </KeyboardAvoidingView>
       </View>
-      
-      {/* Location Search Modal */}
-      <Modal
-        visible={locationSearchVisible}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setLocationSearchVisible(false)}
-      >
-        <View style={styles.searchModalOverlay}>
-          <View style={styles.searchModalContainer}>
-            <View style={styles.searchModalHeader}>
-              <Text style={styles.searchModalTitle}>Search Location</Text>
-              <TouchableOpacity onPress={() => setLocationSearchVisible(false)}>
-                <X size={24} color="#6b7280" />
-              </TouchableOpacity>
-            </View>
-            
-            <View style={styles.searchModalContent}>
-              <TextInput
-                value={locationSearchText}
-                onChangeText={setLocationSearchText}
-                style={styles.searchInput}
-                placeholder="Enter address or location"
-                onSubmitEditing={handleLocationSearch}
-                returnKeyType="search"
-              />
-              
-              <TouchableOpacity
-                style={styles.searchSubmitButton}
-                onPress={handleLocationSearch}
-                disabled={locationSearchLoading}
-              >
-                <Text style={styles.searchSubmitButtonText}>
-                  {locationSearchLoading ? 'Searching...' : 'Search'}
-                </Text>
-              </TouchableOpacity>
-              
-              {locationSearchResults.length > 0 && (
-                <View style={styles.searchResults}>
-                  {locationSearchResults.map((result, index) => (
-                    <TouchableOpacity
-                      key={index}
-                      style={styles.searchResultItem}
-                      onPress={() => selectLocationFromSearch(result)}
-                    >
-                      <MapPin size={20} color="#4F46E5" />
-                      <Text style={styles.searchResultText}>
-                        {result.address.formatted}
-                      </Text>
-                    </TouchableOpacity>
-                  ))}
-                </View>
-              )}
-            </View>
-          </View>
-        </View>
-      </Modal>
     </Modal>
   );
 };
@@ -717,11 +685,21 @@ const styles = StyleSheet.create({
     color: '#111827',
     marginBottom: 16,
   },
+  sectionDivider: {
+    height: 1,
+    backgroundColor: '#E5E7EB',
+    marginVertical: 16,
+  },
   label: {
     fontSize: 14,
     fontWeight: '500',
     color: '#374151',
     marginBottom: 6,
+  },
+  labelHint: {
+    fontSize: 12,
+    color: '#6B7280',
+    marginBottom: 8,
   },
   input: {
     backgroundColor: '#F9FAFB',
@@ -867,89 +845,11 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   gpsButtonText: {
-    color: '#4F46E5',
-    fontSize: 14,
     fontWeight: '500',
-    marginLeft: 4,
   },
-  searchButton: {
-    backgroundColor: '#F3F4F6',
-    borderRadius: 6,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    flex: 1,
-  },
-  searchButtonText: {
-    color: '#374151',
-    fontSize: 14,
-    fontWeight: '500',
-    textAlign: 'center',
-  },
-  searchModalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  searchModalContainer: {
-    backgroundColor: 'white',
-    borderRadius: 12,
-    width: '90%',
-    maxWidth: 400,
-    maxHeight: '80%',
-  },
-  searchModalHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    padding: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: '#E5E7EB',
-  },
-  searchModalTitle: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: '#111827',
-  },
-  searchModalContent: {
-    padding: 16,
-  },
-  searchInput: {
-    borderWidth: 1,
-    borderColor: '#D1D5DB',
-    borderRadius: 8,
-    padding: 12,
-    fontSize: 16,
-    marginBottom: 12,
-  },
-  searchSubmitButton: {
-    backgroundColor: '#4F46E5',
-    borderRadius: 8,
-    padding: 12,
-    alignItems: 'center',
-    marginBottom: 16,
-  },
-  searchSubmitButtonText: {
-    color: 'white',
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  searchResults: {
-    gap: 8,
-  },
-  searchResultItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    padding: 12,
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
-    borderRadius: 8,
-    backgroundColor: '#F9FAFB',
-  },
-  searchResultText: {
-    flex: 1,
-    color: '#374151',
+  summaryPlaceholder: {
+    fontSize: 13,
+    color: '#6B7280',
   },
 });
 

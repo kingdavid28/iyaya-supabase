@@ -1,6 +1,6 @@
 import React from 'react';
-import { View, Text, ScrollView, Pressable, Linking, Alert, Platform, StyleSheet } from 'react-native';
-import { Calendar, Clock, DollarSign, MapPin, Phone, Mail, MessageCircle, Navigation, Star, Baby, AlertCircle, CheckCircle, X } from 'lucide-react-native';
+import { View, Text, ScrollView, Pressable, Linking, Alert, Platform, StyleSheet, Modal } from 'react-native';
+import { Calendar, Clock, DollarSign, MapPin, Phone, Mail, MessageCircle, Navigation, Star, Baby, AlertCircle, CheckCircle, X, User } from 'lucide-react-native';
 import PropTypes from 'prop-types';
 
 // Simple i18n helper - replace with proper i18n library in production
@@ -61,301 +61,427 @@ export function BookingDetailsModal({
   onCompleteBooking,
   onCancelBooking 
 }) {
-  if (!visible || !booking) return null;
+  console.log('🔍 BookingDetailsModal - Received booking data:', booking);
+  
+  if (!visible) return null;
+  
+  if (!booking) {
+    console.warn('⚠️ BookingDetailsModal - No booking data provided');
+    return (
+      <Modal visible={visible} animationType="slide" transparent={true} onRequestClose={onClose}>
+        <View style={styles.overlay}>
+          <View style={styles.container}>
+            <Text>No booking data available</Text>
+            <Pressable onPress={onClose}><Text>Close</Text></Pressable>
+          </View>
+        </View>
+      </Modal>
+    );
+  }
 
-  const enhancedBooking = {
-    ...booking,
-    location: booking.location || "Cebu City",
-    address: booking.address || "123 Osmeña Blvd, Cebu City, 6000 Cebu",
-    contactPhone: booking.contactPhone || "0917 123 4567",
-    contactEmail: booking.contactEmail || "delacruz.family@email.ph",
-    totalHours: booking.totalHours || 4,
-    totalAmount: booking.totalAmount || (booking.hourlyRate * 4),
-    requirements: booking.requirements || ["CPR Certified", "Background Check", "Non-smoker"],
-    childrenDetails: booking.childrenDetails || [
-      {
-        name: "Maya",
-        age: 3,
-        specialInstructions: "Loves puzzles and quiet activities",
-        allergies: "None",
-        preferences: "Story time before nap"
-      },
-      {
-        name: "Miguel", 
-        age: 5,
-        specialInstructions: "Needs help with homework",
-        allergies: "Peanuts",
-        preferences: "Outdoor play, building blocks"
+  // Enhanced data processing with multiple field variations
+  const enhancedBooking = React.useMemo(() => {
+    const processChildren = () => {
+      if (booking.selectedChildren && Array.isArray(booking.selectedChildren)) {
+        return booking.selectedChildren;
       }
-    ],
-    emergencyContact: booking.emergencyContact || {
-      name: "Dra. Ana Dela Cruz",
-      phone: "0918 987 6543",
-      relation: "Mother"
-    }
-  };
+      if (booking.childrenDetails && Array.isArray(booking.childrenDetails)) {
+        return booking.childrenDetails;
+      }
+      if (booking.children && Array.isArray(booking.children)) {
+        return booking.children;
+      }
+      return [];
+    };
+
+    const processSpecialInstructions = () => {
+      return booking.specialInstructions || 
+             booking.special_instructions || 
+             booking.notes || 
+             booking.instructions || 
+             null;
+    };
+
+    const processEmergencyContact = () => {
+      const contact = booking.emergencyContact || booking.emergency_contact;
+      if (typeof contact === 'string') {
+        try {
+          // Parse string format like "Name: John Doe, Phone: 123-456-7890"
+          const nameMatch = contact.match(/Name:\s*([^,]+)/);
+          const phoneMatch = contact.match(/Phone:\s*([^,]+)/);
+          return {
+            name: nameMatch ? nameMatch[1].trim() : contact,
+            phone: phoneMatch ? phoneMatch[1].trim() : null,
+            relation: 'Emergency Contact'
+          };
+        } catch (error) {
+          return { name: contact, phone: null, relation: 'Emergency Contact' };
+        }
+      }
+      return contact || null;
+    };
+
+    return {
+      ...booking,
+      location: booking.location || booking.address || "Location not specified",
+      address: booking.address || booking.location || "Address not provided",
+      contactPhone: booking.contactPhone || booking.contact_phone || booking.phone,
+      contactEmail: booking.contactEmail || booking.contact_email || booking.email,
+      totalHours: booking.totalHours || booking.total_hours || 4,
+      totalAmount: booking.totalAmount || booking.total_amount || booking.totalCost || (booking.hourlyRate * 4) || 0,
+      hourlyRate: booking.hourlyRate || booking.hourly_rate || 300,
+      requirements: booking.requirements || booking.skills || [],
+      childrenDetails: processChildren(),
+      specialInstructions: processSpecialInstructions(),
+      emergencyContact: processEmergencyContact(),
+      caregiverName: booking.caregiverId?.name || booking.caregiver?.name || booking.caregiverName || booking.caregiver_name || 'Caregiver',
+      parentName: booking.clientId?.name || booking.parent?.name || booking.parentName || booking.parent_name || booking.family || 'Parent',
+      date: booking.date || 'Date not specified',
+      time: booking.time || (booking.start_time && booking.end_time ? `${booking.start_time} - ${booking.end_time}` : booking.startTime && booking.endTime ? `${booking.startTime} - ${booking.endTime}` : 'Time not specified')
+    };
+  }, [booking]);
+  
+  console.log('🔍 Enhanced booking data:', enhancedBooking);
 
   const getStatusColors = (status) => {
-    switch (status.toLowerCase()) {
+    switch (status?.toLowerCase()) {
       case 'confirmed':
-        return { bg: 'bg-green-100', border: 'border-green-200', text: 'text-green-800' };
+        return { bg: '#dcfce7', text: '#166534' };
       case 'pending':
-        return { bg: 'bg-yellow-100', border: 'border-yellow-200', text: 'text-yellow-800' };
+        return { bg: '#fef3c7', text: '#92400e' };
       case 'completed':
-        return { bg: 'bg-blue-100', border: 'border-blue-200', text: 'text-blue-800' };
+        return { bg: '#dbeafe', text: '#1e40af' };
       case 'cancelled':
-        return { bg: 'bg-red-100', border: 'border-red-200', text: 'text-red-800' };
+        return { bg: '#fecaca', text: '#dc2626' };
       default:
-        return { bg: 'bg-gray-100', border: 'border-gray-200', text: 'text-gray-800' };
+        return { bg: '#f3f4f6', text: '#374151' };
     }
   };
 
   const statusColors = getStatusColors(enhancedBooking.status);
 
+  const handlePhonePress = async (phone) => {
+    if (!phone || typeof phone !== 'string') return;
+    try {
+      const canOpen = await Linking.canOpenURL(`tel:${phone}`);
+      if (canOpen) {
+        await Linking.openURL(`tel:${phone}`);
+      } else {
+        Alert.alert('Error', 'Phone calls are not supported on this device');
+      }
+    } catch (error) {
+      console.error('Phone call error:', error);
+      Alert.alert('Error', 'Unable to make phone call');
+    }
+  };
+
+  const handleEmailPress = async (email) => {
+    if (!email || typeof email !== 'string') return;
+    try {
+      const canOpen = await Linking.canOpenURL(`mailto:${email}`);
+      if (canOpen) {
+        await Linking.openURL(`mailto:${email}`);
+      } else {
+        Alert.alert('Error', 'Email is not supported on this device');
+      }
+    } catch (error) {
+      console.error('Email error:', error);
+      Alert.alert('Error', 'Unable to open email client');
+    }
+  };
+
   return (
-    <View className="absolute inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-      <View className="bg-white rounded-2xl w-full max-w-3xl max-h-[90vh] overflow-hidden" style={styles.card}>
-        {/* Header */}
-        <View className="flex flex-row items-center justify-between p-6 border-b border-gray-200 bg-gradient-to-r from-blue-50 to-blue-100">
-          <View className="flex flex-row items-center">
-            <View className="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center mr-4">
-              <Calendar size={24} color="#3b82f6" />
-            </View>
-            <View>
-              <Text className="text-xl font-bold text-gray-800">{t('booking.details')}</Text>
-              <Text className="text-sm text-gray-600">{enhancedBooking.family}</Text>
-            </View>
-          </View>
-          
-          <View className="flex flex-row items-center gap-3">
-            <View className={`px-3 py-1.5 rounded-full border ${statusColors.bg} ${statusColors.border}`}>
-              <Text className={`text-sm font-semibold ${statusColors.text}`}>
-                {enhancedBooking.status.charAt(0).toUpperCase() + enhancedBooking.status.slice(1)}
-              </Text>
-            </View>
-            
-            <Pressable onPress={onClose}>
+    <Modal
+      visible={visible}
+      animationType="slide"
+      transparent={true}
+      onRequestClose={onClose}
+    >
+      <View style={styles.overlay}>
+        <View style={[styles.container, styles.card]}>
+          {/* Header */}
+          <View style={styles.header}>
+            <Text style={styles.headerTitle}>Booking Details</Text>
+            <Pressable onPress={onClose} style={styles.closeButton}>
               <X size={24} color="#9ca3af" />
             </Pressable>
           </View>
-        </View>
 
-        <ScrollView style={{ maxHeight: 'calc(90vh - 140px)' }}>
-          <View className="p-6 gap-6">
-            {/* Booking Overview */}
-            <View className="bg-gray-50 rounded-xl p-4">
-              <Text className="text-lg font-bold text-gray-800 mb-4">Booking Overview</Text>
-              <View className="flex flex-row flex-wrap gap-4">
-                <View className="flex flex-row items-center">
-                  <Calendar size={20} color="#6b7280" className="mr-2" />
-                  <View>
-                    <Text className="text-sm text-gray-600">Date</Text>
-                    <Text className="font-semibold text-gray-800">{enhancedBooking.date}</Text>
-                  </View>
+          {/* Simple Content */}
+          <View style={{ flex: 1, padding: 20 }}>
+            <Text style={{ fontSize: 16, marginBottom: 10 }}>Date: {enhancedBooking.date}</Text>
+            <Text style={{ fontSize: 16, marginBottom: 10 }}>Time: {enhancedBooking.time}</Text>
+            <Text style={{ fontSize: 16, marginBottom: 10 }}>Caregiver: {enhancedBooking.caregiverName}</Text>
+            <Text style={{ fontSize: 16, marginBottom: 10 }}>Rate: ₱{enhancedBooking.hourlyRate}/hr</Text>
+            <Text style={{ fontSize: 16, marginBottom: 10 }}>Total: ₱{enhancedBooking.totalAmount}</Text>
+            <Text style={{ fontSize: 16, marginBottom: 10 }}>Location: {enhancedBooking.address}</Text>
+            <Text style={{ fontSize: 16, marginBottom: 10 }}>Status: {enhancedBooking.status}</Text>
+              {/* Caregiver Information */}
+              <View style={styles.caregiverSection}>
+                <View style={styles.sectionHeader}>
+                  <User size={20} color="#3b82f6" />
+                  <Text style={styles.sectionTitle}>Caregiver Information</Text>
                 </View>
-                <View className="flex flex-row items-center">
-                  <Clock size={20} color="#6b7280" className="mr-2" />
-                  <View>
-                    <Text className="text-sm text-gray-600">Time</Text>
-                    <Text className="font-semibold text-gray-800">{enhancedBooking.time}</Text>
+                <View style={styles.caregiverInfo}>
+                  <View style={styles.caregiverAvatar}>
+                    <User size={24} color="#3b82f6" />
                   </View>
-                </View>
-                <View className="flex flex-row items-center">
-                  <DollarSign size={20} color="#6b7280" className="mr-2" />
-                  <View>
-                    <Text className="text-sm text-gray-600">Rate</Text>
-                    <Text className="font-semibold text-blue-600">${enhancedBooking.hourlyRate}/hr</Text>
-                  </View>
-                </View>
-                <View className="flex flex-row items-center">
-                  <Star size={20} color="#6b7280" className="mr-2" />
-                  <View>
-                    <Text className="text-sm text-gray-600">Total</Text>
-                    <Text className="font-semibold text-green-600">${enhancedBooking.totalAmount}</Text>
+                  <View style={styles.caregiverDetails}>
+                    <Text style={styles.caregiverName}>{enhancedBooking.caregiverName}</Text>
+                    <Text style={styles.caregiverRate}>₱{enhancedBooking.hourlyRate}/hour</Text>
                   </View>
                 </View>
               </View>
-            </View>
 
-            {/* Location & Contact */}
-            <View className="bg-white border border-gray-200 rounded-xl p-4">
-              <Text className="text-lg font-bold text-gray-800 mb-4">Location & Contact</Text>
-              <View className="gap-3">
-                <View className="flex flex-row items-start">
-                  <MapPin size={20} color="#6b7280" className="mr-3 mt-0.5" />
-                  <View>
-                    <Text className="font-semibold text-gray-800">{enhancedBooking.location}</Text>
-                    <Text className="text-sm text-gray-600">{enhancedBooking.address}</Text>
+              {/* Schedule Details */}
+              <View style={styles.scheduleSection}>
+                <Text style={styles.sectionTitle}>Schedule Details</Text>
+                <View style={styles.scheduleGrid}>
+                  <View style={styles.scheduleItem}>
+                    <Calendar size={18} color="#6b7280" />
+                    <View style={styles.scheduleText}>
+                      <Text style={styles.scheduleLabel}>Date</Text>
+                      <Text style={styles.scheduleValue}>{enhancedBooking.date}</Text>
+                    </View>
+                  </View>
+                  <View style={styles.scheduleItem}>
+                    <Clock size={18} color="#6b7280" />
+                    <View style={styles.scheduleText}>
+                      <Text style={styles.scheduleLabel}>Time Range</Text>
+                      <Text style={styles.scheduleValue}>{enhancedBooking.time}</Text>
+                    </View>
+                  </View>
+                  <View style={styles.scheduleItem}>
+                    <Star size={18} color="#6b7280" />
+                    <View style={styles.scheduleText}>
+                      <Text style={styles.scheduleLabel}>Duration</Text>
+                      <Text style={styles.scheduleValue}>{enhancedBooking.totalHours} hours</Text>
+                    </View>
                   </View>
                 </View>
-                {/* Phone - only show if present, else show privacy placeholder */}
-                {enhancedBooking.contactPhone ? (
-                  <View className="flex flex-row items-center">
-                    <Phone size={20} color="#6b7280" className="mr-3" />
-                    <View>
-                      <Text className="text-sm text-gray-600">Phone</Text>
-                      <Text className="font-semibold text-gray-800">{enhancedBooking.contactPhone}</Text>
-                    </View>
-                  </View>
-                ) : (
-                  <View className="flex flex-row items-center">
-                    <Phone size={20} color="#6b7280" className="mr-3" />
-                    <View>
-                      <Text className="text-sm text-gray-600">Phone</Text>
-                      <Text style={{ color: '#9ca3af', fontStyle: 'italic' }}>Contact info hidden for privacy</Text>
-                    </View>
-                  </View>
-                )}
-                {/* Email - only show if present, else show privacy placeholder */}
-                {enhancedBooking.contactEmail ? (
-                  <View className="flex flex-row items-center">
-                    <Mail size={20} color="#6b7280" className="mr-3" />
-                    <View>
-                      <Text className="text-sm text-gray-600">Email</Text>
-                      <Text className="font-semibold text-gray-800">{enhancedBooking.contactEmail}</Text>
-                    </View>
-                  </View>
-                ) : (
-                  <View className="flex flex-row items-center">
-                    <Mail size={20} color="#6b7280" className="mr-3" />
-                    <View>
-                      <Text className="text-sm text-gray-600">Email</Text>
-                      <Text style={{ color: '#9ca3af', fontStyle: 'italic' }}>Contact info hidden for privacy</Text>
-                    </View>
-                  </View>
-                )}
               </View>
-            </View>
 
-            {/* Children Details */}
-            <View className="bg-white border border-gray-200 rounded-xl p-4">
-              <View className="flex flex-row items-center">
-                <Baby size={20} color="#6b7280" className="mr-2" />
-                <Text className="text-lg font-bold text-gray-800">Children Details</Text>
+              {/* Cost Breakdown */}
+              <View style={styles.costSection}>
+                <Text style={styles.sectionTitle}>Cost Breakdown</Text>
+                <View style={styles.costDetails}>
+                  <View style={styles.costRow}>
+                    <Text style={styles.costLabel}>Hourly Rate:</Text>
+                    <Text style={styles.costValue}>₱{enhancedBooking.hourlyRate}</Text>
+                  </View>
+                  <View style={styles.costRow}>
+                    <Text style={styles.costLabel}>Duration:</Text>
+                    <Text style={styles.costValue}>{enhancedBooking.totalHours} hours</Text>
+                  </View>
+                  <View style={styles.costDivider} />
+                  <View style={styles.costRow}>
+                    <Text style={styles.costTotalLabel}>Total Amount:</Text>
+                    <Text style={styles.costTotalValue}>₱{enhancedBooking.totalAmount}</Text>
+                  </View>
+                </View>
               </View>
-              <View className="gap-4 mt-4">
-                {enhancedBooking.childrenDetails.map((child, index) => (
-                  <View key={index} className="bg-blue-50 rounded-lg p-4">
-                    <View className="flex flex-row items-center justify-between mb-2">
-                      <Text className="font-semibold text-gray-800">{child.name}</Text>
-                      <Text className="text-sm text-gray-600">Age {child.age}</Text>
+
+              {/* Parent Contact Information */}
+              <View style={styles.sectionBordered}>
+                <Text style={styles.sectionTitle}>Parent Contact Information</Text>
+                <View style={styles.contactList}>
+                  <View style={styles.contactItem}>
+                    <User size={20} color="#6b7280" />
+                    <View style={styles.contactText}>
+                      <Text style={styles.contactLabel}>Parent Name</Text>
+                      <Text style={styles.contactValue}>{enhancedBooking.parentName}</Text>
                     </View>
-                    
-                    <View className="gap-2">
-                      <View>
-                        <Text className="font-medium text-gray-700">Preferences: </Text>
-                        <Text className="text-gray-600">{child.preferences}</Text>
+                  </View>
+                  <View style={styles.contactItem}>
+                    <MapPin size={20} color="#6b7280" />
+                    <View style={styles.contactText}>
+                      <Text style={styles.contactValue}>{enhancedBooking.location}</Text>
+                      <Text style={styles.contactSubtext}>{enhancedBooking.address}</Text>
+                    </View>
+                  </View>
+                  
+                  {enhancedBooking.contactPhone ? (
+                    <Pressable style={styles.contactItem} onPress={() => handlePhonePress(enhancedBooking.contactPhone)}>
+                      <Phone size={20} color="#3b82f6" />
+                      <View style={styles.contactText}>
+                        <Text style={styles.contactLabel}>Phone</Text>
+                        <Text style={[styles.contactValue, { color: '#3b82f6' }]}>{enhancedBooking.contactPhone}</Text>
                       </View>
-                      <View>
-                        <Text className="font-medium text-gray-700">Special Instructions: </Text>
-                        <Text className="text-gray-600">{child.specialInstructions}</Text>
+                    </Pressable>
+                  ) : (
+                    <View style={styles.contactItem}>
+                      <Phone size={20} color="#9ca3af" />
+                      <View style={styles.contactText}>
+                        <Text style={styles.contactLabel}>Phone</Text>
+                        <Text style={styles.privacyText}>Contact info hidden for privacy</Text>
                       </View>
-                      {child.allergies && child.allergies !== 'None' && (
-                        <View className="flex flex-row items-center">
-                          <AlertCircle size={16} color="#ef4444" className="mr-1" />
-                          <Text className="font-medium text-red-700">Allergies: </Text>
-                          <Text className="text-red-600 ml-1">{child.allergies}</Text>
+                    </View>
+                  )}
+                  
+                  {enhancedBooking.contactEmail ? (
+                    <Pressable style={styles.contactItem} onPress={() => handleEmailPress(enhancedBooking.contactEmail)}>
+                      <Mail size={20} color="#3b82f6" />
+                      <View style={styles.contactText}>
+                        <Text style={styles.contactLabel}>Email</Text>
+                        <Text style={[styles.contactValue, { color: '#3b82f6' }]}>{enhancedBooking.contactEmail}</Text>
+                      </View>
+                    </Pressable>
+                  ) : (
+                    <View style={styles.contactItem}>
+                      <Mail size={20} color="#9ca3af" />
+                      <View style={styles.contactText}>
+                        <Text style={styles.contactLabel}>Email</Text>
+                        <Text style={styles.privacyText}>Contact info hidden for privacy</Text>
+                      </View>
+                    </View>
+                  )}
+                </View>
+              </View>
+
+              {/* Children Details */}
+              {enhancedBooking.childrenDetails && enhancedBooking.childrenDetails.length > 0 && (
+                <View style={styles.sectionBordered}>
+                  <View style={styles.sectionHeader}>
+                    <Baby size={20} color="#6b7280" />
+                    <Text style={styles.sectionTitle}>Children Details</Text>
+                  </View>
+                  <View style={styles.childrenList}>
+                    {enhancedBooking.childrenDetails.map((child, index) => (
+                      <View key={index} style={styles.childCard}>
+                        <View style={styles.childHeader}>
+                          <Text style={styles.childName}>{child.name || `Child ${index + 1}`}</Text>
+                          <Text style={styles.childAge}>Age {child.age || 'Unknown'}</Text>
                         </View>
-                      )}
+                        
+                        <View style={styles.childDetails}>
+                          {child.preferences && (
+                            <View style={styles.childDetail}>
+                              <Text style={styles.childDetailLabel}>Preferences:</Text>
+                              <Text style={styles.childDetailValue}>{child.preferences}</Text>
+                            </View>
+                          )}
+                          {(child.specialInstructions || child.special_instructions || child.notes) && (
+                            <View style={styles.childDetail}>
+                              <Text style={styles.childDetailLabel}>Special Instructions:</Text>
+                              <Text style={styles.childDetailValue}>{child.specialInstructions || child.special_instructions || child.notes}</Text>
+                            </View>
+                          )}
+                          {child.allergies && child.allergies !== 'None' && (
+                            <View style={styles.allergyItem}>
+                              <AlertCircle size={16} color="#ef4444" />
+                              <Text style={styles.allergyLabel}>Allergies:</Text>
+                              <Text style={styles.allergyValue}>{child.allergies}</Text>
+                            </View>
+                          )}
+                        </View>
+                      </View>
+                    ))}
+                  </View>
+                </View>
+              )}
+
+              {/* Requirements */}
+              {enhancedBooking.requirements && enhancedBooking.requirements.length > 0 && (
+                <View style={styles.sectionBordered}>
+                  <Text style={styles.sectionTitle}>Requirements</Text>
+                  <View style={styles.requirementsList}>
+                    {enhancedBooking.requirements.map((req, index) => (
+                      <View key={index} style={styles.requirementItem}>
+                        <CheckCircle size={12} color="#16a34a" />
+                        <Text style={styles.requirementText}>{req}</Text>
+                      </View>
+                    ))}
+                  </View>
+                </View>
+              )}
+
+              {/* Special Instructions */}
+              {enhancedBooking.specialInstructions && (
+                <View style={styles.specialSection}>
+                  <Text style={styles.sectionTitle}>Special Instructions</Text>
+                  <Text style={styles.specialText}>{enhancedBooking.specialInstructions}</Text>
+                </View>
+              )}
+
+              {/* Emergency Contact */}
+              {enhancedBooking.emergencyContact && (
+                <View style={styles.emergencySection}>
+                  <View style={styles.sectionHeader}>
+                    <AlertCircle size={20} color="#dc2626" />
+                    <Text style={styles.sectionTitle}>Emergency Contact</Text>
+                  </View>
+                  <View style={styles.emergencyDetails}>
+                    <View style={styles.emergencyItem}>
+                      <Text style={styles.emergencyLabel}>Name:</Text>
+                      <Text style={styles.emergencyValue}>{enhancedBooking.emergencyContact.name}</Text>
                     </View>
+                    {enhancedBooking.emergencyContact.relation && (
+                      <View style={styles.emergencyItem}>
+                        <Text style={styles.emergencyLabel}>Relation:</Text>
+                        <Text style={styles.emergencyValue}>{enhancedBooking.emergencyContact.relation}</Text>
+                      </View>
+                    )}
+                    {enhancedBooking.emergencyContact.phone && (
+                      <Pressable style={styles.emergencyItem} onPress={() => handlePhonePress(enhancedBooking.emergencyContact.phone)}>
+                        <Text style={styles.emergencyLabel}>Phone:</Text>
+                        <Text style={[styles.emergencyValue, { color: '#dc2626', fontWeight: '600' }]}>{enhancedBooking.emergencyContact.phone}</Text>
+                      </Pressable>
+                    )}
                   </View>
-                ))}
-              </View>
-            </View>
+                </View>
+              )}
+          </View>
 
-            {/* Requirements */}
-            <View className="bg-white border border-gray-200 rounded-xl p-4">
-              <Text className="text-lg font-bold text-gray-800 mb-4">Requirements</Text>
-              <View className="flex flex-row flex-wrap gap-2">
-                {enhancedBooking.requirements.map((req, index) => (
-                  <View key={index} className="px-3 py-1 bg-green-100 rounded-full flex flex-row items-center">
-                    <CheckCircle size={12} color="#16a34a" className="mr-1" />
-                    <Text className="text-green-700 text-sm font-medium">{req}</Text>
-                  </View>
-                ))}
-              </View>
-            </View>
+          {/* Footer Actions */}
+          <View style={styles.footer}>
+            <Pressable style={[styles.actionButton, styles.messageButton]} onPress={onMessage}>
+              <MessageCircle size={16} color="#3b82f6" />
+              <Text style={styles.messageButtonText}>{t('actions.message')}</Text>
+            </Pressable>
+            
+            <Pressable 
+              style={[styles.actionButton, styles.directionsButton]} 
+              onPress={() => {
+                try {
+                  Linking.openURL(`https://maps.google.com/?q=${enhancedBooking.address}`);
+                  onGetDirections?.();
+                } catch (error) {
+                  Alert.alert('Error', 'Unable to open maps');
+                }
+              }}
+            >
+              <Navigation size={16} color="#16a34a" />
+              <Text style={styles.directionsButtonText}>{t('actions.directions')}</Text>
+            </Pressable>
 
-            {/* Special Notes */}
-            {enhancedBooking.notes && (
-              <View className="bg-yellow-50 border border-yellow-200 rounded-xl p-4">
-                <Text className="text-lg font-bold text-gray-800 mb-2">Special Notes</Text>
-                <Text className="text-gray-700">{enhancedBooking.notes}</Text>
-              </View>
+            {enhancedBooking.status === 'confirmed' && (
+              <Pressable
+                style={[styles.actionButton, styles.completeButton]}
+                onPress={() => {
+                  Alert.alert("Booking Completed", "The booking has been marked as complete");
+                  onCompleteBooking?.();
+                }}
+              >
+                <CheckCircle size={16} color="#ffffff" />
+                <Text style={styles.completeButtonText}>{t('actions.complete')}</Text>
+              </Pressable>
             )}
 
-            {/* Emergency Contact */}
-            <View className="bg-red-50 border border-red-200 rounded-xl p-4">
-              <View className="flex flex-row items-center">
-                <AlertCircle size={20} color="#dc2626" className="mr-2" />
-                <Text className="text-lg font-bold text-gray-800">Emergency Contact</Text>
-              </View>
-              <View className="gap-2 mt-4">
-                <View>
-                  <Text className="font-medium text-gray-700">Name: </Text>
-                  <Text className="text-gray-800">{enhancedBooking.emergencyContact.name}</Text>
-                </View>
-                <View>
-                  <Text className="font-medium text-gray-700">Relation: </Text>
-                  <Text className="text-gray-800">{enhancedBooking.emergencyContact.relation}</Text>
-                </View>
-                <View>
-                  <Text className="font-medium text-gray-700">Phone: </Text>
-                  <Text className="text-gray-800 font-semibold">{enhancedBooking.emergencyContact.phone}</Text>
-                </View>
-              </View>
-            </View>
+            {(enhancedBooking.status === 'pending' || enhancedBooking.status === 'confirmed') && (
+              <Pressable
+                style={[styles.actionButton, styles.cancelButton]}
+                onPress={() => {
+                  Alert.alert("Booking Cancelled", "The booking has been cancelled");
+                  onCancelBooking?.();
+                }}
+              >
+                <Text style={styles.cancelButtonText}>{t('actions.cancel')}</Text>
+              </Pressable>
+            )}
           </View>
-        </ScrollView>
-
-        {/* Footer Actions */}
-        <View className="flex flex-row flex-wrap gap-3 p-6 border-t border-gray-200 bg-gray-50">
-          <Pressable
-            onPress={onMessage}
-            className="flex-1 min-w-[120px] px-4 py-3 bg-blue-100 rounded-lg flex flex-row items-center justify-center"
-          >
-            <MessageCircle size={16} color="#3b82f6" className="mr-2" />
-            <Text className="text-blue-700 font-semibold">{t('actions.message')}</Text>
-          </Pressable>
-          
-          <Pressable
-            onPress={() => {
-              Linking.openURL(`https://maps.google.com/?q=${enhancedBooking.address}`);
-              onGetDirections?.();
-            }}
-            className="flex-1 min-w-[120px] px-4 py-3 bg-green-100 rounded-lg flex flex-row items-center justify-center"
-          >
-            <Navigation size={16} color="#16a34a" className="mr-2" />
-            <Text className="text-green-700 font-semibold">{t('actions.directions')}</Text>
-          </Pressable>
-
-          {enhancedBooking.status === 'confirmed' && (
-            <Pressable
-              onPress={() => {
-                Alert.alert("Booking Completed", "The booking has been marked as complete");
-                onCompleteBooking?.();
-              }}
-              className="flex-1 min-w-[120px] px-4 py-3 bg-blue-600 rounded-lg flex flex-row items-center justify-center"
-            >
-              <CheckCircle size={16} color="#ffffff" className="mr-2" />
-              <Text className="text-white font-semibold">{t('actions.complete')}</Text>
-            </Pressable>
-          )}
-
-          {(enhancedBooking.status === 'pending_confirmation' || enhancedBooking.status === 'confirmed') && (
-            <Pressable
-              onPress={() => {
-                Alert.alert("Booking Cancelled", "The booking has been cancelled");
-                onCancelBooking?.();
-              }}
-              className="px-4 py-3 bg-red-100 rounded-lg flex flex-row items-center justify-center"
-            >
-              <Text className="text-red-700 font-semibold">{t('actions.cancel')}</Text>
-            </Pressable>
-          )}
         </View>
       </View>
-    </View>
+    </Modal>
   );
 }
 
@@ -396,12 +522,22 @@ BookingDetailsModal.propTypes = {
   onCompleteBooking: PropTypes.func,
   onCancelBooking: PropTypes.func
 };
-
-BookingDetailsModal.defaultProps = {
-  booking: {}
-};
-
 const styles = StyleSheet.create({
+  overlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 16,
+  },
+  container: {
+    backgroundColor: '#fff',
+    borderRadius: 16,
+    width: '100%',
+    maxWidth: 600,
+    maxHeight: '90%',
+    overflow: 'hidden',
+  },
   card: Platform.select({
     web: {
       boxShadow: '0 10px 25px rgba(0,0,0,0.15)',
@@ -415,8 +551,335 @@ const styles = StyleSheet.create({
     android: {
       elevation: 8,
     },
-    default: {},
   }),
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    padding: 20,
+    borderBottomWidth: 1,
+    borderBottomColor: '#e5e7eb',
+    backgroundColor: '#f8fafc',
+  },
+  headerLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+  },
+  iconContainer: {
+    width: 48,
+    height: 48,
+    backgroundColor: '#dbeafe',
+    borderRadius: 24,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 12,
+  },
+  headerTitle: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: '#1f2937',
+  },
+  headerSubtitle: {
+    fontSize: 14,
+    color: '#6b7280',
+    marginTop: 2,
+  },
+  headerRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  statusBadge: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 20,
+    backgroundColor: '#f3f4f6',
+  },
+  statusText: {
+    fontSize: 12,
+    fontWeight: '600',
+    textTransform: 'capitalize',
+  },
+  closeButton: {
+    padding: 4,
+  },
+  scrollView: {
+    flex: 1,
+    backgroundColor: '#fff',
+  },
+  content: {
+    padding: 20,
+    minHeight: 400,
+  },
+  section: {
+    backgroundColor: '#f9fafb',
+    borderRadius: 12,
+    padding: 16,
+  },
+  sectionBordered: {
+    backgroundColor: '#fff',
+    borderWidth: 1,
+    borderColor: '#e5e7eb',
+    borderRadius: 12,
+    padding: 16,
+  },
+  sectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 16,
+    gap: 8,
+  },
+  sectionTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#1f2937',
+    marginBottom: 16,
+  },
+  overviewGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 16,
+  },
+  overviewItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    minWidth: 120,
+    gap: 8,
+  },
+  overviewText: {
+    flex: 1,
+  },
+  overviewLabel: {
+    fontSize: 12,
+    color: '#6b7280',
+    marginBottom: 2,
+  },
+  overviewValue: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#1f2937',
+  },
+  contactList: {
+    gap: 12,
+  },
+  contactItem: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 12,
+  },
+  contactText: {
+    flex: 1,
+  },
+  contactLabel: {
+    fontSize: 12,
+    color: '#6b7280',
+    marginBottom: 2,
+  },
+  contactValue: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#1f2937',
+  },
+  contactSubtext: {
+    fontSize: 12,
+    color: '#6b7280',
+    marginTop: 2,
+  },
+  privacyText: {
+    fontSize: 14,
+    color: '#9ca3af',
+    fontStyle: 'italic',
+  },
+  childrenList: {
+    gap: 12,
+  },
+  childCard: {
+    backgroundColor: '#eff6ff',
+    borderRadius: 8,
+    padding: 16,
+  },
+  childHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 12,
+  },
+  childName: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#1f2937',
+  },
+  childAge: {
+    fontSize: 12,
+    color: '#6b7280',
+  },
+  childDetails: {
+    gap: 8,
+  },
+  childDetail: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+  },
+  childDetailLabel: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: '#374151',
+    marginRight: 4,
+  },
+  childDetailValue: {
+    fontSize: 14,
+    color: '#6b7280',
+    flex: 1,
+  },
+  allergyItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  allergyLabel: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: '#dc2626',
+  },
+  allergyValue: {
+    fontSize: 14,
+    color: '#dc2626',
+  },
+  requirementsList: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  requirementItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#dcfce7',
+  },
+  directionsButtonText: {
+    color: '#166534',
+    fontWeight: '600',
+    fontSize: 14,
+  },
+  completeButton: {
+    backgroundColor: '#3b82f6',
+  },
+  completeButtonText: {
+    color: '#ffffff',
+    fontWeight: '600',
+    fontSize: 14,
+  },
+  cancelButton: {
+    backgroundColor: '#fecaca',
+    flex: 0,
+    paddingHorizontal: 16,
+  },
+  cancelButtonText: {
+    color: '#dc2626',
+    fontWeight: '600',
+    fontSize: 14,
+  },
+  caregiverSection: {
+    backgroundColor: '#eff6ff',
+    borderWidth: 1,
+    borderColor: '#bfdbfe',
+    borderRadius: 12,
+    padding: 16,
+  },
+  caregiverInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  caregiverAvatar: {
+    width: 48,
+    height: 48,
+    backgroundColor: '#dbeafe',
+    borderRadius: 24,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  caregiverDetails: {
+    flex: 1,
+  },
+  caregiverName: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#1f2937',
+    marginBottom: 4,
+  },
+  caregiverRate: {
+    fontSize: 16,
+    fontWeight: '500',
+    color: '#3b82f6',
+  },
+  scheduleSection: {
+    backgroundColor: '#f9fafb',
+    borderRadius: 12,
+    padding: 16,
+  },
+  scheduleGrid: {
+    gap: 12,
+  },
+  scheduleItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  scheduleText: {
+    flex: 1,
+  },
+  scheduleLabel: {
+    fontSize: 12,
+    color: '#6b7280',
+    marginBottom: 2,
+  },
+  scheduleValue: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: '#1f2937',
+  },
+  costSection: {
+    backgroundColor: '#eff6ff',
+    borderWidth: 1,
+    borderColor: '#bfdbfe',
+    borderRadius: 12,
+    padding: 16,
+  },
+  costDetails: {
+    gap: 8,
+  },
+  costRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  costLabel: {
+    fontSize: 14,
+    color: '#6b7280',
+  },
+  costValue: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: '#1f2937',
+  },
+  costDivider: {
+    height: 1,
+    backgroundColor: '#d1d5db',
+    marginVertical: 8,
+  },
+  costTotalLabel: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#1f2937',
+  },
+  costTotalValue: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#3b82f6',
+  },
 });
 
-export default BookingDetailsModal;
+BookingDetailsModal.defaultProps = {
+  booking: {}
+};

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet } from 'react-native';
-import supabaseService from '../services/supabaseService';
+import { supabaseService } from '../services/supabase';
 import { useAuth } from '../contexts/AuthContext';
 
 const NotificationBadge = ({ style }) => {
@@ -13,7 +13,7 @@ const NotificationBadge = ({ style }) => {
     loadUnreadCount();
     
     // Setup real-time subscription
-    const subscription = supabaseService.subscribeToNotifications(user.id, () => {
+    const subscription = supabaseService.notifications.subscribeToNotifications(user.id, () => {
       loadUnreadCount();
     });
 
@@ -26,7 +26,7 @@ const NotificationBadge = ({ style }) => {
 
   const loadUnreadCount = async () => {
     try {
-      const count = await supabaseService.getUnreadNotificationCount(user.id);
+      const count = await supabaseService.notifications.getUnreadNotificationCount(user.id);
       setUnreadCount(count);
     } catch (error) {
       console.error('Error loading unread count:', error);

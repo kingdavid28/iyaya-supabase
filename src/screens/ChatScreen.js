@@ -11,8 +11,9 @@ import {
   Alert
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
-import supabaseService from '../services/supabaseService';
+import { messagingService, notificationService } from '../services/supabase';
 import { useAuth } from '../contexts/AuthContext';
 
 const ChatScreen = ({ route, navigation }) => {
@@ -41,7 +42,7 @@ const ChatScreen = ({ route, navigation }) => {
       loadMessages();
       
       // Setup real-time subscription
-      const subscription = supabaseService.subscribeToMessages(conversationId, (payload) => {
+      const subscription = messagingService.subscribeToMessages(conversationId, (payload) => {
         if (payload.eventType === 'INSERT') {
           const newMessage = payload.new;
           setMessages(prev => [...prev, transformMessage(newMessage)]);
@@ -63,7 +64,7 @@ const ChatScreen = ({ route, navigation }) => {
       
       if (!convId) {
         // Create or get conversation
-        const conversation = await supabaseService.getOrCreateConversation(userId, targetUserId);
+        const conversation = await messagingService.getOrCreateConversation(userId, targetUserId);
         convId = conversation.id;
         setConversationId(convId);
       }
@@ -78,12 +79,12 @@ const ChatScreen = ({ route, navigation }) => {
   const loadMessages = async (convId = conversationId) => {
     try {
       setLoading(true);
-      const messagesData = await supabaseService.getMessages(convId);
+      const messagesData = await messagingService.getMessages(convId);
       const transformedMessages = messagesData.map(transformMessage);
       setMessages(transformedMessages);
       
       // Mark messages as read
-      await supabaseService.markMessagesAsRead(convId, userId);
+      await messagingService.markMessagesAsRead(convId, userId);
       
       setTimeout(scrollToBottom, 100);
     } catch (error) {
@@ -112,10 +113,10 @@ const ChatScreen = ({ route, navigation }) => {
       const messageText = newMessage.trim();
       setNewMessage('');
 
-      await supabaseService.sendMessage(conversationId, userId, messageText);
+      await messagingService.sendMessage(conversationId, userId, messageText);
       
       // Send notification to recipient
-      await supabaseService.notifyNewMessage(conversationId, userId, targetUserId);
+      await notificationService.notifyNewMessage(userId, targetUserId, messageText);
       
     } catch (error) {
       console.error('Error sending message:', error);
@@ -129,26 +130,41 @@ const ChatScreen = ({ route, navigation }) => {
     }
   };
 
-  const renderMessage = ({ item }) => (
+  const renderMessage = React.useCallback(({ item }) => (
     <View style={[
       styles.messageContainer,
       item.isOwn ? styles.ownMessage : styles.otherMessage
     ]}>
-      <Text style={[
-        styles.messageText,
-        item.isOwn ? styles.ownMessageText : styles.otherMessageText
+      <View style={[
+        styles.messageBubble,
+        item.isOwn ? styles.ownMessageBubble : styles.otherMessageBubble
       ]}>
-        {item.text}
-      </Text>
-      <Text style={styles.messageTime}>
-        {item.createdAt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-      </Text>
+        <Text style={[
+          styles.messageText,
+          item.isOwn ? styles.ownMessageText : styles.otherMessageText
+        ]}>
+          {item.text}
+        </Text>
+        <Text style={[
+          styles.messageTime,
+          item.isOwn ? styles.ownMessageTime : styles.otherMessageTime
+        ]}>
+          {item.createdAt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+        </Text>
+      </View>
     </View>
-  );
+  ), []);
 
   const EmptyState = () => (
     <View style={styles.emptyContainer}>
-      <Ionicons name="chatbubble-ellipses-outline" size={64} color="#9CA3AF" />
+      <View style={{
+        backgroundColor: '#fce7f3',
+        borderRadius: 50,
+        padding: 20,
+        marginBottom: 16,
+      }}>
+        <Ionicons name="chatbubble-ellipses-outline" size={48} color="#db2777" />
+      </View>
       <Text style={styles.emptyTitle}>Start the conversation</Text>
       <Text style={styles.emptySubtitle}>
         Send a message to {targetUserName}
@@ -158,13 +174,18 @@ const ChatScreen = ({ route, navigation }) => {
 
   return (
     <SafeAreaView style={styles.container}>
-      <View style={styles.header}>
+      <LinearGradient
+        colors={["#ebc5dd", "#ccc8e8"]}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 0 }}
+        style={styles.header}
+      >
         <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
-          <Ionicons name="arrow-back" size={24} color="#1F2937" />
+          <Ionicons name="arrow-back" size={24} color="#1f2937" />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>{targetUserName}</Text>
         <View style={styles.headerRight} />
-      </View>
+      </LinearGradient>
 
       <KeyboardAvoidingView 
         style={styles.chatContainer}
@@ -208,35 +229,45 @@ const ChatScreen = ({ route, navigation }) => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F5F5F5',
+    backgroundColor: '#f8fafc',
   },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 16,
-    paddingVertical: 12,
-    backgroundColor: '#FFFFFF',
-    borderBottomWidth: 1,
-    borderBottomColor: '#E5E7EB',
+    paddingVertical: 16,
+    borderRadius: 16,
+    marginHorizontal: 8,
+    marginTop: 8,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
   },
   backButton: {
     padding: 8,
+    borderRadius: 20,
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
   },
   headerTitle: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: '#1F2937',
+    fontSize: 20,
+    fontWeight: '700',
+    color: '#1f2937',
+    textAlign: 'center',
   },
   headerRight: {
     width: 40,
   },
   chatContainer: {
     flex: 1,
+    marginTop: 8,
   },
   messagesList: {
     flex: 1,
     paddingHorizontal: 16,
+    paddingTop: 8,
   },
   emptyContainer: {
     flex: 1,
@@ -253,72 +284,110 @@ const styles = StyleSheet.create({
   },
   emptySubtitle: {
     fontSize: 16,
-    color: '#6B7280',
+    color: '#6b7280',
     textAlign: 'center',
   },
   emptyList: {
     flex: 1,
   },
   messageContainer: {
-    marginVertical: 4,
-    maxWidth: '80%',
-    padding: 12,
-    borderRadius: 16,
+    marginVertical: 3,
+    maxWidth: '85%',
   },
   ownMessage: {
     alignSelf: 'flex-end',
-    backgroundColor: '#3B82F6',
   },
   otherMessage: {
     alignSelf: 'flex-start',
-    backgroundColor: '#FFFFFF',
+  },
+  messageBubble: {
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderRadius: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
+    elevation: 2,
+  },
+  ownMessageBubble: {
+    backgroundColor: '#db2777',
+    borderBottomRightRadius: 6,
+  },
+  otherMessageBubble: {
+    backgroundColor: '#ffffff',
+    borderBottomLeftRadius: 6,
     borderWidth: 1,
-    borderColor: '#E5E7EB',
+    borderColor: '#e5e7eb',
   },
   messageText: {
     fontSize: 16,
-    lineHeight: 20,
+    lineHeight: 22,
+    fontWeight: '400',
   },
   ownMessageText: {
-    color: '#FFFFFF',
+    color: '#ffffff',
   },
   otherMessageText: {
-    color: '#1F2937',
+    color: '#1f2937',
   },
   messageTime: {
-    fontSize: 12,
+    fontSize: 11,
     marginTop: 4,
-    opacity: 0.7,
+    fontWeight: '500',
+  },
+  ownMessageTime: {
+    color: 'rgba(255, 255, 255, 0.8)',
+    textAlign: 'right',
+  },
+  otherMessageTime: {
+    color: '#9ca3af',
+    textAlign: 'left',
   },
   inputContainer: {
     flexDirection: 'row',
     alignItems: 'flex-end',
     paddingHorizontal: 16,
-    paddingVertical: 12,
-    backgroundColor: '#FFFFFF',
+    paddingVertical: 16,
+    backgroundColor: '#ffffff',
     borderTopWidth: 1,
-    borderTopColor: '#E5E7EB',
+    borderTopColor: '#e5e7eb',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: -2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    elevation: 5,
   },
   textInput: {
     flex: 1,
     borderWidth: 1,
-    borderColor: '#D1D5DB',
-    borderRadius: 20,
-    paddingHorizontal: 16,
+    borderColor: '#d1d5db',
+    borderRadius: 24,
+    paddingHorizontal: 18,
     paddingVertical: 12,
     marginRight: 12,
-    maxHeight: 100,
+    maxHeight: 120,
     fontSize: 16,
+    backgroundColor: '#f9fafb',
+    color: '#1f2937',
   },
   sendButton: {
-    backgroundColor: '#3B82F6',
-    borderRadius: 20,
+    backgroundColor: '#db2777',
+    borderRadius: 24,
     padding: 12,
     alignItems: 'center',
     justifyContent: 'center',
+    minWidth: 48,
+    minHeight: 48,
+    shadowColor: '#db2777',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+    elevation: 4,
   },
   sendButtonDisabled: {
-    backgroundColor: '#9CA3AF',
+    backgroundColor: '#9ca3af',
+    shadowOpacity: 0.1,
   },
 });
 

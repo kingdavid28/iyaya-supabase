@@ -10,7 +10,7 @@ import {
 } from 'react-native';
 import { Card } from 'react-native-paper';
 import { Ionicons } from '@expo/vector-icons';
-import supabaseService from '../../../services/supabaseService';
+import { supabaseService } from '../../../services/supabase';
 import { useAuth } from '../../../contexts/AuthContext';
 
 const MessagesTab = ({ navigation, refreshing, onRefresh }) => {
@@ -25,7 +25,7 @@ const MessagesTab = ({ navigation, refreshing, onRefresh }) => {
     loadConversations();
     
     // Setup real-time subscription for new conversations
-    const subscription = supabaseService.subscribeToMessages('*', (payload) => {
+    const subscription = supabaseService.messaging.subscribeToMessages('*', (payload) => {
       if (payload.eventType === 'INSERT') {
         loadConversations();
       }
@@ -44,7 +44,7 @@ const MessagesTab = ({ navigation, refreshing, onRefresh }) => {
       const userId = user?.id;
       if (!userId) return;
       
-      const conversations = await supabaseService.getConversations(userId);
+      const conversations = await supabaseService.messaging.getConversations(userId);
       
       // Transform conversations for display
       const transformedConversations = conversations.map(conv => {

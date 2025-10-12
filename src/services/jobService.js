@@ -141,10 +141,10 @@ class JobService {
   async getAllJobs(filters = {}) {
     try {
       // Import supabaseService dynamically to avoid circular imports
-      const { supabaseService } = await import('./supabaseService');
+      const { supabaseService } = await import('./supabase');
       
       console.log('📋 Fetching all jobs with filters:', filters);
-      const jobs = await supabaseService.getJobs(filters);
+      const jobs = await supabaseService.jobs.getJobs(filters);
       
       console.log('📋 JobService - Fetched all jobs:', jobs?.length || 0);
       return jobs || [];
@@ -168,7 +168,7 @@ class JobService {
   async createJobPost(jobData) {
     try {
       // Import supabaseService dynamically to avoid circular imports
-      const { supabaseService } = await import('./supabaseService');
+      const { supabaseService } = await import('./supabase');
       const { supabase } = await import('../config/supabase');
       
       const { data: { user }, error } = await supabase.auth.getUser();
@@ -177,7 +177,7 @@ class JobService {
       }
       
       // Get user profile to get name
-      const profile = await supabaseService.getProfile(user.id);
+      const profile = await supabaseService.user.getProfile(user.id);
       
       const jobPayload = {
         ...jobData,
@@ -186,7 +186,7 @@ class JobService {
       };
       
       console.log('📝 Creating job with data:', jobPayload);
-      const result = await supabaseService.createJob(jobPayload);
+      const result = await supabaseService.jobs.createJob(jobPayload);
       console.log('✅ Job created successfully:', result);
       
       return { data: result };
@@ -225,7 +225,7 @@ class JobService {
   async getMyJobs(page = 1, limit = 10) {
     try {
       // Import supabaseService dynamically to avoid circular imports
-      const { supabaseService } = await import('./supabaseService');
+      const { supabaseService } = await import('./supabase');
       const { supabase } = await import('../config/supabase');
       
       const { data: { user }, error } = await supabase.auth.getUser();
@@ -234,7 +234,7 @@ class JobService {
       }
       
       console.log('📋 Fetching jobs for user:', user.id);
-      const jobs = await supabaseService.getMyJobs(user.id);
+      const jobs = await supabaseService.jobs.getMyJobs(user.id);
       
       console.log('📋 JobService - Fetched jobs:', jobs?.length || 0);
       return { jobs: jobs || [] };

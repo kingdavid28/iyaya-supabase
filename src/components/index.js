@@ -1,5 +1,6 @@
 // UI Components - Modals
-export { default as BookingDetailsModal } from './ui/modals/BookingDetailsModal';
+export { default as BookingDetailsModal } from './BookingDetailsModal';
+export { default as BookingModal } from '../screens/ParentDashboard/modals/BookingModal';
 export { default as RequestInfoModal } from './ui/modals/RequestInfoModal';
 export { default as SettingsModal } from './ui/modals/SettingsModal';
 

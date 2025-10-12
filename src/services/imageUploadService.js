@@ -1,5 +1,5 @@
 import * as ImagePicker from 'expo-image-picker';
-import { supabaseService } from './supabaseService';
+import { supabaseService } from './supabase';
 
 export const imageUploadService = {
   async pickAndUploadProfileImage(userId) {
@@ -32,8 +32,8 @@ export const imageUploadService = {
         throw new Error('Failed to get image data');
       }
 
-      // Upload to Supabase
-      const uploadResult = await supabaseService.uploadProfileImage(userId, asset.base64);
+      // Upload to Supabase using new architecture
+      const uploadResult = await supabaseService.user.uploadProfileImage(userId, asset.base64);
       return uploadResult;
 
     } catch (error) {

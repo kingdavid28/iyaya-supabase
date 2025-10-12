@@ -1,25 +1,57 @@
-// Legacy userService - now redirects to Supabase services
-// This file is kept for backward compatibility but no longer uses old API
+// Legacy userService - now uses Supabase services
+// This file provides backward compatibility while using new Supabase architecture
 import { logger } from "../utils/logger"
 
 class UserService {
   // Create/Upsert profile for the authenticated user
   async createProfile(userId, profile) {
-    throw new Error('Use Supabase services instead - old backend is deprecated');
+    try {
+      const { supabaseService } = await import('./supabase');
+      return await supabaseService.user.updateProfile(userId, profile);
+    } catch (error) {
+      logger.error('Create profile error:', error);
+      throw error;
+    }
   }
 
   // Update children for parent user
   async updateChildren(children, userId) {
-    throw new Error('Use Supabase childrenAPI instead - old backend is deprecated');
+    try {
+      const { supabaseService } = await import('./supabase');
+      const results = [];
+      for (const child of children) {
+        if (child.id) {
+          results.push(await supabaseService.children.updateChild(child.id, child));
+        } else {
+          results.push(await supabaseService.children.addChild(userId, child));
+        }
+      }
+      return results;
+    } catch (error) {
+      logger.error('Update children error:', error);
+      throw error;
+    }
   }
 
   // Profile Management
   async getProfile(userId, forceRefresh = false) {
-    throw new Error('Use AuthContext.getUserProfile instead - old backend is deprecated');
+    try {
+      const { supabaseService } = await import('./supabase');
+      return await supabaseService.user.getProfile(userId);
+    } catch (error) {
+      logger.error('Get profile error:', error);
+      throw error;
+    }
   }
 
   async updateProfile(userId, updates) {
-    throw new Error('Use Supabase services instead - old backend is deprecated');
+    try {
+      const { supabaseService } = await import('./supabase');
+      return await supabaseService.user.updateProfile(userId, updates);
+    } catch (error) {
+      logger.error('Update profile error:', error);
+      throw error;
+    }
   }
 
   // Preferences
@@ -156,24 +188,12 @@ class UserService {
   // Search Nannies
   async searchNannies(filters = {}, page = 1, limit = 10) {
     try {
-      // Create cache key based on filters
-      const cacheKey = `caregivers:${JSON.stringify(filters)}:${page}:${limit}`
-      // Note: Cache functionality removed to prevent circular dependencies
+      const { supabaseService } = await import('./supabase');
       logger.info('Searching caregivers with filters:', filters)
-
-      // Build query string from filters
-      const queryParams = new URLSearchParams({
-        page: page.toString(),
-        limit: limit.toString(),
-        ...filters
-      })
-
-      const result = await api.get(`/caregivers?${queryParams}`)
-
-      // Note: Cache functionality removed to prevent circular dependencies
+      
+      const result = await supabaseService.user.getCaregivers(filters);
       logger.info('Caregivers search completed successfully');
-
-      return result
+      return result;
     } catch (error) {
       logger.error("Failed to search caregivers:", error)
       throw error

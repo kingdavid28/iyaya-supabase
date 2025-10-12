@@ -5,18 +5,21 @@ import React, { useCallback, useEffect, useState } from "react"
 import { ActivityIndicator, Alert, Dimensions, Image, Linking, Modal, Platform, Pressable, RefreshControl, ScrollView, Text, TextInput, View, FlatList } from "react-native"
 import { Button, Card, Chip, Searchbar } from "react-native-paper"
 import Toast from "../components/ui/feedback/Toast"
-import { supabaseService } from '../services/supabaseService'
+import { supabaseService } from '../services/supabase'
 import { getCurrentSocketURL } from '../config/api'
 import { useAuth } from "../contexts/AuthContext"
 
 import { usePrivacy } from '../components/features/privacy/PrivacyManager';
 import { SettingsModal } from "../components/ui/modals/SettingsModal"
 import { RequestInfoModal } from "../components/ui/modals/RequestInfoModal"
+import BookingDetailsModal from '../components/BookingDetailsModal';
 
 import { formatAddress } from "../utils/addressUtils"
 import { calculateAge } from "../utils/dateUtils"
 import { __DEV__ } from "../config/constants"
 import MessagesTab from './CaregiverDashboard/components/MessagesTab';
+import NotificationsTab from './CaregiverDashboard/components/NotificationsTab';
+import BookingsTab from './CaregiverDashboard/BookingsTab';
 
 import { 
   EmptyState, 
@@ -854,7 +857,7 @@ function CaregiverDashboard({ onLogout, route }) {
 
     const loadConversations = async () => {
       try {
-        const conversations = await supabaseService.getConversations(user.id);
+        const conversations = await supabaseService.messaging.getConversations(user.id);
         console.log('📨 Caregiver received conversations:', conversations.length);
         setParents(conversations.map(conv => {
           const otherParticipant = conv.participant_1 === user.id ? conv.participant_2 : conv.participant_1;
@@ -880,8 +883,8 @@ function CaregiverDashboard({ onLogout, route }) {
 
     const loadMessages = async () => {
       try {
-        const conversation = await supabaseService.getOrCreateConversation(user.id, selectedParent.id);
-        const messagesData = await supabaseService.getMessages(conversation.id);
+        const conversation = await supabaseService.messaging.getOrCreateConversation(user.id, selectedParent.id);
+        const messagesData = await supabaseService.messaging.getMessages(conversation.id);
         console.log('📨 Received messages:', messagesData.length);
         setMessages(messagesData);
       } catch (error) {
@@ -1006,10 +1009,9 @@ function CaregiverDashboard({ onLogout, route }) {
 
   const handleConfirmAttendance = async (booking) => {
     try {
-      await supabaseService.updateBookingStatus(
+      await supabaseService.bookings.updateBookingStatus(
         booking.id,
-        'confirmed',
-        'Caregiver confirmed attendance'
+        'confirmed'
       );
 
       showToast('Attendance confirmed successfully!', 'success');
@@ -1032,7 +1034,7 @@ function CaregiverDashboard({ onLogout, route }) {
     }
 
     try {
-      const conversation = await supabaseService.getOrCreateConversation(user.id, selectedParent.id);
+      const conversation = await supabaseService.messaging.getOrCreateConversation(user.id, selectedParent.id);
       
       console.log('📨 Caregiver sending message:', {
         senderId: user.id,
@@ -1041,12 +1043,12 @@ function CaregiverDashboard({ onLogout, route }) {
         message: newMessage.trim()
       });
 
-      await supabaseService.sendMessage(conversation.id, user.id, newMessage.trim());
+      await supabaseService.messaging.sendMessage(conversation.id, user.id, newMessage.trim());
       setNewMessage('');
       console.log('✅ Caregiver message sent successfully');
       
       // Reload messages to show the new one
-      const messagesData = await supabaseService.getMessages(conversation.id);
+      const messagesData = await supabaseService.messaging.getMessages(conversation.id);
       setMessages(messagesData);
     } catch (error) {
       console.error('❌ Error sending caregiver message:', error);
@@ -1067,7 +1069,7 @@ function CaregiverDashboard({ onLogout, route }) {
       setApplicationSubmitting(true)
 
       console.log('Submitting application with jobId:', jobId);
-      const response = await supabaseService.applyToJob(
+      const response = await supabaseService.applications.applyToJob(
         jobId,
         user.id,
         coverLetter || ''
@@ -1080,7 +1082,7 @@ function CaregiverDashboard({ onLogout, route }) {
         if (parentId && parentId !== user?.id) {
           try {
             console.log('🔗 Creating Supabase conversation for application:', { caregiverId: user.id, parentId });
-            await supabaseService.getOrCreateConversation(user.id, parentId);
+            await supabaseService.messaging.getOrCreateConversation(user.id, parentId);
             console.log('✅ Supabase conversation created successfully');
           } catch (connectionError) {
             console.warn('⚠️ Failed to create Supabase conversation:', connectionError.message);
@@ -1149,9 +1151,9 @@ function CaregiverDashboard({ onLogout, route }) {
       console.log('💾 Dashboard payload:', payload);
       
       if (isCaregiver) {
-        await supabaseService.updateProfile(user.id, payload);
+        await supabaseService.user.updateProfile(user.id, payload);
       } else {
-        await supabaseService.updateProfile(user.id, { name: payload.name });
+        await supabaseService.user.updateProfile(user.id, { name: payload.name });
       }
       
       await loadProfile()
@@ -1292,8 +1294,8 @@ function CaregiverDashboard({ onLogout, route }) {
                     setSelectedParent(item);
                     setChatActive(true);
                     // Mark messages as read when opening chat
-                    const conversation = await supabaseService.getOrCreateConversation(user.id, item.id);
-                    await supabaseService.markMessagesAsRead(conversation.id, user.id);
+                    const conversation = await supabaseService.messaging.getOrCreateConversation(user.id, item.id);
+                    await supabaseService.messaging.markMessagesAsRead(conversation.id, user.id);
                   }}
                 >
                   <Ionicons name="person-circle" size={40} color="#3B82F6" />
@@ -1845,51 +1847,18 @@ function CaregiverDashboard({ onLogout, route }) {
         )}
 
         {activeTab === "bookings" && (
-          <ScrollView style={styles.content}>
-            <View style={styles.section}>
-              <View style={styles.bookingFilters}>
-                <Chip
-                  style={[styles.bookingFilterChip, styles.bookingFilterChipActive]}
-                  textStyle={styles.bookingFilterChipText}
-                >
-                  Upcoming
-                </Chip>
-                <Chip
-                  style={styles.bookingFilterChip}
-                  textStyle={styles.bookingFilterChipText}
-                >
-                  Past
-                </Chip>
-                <Chip
-                  style={styles.bookingFilterChip}
-                  textStyle={styles.bookingFilterChipText}
-                >
-                  Cancelled
-                </Chip>
-              </View>
-
-              {bookings.length > 0 ? (
-                (bookings || []).map((booking, index) => (
-                  <BookingCard
-                    key={booking.id || index}
-                    booking={booking}
-                    onMessage={handleBookingMessage}
-                    onViewDetails={(booking) => {
-                      setSelectedBooking(booking)
-                      setShowBookingDetails(true)
-                    }}
-                    onConfirmAttendance={handleConfirmAttendance}
-                  />
-                ))
-              ) : (
-                <EmptyState 
-                  icon="calendar" 
-                  title="No bookings yet"
-                  subtitle="Your upcoming bookings will appear here"
-                />
-              )}
-            </View>
-          </ScrollView>
+          <BookingsTab
+            bookings={bookings}
+            onMessageFamily={handleBookingMessage}
+            onConfirmBooking={handleConfirmAttendance}
+            onViewDetails={(booking) => {
+              setSelectedBooking(booking)
+              setShowBookingDetails(true)
+            }}
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            loading={false}
+          />
         )}
 
         {activeTab === "messages" && (
@@ -1902,84 +1871,24 @@ function CaregiverDashboard({ onLogout, route }) {
         {activeTab === "reviews" && renderReviewsTab()}
 
         {activeTab === "notifications" && (
-          <ScrollView style={styles.content}>
-            <View style={styles.section}>
-              {(() => {
-                const allNotifications = [
-                  ...(notifications || []),
-                  ...(pendingRequests || []).map(req => ({
-                    id: req.id,
-                    type: 'privacy_request',
-                    title: 'Privacy Request',
-                    message: `${req.requesterName} requested access to your information`,
-                    timestamp: req.createdAt,
-                    read: false
-                  }))
-                ];
-                
-                return allNotifications.length > 0 ? (
-                  allNotifications.map((notification, index) => (
-                    <Card key={notification.id || index} style={styles.notificationCard}>
-                      <Card.Content style={styles.notificationContent}>
-                        <View style={styles.notificationHeader}>
-                          <View style={styles.notificationIcon}>
-                            <Ionicons 
-                              name={notification.type === 'privacy_request' ? 'shield' : 'notifications'} 
-                              size={20} 
-                              color={notification.read ? '#6B7280' : '#3B82F6'} 
-                            />
-                          </View>
-                          <View style={styles.notificationText}>
-                            <Text style={[styles.notificationTitle, !notification.read && styles.unreadTitle]}>
-                              {notification.title}
-                            </Text>
-                            <Text style={styles.notificationMessage}>
-                              {notification.message}
-                            </Text>
-                            <Text style={styles.notificationTime}>
-                              {formatDate(notification.timestamp)}
-                            </Text>
-                          </View>
-                          {!notification.read && (
-                            <View style={styles.unreadDot} />
-                          )}
-                        </View>
-                      </Card.Content>
-                    </Card>
-                  ))
-                ) : (
-                  <EmptyState 
-                    icon="notifications" 
-                    title="No notifications"
-                    subtitle="You're all caught up!"
-                  />
-                );
-              })()
-              }
-            </View>
-          </ScrollView>
+          <NotificationsTab 
+            navigation={navigation}
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+          />
         )}
       </View>
 
       {renderEditProfileModal()}
 
-      {showBookingDetails && selectedBooking && (
-        <ModalWrapper 
-          visible={showBookingDetails} 
-          onClose={() => setShowBookingDetails(false)}
-        >
-          <SharedCard style={styles.editProfileModal}>
-              <Text style={styles.editProfileTitle}>{selectedBooking.family}</Text>
-              <Text style={styles.profileSectionText}>Children: {selectedBooking.children}</Text>
-              <Text style={styles.profileSectionText}>Date: {formatDate(selectedBooking.date)}</Text>
-              <Text style={styles.profileSectionText}>Time: {selectedBooking.time}</Text>
-              <Text style={styles.profileSectionText}>Location: {selectedBooking.location}</Text>
-              <View style={{ flexDirection: 'row', justifyContent: 'flex-end', marginTop: 12 }}>
-                <SharedButton title="Close" variant="secondary" onPress={() => setShowBookingDetails(false)} />
-              </View>
-          </SharedCard>
-        </ModalWrapper>
-      )}
+      <BookingDetailsModal
+        visible={showBookingDetails}
+        booking={selectedBooking}
+        onClose={() => setShowBookingDetails(false)}
+        onMessage={(booking) => handleBookingMessage(booking)}
+        onConfirm={(booking) => handleConfirmAttendance(booking)}
+        userType="caregiver"
+      />
 
       {showJobApplication && selectedJob && (
         <Modal

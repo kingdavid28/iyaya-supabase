@@ -130,6 +130,20 @@ const Header = ({ navigation, onProfilePress, onSignOut, greetingName, onProfile
             
             <Pressable 
               style={[styles.headerButton, { position: 'relative' }]} 
+              onPress={() => setActiveTab('alerts')}
+            >
+              <Ionicons name="notifications-outline" size={22} color="#db2777" />
+              {(unreadNotifications > 0) && (
+                <View style={headerStyles.notificationBadge}>
+                  <Text style={headerStyles.notificationBadgeText}>
+                    {unreadNotifications > 99 ? '99+' : unreadNotifications}
+                  </Text>
+                </View>
+              )}
+            </Pressable>
+            
+            <Pressable 
+              style={[styles.headerButton, { position: 'relative' }]} 
               onPress={() => setShowRequestModal(true)}
             >
               <Ionicons name="mail-outline" size={22} color="#db2777" />

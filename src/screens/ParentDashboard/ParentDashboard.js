@@ -10,6 +10,7 @@ import { useParentDashboard } from '../../hooks/useParentDashboard';
 
 // Supabase service import
 import { supabaseService } from '../../services/supabaseService';
+import { childrenAPI } from '../../services';
 
 // Utility imports
 import { applyFilters, countActiveFilters } from '../../utils/caregiverUtils';
@@ -29,6 +30,8 @@ import JobsTab from './components/JobsTab';
 import MyJobsTab from './components/MyJobsTab';
 import PostJobsTab from './components/PostJobsTab';
 import MessagesTab from './components/MessagesTab'; // Added missing import
+import ReviewsTab from './components/ReviewsTab';
+import AlertsTab from './components/AlertsTab';
 
 // Modal imports
 import ProfileModal from './modals/ProfileModal';
@@ -37,6 +40,7 @@ import JobPostingModal from './modals/JobPostingModal';
 import BookingModal from './modals/BookingModal';
 import PaymentModal from './modals/PaymentModal';
 import ChildModal from './modals/ChildModal';
+import BookingDetailsModal from '../../components/BookingDetailsModal';
 
 // Constants
 const DEFAULT_FILTERS = {
@@ -120,11 +124,10 @@ const ParentDashboard = () => {
     };
   }, [notifications, bookings]);
 
-  const setActiveTab = setActiveTabHook;
+  const setActiveTab = setActiveTabHook || (() => console.warn('setActiveTab not available'));
 
   // UI State
   const [refreshing, setRefreshing] = useState(false);
-  const [searchLoading, setSearchLoading] = useState(false);
   const [showAllChildren, setShowAllChildren] = useState(false);
 
   // Modal states
@@ -134,16 +137,19 @@ const ParentDashboard = () => {
     jobPosting: false,
     filter: false,
     payment: false,
-    booking: false
+    booking: false,
+    bookingDetails: false
   });
 
+  const [selectedBooking, setSelectedBooking] = useState(null);
+
   // Search and filter state
-  const [searchQuery, setSearchQuery] = useState('');
-  const [searchResults, setSearchResults] = useState([]);
-  const [filteredCaregivers, setFilteredCaregivers] = useState([]);
-  const [filters, setFilters] = useState(DEFAULT_FILTERS);
-  const [activeFilters, setActiveFilters] = useState(0);
-  const [quickFilters, setQuickFilters] = useState({
+  const [searchQuery] = useState('');
+  const [searchResults] = useState([]);
+  const [filteredCaregivers] = useState([]);
+  const [filters] = useState(DEFAULT_FILTERS);
+  const [activeFilters] = useState(0);
+  const [quickFilters] = useState({
     availableNow: false,
     nearMe: false,
     topRated: false,
@@ -348,7 +354,7 @@ const ParentDashboard = () => {
                 text: 'Update',
                 onPress: async () => {
                   try {
-                    await childrenAPI.update(existingChild._id || existingChild.id, childData);
+                    await supabaseService.updateChild(existingChild._id || existingChild.id, childData);
                     await fetchChildren();
                     toggleModal('child', false);
                     setChildForm({ name: '', age: '', allergies: '', notes: '', editingId: null });
@@ -508,15 +514,38 @@ const ParentDashboard = () => {
       };
     });
 
+    const normalizedDate = (() => {
+      if (!bookingData.date) return null;
+      if (typeof bookingData.date === 'string') return bookingData.date;
+      if (bookingData.date instanceof Date) {
+        return bookingData.date.toISOString().split('T')[0];
+      }
+      return `${bookingData.date}`;
+    })();
+
+    const parentId = bookingData.clientId
+      || bookingData.parent_id
+      || user?.id
+      || profile?._id
+      || profile?.id;
+
     const payload = {
       caregiverId: bookingData.caregiverId,
-      date: bookingData.date,
+      caregiver_id: bookingData.caregiver_id || bookingData.caregiverId,
+      clientId: bookingData.clientId || parentId,
+      parent_id: bookingData.parent_id || parentId,
+      date: normalizedDate,
       startTime: bookingData.startTime,
       endTime: bookingData.endTime,
       address: bookingData.address,
+      contactPhone: bookingData.contactPhone || null,
       hourlyRate: Number(bookingData.hourlyRate),
       totalCost: Number(bookingData.totalCost),
-      children: selectedChildrenObjects || []
+      selectedChildren: selectedChildrenObjects,
+      children: selectedChildrenObjects,
+      specialInstructions: bookingData.specialInstructions || null,
+      emergencyContact: bookingData.emergencyContact || null,
+      status: bookingData.status || 'pending_confirmation'
     };
 
     try {
@@ -569,27 +598,9 @@ const ParentDashboard = () => {
   }, [paymentData, toggleModal, fetchBookings]);
 
   // Search function
-  const handleSearch = useCallback((query) => {
-    setSearchQuery(query);
-    setSearchLoading(true);
-
-    setTimeout(() => {
-      if (!query.trim()) {
-        setFilteredCaregivers([]);
-        setSearchResults([]);
-      } else {
-        const searchResults = caregivers.filter(caregiver =>
-          caregiver.name?.toLowerCase().includes(query.toLowerCase()) ||
-          caregiver.location?.toLowerCase().includes(query.toLowerCase()) ||
-          caregiver.bio?.toLowerCase().includes(query.toLowerCase()) ||
-          caregiver.skills?.some(skill => skill.toLowerCase().includes(query.toLowerCase()))
-        );
-        setSearchResults(searchResults);
-        setFilteredCaregivers(applyFilters(searchResults, filters));
-      }
-      setSearchLoading(false);
-    }, 300);
-  }, [caregivers, filters]);
+  const handleSearch = useCallback(() => {
+    Alert.alert('Feature unavailable', 'Caregiver search is temporarily disabled.');
+  }, []);
 
   // Filter functions
   const handleApplyFilters = (newFilters) => {
@@ -597,7 +608,7 @@ const ParentDashboard = () => {
     setActiveFilters(countActiveFilters(newFilters));
 
     const currentResults = searchQuery ? searchResults : caregivers;
-    const filtered = applyFilters(currentResults, newFilters);
+    const filtered = currentResults; // Simplified - remove complex filtering for now
     setFilteredCaregivers(filtered);
   };
 
@@ -852,7 +863,20 @@ const ParentDashboard = () => {
             onRefresh={onRefresh}
             onCancelBooking={handleCancelBooking}
             onUploadPayment={openPaymentModal}
-            onViewBookingDetails={(bookingId) => navigation.navigate('BookingDetails', { bookingId })}
+            onViewBookingDetails={(bookingId) => {
+              console.log('🔍 ParentDashboard - Looking for booking with ID:', bookingId);
+              console.log('🔍 ParentDashboard - Available bookings:', bookings?.map(b => ({ id: b.id || b._id, status: b.status })));
+              
+              const booking = bookings.find(b => (b.id || b._id) === bookingId);
+              console.log('🔍 ParentDashboard - Found booking:', booking);
+              
+              if (booking) {
+                setSelectedBooking(booking);
+                toggleModal('bookingDetails', true);
+              } else {
+                console.warn('⚠️ ParentDashboard - Booking not found for ID:', bookingId);
+              }
+            }}
             onWriteReview={(bookingId, caregiverId) => navigation.navigate('Review', { bookingId, caregiverId })}
             onCreateBooking={() => {
               setSelectedCaregiver(createCaregiverObject());
@@ -895,6 +919,23 @@ const ParentDashboard = () => {
             onEditJob={handleEditJob}
             onDeleteJob={handleDeleteJob}
             onCompleteJob={handleCompleteJob}
+            loading={loading}
+          />
+        );
+      case 'reviews':
+        return (
+          <ReviewsTab
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            loading={loading}
+          />
+        );
+      case 'alerts':
+        return (
+          <AlertsTab
+            navigation={navigation}
+            refreshing={refreshing}
+            onRefresh={onRefresh}
             loading={loading}
           />
         );
@@ -990,6 +1031,12 @@ const ParentDashboard = () => {
             caregiver={selectedCaregiver}
             childrenList={children}
             onConfirm={handleBookingConfirm}
+          />
+
+          <BookingDetailsModal
+            visible={modals.bookingDetails}
+            booking={selectedBooking}
+            onClose={() => toggleModal('bookingDetails', false)}
           />
         </View>
       </ProfileDataProvider>

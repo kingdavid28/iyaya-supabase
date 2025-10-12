@@ -668,6 +668,11 @@ export const supabaseService = {
       const { data: { user } } = await supabase.auth.getUser()
       const parentProfile = user ? await this.getProfile(user.id) : null
       
+      const validStatuses = ['pending', 'confirmed', 'completed', 'cancelled']
+      const normalizedStatus = validStatuses.includes(bookingData.status)
+        ? bookingData.status
+        : 'pending'
+
       const dbBookingData = {
         parent_id: parentId,
         caregiver_id: caregiverId,
@@ -677,19 +682,11 @@ export const supabaseService = {
         end_time: bookingData.endTime || bookingData.end_time || '17:00:00',
         hourly_rate: bookingData.hourlyRate || bookingData.hourly_rate || 300,
         total_amount: bookingData.totalCost || bookingData.total_amount || 0,
-        status: bookingData.status || 'pending',
+        status: normalizedStatus,
         address: bookingData.address || null,
         contact_phone: bookingData.contactPhone || bookingData.contact_phone || null,
-        selected_children: bookingData.selectedChildren || bookingData.selected_children || [],
-        special_instructions: bookingData.specialInstructions || bookingData.special_instructions || null,
-        emergency_contact: bookingData.emergencyContact || bookingData.emergency_contact || null,
-        caregiver_name: bookingData.caregiver?.name || bookingData.caregiver_name || bookingData.caregiver || 'Unknown Caregiver',
-        parent_name: parentProfile?.name || bookingData.parent?.name || user?.user_metadata?.name || 'Parent',
-        time_display: bookingData.time || bookingData.time_display || null,
         created_at: new Date().toISOString()
       }
-
-      console.log('📝 Database booking data:', dbBookingData)
 
       const { data, error } = await supabase
         .from('bookings')
@@ -1222,6 +1219,108 @@ export const supabaseService = {
   },
 
   // ============ NOTIFICATION METHODS ============
+  async getNotifications(userId, limit = 50) {
+    try {
+      this._validateId(userId, 'User ID')
+      
+      const { data, error } = await supabase
+        .from('notifications')
+        .select('*')
+        .eq('user_id', userId)
+        .order('created_at', { ascending: false })
+        .limit(limit)
+      
+      if (error) throw error
+      return data || []
+    } catch (error) {
+      console.warn('⚠️ getNotifications error:', error.message)
+      return []
+    }
+  },
+
+  async getUnreadNotificationCount(userId) {
+    try {
+      this._validateId(userId, 'User ID')
+      
+      const { count, error } = await supabase
+        .from('notifications')
+        .select('*', { count: 'exact', head: true })
+        .eq('user_id', userId)
+        .eq('read', false)
+      
+      if (error) throw error
+      return count || 0
+    } catch (error) {
+      console.warn('⚠️ getUnreadNotificationCount error:', error.message)
+      return 0
+    }
+  },
+
+  async markNotificationAsRead(notificationId) {
+    try {
+      this._validateId(notificationId, 'Notification ID')
+      
+      const { error } = await supabase
+        .from('notifications')
+        .update({ read: true, read_at: new Date().toISOString() })
+        .eq('id', notificationId)
+      
+      if (error) throw error
+      return { success: true }
+    } catch (error) {
+      return this._handleError('markNotificationAsRead', error)
+    }
+  },
+
+  async markAllNotificationsAsRead(userId) {
+    try {
+      this._validateId(userId, 'User ID')
+      
+      const { error } = await supabase
+        .from('notifications')
+        .update({ read: true, read_at: new Date().toISOString() })
+        .eq('user_id', userId)
+        .eq('read', false)
+      
+      if (error) throw error
+      return { success: true }
+    } catch (error) {
+      return this._handleError('markAllNotificationsAsRead', error)
+    }
+  },
+
+  async createNotification(notificationData) {
+    try {
+      const { data, error } = await supabase
+        .from('notifications')
+        .insert([{
+          ...notificationData,
+          created_at: new Date().toISOString()
+        }])
+        .select()
+        .single()
+      
+      if (error) throw error
+      return data
+    } catch (error) {
+      return this._handleError('createNotification', error)
+    }
+  },
+
+  subscribeToNotifications(userId, callback) {
+    this._validateId(userId, 'User ID')
+    
+    return supabase
+      .channel(`notifications:${userId}`)
+      .on('postgres_changes', {
+        event: '*',
+        schema: 'public',
+        table: 'notifications',
+        filter: `user_id=eq.${userId}`
+      }, callback)
+      .subscribe()
+  },
+
   async notifyNewMessage(messageData) {
     try {
       // In a real app, this would send push notifications

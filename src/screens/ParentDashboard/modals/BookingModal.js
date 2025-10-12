@@ -36,7 +36,7 @@ import {
 import CustomDateTimePicker from '../../../shared/ui/inputs/DateTimePicker';
 import TimePicker from '../../../shared/ui/inputs/TimePicker';
 import { formatAddress } from '../../../utils/addressUtils';
-import { getCurrentDeviceLocation, searchLocation } from '../../../utils/locationUtils';
+import { getCurrentDeviceLocation } from '../../../utils/locationUtils';
 import { getImageSource } from '../../../utils/imageUtils';
 
 const BookingModal = ({ caregiver, childrenList = [], onConfirm, onClose, visible }) => {
@@ -58,10 +58,6 @@ const BookingModal = ({ caregiver, childrenList = [], onConfirm, onClose, visibl
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState('');
   const [locationLoading, setLocationLoading] = useState(false);
-  const [locationSearchVisible, setLocationSearchVisible] = useState(false);
-  const [locationSearchText, setLocationSearchText] = useState('');
-  const [locationSearchResults, setLocationSearchResults] = useState([]);
-  const [locationSearchLoading, setLocationSearchLoading] = useState(false);
 
   const resolveHourlyRate = () => {
     if (typeof caregiver?.hourlyRate === 'number' && caregiver.hourlyRate > 0) return caregiver.hourlyRate;
@@ -111,30 +107,6 @@ const BookingModal = ({ caregiver, childrenList = [], onConfirm, onClose, visibl
       Alert.alert('Location Error', error.message || 'Failed to get current location.');
     } finally {
       setLocationLoading(false);
-    }
-  };
-
-  const handleLocationSearch = async () => {
-    if (!locationSearchText.trim()) return;
-    
-    try {
-      setLocationSearchLoading(true);
-      const result = await searchLocation(locationSearchText);
-      setLocationSearchResults([result]);
-    } catch (error) {
-      Alert.alert('Search Failed', error.message || 'Failed to search location.');
-    } finally {
-      setLocationSearchLoading(false);
-    }
-  };
-
-  const selectLocationFromSearch = (location) => {
-    if (location && location.address) {
-      const formattedAddress = `${location.address.street || ''} ${location.address.city || ''}, ${location.address.province || ''}`;
-      setBookingData({ ...bookingData, address: formattedAddress.trim() });
-      setLocationSearchVisible(false);
-      setLocationSearchText('');
-      setLocationSearchResults([]);
     }
   };
 
@@ -353,15 +325,6 @@ const BookingModal = ({ caregiver, childrenList = [], onConfirm, onClose, visibl
         >
           {locationLoading ? 'Getting Location...' : 'Use Current Location (GPS)'}
         </Button>
-        
-        <Button
-          mode="outlined"
-          onPress={() => setLocationSearchVisible(true)}
-          style={styles.searchButton}
-          icon="magnify"
-        >
-          Search Location
-        </Button>
       </View>
       
       <View style={styles.inputContainer}>
@@ -422,36 +385,164 @@ const BookingModal = ({ caregiver, childrenList = [], onConfirm, onClose, visibl
     </View>
   );
 
-  const renderStep4 = () => (
-    <View style={styles.stepContainer}>
-      <Text style={styles.sectionTitle}>Booking Summary</Text>
-      
-      {/* Caregiver Info */}
-      <View style={styles.caregiverSummary}>
-        <View style={styles.caregiverHeader}>
-          {caregiver?.avatar || caregiver?.profileImage ? (
-            <Image 
-              source={getImageSource(caregiver.avatar || caregiver.profileImage)}
-              style={styles.avatar}
-            />
-          ) : (
-            <View style={[styles.avatar, { backgroundColor: '#f3f4f6', justifyContent: 'center', alignItems: 'center' }]}>
-              <User size={32} color="#6b7280" />
+  const renderStep4 = () => {
+    const calculateDuration = () => {
+      if (!bookingData.startTime || !bookingData.endTime) return 0;
+      const start = new Date(`2024-01-01T${convertTo24Hour(bookingData.startTime)}`);
+      const end = new Date(`2024-01-01T${convertTo24Hour(bookingData.endTime)}`);
+      return Math.max(0, (end.getTime() - start.getTime()) / (1000 * 60 * 60));
+    };
+
+    return (
+      <ScrollView style={styles.reviewContainer} showsVerticalScrollIndicator={false}>
+        <Text style={styles.sectionTitle}>Review Booking Details</Text>
+        
+        {/* Caregiver Information */}
+        <View style={styles.reviewCard}>
+          <Text style={styles.reviewCardTitle}>Caregiver Information</Text>
+          <View style={styles.caregiverHeader}>
+            {caregiver?.avatar || caregiver?.profileImage ? (
+              <Image 
+                source={getImageSource(caregiver.avatar || caregiver.profileImage)}
+                style={styles.reviewAvatar}
+              />
+            ) : (
+              <View style={[styles.reviewAvatar, styles.avatarPlaceholder]}>
+                <User size={24} color="#6b7280" />
+              </View>
+            )}
+            <View style={styles.caregiverInfo}>
+              <Text style={styles.caregiverName}>{caregiver.name}</Text>
+              <Text style={styles.rateText}>₱{resolveHourlyRate()}/hour</Text>
             </View>
-          )}
-          <View style={styles.caregiverInfo}>
-            <Text style={styles.caregiverName}>{caregiver.name}</Text>
-            <Text style={styles.rateText}>₱{resolveHourlyRate()}/hr</Text>
           </View>
         </View>
-      </View>
-      
-      <View style={[styles.summaryRow, styles.totalRow]}>
-        <Text style={styles.totalLabel}>Total Amount:</Text>
-        <Text style={styles.totalAmount}>₱{calculateTotalCost()}</Text>
-      </View>
-    </View>
-  );
+
+        {/* Schedule Details */}
+        <View style={[styles.reviewCard, styles.scheduleCard]}>
+          <Text style={styles.reviewCardTitle}>Schedule Details</Text>
+          <View style={styles.scheduleDetails}>
+            <View style={styles.scheduleRow}>
+              <Calendar size={16} color="#3b82f6" />
+              <Text style={styles.scheduleLabel}>Date:</Text>
+              <Text style={styles.scheduleValue}>{bookingData.date ? new Date(bookingData.date).toLocaleDateString() : 'Not selected'}</Text>
+            </View>
+            <View style={styles.scheduleRow}>
+              <Clock size={16} color="#3b82f6" />
+              <Text style={styles.scheduleLabel}>Time:</Text>
+              <Text style={styles.scheduleValue}>{bookingData.startTime} - {bookingData.endTime}</Text>
+            </View>
+            <View style={styles.scheduleRow}>
+              <Clock size={16} color="#3b82f6" />
+              <Text style={styles.scheduleLabel}>Duration:</Text>
+              <Text style={styles.scheduleValue}>{calculateDuration().toFixed(1)} hours</Text>
+            </View>
+          </View>
+        </View>
+
+        {/* Children Details */}
+        <View style={[styles.reviewCard, styles.childrenCard]}>
+          <Text style={styles.reviewCardTitle}>Children Details</Text>
+          <View style={styles.childrenReview}>
+            {bookingData.selectedChildren.map((childName, index) => {
+              const child = childrenList.find(c => c.name === childName);
+              return (
+                <View key={index} style={styles.childReviewItem}>
+                  <View style={styles.childReviewHeader}>
+                    <Baby size={16} color="#10b981" />
+                    <Text style={styles.childReviewName}>{childName}</Text>
+                    {child?.age && <Text style={styles.childReviewAge}>Age {child.age}</Text>}
+                  </View>
+                  {child?.allergies && child.allergies !== 'None' && (
+                    <View style={styles.allergyReview}>
+                      <AlertCircle size={14} color="#ef4444" />
+                      <Text style={styles.allergyReviewText}>Allergies: {child.allergies}</Text>
+                    </View>
+                  )}
+                  {child?.preferences && (
+                    <Text style={styles.childPreferences}>Preferences: {child.preferences}</Text>
+                  )}
+                </View>
+              );
+            })}
+          </View>
+          {bookingData.specialInstructions && (
+            <View style={styles.specialInstructionsReview}>
+              <Text style={styles.instructionsLabel}>Special Instructions:</Text>
+              <Text style={styles.instructionsText}>{bookingData.specialInstructions}</Text>
+            </View>
+          )}
+        </View>
+
+        {/* Location & Contact */}
+        <View style={[styles.reviewCard, styles.locationCard]}>
+          <Text style={styles.reviewCardTitle}>Location & Contact</Text>
+          <View style={styles.locationReview}>
+            <View style={styles.locationRow}>
+              <MapPin size={16} color="#8b5cf6" />
+              <View style={styles.locationInfo}>
+                <Text style={styles.locationLabel}>Address:</Text>
+                <Text style={styles.locationValue}>{bookingData.address}</Text>
+              </View>
+            </View>
+            <View style={styles.locationRow}>
+              <Phone size={16} color="#8b5cf6" />
+              <View style={styles.locationInfo}>
+                <Text style={styles.locationLabel}>Contact Phone:</Text>
+                <Text style={styles.locationValue}>{bookingData.contactPhone}</Text>
+              </View>
+            </View>
+          </View>
+          
+          {/* Emergency Contact */}
+          {(bookingData.emergencyContact.name || bookingData.emergencyContact.phone) && (
+            <View style={styles.emergencySummaryCard}>
+              <View style={styles.emergencyContactHeader}>
+                <AlertCircle size={16} color="#ef4444" />
+                <Text style={styles.reviewCardTitle}>Emergency Contact</Text>
+              </View>
+              <View style={styles.emergencyContactReview}>
+                {bookingData.emergencyContact.name && (
+                  <Text style={styles.emergencyDetail}>
+                    Name: {bookingData.emergencyContact.name}
+                  </Text>
+                )}
+                {bookingData.emergencyContact.phone && (
+                  <Text style={styles.emergencyDetail}>
+                    Phone: {bookingData.emergencyContact.phone}
+                  </Text>
+                )}
+                {bookingData.emergencyContact.relation && (
+                  <Text style={styles.emergencyDetail}>
+                    Relationship: {bookingData.emergencyContact.relation}
+                  </Text>
+                )}
+              </View>
+            </View>
+          )}
+        </View>
+
+        {/* Cost Breakdown */}
+        <View style={[styles.reviewCard, styles.costCard]}>
+          <Text style={styles.reviewCardTitle}>Cost Breakdown</Text>
+          <View style={styles.costBreakdown}>
+            <View style={styles.costRow}>
+              <Text style={styles.costLabel}>Hourly Rate:</Text>
+              <Text style={styles.costValue}>₱{resolveHourlyRate()}/hour</Text>
+            </View>
+            <View style={styles.costRow}>
+              <Text style={styles.costLabel}>Duration:</Text>
+              <Text style={styles.costValue}>{calculateDuration().toFixed(1)} hours</Text>
+            </View>
+            <View style={[styles.costRow, styles.totalCostRow]}>
+              <Text style={styles.totalCostLabel}>Total Amount:</Text>
+              <Text style={styles.totalCostValue}>₱{calculateTotalCost()}</Text>
+            </View>
+          </View>
+        </View>
+      </ScrollView>
+    );
+  };
 
   return (
     <ModalWrapper
@@ -465,189 +556,128 @@ const BookingModal = ({ caregiver, childrenList = [], onConfirm, onClose, visibl
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         keyboardVerticalOffset={Platform.OS === 'ios' ? 100 : 0}
       >
-          {/* Header */}
-          <View style={styles.modalHeader}>
-            <View style={styles.headerLeft}>
-              <View style={styles.caregiverAvatar}>
-                {caregiver?.avatar || caregiver?.profileImage ? (
-                  <Image 
-                    source={getImageSource(caregiver.avatar || caregiver.profileImage)}
-                    style={styles.avatarImage} 
-                  />
-                ) : (
-                  <User size={20} color="#6b7280" />
+        {/* Header */}
+        <View style={styles.modalHeader}>
+          <View style={styles.headerLeft}>
+            <View style={styles.caregiverAvatar}>
+              {caregiver?.avatar || caregiver?.profileImage ? (
+                <Image 
+                  source={getImageSource(caregiver.avatar || caregiver.profileImage)}
+                  style={styles.avatarImage} 
+                />
+              ) : (
+                <User size={20} color="#6b7280" />
+              )}
+            </View>
+            <View>
+              <Text style={styles.modalTitle}>Book {caregiver?.name || "Caregiver"}</Text>
+              <Text style={styles.stepIndicator}>Step {currentStep} of 4</Text>
+            </View>
+          </View>
+          <TouchableOpacity onPress={onClose} style={styles.closeButton}>
+            <X size={24} color="#6b7280" />
+          </TouchableOpacity>
+        </View>
+
+        {/* Progress Bar */}
+        <View style={styles.progressContainer}>
+          <View style={styles.progressBar}>
+            {[1, 2, 3, 4].map((step) => (
+              <View key={step} style={styles.progressStep}>
+                <View style={[
+                  styles.progressCircle,
+                  step <= currentStep && styles.progressCircleActive
+                ]}>
+                  <Text style={[
+                    styles.progressText,
+                    step <= currentStep && styles.progressTextActive
+                  ]}>
+                    {step}
+                  </Text>
+                </View>
+                {step < 4 && (
+                  <View style={[
+                    styles.progressLine,
+                    step < currentStep && styles.progressLineActive
+                  ]}/>
                 )}
               </View>
-              <View>
-                <Text style={styles.modalTitle}>Book {caregiver?.name || "Caregiver"}</Text>
-                <Text style={styles.stepIndicator}>Step {currentStep} of 4</Text>
-              </View>
-            </View>
-
+            ))}
           </View>
-
-          {/* Progress Bar */}
-          <View style={styles.progressContainer}>
-            <View style={styles.progressBar}>
-              {[1, 2, 3, 4].map((step) => (
-                <View key={step} style={styles.progressStep}>
-                  <View style={[
-                    styles.progressCircle,
-                    step <= currentStep && styles.progressCircleActive
-                  ]}>
-                    <Text style={[
-                      styles.progressText,
-                      step <= currentStep && styles.progressTextActive
-                    ]}>
-                      {step}
-                    </Text>
-                  </View>
-                  {step < 4 && (
-                    <View style={[
-                      styles.progressLine,
-                      step < currentStep && styles.progressLineActive
-                    ]}/>
-                  )}
-                </View>
-              ))}
-            </View>
-            <View style={styles.progressLabels}>
-              <Text style={styles.progressLabel}>Schedule</Text>
-              <Text style={styles.progressLabel}>Children</Text>
-              <Text style={styles.progressLabel}>Contact</Text>
-              <Text style={styles.progressLabel}>Review</Text>
-            </View>
+          <View style={styles.progressLabels}>
+            <Text style={styles.progressLabel}>Schedule</Text>
+            <Text style={styles.progressLabel}>Children</Text>
+            <Text style={styles.progressLabel}>Contact</Text>
+            <Text style={styles.progressLabel}>Review</Text>
           </View>
+        </View>
 
-          {/* Content */}
-          <ScrollView 
-            style={styles.contentContainer}
-            contentContainerStyle={styles.scrollContent}
-            showsVerticalScrollIndicator={false}
+        {/* Content */}
+        <ScrollView 
+          style={styles.contentContainer}
+          contentContainerStyle={styles.scrollContent}
+          showsVerticalScrollIndicator={false}
+        >
+          {currentStep === 1 && renderStep1()}
+          {currentStep === 2 && renderStep2()}
+          {currentStep === 3 && renderStep3()}
+          {currentStep === 4 && renderStep4()}
+        </ScrollView>
+
+        {submitError ? (
+          <View style={styles.errorContainer}>
+            <AlertCircle size={16} color="#ef4444" />
+            <Text style={styles.errorText}>{submitError}</Text>
+          </View>
+        ) : null}
+
+        {/* Footer */}
+        <View style={styles.modalFooter}>
+          <TouchableOpacity
+            onPress={currentStep === 1 ? onClose : handlePrevStep}
+            disabled={submitting}
+            style={[
+              styles.footerButton, 
+              styles.secondaryButton, 
+              submitting && styles.disabledButton
+            ]}
           >
-            {currentStep === 1 && renderStep1()}
-            {currentStep === 2 && renderStep2()}
-            {currentStep === 3 && renderStep3()}
-            {currentStep === 4 && renderStep4()}
-          </ScrollView>
-
-          {submitError ? (
-            <View style={styles.errorContainer}>
-              <AlertCircle size={16} color="#ef4444" />
-              <Text style={styles.errorText}>{submitError}</Text>
-            </View>
-          ) : null}
-
-          {/* Footer */}
-          <View style={styles.modalFooter}>
+            <Text style={styles.secondaryButtonText}>{currentStep === 1 ? 'Close' : 'Previous'}</Text>
+          </TouchableOpacity>
+          
+          {currentStep < 4 ? (
             <TouchableOpacity
-              onPress={currentStep === 1 ? onClose : handlePrevStep}
+              onPress={handleNextStep}
+              disabled={!isStepValid() || submitting}
+              style={[
+                styles.footerButton, 
+                styles.primaryButton, 
+                (!isStepValid() || submitting) && styles.disabledButton
+              ]}
+            >
+              <Text style={styles.primaryButtonText}>Next</Text>
+            </TouchableOpacity>
+          ) : (
+            <TouchableOpacity
+              onPress={handleSubmit}
               disabled={submitting}
               style={[
                 styles.footerButton, 
-                styles.secondaryButton, 
+                styles.successButton, 
                 submitting && styles.disabledButton
               ]}
             >
-              <Text style={styles.secondaryButtonText}>{currentStep === 1 ? 'Close' : 'Previous'}</Text>
+              {submitting && <ActivityIndicator size="small" color="white" style={{ marginRight: 8 }} />}
+              <Text style={styles.primaryButtonText}>
+                {submitting ? 'Submitting…' : 'Confirm Booking'}
+              </Text>
             </TouchableOpacity>
-            
-            {currentStep < 4 ? (
-              <TouchableOpacity
-                onPress={handleNextStep}
-                disabled={!isStepValid() || submitting}
-                style={[
-                  styles.footerButton, 
-                  styles.primaryButton, 
-                  (!isStepValid() || submitting) && styles.disabledButton
-                ]}
-              >
-                <Text style={styles.primaryButtonText}>Next</Text>
-              </TouchableOpacity>
-            ) : (
-              <TouchableOpacity
-                onPress={handleSubmit}
-                disabled={submitting}
-                style={[
-                  styles.footerButton, 
-                  styles.successButton, 
-                  submitting && styles.disabledButton
-                ]}
-              >
-                {submitting && <ActivityIndicator size="small" color="white" style={{ marginRight: 8 }} />}
-                <Text style={styles.primaryButtonText}>
-                  {submitting ? 'Submitting…' : 'Confirm Booking'}
-                </Text>
-              </TouchableOpacity>
-            )}
-          </View>
-      </KeyboardAvoidingView>
-      
-      {/* Location Search Modal */}
-      <Modal
-        visible={locationSearchVisible}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setLocationSearchVisible(false)}
-      >
-        <View style={styles.searchModalOverlay}>
-          <View style={styles.searchModalContainer}>
-            <View style={styles.searchModalHeader}>
-              <Text style={styles.searchModalTitle}>Search Location</Text>
-              <TouchableOpacity onPress={() => setLocationSearchVisible(false)}>
-                <X size={24} color="#6b7280" />
-              </TouchableOpacity>
-            </View>
-            
-            <View style={styles.searchModalContent}>
-              <TextInput
-                value={locationSearchText}
-                onChangeText={setLocationSearchText}
-                style={styles.searchInput}
-                placeholder="Enter address or location"
-                onSubmitEditing={handleLocationSearch}
-                returnKeyType="search"
-              />
-              
-              <Button
-                mode="contained"
-                onPress={handleLocationSearch}
-                loading={locationSearchLoading}
-                style={styles.searchSubmitButton}
-              >
-                Search
-              </Button>
-              
-              {locationSearchLoading && (
-                <View style={styles.searchLoading}>
-                  <ActivityIndicator size="small" color="#3b82f6" />
-                  <Text style={styles.searchLoadingText}>Searching...</Text>
-                </View>
-              )}
-              
-              {locationSearchResults.length > 0 && (
-                <View style={styles.searchResults}>
-                  {locationSearchResults.map((result, index) => (
-                    <TouchableOpacity
-                      key={index}
-                      style={styles.searchResultItem}
-                      onPress={() => selectLocationFromSearch(result)}
-                    >
-                      <MapPin size={20} color="#3b82f6" />
-                      <Text style={styles.searchResultText}>
-                        {result.address.formatted}
-                      </Text>
-                    </TouchableOpacity>
-                  ))}
-                </View>
-              )}
-            </View>
-          </View>
+          )}
         </View>
-      </Modal>
+      </KeyboardAvoidingView>
     </ModalWrapper>
   );
-}
+};
 
 const BookingDetailsModal = ({ 
   booking, 
@@ -819,39 +849,61 @@ const BookingDetailsModal = ({
             {/* Children Details */}
             <View style={styles.sectionCard}>
               <View style={styles.sectionHeader}>
-                <Baby size={20} color="#6b7280" />
+                <Baby size={20} color="#10b981" />
                 <Text style={styles.sectionTitle}>Children Details</Text>
               </View>
               <View style={styles.childrenSection}>
-                {enhancedBooking.childrenDetails.map((child, index) => (
-                  <View key={index} style={styles.childCard}>
-                    <View style={styles.childHeader}>
-                      <Text style={styles.childName}>{child.name}</Text>
-                      <Text style={styles.childAge}>Age {child.age}</Text>
-                    </View>
-                    
-                    <View style={styles.childDetails}>
-                      <Text style={styles.childDetail}>
-                        <Text style={styles.detailLabel}>Preferences: </Text>
-                        {child.preferences}
-                      </Text>
-                      <Text style={styles.childDetail}>
-                        <Text style={styles.detailLabel}>Special Instructions: </Text>
-                        {child.specialInstructions}
-                      </Text>
-                      {child.allergies && child.allergies !== 'None' && (
-                        <View style={styles.allergyContainer}>
-                          <AlertCircle size={16} color="#ef4444" />
-                          <Text style={styles.allergyText}>
-                            <Text style={styles.allergyLabel}>Allergies: </Text>
-                            {child.allergies}
+                {(booking?.selected_children || booking?.selectedChildren || enhancedBooking.childrenDetails)?.map((child, index) => {
+                  const childData = typeof child === 'string' 
+                    ? { name: child, age: 'Unknown', preferences: '', allergies: 'None' }
+                    : child;
+                  return (
+                    <View key={index} style={styles.childCard}>
+                      <View style={styles.childHeader}>
+                        <Baby size={16} color="#10b981" />
+                        <Text style={styles.childName}>{childData.name}</Text>
+                        {childData.age && childData.age !== 'Unknown' && (
+                          <Text style={styles.childAge}>Age {childData.age}</Text>
+                        )}
+                      </View>
+                      
+                      <View style={styles.childDetails}>
+                        {childData.preferences && (
+                          <Text style={styles.childDetail}>
+                            <Text style={styles.detailLabel}>Preferences: </Text>
+                            {childData.preferences}
                           </Text>
-                        </View>
-                      )}
+                        )}
+                        {childData.specialInstructions && (
+                          <Text style={styles.childDetail}>
+                            <Text style={styles.detailLabel}>Special Instructions: </Text>
+                            {childData.specialInstructions}
+                          </Text>
+                        )}
+                        {childData.allergies && childData.allergies !== 'None' && (
+                          <View style={styles.allergyContainer}>
+                            <AlertCircle size={16} color="#ef4444" />
+                            <Text style={styles.allergyText}>
+                              <Text style={styles.allergyLabel}>Allergies: </Text>
+                              {childData.allergies}
+                            </Text>
+                          </View>
+                        )}
+                      </View>
                     </View>
-                  </View>
-                ))}
+                  );
+                })}
               </View>
+              
+              {/* Special Instructions */}
+              {(booking?.special_instructions || booking?.specialInstructions) && (
+                <View style={styles.specialInstructionsSection}>
+                  <Text style={styles.instructionsLabel}>Special Instructions:</Text>
+                  <Text style={styles.instructionsText}>
+                    {booking.special_instructions || booking.specialInstructions}
+                  </Text>
+                </View>
+              )}
             </View>
 
             {/* Requirements */}
@@ -876,7 +928,7 @@ const BookingDetailsModal = ({
             )}
 
             {/* Emergency Contact */}
-            <View style={styles.emergencyCard}>
+            <View style={styles.emergencyDetailsCard}>
               <View style={styles.sectionHeader}>
                 <AlertCircle size={20} color="#ef4444" />
                 <Text style={styles.sectionTitle}>Emergency Contact</Text>
@@ -939,7 +991,7 @@ const BookingDetailsModal = ({
       </View>
     </Modal>
   );
-}
+};
 
 const styles = StyleSheet.create({
   // Common styles
@@ -1185,16 +1237,209 @@ const styles = StyleSheet.create({
     padding: 16,
     borderRadius: 8,
   },
+  reviewContainer: {
+    flex: 1,
+  },
+  reviewCard: {
+    backgroundColor: '#ffffff',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: '#e5e7eb',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  reviewCardTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#111827',
+    marginBottom: 12,
+  },
+  scheduleCard: {
+    backgroundColor: '#eff6ff',
+    borderColor: '#bfdbfe',
+  },
+  childrenCard: {
+    backgroundColor: '#f0fdf4',
+    borderColor: '#bbf7d0',
+  },
+  locationCard: {
+    backgroundColor: '#faf5ff',
+    borderColor: '#e9d5ff',
+  },
+  emergencyCard: {
+    backgroundColor: '#fef2f2',
+    borderColor: '#fecaca',
+  },
+  costCard: {
+    backgroundColor: '#f9fafb',
+    borderColor: '#d1d5db',
+  },
+  reviewAvatar: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+  },
+  avatarPlaceholder: {
+    backgroundColor: '#f3f4f6',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  scheduleDetails: {
+    gap: 8,
+  },
+  scheduleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  scheduleLabel: {
+    fontSize: 14,
+    color: '#6b7280',
+    minWidth: 60,
+  },
+  scheduleValue: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: '#111827',
+    flex: 1,
+  },
+  childrenReview: {
+    gap: 12,
+  },
+  childReviewItem: {
+    backgroundColor: '#f8fafc',
+    padding: 12,
+    borderRadius: 8,
+    gap: 6,
+  },
+  childReviewHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  childReviewName: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#111827',
+    flex: 1,
+  },
+  childReviewAge: {
+    fontSize: 12,
+    color: '#6b7280',
+    backgroundColor: '#e5e7eb',
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 10,
+  },
+  allergyReview: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: '#fef2f2',
+    padding: 6,
+    borderRadius: 6,
+  },
+  allergyReviewText: {
+    fontSize: 12,
+    color: '#ef4444',
+    fontWeight: '500',
+  },
+  childPreferences: {
+    fontSize: 12,
+    color: '#6b7280',
+    fontStyle: 'italic',
+  },
+  specialInstructionsReview: {
+    backgroundColor: '#fef3c7',
+    padding: 12,
+    borderRadius: 8,
+    marginTop: 12,
+  },
+  instructionsLabel: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#92400e',
+    marginBottom: 4,
+  },
+  instructionsText: {
+    fontSize: 14,
+    color: '#92400e',
+  },
+  locationReview: {
+    gap: 12,
+  },
+  locationRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 8,
+  },
+  locationInfo: {
+    flex: 1,
+  },
+  locationLabel: {
+    fontSize: 12,
+    color: '#6b7280',
+    marginBottom: 2,
+  },
+  locationValue: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: '#111827',
+  },
+  emergencyContactHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 12,
+  },
+  emergencySummaryCard: {
+    marginTop: 12,
+    padding: 12,
+    borderRadius: 10,
+    backgroundColor: '#fef2f2',
+    borderWidth: 1,
+    borderColor: '#fecaca',
+  },
+  emergencyContactReview: {
+    gap: 6,
+  },
+  emergencyDetail: {
+    fontSize: 14,
+    color: '#991b1b',
+    fontWeight: '500',
+  },
+  costBreakdown: {
+    gap: 8,
+  },
+  totalCostRow: {
+    borderTopWidth: 1,
+    borderTopColor: '#e5e7eb',
+    paddingTop: 8,
+    marginTop: 4,
+  },
+  totalCostLabel: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#111827',
+  },
+  totalCostValue: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#10b981',
+  },
   caregiverHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
     marginBottom: 12,
   },
-  avatar: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
+  caregiverInfo: {
+    flex: 1,
   },
   caregiverName: {
     fontWeight: 'bold',
@@ -1415,8 +1660,14 @@ const styles = StyleSheet.create({
   },
   childHeader: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
+    alignItems: 'center',
+    gap: 8,
     marginBottom: 8,
+  },
+  childName: {
+    fontWeight: '600',
+    color: '#111827',
+    flex: 1,
   },
   childAge: {
     fontSize: 14,
@@ -1476,7 +1727,7 @@ const styles = StyleSheet.create({
     color: '#92400e',
   },
   
-  emergencyCard: {
+  emergencyDetailsCard: {
     backgroundColor: '#fee2e2',
     borderWidth: 1,
     borderColor: '#fca5a5',
@@ -1545,86 +1796,21 @@ const styles = StyleSheet.create({
     fontWeight: '500',
     fontSize: 13,
   },
+  specialInstructionsSection: {
+    backgroundColor: '#fef3c7',
+    padding: 12,
+    borderRadius: 8,
+    marginTop: 12,
+    borderLeftWidth: 4,
+    borderLeftColor: '#f59e0b',
+  },
   
   // Location functionality styles
   locationSection: {
-    flexDirection: 'row',
-    gap: 8,
     marginBottom: 16,
   },
   gpsButton: {
-    flex: 1,
-  },
-  searchButton: {
-    flex: 1,
-  },
-  
-  // Location search modal styles
-  searchModalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  searchModalContainer: {
-    backgroundColor: 'white',
-    borderRadius: 12,
-    width: '90%',
-    maxWidth: 400,
-    maxHeight: '80%',
-  },
-  searchModalHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    padding: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: '#e5e7eb',
-  },
-  searchModalTitle: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: '#111827',
-  },
-  searchModalContent: {
-    padding: 16,
-  },
-  searchInput: {
-    borderWidth: 1,
-    borderColor: '#d1d5db',
-    borderRadius: 8,
-    padding: 12,
-    fontSize: 16,
-    marginBottom: 12,
-  },
-  searchSubmitButton: {
-    marginBottom: 16,
-  },
-  searchLoading: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    padding: 12,
-  },
-  searchLoadingText: {
-    color: '#6b7280',
-  },
-  searchResults: {
-    gap: 8,
-  },
-  searchResultItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    padding: 12,
-    borderWidth: 1,
-    borderColor: '#e5e7eb',
-    borderRadius: 8,
-    backgroundColor: '#f9fafb',
-  },
-  searchResultText: {
-    flex: 1,
-    color: '#374151',
+    width: '100%',
   },
 });
 

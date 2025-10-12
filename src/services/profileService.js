@@ -4,8 +4,8 @@ import { logger } from '../utils/logger';
 import { tokenManager } from '../utils/tokenManager';
 
 /**
- * Profile Service
- * Handles all profile-related API calls
+ * Profile Service - Legacy wrapper for Supabase services
+ * Maintains backward compatibility while using new Supabase architecture
  */
 class ProfileService {
 
@@ -27,23 +27,13 @@ class ProfileService {
    */
   async getProfile(token) {
     try {
-      const response = await fetch(`${this.baseURL}`, {
-        method: 'GET',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
-      });
-
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.error || 'Failed to fetch profile');
-      }
-
+      const { supabaseService } = await import('./supabase');
+      const user = await supabaseService.user._getCurrentUser();
+      if (!user) throw new Error('User not authenticated');
+      
+      const profile = await supabaseService.user.getProfile(user.id);
       logger.info('Profile fetched successfully');
-      return data.data;
-
+      return profile;
     } catch (error) {
       logger.error('Get profile error:', error);
       throw errorHandler.process(error);
@@ -62,61 +52,16 @@ class ProfileService {
    */
   async updateProfile(profileData, token) {
     try {
-      // Try with provided token first
-      let authToken = token;
+      const { supabaseService } = await import('./supabase');
+      const user = await supabaseService.user._getCurrentUser();
+      if (!user) throw new Error('User not authenticated');
       
-      const makeRequest = async (authToken) => {
-        console.log('🔄 Making profile update request to:', this.baseURL);
-        console.log('🔑 Using token preview:', authToken ? authToken.substring(0, 50) + '...' : 'No token');
-        console.log('📤 Profile data:', JSON.stringify(profileData, null, 2));
-        
-        const response = await fetch(`${this.baseURL}`, {
-          method: 'PUT',
-          headers: {
-            'Authorization': `Bearer ${authToken}`,
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify(profileData),
-        });
-        
-        console.log('📡 Response received:', response.status, response.statusText);
-        return response;
-      };
-
-      let response = await makeRequest(authToken);
-      
-      // If 401, try to refresh token and retry
-      if (response.status === 401) {
-        console.log('⚠️ Got 401, attempting token refresh...');
-        logger.info('Token expired, attempting to refresh...');
-        const freshToken = await this.getFreshToken();
-        
-        if (freshToken) {
-          console.log('✅ Got fresh token, retrying request');
-          authToken = freshToken;
-          response = await makeRequest(authToken);
-        } else {
-          console.log('❌ Failed to get fresh token');
-        }
-      }
-
-      const data = await response.json();
-      console.log('📥 Response status:', response.status);
-      console.log('📥 Response data:', data);
-
-      if (!response.ok) {
-        throw new Error(data.error || `Profile update failed: ${response.status}`);
-      }
-
+      console.log('📤 Profile data:', JSON.stringify(profileData, null, 2));
+      const result = await supabaseService.user.updateProfile(user.id, profileData);
       logger.info('Profile updated successfully');
-      return data.data;
-
+      return result;
     } catch (error) {
-      console.error('❌ Profile update error details:', {
-        message: error.message,
-        stack: error.stack,
-        url: this.baseURL
-      });
+      console.error('❌ Profile update error details:', error.message);
       logger.error('Update profile error:', error);
       throw errorHandler.process(error);
     }
@@ -173,24 +118,22 @@ class ProfileService {
    */
   async updateChildren(children, token) {
     try {
-      const response = await fetch(`${this.baseURL}/children`, {
-        method: 'PUT',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({ children }),
-      });
-
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.error || 'Failed to update children information');
+      const { supabaseService } = await import('./supabase');
+      const user = await supabaseService.user._getCurrentUser();
+      if (!user) throw new Error('User not authenticated');
+      
+      // Update children using children service
+      const results = [];
+      for (const child of children) {
+        if (child.id) {
+          results.push(await supabaseService.children.updateChild(child.id, child));
+        } else {
+          results.push(await supabaseService.children.addChild(user.id, child));
+        }
       }
-
+      
       logger.info('Children information updated successfully');
-      return data.data;
-
+      return results;
     } catch (error) {
       logger.error('Update children error:', error);
       throw errorHandler.process(error);

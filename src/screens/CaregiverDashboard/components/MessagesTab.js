@@ -3,7 +3,7 @@ import { View, Text, FlatList, TouchableOpacity, RefreshControl, Image, Keyboard
 import { Ionicons } from '@expo/vector-icons';
 import { Card } from 'react-native-paper';
 import { useAuth } from '../../../contexts/AuthContext';
-import supabaseService from '../../../services/supabaseService';
+import { supabaseService } from '../../../services/supabase';
 import { styles } from '../../styles/CaregiverDashboard.styles';
 
 const MessagesTab = ({ navigation, refreshing, onRefresh }) => {
@@ -32,7 +32,7 @@ const MessagesTab = ({ navigation, refreshing, onRefresh }) => {
     const loadConversations = async () => {
       try {
         setLoading(true);
-        const conversations = await supabaseService.getConversations(userIdToUse);
+        const conversations = await supabaseService.messaging.getConversations(userIdToUse);
         console.log('📨 MessagesTab: Received conversations:', conversations);
         
         // Transform conversations for display
@@ -61,7 +61,7 @@ const MessagesTab = ({ navigation, refreshing, onRefresh }) => {
     loadConversations();
     
     // Setup real-time subscription
-    const subscription = supabaseService.subscribeToMessages('*', () => {
+    const subscription = supabaseService.messaging.subscribeToMessages('*', () => {
       loadConversations();
     });
 
@@ -92,7 +92,7 @@ const MessagesTab = ({ navigation, refreshing, onRefresh }) => {
     const userIdToUse = user?.id || user?.uid;
     if (userIdToUse && conversation.id) {
       console.log('👁️ Marking messages as read for conversation:', conversation.id);
-      await supabaseService.markMessagesAsRead(conversation.id, userIdToUse);
+      await supabaseService.messaging.markMessagesAsRead(conversation.id, userIdToUse);
     }
 
     navigation.navigate('Chat', {

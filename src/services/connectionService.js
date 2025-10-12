@@ -1,26 +1,33 @@
 // src/services/connectionService.js
-import { setupConnectionListener, withConnection } from '../utils/firebaseUtils';
-import { ref, get, update } from '../config/supabase';
+import { supabaseService } from './supabase';
 
 export const listenToConnections = (userId, onConnectionUpdate) => {
-  return setupConnectionListener(`users/${userId}/connections`, onConnectionUpdate);
+  // Use Supabase real-time for conversation updates
+  return supabaseService.messaging.subscribeToMessages(userId, onConnectionUpdate);
 };
 
 export const getConnectionStatus = async (userId, targetUserId) => {
-  return withConnection(async (db) => {
-    // Use Firebase v9 syntax: ref(db, path)
-    const connectionRef = ref(db, `connections/${userId}/${targetUserId}`);
-    const snapshot = await get(connectionRef);
-    return snapshot.val();
-  });
+  try {
+    // Check if there's an existing conversation between users
+    const conversation = await supabaseService.messaging.getOrCreateConversation(userId, targetUserId);
+    return conversation ? 'connected' : 'not_connected';
+  } catch (error) {
+    console.error('Error getting connection status:', error);
+    return 'not_connected';
+  }
 };
 
 export const updateConnectionStatus = async (userId, targetUserId, status) => {
-  return withConnection(async (db) => {
-    const updates = {};
-    updates[`connections/${userId}/${targetUserId}`] = status;
-    updates[`connections/${targetUserId}/${userId}`] = status;
-    // Use Firebase v9 syntax: update(ref(db), updates)
-    return update(ref(db), updates);
-  });
+  try {
+    if (status === 'connected') {
+      // Create conversation to establish connection
+      await supabaseService.messaging.getOrCreateConversation(userId, targetUserId);
+      return { success: true };
+    }
+    // For disconnect, we don't delete conversations but could mark them inactive
+    return { success: true };
+  } catch (error) {
+    console.error('Error updating connection status:', error);
+    throw error;
+  }
 };

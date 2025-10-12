@@ -10,7 +10,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import supabaseService from '../services/supabaseService';
+import { supabaseService } from '../services/supabase';
 import { useAuth } from '../contexts/AuthContext';
 
 const NotificationsScreen = ({ navigation }) => {
@@ -23,7 +23,7 @@ const NotificationsScreen = ({ navigation }) => {
     loadNotifications();
     
     // Setup real-time subscription
-    const subscription = supabaseService.subscribeToNotifications(user.id, (payload) => {
+    const subscription = supabaseService.notifications.subscribeToNotifications(user.id, (payload) => {
       if (payload.eventType === 'INSERT') {
         const newNotification = payload.new;
         setNotifications(prev => [newNotification, ...prev]);
@@ -40,7 +40,7 @@ const NotificationsScreen = ({ navigation }) => {
   const loadNotifications = async () => {
     try {
       setLoading(true);
-      const notificationsData = await supabaseService.getNotifications(user.id);
+      const notificationsData = await supabaseService.notifications.getNotifications(user.id);
       setNotifications(notificationsData);
     } catch (error) {
       console.error('Error loading notifications:', error);
@@ -57,7 +57,7 @@ const NotificationsScreen = ({ navigation }) => {
 
   const markAsRead = async (notificationId) => {
     try {
-      await supabaseService.markNotificationAsRead(notificationId);
+      await supabaseService.notifications.markNotificationAsRead(notificationId);
       setNotifications(prev =>
         prev.map(notif =>
           notif.id === notificationId ? { ...notif, read: true } : notif
@@ -70,7 +70,7 @@ const NotificationsScreen = ({ navigation }) => {
 
   const markAllAsRead = async () => {
     try {
-      await supabaseService.markAllNotificationsAsRead(user.id);
+      await supabaseService.notifications.markAllNotificationsAsRead(user.id);
       setNotifications(prev =>
         prev.map(notif => ({ ...notif, read: true }))
       );
@@ -218,7 +218,11 @@ const NotificationsScreen = ({ navigation }) => {
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => navigation.goBack()}>
+        <TouchableOpacity onPress={() => {
+          if (navigation.canGoBack()) {
+            navigation.goBack();
+          }
+        }}>
           <Ionicons name="arrow-back" size={24} color="#1F2937" />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Notifications</Text>

@@ -266,6 +266,52 @@ export const AuthProvider = ({ children }) => {
   const signInWithFacebook = () => signInWithOAuth('facebook')
   const signInWithGoogle = () => signInWithOAuth('google')
 
+  // Facebook login with user profile creation
+  const loginWithFacebook = async (facebookResult) => {
+    try {
+      setError(null)
+      setLoading(true)
+      
+      console.log('🔄 Processing Facebook login result:', facebookResult)
+      
+      // If it's a mock auth result, handle it differently
+      if (facebookResult.isMockAuth) {
+        console.log('⚠️ Processing mock Facebook authentication')
+        
+        // Create a mock user object that matches our expected structure
+        const mockUser = {
+          ...facebookResult.user,
+          id: facebookResult.user.uid,
+          email_confirmed_at: new Date().toISOString(),
+          user_metadata: {
+            name: facebookResult.user.name,
+            role: facebookResult.user.role
+          }
+        }
+        
+        setUser(mockUser)
+        return mockUser
+      }
+      
+      // For real Facebook auth, the user should already be authenticated via Supabase OAuth
+      // Just fetch the updated profile
+      const currentUser = await supabase.auth.getUser()
+      if (currentUser.data.user) {
+        const userWithProfile = await fetchUserWithProfile(currentUser.data.user)
+        setUser(userWithProfile)
+        return userWithProfile
+      }
+      
+      throw new Error('Facebook authentication failed')
+    } catch (err) {
+      console.error('❌ Facebook login error:', err)
+      setError(err.message)
+      throw err
+    } finally {
+      setLoading(false)
+    }
+  }
+
   const getCurrentUser = () => {
     return user
   }
@@ -299,6 +345,7 @@ export const AuthProvider = ({ children }) => {
     resendVerification,
     signInWithFacebook,
     signInWithGoogle,
+    loginWithFacebook,
     getCurrentUser,
     getUserProfile
   }

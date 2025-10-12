@@ -1,10 +1,10 @@
-import React from 'react';
+import React, { useCallback } from 'react';
 import { View, Text, TouchableOpacity, ScrollView, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { colors } from '../../styles/ParentDashboard.styles';
 
 // Reusable Tab Button Component with Notification Badge
-const TabButton = ({
+const TabButton = React.memo(({
   activeTab,
   tabName,
   iconName,
@@ -12,32 +12,36 @@ const TabButton = ({
   setActiveTab,
   notificationCount = 0,
   showBadge = true
-}) => (
-  <TouchableOpacity
-    style={[styles.navItem, activeTab === tabName && styles.activeNavItem]}
-    onPress={() => setActiveTab(tabName)}
-  >
-    <View style={{ position: 'relative' }}>
-      <Ionicons 
-        name={iconName} 
-        size={20} 
-        color={activeTab === tabName ? colors.secondary : colors.textTertiary} 
-      />
-      {showBadge && notificationCount > 0 && (
-        <View style={styles.notificationBadge}>
-          <Text style={styles.notificationBadgeText}>
-            {notificationCount > 9 ? '9+' : notificationCount}
-          </Text>
-        </View>
-      )}
-    </View>
-    <Text style={[styles.navText, activeTab === tabName && styles.activeNavText]}>
-      {label}
-    </Text>
-  </TouchableOpacity>
-);
+}) => {
+  const handlePress = useCallback(() => setActiveTab(tabName), [setActiveTab, tabName]);
+  
+  return (
+    <TouchableOpacity
+      style={[styles.navItem, activeTab === tabName && styles.activeNavItem]}
+      onPress={handlePress}
+    >
+      <View style={{ position: 'relative' }}>
+        <Ionicons 
+          name={iconName} 
+          size={20} 
+          color={activeTab === tabName ? colors.secondary : colors.textTertiary} 
+        />
+        {showBadge && notificationCount > 0 && (
+          <View style={styles.notificationBadge}>
+            <Text style={styles.notificationBadgeText}>
+              {notificationCount > 9 ? '9+' : notificationCount}
+            </Text>
+          </View>
+        )}
+      </View>
+      <Text style={[styles.navText, activeTab === tabName && styles.activeNavText]}>
+        {label}
+      </Text>
+    </TouchableOpacity>
+  );
+});
 
-const NavigationTabs = ({
+const NavigationTabs = React.memo(({
   activeTab,
   setActiveTab,
   onProfilePress,
@@ -107,14 +111,14 @@ const NavigationTabs = ({
           activeTab={activeTab}
           tabName="reviews"
           iconName="star-outline"
-          label="Reviews"
+          label="My Reviews"
           notificationCount={reviewsCount}
           setActiveTab={setActiveTab}
         />
 
         <TabButton
           activeTab={activeTab}
-          tabName="notifications"
+          tabName="alerts"
           iconName="notifications-outline"
           label="Alerts"
           notificationCount={otherNotifications}
@@ -124,7 +128,7 @@ const NavigationTabs = ({
       </ScrollView>
     </View>
   );
-};
+});
 
 const styles = StyleSheet.create({
   tabContainer: {
