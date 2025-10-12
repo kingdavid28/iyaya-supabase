@@ -86,29 +86,21 @@ export const caregiverProfileService = {
   // Get all caregiver profiles (for browsing)
   async getAllProfiles(filters = {}) {
     try {
-      // Use new Supabase service for getting caregivers
       const caregivers = await supabaseService.user.getCaregivers(filters);
       return { data: caregivers };
     } catch (error) {
       console.error('Error getting caregiver profiles:', error);
-      // Fallback to direct query if needed
-      try {
-        let query = supabase
-          .from('users')
-          .select('*')
-          .eq('role', 'caregiver');
-
-        if (filters.location) {
-          query = query.ilike('address', `%${filters.location}%`);
-        }
-
-        const { data, error } = await query;
-        if (error) throw error;
-        return { data };
-      } catch (fallbackError) {
-        throw fallbackError;
+  
+      let query = supabase.from('users').select('*').eq('role', 'caregiver');
+      if (filters.location) {
+        query = query.ilike('address', `%${filters.location}%`);
       }
+  
+      const { data, error: fallbackError } = await query;
+      if (fallbackError) throw fallbackError;
+      return { data };
     }
+
   },
 
   // Check if user has a caregiver profile

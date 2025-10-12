@@ -287,7 +287,7 @@ const BookingModal = ({ caregiver, childrenList = [], onConfirm, onClose, visibl
               </View>
             </TouchableOpacity>
             <View style={styles.childInfo}>
-              <Text style={styles.childName}>{child.name}</Text>
+            <Text style={styles.childHeaderName}>{childData.name}</Text>
               <Text style={styles.childDetailsText}>{`Age ${child.age} • ${child.preferences}`}</Text>
               {child.allergies && child.allergies !== 'None' && (
                 <Text style={styles.allergyWarning}>{`⚠️ Allergies: ${child.allergies}`}</Text>
@@ -508,9 +508,9 @@ const BookingModal = ({ caregiver, childrenList = [], onConfirm, onClose, visibl
                   </Text>
                 )}
                 {bookingData.emergencyContact.phone && (
-                  <Text style={styles.emergencyDetail}>
-                    Phone: {bookingData.emergencyContact.phone}
-                  </Text>
+                  <Text style={styles.emergencySummaryDetail}>
+                  Phone: {bookingData.emergencyContact.phone}
+                </Text>
                 )}
                 {bookingData.emergencyContact.relation && (
                   <Text style={styles.emergencyDetail}>
@@ -942,10 +942,10 @@ const BookingDetailsModal = ({
                   <Text style={styles.detailLabel}>Relation: </Text>
                   {enhancedBooking.emergencyContact.relation}
                 </Text>
-                <Text style={styles.emergencyDetail}>
-                  <Text style={styles.detailLabel}>Phone: </Text>
-                  {enhancedBooking.emergencyContact.phone}
-                </Text>
+                <Text style={styles.emergencyDetailText}>
+                <Text style={styles.detailLabel}>Phone: </Text>
+                {enhancedBooking.emergencyContact.phone}
+              </Text>
               </View>
             </View>
           </ScrollView>
@@ -1231,6 +1231,21 @@ const styles = StyleSheet.create({
   emergencyContactContainer: {
     gap: 12,
   },
+  // Styles
+childHeaderName: {
+  fontWeight: '600',
+  color: '#111827',
+  flex: 1,
+},
+emergencySummaryDetail: {
+  fontSize: 14,
+  color: '#991b1b',
+  fontWeight: '500',
+},
+emergencyDetailText: {
+  fontSize: 14,
+  color: '#991b1b',
+},
   
   caregiverSummary: {
     backgroundColor: '#f9fafb',
@@ -1400,354 +1415,18 @@ const styles = StyleSheet.create({
   emergencySummaryCard: {
     marginTop: 12,
     padding: 12,
-    borderRadius: 10,
-    backgroundColor: '#fef2f2',
-    borderWidth: 1,
-    borderColor: '#fecaca',
-  },
   emergencyContactReview: {
     gap: 6,
   },
-  emergencyDetail: {
+  emergencySummaryDetail: {
     fontSize: 14,
     color: '#991b1b',
     fontWeight: '500',
   },
-  costBreakdown: {
-    gap: 8,
-  },
-  totalCostRow: {
-    borderTopWidth: 1,
-    borderTopColor: '#e5e7eb',
-    paddingTop: 8,
-    marginTop: 4,
-  },
-  totalCostLabel: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: '#111827',
-  },
-  totalCostValue: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: '#10b981',
-  },
-  caregiverHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    marginBottom: 12,
-  },
-  caregiverInfo: {
-    flex: 1,
-  },
-  caregiverName: {
-    fontWeight: 'bold',
-    fontSize: 16,
-    color: '#111827',
-  },
-  rateText: {
-    color: '#3b82f6',
-    fontWeight: '600',
-  },
-  
-  summaryDetails: {
-    gap: 12,
-  },
-  summaryRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-  },
-  summaryLabel: {
-    color: '#6b7280',
-  },
-  summaryValue: {
-    fontWeight: '500',
-    color: '#111827',
-  },
-  totalRow: {
-    borderTopWidth: 1,
-    borderTopColor: '#e5e7eb',
-    paddingTop: 12,
-    marginTop: 4,
-  },
-  totalLabel: {
-    fontWeight: 'bold',
-    fontSize: 16,
-    color: '#111827',
-  },
-  totalAmount: {
-    fontWeight: 'bold',
-    fontSize: 16,
-    color: '#10b981',
-  },
-  
-  modalFooter: {
-    flexDirection: 'row',
-    gap: 8,
-    padding: 16,
-    borderTopWidth: 1,
-    borderTopColor: '#f0f0f0',
-    backgroundColor: 'white',
-  },
-  errorContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    backgroundColor: '#fef2f2',
-    borderTopWidth: 1,
-    borderTopColor: '#fecaca',
-  },
-  errorText: {
-    color: '#dc2626',
-    fontSize: 14,
-    flex: 1,
-  },
-  footerButton: {
-    flex: 1,
-    paddingVertical: 12,
-    paddingHorizontal: 16,
-    borderRadius: 8,
-    justifyContent: 'center',
-    alignItems: 'center',
-    flexDirection: 'row',
-    minHeight: 44,
-  },
-  secondaryButton: {
-    borderWidth: 1,
-    borderColor: '#d1d5db',
-    backgroundColor: 'white',
-  },
-  secondaryButtonText: {
-    color: '#374151',
-    fontWeight: '500',
-    fontSize: 14,
-  },
-  primaryButton: {
-    backgroundColor: '#3b82f6',
-  },
-  disabledButton: {
-    opacity: 0.5,
-  },
-  primaryButtonText: {
-    color: 'white',
-    fontWeight: '500',
-    fontSize: 14,
-  },
-  successButton: {
-    backgroundColor: '#10b981',
-  },
-  
-  // BookingDetailsModal specific styles
-  detailsModalContainer: {
-    maxWidth: 500,
-    marginHorizontal: 20,
-    marginVertical: 40,
-    borderRadius: 20,
-    maxHeight: '90%',
-  },
-  detailsHeader: {
-    backgroundColor: '#eff6ff',
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
-  },
-  detailsHeaderContent: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-  },
-  calendarIcon: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    backgroundColor: '#dbeafe',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  headerRight: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-  },
-  statusBadge: {
-    paddingVertical: 6,
-    paddingHorizontal: 12,
-    borderRadius: 12,
-    borderWidth: 1,
-  },
-  statusText: {
-    fontWeight: '500',
-    fontSize: 14,
-  },
-  
-  detailsContent: {
-    padding: 16,
-  },
-  sectionCard: {
-    backgroundColor: 'white',
-    borderWidth: 1,
-    borderColor: '#e5e7eb',
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 16,
-  },
-  sectionHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    marginBottom: 16,
-  },
-  
-  overviewGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 16,
-  },
-  overviewItem: {
-    width: '48%',
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  overviewLabel: {
-    fontSize: 14,
-    color: '#6b7280',
-  },
-  overviewValue: {
-    fontWeight: '500',
-    color: '#111827',
-  },
-  rateValue: {
-    color: '#3b82f6',
-  },
-  totalValue: {
-    color: '#10b981',
-  },
-  
-  contactSection: {
-    gap: 16,
-  },
-  contactItem: {
-    flexDirection: 'row',
-    gap: 12,
-  },
-  contactTitle: {
-    fontWeight: '600',
-    color: '#111827',
-  },
-  contactDetail: {
-    fontSize: 14,
-    color: '#6b7280',
-  },
-  contactLabel: {
-    fontSize: 14,
-    color: '#6b7280',
-  },
-  contactValue: {
-    fontWeight: '500',
-    color: '#111827',
-  },
-  
-  childrenSection: {
-    gap: 12,
-  },
-  childCard: {
-    backgroundColor: '#eff6ff',
-    borderRadius: 8,
-    padding: 12,
-  },
-  childHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    marginBottom: 8,
-  },
-  childName: {
-    fontWeight: '600',
-    color: '#111827',
-    flex: 1,
-  },
-  childAge: {
-    fontSize: 14,
-    color: '#6b7280',
-  },
-  childDetails: {
-    gap: 4,
-  },
-  childDetail: {
-    fontSize: 14,
-    color: '#374151',
-  },
-  detailLabel: {
-    fontWeight: '500',
-  },
-  allergyContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-  },
-  allergyText: {
-    fontSize: 14,
-    color: '#ef4444',
-  },
-  allergyLabel: {
-    fontWeight: '500',
-  },
-  
-  requirementsContainer: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-  },
-  requirementTag: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    backgroundColor: '#d1fae5',
-    paddingVertical: 4,
-    paddingHorizontal: 8,
-    borderRadius: 12,
-  },
-  requirementText: {
-    fontSize: 14,
-    color: '#065f46',
-  },
-  
-  notesCard: {
-    backgroundColor: '#fef3c7',
-    borderWidth: 1,
-    borderColor: '#fcd34d',
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 16,
-  },
-  notesText: {
-    color: '#92400e',
-  },
-  
-  emergencyDetailsCard: {
-    backgroundColor: '#fee2e2',
-    borderWidth: 1,
-    borderColor: '#fca5a5',
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 16,
-  },
-  emergencyDetails: {
-    gap: 8,
-  },
-  emergencyDetail: {
+  emergencyDetailText: {
     fontSize: 14,
     color: '#991b1b',
   },
-  
-  detailsFooter: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-    padding: 12,
     borderTopWidth: 1,
     borderTopColor: '#e5e7eb',
     backgroundColor: '#f9fafb',

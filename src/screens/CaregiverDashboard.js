@@ -8,7 +8,7 @@ import Toast from "../components/ui/feedback/Toast"
 import { supabaseService } from '../services/supabase'
 import { getCurrentSocketURL } from '../config/api'
 import { useAuth } from "../contexts/AuthContext"
-
+import JobsTab, { CaregiverJobCard } from './CaregiverDashboard/JobsTab';
 import { usePrivacy } from '../components/features/privacy/PrivacyManager';
 import { SettingsModal } from "../components/ui/modals/SettingsModal"
 import { RequestInfoModal } from "../components/ui/modals/RequestInfoModal"
@@ -42,266 +42,7 @@ import { PrivacyNotificationModal } from '../components/ui/modals/PrivacyNotific
 import MessageItemLocal from '../components/messaging/MessageItemLocal';
 import ReviewItemLocal from '../components/messaging/ReviewItemLocal';
 
-function JobCard({ job, showActions = true, onApply, hasApplied, onLearnMore, jobCardStyle, gridMode = false }) {
-  const applied = typeof hasApplied === 'function' ? hasApplied(job.id) : false
-  
-  return (
-    <View style={[
-      {
-        backgroundColor: '#FFFFFF',
-        borderRadius: 16,
-        marginVertical: 8,
-        marginHorizontal: 16,
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.1,
-        shadowRadius: 8,
-        elevation: 5,
-        overflow: 'hidden',
-        minHeight: 280
-      },
-      jobCardStyle
-    ]}>
-      {/* Header with gradient */}
-      <LinearGradient
-        colors={['#667eea', '#764ba2']}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 0 }}
-        style={{
-          paddingHorizontal: 16,
-          paddingVertical: 16,
-        }}
-      >
-        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-          <View style={{ flex: 1 }}>
-            <Text style={{
-              fontSize: 18,
-              fontWeight: '700',
-              color: '#FFFFFF',
-              marginBottom: 4
-            }} numberOfLines={2}>
-              {job.title}
-            </Text>
-            <Text style={{
-              fontSize: 14,
-              color: 'rgba(255, 255, 255, 0.9)',
-              fontWeight: '500'
-            }}>
-              {job.family || 'Family'}
-            </Text>
-          </View>
-          {job.urgent && (
-            <View style={{
-              backgroundColor: '#EF4444',
-              paddingHorizontal: 12,
-              paddingVertical: 6,
-              borderRadius: 20,
-              marginLeft: 12,
-            }}>
-              <Text style={{
-                color: '#FFFFFF',
-                fontSize: 12,
-                fontWeight: '600',
-              }}>
-                Urgent
-              </Text>
-            </View>
-          )}
-        </View>
-      </LinearGradient>
 
-      {/* Content */}
-      <View style={{ padding: 16, flex: 1 }}>
-        {/* Details Grid */}
-        <View style={{ 
-          flexDirection: 'row', 
-          flexWrap: 'wrap',
-          marginBottom: 16
-        }}>
-          <View style={{
-            flexDirection: 'row',
-            alignItems: 'center',
-            backgroundColor: '#F8FAFC',
-            paddingHorizontal: 12,
-            paddingVertical: 8,
-            borderRadius: 20,
-            marginRight: 8,
-            marginBottom: 8,
-            flex: 0.48,
-          }}>
-            <Ionicons name="time" size={16} color="#6B7280" />
-            <Text style={{
-              marginLeft: 6,
-              fontSize: 13,
-              color: '#374151',
-              fontWeight: '500'
-            }} numberOfLines={1}>
-              {job.schedule || 'Flexible'}
-            </Text>
-          </View>
-
-          <View style={{
-            flexDirection: 'row',
-            alignItems: 'center',
-            backgroundColor: '#F0FDF4',
-            paddingHorizontal: 12,
-            paddingVertical: 8,
-            borderRadius: 20,
-            marginBottom: 8,
-            flex: 0.48,
-          }}>
-            <Ionicons name="cash" size={16} color="#059669" />
-            <Text style={{
-              marginLeft: 6,
-              fontSize: 13,
-              color: '#059669',
-              fontWeight: '600'
-            }}>
-              ₱{job.hourlyRate}/hr
-            </Text>
-          </View>
-        </View>
-
-        {/* Children and Location Info */}
-        <View style={{
-          flexDirection: 'row',
-          alignItems: 'center',
-          marginBottom: 12,
-        }}>
-          <Ionicons name="people" size={16} color="#6B7280" />
-          <Text style={{
-            marginLeft: 6,
-            fontSize: 14,
-            color: '#6B7280',
-            marginRight: 16
-          }}>
-            {job.children} {job.children === 1 ? 'child' : 'children'}
-          </Text>
-          <Ionicons name="location" size={16} color="#6B7280" />
-          <Text style={{
-            marginLeft: 6,
-            fontSize: 14,
-            color: '#6B7280',
-            flex: 1
-          }} numberOfLines={1}>
-            {job.distance || job.location}
-          </Text>
-        </View>
-
-        {/* Requirements */}
-        {job.requirements && job.requirements.length > 0 && (
-          <View style={{
-            flexDirection: 'row',
-            flexWrap: 'wrap',
-            marginBottom: 16
-          }}>
-            {job.requirements.slice(0, 2).map((req, index) => (
-              <View key={index} style={{
-                backgroundColor: '#F3F0FF',
-                paddingHorizontal: 8,
-                paddingVertical: 4,
-                borderRadius: 12,
-                marginRight: 6,
-                marginBottom: 4,
-              }}>
-                <Text style={{
-                  fontSize: 12,
-                  color: '#8B5CF6',
-                  fontWeight: '500'
-                }}>
-                  {req}
-                </Text>
-              </View>
-            ))}
-            {job.requirements.length > 2 && (
-              <Text style={{
-                fontSize: 12,
-                color: '#6B7280',
-                alignSelf: 'center'
-              }}>
-                +{job.requirements.length - 2} more
-              </Text>
-            )}
-          </View>
-        )}
-
-        {/* Actions */}
-        {showActions && (
-          <View style={{ flexDirection: 'row', gap: 8, marginTop: 'auto' }}>
-            <Pressable
-              onPress={() => onLearnMore && onLearnMore(job)}
-              style={{
-                flex: 1,
-                backgroundColor: '#F8FAFC',
-                paddingVertical: 12,
-                paddingHorizontal: 16,
-                borderRadius: 12,
-                alignItems: 'center',
-                borderWidth: 1,
-                borderColor: '#CBD5E1'
-              }}
-            >
-              <Text style={{
-                color: '#475569',
-                fontSize: 14,
-                fontWeight: '600'
-              }}>
-                Details
-              </Text>
-            </Pressable>
-
-            {applied ? (
-              <View style={{
-                flex: 1,
-                backgroundColor: '#10B981',
-                paddingVertical: 12,
-                paddingHorizontal: 16,
-                borderRadius: 12,
-                alignItems: 'center',
-                flexDirection: 'row',
-                justifyContent: 'center'
-              }}>
-                <Ionicons name="checkmark-circle" size={16} color="#FFFFFF" style={{ marginRight: 6 }} />
-                <Text style={{
-                  color: '#FFFFFF',
-                  fontSize: 14,
-                  fontWeight: '600'
-                }}>
-                  Applied
-                </Text>
-              </View>
-            ) : (
-              <Pressable
-                onPress={() => onApply && onApply(job)}
-                style={{
-                  flex: 1,
-                  backgroundColor: '#3B82F6',
-                  paddingVertical: 12,
-                  paddingHorizontal: 16,
-                  borderRadius: 12,
-                  alignItems: 'center',
-                  shadowColor: '#3B82F6',
-                  shadowOffset: { width: 0, height: 2 },
-                  shadowOpacity: 0.2,
-                  shadowRadius: 4,
-                  elevation: 3
-                }}
-              >
-                <Text style={{
-                  color: '#FFFFFF',
-                  fontSize: 14,
-                  fontWeight: '600'
-                }}>
-                  Apply
-                </Text>
-              </Pressable>
-            )}
-          </View>
-        )}
-      </View>
-    </View>
-  )
-}
 
 function ApplicationCard({ application, onViewDetails, onMessage }) {
   const getStatusColor = (status) => {
@@ -1674,25 +1415,25 @@ function CaregiverDashboard({ onLogout, route }) {
                   style={styles.horizontalScroll}
                   contentContainerStyle={{ paddingLeft: 2, paddingRight: 2 }}
                 >
-                  {(jobs || []).slice(0, 3).map((job, index) => (
-                    <JobCard
-                      key={job.id || index}
-                      job={job}
-                      showActions={true}
-                      onApply={handleJobApplication}
-                      onLearnMore={handleViewJob}
-                      hasApplied={(id) => applications.some((a) => a.jobId === id)}
-                      jobCardStyle={[
-                        styles.jobCardHorizontal,
-                        { marginRight: index === 2 ? 0 : 26 }
-                      ]}
-                    />
-                  ))}
+                  {(jobs || []).slice(0, 3).map((job, index) => {
+                    const jobId = job?.id || job?._id;
+                    const alreadyApplied = applications.some(
+                      (app) => (app?.jobId || app?.job_id || app?.job?.id || app?.job?._id) === jobId
+                    );
+                    return (
+                      <CaregiverJobCard
+                        key={jobId || `job-${index}`}
+                        job={job}
+                        onApply={handleJobApplication}
+                        onView={handleViewJob}
+                        hasApplied={Boolean(alreadyApplied)}
+                        style={{ width: isTablet ? 320 : '100%', marginRight: isTablet && index < 2 ? 16 : 0 }}
+                      />
+                    );
+                  })}
                 </ScrollView>
               )}
             </View>
-
-
 
             <View style={styles.section}>
               <View style={styles.sectionHeader}>
@@ -1731,80 +1472,19 @@ function CaregiverDashboard({ onLogout, route }) {
           )
         )}
 
-        {activeTab === "jobs" && (
-          <ScrollView 
-            style={styles.content}
-            refreshControl={
-              <RefreshControl
-                refreshing={refreshing || jobsLoading}
+            {activeTab === 'jobs' && (
+              <JobsTab
+                jobs={jobs}
+                jobsLoading={jobsLoading}
+                applications={applications}
                 onRefresh={onRefresh}
-                colors={['#3B82F6']}
-                tintColor="#3B82F6"
+                onJobApply={handleJobApplication}
+                onJobView={handleViewJob}
+                refreshing={refreshing}
+                loading={jobsLoading}
+                searchQuery={debouncedSearch}
               />
-            }
-          >
-            <View style={styles.section}>
-              <View style={styles.filters}>
-                <Chip style={styles.filterChip} textStyle={styles.filterChipText}>
-                  All Jobs
-                </Chip>
-                <Chip
-                  style={[styles.filterChip, styles.filterChipActive]}
-                  textStyle={[styles.filterChipText, styles.filterChipTextActive]}
-                >
-                  Nearby
-                </Chip>
-                <Chip style={styles.filterChip} textStyle={styles.filterChipText}>
-                  High Pay
-                </Chip>
-                <Chip style={styles.filterChip} textStyle={styles.filterChipText}>
-                  Urgent
-                </Chip>
-              </View>
-
-              {jobsLoading ? (
-                <View style={styles.loadingContainer}>
-                  <ActivityIndicator size="large" color="#3B82F6" />
-                  <Text style={styles.loadingText}>Loading jobs...</Text>
-                </View>
-              ) : (() => {
-                const filteredJobs = jobs.filter(job => {
-                  if (!debouncedSearch) return true;
-                  const searchLower = debouncedSearch.toLowerCase();
-                  return (
-                    job.title?.toLowerCase().includes(searchLower) ||
-                    job.family?.toLowerCase().includes(searchLower) ||
-                    job.location?.toLowerCase().includes(searchLower) ||
-                    job.requirements?.some(req => req.toLowerCase().includes(searchLower))
-                  );
-                });
-                
-                return filteredJobs.length > 0 ? (
-                  <View style={[styles.jobsGrid, columns === 1 && { flexDirection: 'column' }]}>
-                    {filteredJobs.map((job, index) => (
-                      <JobCard
-                        key={job.id || `job-${index}`}
-                        job={job}
-                        showActions={true}
-                        onApply={handleJobApplication}
-                        onLearnMore={handleViewJob}
-                        hasApplied={(id) => applications.some((a) => a.jobId === id)}
-                        jobCardStyle={columns === 1 ? { width: '100%', marginBottom: 16 } : { width: gridCardWidth, marginBottom: 16, marginRight: 8 }}
-                        gridMode
-                      />
-                    ))}
-                  </View>
-                ) : (
-                  <EmptyState 
-                    icon="briefcase" 
-                    title={debouncedSearch ? "No matching jobs" : "No jobs available"}
-                    subtitle={debouncedSearch ? `No jobs found for "${debouncedSearch}"` : "Please check back later or adjust your filters"}
-                  />
-                );
-              })()}
-            </View>
-          </ScrollView>
-        )}
+            )}
 
         {activeTab === "applications" && (
           jobsLoading ? (
