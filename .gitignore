@@ -14,3 +14,13 @@ web-build/
 .env.production
 .DS_Store
 *.log
+
+# Generated artifacts
+coverage/
+db/
+docs/
+scripts/
+recovered_*
+android.os.Looper
+com.facebook.react.uimanager.ViewManagerPropertyUpdater$FallbackViewManagerSetter
+com.facebook.react.uimanager.ViewManagersPropertyCache$PropSetter
