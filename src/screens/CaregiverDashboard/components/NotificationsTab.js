@@ -21,7 +21,7 @@ import {
 import { supabaseService } from '../../../services/supabaseService';
 import { useAuth } from '../../../contexts/AuthContext';
 
-const NotificationsTab = ({ navigation }) => {
+const NotificationsTab = ({ navigation, onNavigateTab }) => {
   const { user } = useAuth();
   const [notifications, setNotifications] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -72,9 +72,36 @@ const NotificationsTab = ({ navigation }) => {
     }
   };
 
+  const resolveTargetTab = (type) => {
+    switch (type) {
+      case 'job_opportunity':
+        return 'jobs';
+      case 'application_update':
+        return 'applications';
+      case 'booking_request':
+      case 'booking_confirmed':
+      case 'booking_cancelled':
+      case 'booking_update':
+      case 'payment':
+        return 'bookings';
+      case 'message':
+        return 'messages';
+      case 'review':
+        return 'reviews';
+      default:
+        return null;
+    }
+  };
+
   const handleNotificationPress = async (notification) => {
     if (!notification.read) {
       await markAsRead(notification.id);
+    }
+
+    const targetTab = resolveTargetTab(notification.type);
+    if (targetTab && onNavigateTab) {
+      onNavigateTab(targetTab, notification);
+      return;
     }
 
     if (navigation?.canGoBack?.()) {

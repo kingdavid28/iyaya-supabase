@@ -9,7 +9,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import { useParentDashboard } from '../../hooks/useParentDashboard';
 
 // Supabase service import
-import { supabaseService } from '../../services/supabaseService';
+import { supabaseService } from '../../services/supabase';
 import { childrenAPI } from '../../services';
 
 // Utility imports
@@ -147,6 +147,7 @@ const ParentDashboard = () => {
   const [searchQuery] = useState('');
   const [searchResults] = useState([]);
   const [filteredCaregivers] = useState([]);
+  const [searchLoading] = useState(false);
   const [filters] = useState(DEFAULT_FILTERS);
   const [activeFilters] = useState(0);
   const [quickFilters] = useState({
@@ -499,19 +500,25 @@ const ParentDashboard = () => {
     }
 
     // Transform selected children names to child objects
-    const selectedChildrenObjects = (bookingData.selectedChildren || []).map(childName => {
-      const childData = children.find(child => child.name === childName);
-      return childData ? {
-        name: childData.name,
-        age: childData.age,
-        preferences: childData.preferences || '',
-        allergies: childData.allergies || ''
-      } : {
-        name: childName,
-        age: 0,
-        preferences: '',
-        allergies: ''
+    const normalizeChildRecord = (childRecord, fallbackName, index) => {
+      const base = childRecord?.child ?? childRecord ?? {};
+
+      return {
+        name: base.name || fallbackName || `Child ${index + 1}`,
+        age: base.age ?? base.childAge ?? 'Unknown',
+        preferences: base.preferences ?? base.childPreferences ?? '',
+        allergies: base.allergies ?? base.childAllergies ?? 'None',
+        specialInstructions:
+          base.specialInstructions ??
+          base.special_instructions ??
+          base.notes ??
+          '',
       };
+    };
+
+    const selectedChildrenObjects = (bookingData.selectedChildren || []).map((childName, index) => {
+      const matchedChild = children.find(child => child?.name === childName);
+      return normalizeChildRecord(matchedChild, childName, index);
     });
 
     const normalizedDate = (() => {
@@ -1037,6 +1044,7 @@ const ParentDashboard = () => {
             visible={modals.bookingDetails}
             booking={selectedBooking}
             onClose={() => toggleModal('bookingDetails', false)}
+            colors={['#ebc5dd', '#ccc8e8']}
           />
         </View>
       </ProfileDataProvider>

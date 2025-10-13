@@ -292,6 +292,7 @@ const BookingDetailsModal = ({
   onCompleteBooking,
   onCancelBooking,
   showFooterActions = true,
+  colors = ['#ebc5dd', '#ccc8e8']
 }) => {
   if (!booking) return null;
 
@@ -327,12 +328,17 @@ const BookingDetailsModal = ({
   const shouldShowFooter =
     showFooterActions && (onMessage || onGetDirections || onCompleteBooking || onCancelBooking);
 
+  const sharedColors = {
+    primary: colors[0] || '#ebc5dd',
+    secondary: colors[1] || colors[0] || '#ccc8e8',
+  };
+
   return (
     <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
       <View style={styles.overlay}>
         <View style={styles.modalContainer}>
           <LinearGradient
-            colors={['#ebc5dd', '#ccc8e8']}
+            colors={colors}
             start={{ x: 0, y: 0 }}
             end={{ x: 1, y: 0 }}
             style={styles.header}
@@ -368,7 +374,7 @@ const BookingDetailsModal = ({
                   </View>
                   <View style={styles.caregiverDetails}>
                     <Text style={styles.caregiverName}>{enhancedBooking.caregiverName}</Text>
-                    <Text style={styles.caregiverRate}>{`${formattedHourlyRate}/hour`}</Text>
+                    <Text style={[styles.caregiverRate, { color: sharedColors.primary }]}>{`${formattedHourlyRate}/hour`}</Text>
                   </View>
                 </View>
               </View>
@@ -378,7 +384,7 @@ const BookingDetailsModal = ({
               <Text style={styles.sectionTitle}>Schedule Details</Text>
               <View style={styles.infoGrid}>
                 <View style={styles.infoItem}>
-                  <Ionicons name="calendar" size={20} color="#667eea" />
+                  <Ionicons name="calendar" size={20} color={sharedColors.primary} />
                   <View style={styles.infoContent}>
                     <Text style={styles.infoLabel}>Date</Text>
                     <Text style={styles.infoValue}>{enhancedBooking.formattedDate}</Text>
@@ -386,7 +392,7 @@ const BookingDetailsModal = ({
                 </View>
 
                 <View style={styles.infoItem}>
-                  <Ionicons name="time" size={20} color="#667eea" />
+                  <Ionicons name="time" size={20} color={sharedColors.primary} />
                   <View style={styles.infoContent}>
                     <Text style={styles.infoLabel}>Time Range</Text>
                     <Text style={styles.infoValue}>{enhancedBooking.timeDisplay}</Text>
@@ -394,7 +400,7 @@ const BookingDetailsModal = ({
                 </View>
 
                 <View style={styles.infoItem}>
-                  <Ionicons name="hourglass" size={20} color="#667eea" />
+                  <Ionicons name="hourglass" size={20} color={sharedColors.primary} />
                   <View style={styles.infoContent}>
                     <Text style={styles.infoLabel}>Duration</Text>
                     <Text style={styles.infoValue}>{enhancedBooking.formattedDuration}</Text>

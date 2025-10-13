@@ -1,310 +1,475 @@
-import React, { useState } from 'react';
-import { ScrollView, View, Text, ActivityIndicator, RefreshControl, TouchableOpacity, Alert, StyleSheet } from 'react-native';
+import React, { useCallback, useMemo, useState } from 'react';
+import {
+  View,
+  Text,
+  ActivityIndicator,
+  TouchableOpacity,
+  Alert,
+  StyleSheet,
+  FlatList,
+} from 'react-native';
 import { Chip } from 'react-native-paper';
-import { MapPin, Clock, Users, DollarSign, Calendar, Briefcase } from 'lucide-react-native';
+import {
+  MapPin,
+  Clock,
+  Users,
+  DollarSign,
+  Calendar,
+  Briefcase,
+  Target,
+  TrendingUp,
+  Compass,
+  AlertTriangle,
+  Filter,
+} from 'lucide-react-native';
 import { styles as dashboardStyles } from '../styles/CaregiverDashboard.styles';
 
-// Local styles for job components
 const localStyles = StyleSheet.create({
-  jobCard: {
-    backgroundColor: '#fff',
-    borderRadius: 12,
+  screenContainer: { flex: 1 },
+  listContent: { paddingHorizontal: 16, paddingBottom: 120 },
+  summaryGrid: { flexDirection: 'row', flexWrap: 'wrap', marginBottom: 16, gap: 12 },
+  summaryCard: {
+    flexGrow: 1,
+    minWidth: '44%',
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
     padding: 16,
-    marginBottom: 12,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
-  },
-  jobHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 12,
-  },
-  jobTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#1f2937',
-    flex: 1,
-  },
-  urgentBadge: {
-    backgroundColor: '#ef4444',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 6,
-  },
-  urgentText: {
-    color: '#fff',
-    fontSize: 10,
-    fontWeight: '600',
-  },
-  jobDetails: {
-    marginBottom: 12,
-  },
-  jobDetailRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 6,
-  },
-  jobDetailText: {
-    marginLeft: 8,
-    fontSize: 14,
-    color: '#6b7280',
-  },
-  jobDescription: {
-    fontSize: 14,
-    color: '#4b5563',
-    marginBottom: 12,
-    lineHeight: 20,
-  },
-  jobActions: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  viewButton: {
-    flex: 1,
-    paddingVertical: 10,
-    paddingHorizontal: 16,
-    borderRadius: 8,
     borderWidth: 1,
-    borderColor: '#3b82f6',
-    marginRight: 8,
+    borderColor: '#E5E7EB',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 6,
+    elevation: 2,
+  },
+  summaryTitleRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 8, gap: 8 },
+  summaryValue: { fontSize: 22, fontWeight: '700', color: '#111827' },
+  summaryLabel: { fontSize: 13, color: '#6B7280' },
+  filterSection: { marginBottom: 20 },
+  filterHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 },
+  filterHeaderTitle: { fontSize: 18, fontWeight: '600', color: '#111827' },
+  filterAction: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  filterActionText: { color: '#2563EB', fontSize: 14, fontWeight: '500' },
+  jobCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    padding: 18,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: '#F3F4F6',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 6,
+    elevation: 2,
+  },
+  jobHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12, gap: 12 },
+  jobTitleWrapper: { flex: 1 },
+  jobTitle: { fontSize: 18, fontWeight: '700', color: '#1F2937', lineHeight: 24 },
+  jobMetaText: { marginTop: 4, fontSize: 13, color: '#6B7280' },
+  statusPill: {
+    flexDirection: 'row',
     alignItems: 'center',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 999,
+    backgroundColor: '#ECFDF5',
+    borderWidth: 1,
+    borderColor: '#D1FAE5',
+    gap: 6,
   },
-  viewButtonText: {
-    color: '#3b82f6',
-    fontSize: 14,
-    fontWeight: '500',
-  },
-  applyButton: {
-    flex: 1,
-    paddingVertical: 10,
-    paddingHorizontal: 16,
-    borderRadius: 8,
-    backgroundColor: '#3b82f6',
-    alignItems: 'center',
-  },
-  applyButtonDisabled: {
-    backgroundColor: '#9ca3af',
-  },
-  applyButtonText: {
-    color: '#fff',
-    fontSize: 14,
-    fontWeight: '500',
-  },
-  jobsList: {
-    paddingTop: 8,
-  },
-  emptyState: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 48,
-  },
-  emptyStateTitle: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: '#1f2937',
-    marginTop: 16,
-    marginBottom: 8,
-  },
-  emptyStateSubtitle: {
-    fontSize: 14,
-    color: '#6b7280',
-    textAlign: 'center',
-    paddingHorizontal: 32,
-  },
+  urgentBadge: { backgroundColor: '#FEE2E2', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 999, marginLeft: 8 },
+  urgentText: { color: '#DC2626', fontSize: 11, fontWeight: '700', letterSpacing: 0.3 },
+  jobDetails: { marginBottom: 16, gap: 10 },
+  jobDetailRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  jobDetailText: { flex: 1, fontSize: 14, color: '#4B5563' },
+  tagContainer: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 12 },
+  tagPill: { backgroundColor: '#EFF6FF', borderRadius: 999, paddingHorizontal: 12, paddingVertical: 6, borderWidth: 1, borderColor: '#DBEAFE' },
+  tagText: { color: '#2563EB', fontSize: 12, fontWeight: '500' },
+  jobDescription: { fontSize: 14, color: '#374151', lineHeight: 20, marginBottom: 16 },
+  jobActions: { flexDirection: 'row', gap: 12 },
+  viewButton: { flex: 1, paddingVertical: 12, borderRadius: 12, borderWidth: 1, borderColor: '#CBD5F5', alignItems: 'center', backgroundColor: '#F8FAFC' },
+  viewButtonText: { color: '#1D4ED8', fontSize: 14, fontWeight: '600' },
+  applyButton: { flex: 1, paddingVertical: 12, borderRadius: 12, backgroundColor: '#2563EB', alignItems: 'center' },
+  applyButtonDisabled: { backgroundColor: '#CBD5F5' },
+  applyButtonText: { color: '#FFFFFF', fontSize: 14, fontWeight: '600' },
+  listEmptyContainer: { alignItems: 'center', paddingVertical: 64, gap: 16 },
+  emptyTitle: { fontSize: 18, fontWeight: '700', color: '#1F2937' },
+  emptySubtitle: { fontSize: 14, color: '#6B7280', textAlign: 'center', paddingHorizontal: 32 },
+  appliedBadge: { marginTop: 8, alignSelf: 'flex-start', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 999, backgroundColor: '#E0F2FE', borderWidth: 1, borderColor: '#BAE6FD' },
+  appliedBadgeText: { fontSize: 11, fontWeight: '600', color: '#0369A1' },
+  metaFooter: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 12 },
+  postedText: { fontSize: 12, color: '#9CA3AF' },
+  chipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  skeletonCard: { backgroundColor: '#FFFFFF', borderRadius: 16, padding: 18, marginBottom: 16, borderWidth: 1, borderColor: '#F3F4F6' },
+  skeletonLine: { height: 12, borderRadius: 6, backgroundColor: '#E5E7EB', marginBottom: 12 },
+  skeletonLineShort: { width: '60%' },
+  skeletonLineMedium: { width: '80%' },
+  skeletonLineLong: { width: '95%' },
 });
 
-// Combine styles
 const styles = { ...dashboardStyles, ...localStyles };
 
-const JobCard = ({ job, onApply, onView }) => {
+const FILTER_OPTIONS = [
+  { key: 'all', label: 'All Jobs', icon: Briefcase },
+  { key: 'nearby', label: 'Nearby', icon: Compass },
+  { key: 'high-pay', label: 'High Pay', icon: TrendingUp },
+  { key: 'urgent', label: 'Urgent', icon: AlertTriangle },
+];
+
+const SORT_OPTIONS = [
+  { key: 'recent', label: 'Most Recent' },
+  { key: 'highest-pay', label: 'Highest Pay' },
+  { key: 'alphabetical', label: 'A-Z' },
+];
+
+const JOB_SKELETON_COUNT = 3;
+
+const formatCurrency = (value) => {
+  if (!value && value !== 0) return '₱0/hr';
+  return `₱${Number(value).toLocaleString('en-PH', { minimumFractionDigits: 0 })}/hr`;
+};
+
+const formatDateDisplay = (value) => {
+  if (!value) return 'Date not specified';
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return String(value);
+  return parsed.toLocaleDateString();
+};
+
+const getRelativeTime = (value) => {
+  const parsed = new Date(value);
+  if (!value || Number.isNaN(parsed.getTime())) return 'Posted recently';
+  const diffMinutes = Math.floor((Date.now() - parsed.getTime()) / (1000 * 60));
+  if (diffMinutes < 1) return 'Just now';
+  if (diffMinutes < 60) return `${diffMinutes}m ago`;
+  const diffHours = Math.floor(diffMinutes / 60);
+  if (diffHours < 24) return `${diffHours}h ago`;
+  const diffDays = Math.floor(diffHours / 24);
+  if (diffDays < 7) return `${diffDays}d ago`;
+  return parsed.toLocaleDateString();
+};
+
+const resolveJobTags = (job) => {
+  const tags = [];
+  if (Array.isArray(job?.requirements)) tags.push(...job.requirements);
+  if (Array.isArray(job?.skills)) tags.push(...job.skills);
+  if (job?.careType) tags.push(job.careType);
+  if (job?.childrenCount) tags.push(`${job.childrenCount} children`);
+  return tags.filter(Boolean).slice(0, 6);
+};
+
+const JobSkeleton = () => (
+  <View style={styles.skeletonCard}>
+    <View style={[styles.skeletonLine, styles.skeletonLineMedium]} />
+    <View style={[styles.skeletonLine, styles.skeletonLineShort]} />
+    <View style={[styles.skeletonLine, styles.skeletonLineLong]} />
+    <View style={[styles.skeletonLine, styles.skeletonLineMedium]} />
+    <View style={[styles.skeletonLine, styles.skeletonLineShort]} />
+  </View>
+);
+
+export const CaregiverJobCard = ({ job, onApply, onView, hasApplied, style }) => {
   const [applying, setApplying] = useState(false);
 
-  const handleApply = async () => {
-    if (applying) return;
-    
+  const handleApply = useCallback(async () => {
+    if (applying || hasApplied) return;
     setApplying(true);
     try {
-      if (onApply) {
-        await onApply(job);
-      }
+      await onApply?.(job);
     } catch (error) {
       console.error('Error applying to job:', error);
       Alert.alert('Error', 'Failed to apply to job. Please try again.');
     } finally {
       setApplying(false);
     }
-  };
+  }, [applying, hasApplied, job, onApply]);
+
+  const tags = useMemo(() => resolveJobTags(job), [job]);
+  const childrenSummary = useMemo(() => {
+    if (job?.childrenSummary) return job.childrenSummary;
+    if (Array.isArray(job?.children) && job.children.length) return `${job.children.length} children`;
+    if (job?.childrenCount) return `${job.childrenCount} children`;
+    return 'Child details on request';
+  }, [job]);
 
   return (
-    <View style={localStyles.jobCard}>
-      <View style={localStyles.jobHeader}>
-        <Text style={localStyles.jobTitle}>{job.title || 'Childcare Position'}</Text>
-        {job.urgent && (
-          <View style={localStyles.urgentBadge}>
-            <Text style={localStyles.urgentText}>URGENT</Text>
+    <View style={[styles.jobCard, style]}>
+      <View style={styles.jobHeader}>
+        <View style={styles.jobTitleWrapper}>
+          <Text style={styles.jobTitle} numberOfLines={2}>{job?.title || 'Childcare Position'}</Text>
+          <Text style={styles.jobMetaText} numberOfLines={1}>
+            {(job?.family || job?.familyName || 'Family')} · {(job?.location || 'Location not specified')}
+          </Text>
+          {hasApplied && (
+            <View style={styles.appliedBadge}>
+              <Text style={styles.appliedBadgeText}>Application Submitted</Text>
+            </View>
+          )}
+        </View>
+        <View>
+          <View style={styles.statusPill}>
+            <DollarSign size={16} color="#047857" />
+            <Text style={styles.summaryLabel}>{formatCurrency(job?.hourlyRate || job?.rate)}</Text>
+          </View>
+          {job?.urgent && (
+            <View style={styles.urgentBadge}>
+              <Text style={styles.urgentText}>URGENT</Text>
+            </View>
+          )}
+        </View>
+      </View>
+
+      <View style={styles.jobDetails}>
+        <View style={styles.jobDetailRow}>
+          <MapPin size={18} color="#1D4ED8" />
+          <Text style={styles.jobDetailText}>{job?.address || job?.location || 'Location not specified'}</Text>
+        </View>
+        <View style={styles.jobDetailRow}>
+          <Clock size={18} color="#1D4ED8" />
+          <Text style={styles.jobDetailText}>{job?.schedule || job?.time || 'Flexible schedule'}</Text>
+        </View>
+        <View style={styles.jobDetailRow}>
+          <Users size={18} color="#1D4ED8" />
+          <Text style={styles.jobDetailText}>{childrenSummary}</Text>
+        </View>
+        {job?.date && (
+          <View style={styles.jobDetailRow}>
+            <Calendar size={18} color="#1D4ED8" />
+            <Text style={styles.jobDetailText}>{formatDateDisplay(job?.date)}</Text>
           </View>
         )}
       </View>
-      
-      <View style={localStyles.jobDetails}>
-        <View style={localStyles.jobDetailRow}>
-          <Users size={16} color="#666" />
-          <Text style={localStyles.jobDetailText}>{job.family || 'Family'}</Text>
+
+      {tags.length > 0 && (
+        <View style={styles.tagContainer}>
+          {tags.map((tag) => (
+            <View key={`${job?.id || job?._id || job?.title}-${tag}`} style={styles.tagPill}>
+              <Text style={styles.tagText}>{tag}</Text>
+            </View>
+          ))}
         </View>
-        
-        <View style={localStyles.jobDetailRow}>
-          <MapPin size={16} color="#666" />
-          <Text style={localStyles.jobDetailText}>{job.location || 'Location not specified'}</Text>
-        </View>
-        
-        <View style={localStyles.jobDetailRow}>
-          <Clock size={16} color="#666" />
-          <Text style={localStyles.jobDetailText}>{job.schedule || 'Flexible hours'}</Text>
-        </View>
-        
-        <View style={localStyles.jobDetailRow}>
-          <DollarSign size={16} color="#666" />
-          <Text style={localStyles.jobDetailText}>₱{job.hourlyRate || 300}/hr</Text>
-        </View>
-        
-        {job.date && (
-          <View style={localStyles.jobDetailRow}>
-            <Calendar size={16} color="#666" />
-            <Text style={localStyles.jobDetailText}>{new Date(job.date).toLocaleDateString()}</Text>
-          </View>
-        )}
-      </View>
-      
-      {job.description && (
-        <Text style={localStyles.jobDescription} numberOfLines={2}>
+      )}
+
+      {job?.description && (
+        <Text style={styles.jobDescription} numberOfLines={3}>
           {job.description}
         </Text>
       )}
-      
-      <View style={localStyles.jobActions}>
-        <TouchableOpacity 
-          style={localStyles.viewButton}
-          onPress={() => onView && onView(job)}
-        >
-          <Text style={localStyles.viewButtonText}>View Details</Text>
+
+      <View style={styles.jobActions}>
+        <TouchableOpacity style={styles.viewButton} onPress={() => onView?.(job)}>
+          <Text style={styles.viewButtonText}>View Details</Text>
         </TouchableOpacity>
-        
-        <TouchableOpacity 
-          style={[localStyles.applyButton, applying && localStyles.applyButtonDisabled]}
+        <TouchableOpacity
+          style={[styles.applyButton, (applying || hasApplied) && styles.applyButtonDisabled]}
           onPress={handleApply}
-          disabled={applying}
+          disabled={applying || hasApplied}
         >
-          {applying ? (
-            <ActivityIndicator size="small" color="#fff" />
-          ) : (
-            <Text style={localStyles.applyButtonText}>Apply</Text>
+          {applying ? <ActivityIndicator size="small" color="#fff" /> : (
+            <Text style={styles.applyButtonText}>{hasApplied ? 'Applied' : 'Apply Now'}</Text>
           )}
         </TouchableOpacity>
+      </View>
+
+      <View style={styles.metaFooter}>
+        <Text style={styles.postedText}>Posted {getRelativeTime(job?.created_at || job?.createdAt || job?.postedAt || job?.date)}</Text>
+        {job?.duration ? <Text style={styles.postedText}>{job.duration}</Text> : null}
       </View>
     </View>
   );
 };
 
-const EmptyState = ({ icon, title, subtitle }) => (
-  <View style={localStyles.emptyState}>
-    <Briefcase size={48} color="#ccc" />
-    <Text style={localStyles.emptyStateTitle}>{title}</Text>
-    <Text style={localStyles.emptyStateSubtitle}>{subtitle}</Text>
+const EmptyState = ({ title, subtitle }) => (
+  <View style={styles.listEmptyContainer}>
+    <Briefcase size={56} color="#E5E7EB" />
+    <Text style={styles.emptyTitle}>{title}</Text>
+    <Text style={styles.emptySubtitle}>{subtitle}</Text>
   </View>
 );
 
-export default function JobsTab({ 
-  jobs = [], 
-  jobsLoading, 
+const renderSkeletons = () => (
+  <View>
+    {Array.from({ length: JOB_SKELETON_COUNT }).map((_, index) => (
+      <JobSkeleton key={`skeleton-${index}`} />
+    ))}
+  </View>
+);
+
+export default function JobsTab({
+  jobs = [],
+  jobsLoading,
   applications = [],
   onRefresh,
   onJobApply,
   onJobView,
   refreshing = false,
-  loading = false
+  loading = false,
+  searchQuery = '',
 }) {
-  const [filter, setFilter] = useState('all');
+  const [activeFilter, setActiveFilter] = useState('all');
+  const [activeSort, setActiveSort] = useState('recent');
 
-  const filteredJobs = jobs.filter(job => {
-    if (filter === 'nearby') return true; // TODO: Implement location filtering
-    if (filter === 'high-pay') return job.hourlyRate >= 400;
-    if (filter === 'urgent') return job.urgent;
-    return true;
-  });
+  const applicationJobIds = useMemo(() => {
+    if (!Array.isArray(applications)) return new Set();
+    return new Set(
+      applications
+        .map((app) => app?.job_id || app?.jobId || app?.job?.id || app?.job?._id)
+        .filter(Boolean),
+    );
+  }, [applications]);
 
-  return (
-    <ScrollView 
-      style={dashboardStyles.content || { flex: 1 }}
-      refreshControl={
-        <RefreshControl
-          refreshing={refreshing || jobsLoading}
-          onRefresh={onRefresh}
-          colors={['#3B82F6']}
-          tintColor="#3B82F6"
-        />
+  const summaryMetrics = useMemo(() => {
+    const totalJobs = jobs.length;
+    const urgentJobs = jobs.filter((job) => job?.urgent).length;
+    const highPayJobs = jobs.filter((job) => Number(job?.hourlyRate || 0) >= 400).length;
+    const appliedJobs = jobs.filter((job) => applicationJobIds.has(job?.id || job?._id)).length;
+
+    return [
+      { key: 'total', label: 'Total Jobs', value: totalJobs, icon: Briefcase, accent: '#2563EB' },
+      { key: 'highPay', label: 'High Pay', value: highPayJobs, icon: TrendingUp, accent: '#047857' },
+      { key: 'urgent', label: 'Urgent Roles', value: urgentJobs, icon: AlertTriangle, accent: '#DC2626' },
+      { key: 'applied', label: 'Applied', value: appliedJobs, icon: Target, accent: '#7C3AED' },
+    ];
+  }, [applicationJobIds, jobs]);
+
+  const filteredAndSortedJobs = useMemo(() => {
+    const filtered = jobs.filter((job) => {
+      if (activeFilter === 'nearby') {
+        return Boolean(job?.isNearby || (typeof job?.distance === 'number' && job.distance <= 10));
       }
-    >
-      <View style={dashboardStyles.section || { padding: 16 }}>
-        <View style={dashboardStyles.filters || { flexDirection: 'row', marginBottom: 16 }}>
-          <Chip 
-            style={[dashboardStyles.filterChip || { marginRight: 8 }, filter === 'all' && (dashboardStyles.filterChipActive || { backgroundColor: '#3b82f6' })]} 
-            textStyle={[dashboardStyles.filterChipText || { fontSize: 12 }, filter === 'all' && (dashboardStyles.filterChipTextActive || { color: '#fff' })]}
-            onPress={() => setFilter('all')}
-          >
-            All Jobs
-          </Chip>
-          <Chip
-            style={[dashboardStyles.filterChip || { marginRight: 8 }, filter === 'nearby' && (dashboardStyles.filterChipActive || { backgroundColor: '#3b82f6' })]}
-            textStyle={[dashboardStyles.filterChipText || { fontSize: 12 }, filter === 'nearby' && (dashboardStyles.filterChipTextActive || { color: '#fff' })]}
-            onPress={() => setFilter('nearby')}
-          >
-            Nearby
-          </Chip>
-          <Chip 
-            style={[dashboardStyles.filterChip || { marginRight: 8 }, filter === 'high-pay' && (dashboardStyles.filterChipActive || { backgroundColor: '#3b82f6' })]} 
-            textStyle={[dashboardStyles.filterChipText || { fontSize: 12 }, filter === 'high-pay' && (dashboardStyles.filterChipTextActive || { color: '#fff' })]}
-            onPress={() => setFilter('high-pay')}
-          >
-            High Pay
-          </Chip>
-          <Chip 
-            style={[dashboardStyles.filterChip || { marginRight: 8 }, filter === 'urgent' && (dashboardStyles.filterChipActive || { backgroundColor: '#3b82f6' })]} 
-            textStyle={[dashboardStyles.filterChipText || { fontSize: 12 }, filter === 'urgent' && (dashboardStyles.filterChipTextActive || { color: '#fff' })]}
-            onPress={() => setFilter('urgent')}
-          >
-            Urgent
-          </Chip>
+      if (activeFilter === 'high-pay') return Number(job?.hourlyRate || 0) >= 400;
+      if (activeFilter === 'urgent') return Boolean(job?.urgent);
+      return true;
+    });
+    const searchLower = searchQuery.trim().toLowerCase();
+    const searched = searchLower
+      ? filtered.filter((job) => {
+          const title = String(job?.title || '').toLowerCase();
+          const family = String(job?.family || job?.familyName || '').toLowerCase();
+          const location = String(job?.location || job?.address || '').toLowerCase();
+          const tags = resolveJobTags(job).map((tag) => tag.toLowerCase());
+          return (
+            title.includes(searchLower) ||
+            family.includes(searchLower) ||
+            location.includes(searchLower) ||
+            tags.some((tag) => tag.includes(searchLower))
+          );
+        })
+      : filtered;
+
+    return [...searched].sort((a, b) => {
+      if (activeSort === 'highest-pay') {
+        return Number(b?.hourlyRate || 0) - Number(a?.hourlyRate || 0);
+      }
+      if (activeSort === 'alphabetical') {
+        return String(a?.title || '').localeCompare(String(b?.title || ''));
+      }
+      const dateA = new Date(a?.created_at || a?.createdAt || a?.postedAt || a?.date || 0).getTime();
+      const dateB = new Date(b?.created_at || b?.createdAt || b?.postedAt || b?.date || 0).getTime();
+      return dateB - dateA;
+    });
+  }, [activeFilter, activeSort, jobs]);
+
+  const handleFilterChange = useCallback((nextFilter) => {
+    setActiveFilter(nextFilter);
+  }, []);
+
+  const handleSortChange = useCallback(() => {
+    setActiveSort((prev) => {
+      const currentIndex = SORT_OPTIONS.findIndex((option) => option.key === prev);
+      return SORT_OPTIONS[(currentIndex + 1) % SORT_OPTIONS.length].key;
+    });
+  }, []);
+
+  const renderJobItem = useCallback(({ item }) => (
+    <CaregiverJobCard
+      job={item}
+      onApply={onJobApply}
+      onView={onJobView}
+      hasApplied={applicationJobIds.has(item?.id || item?._id)}
+    />
+  ), [applicationJobIds, onJobApply, onJobView]);
+
+  const listHeader = useMemo(() => (
+    <View>
+      <View style={styles.summaryGrid}>
+        {summaryMetrics.map(({ key, label, value, icon: Icon, accent }) => (
+          <View key={key} style={styles.summaryCard}>
+            <View style={styles.summaryTitleRow}>
+              <Icon size={18} color={accent} />
+              <Text style={styles.summaryLabel}>{label}</Text>
+            </View>
+            <Text style={styles.summaryValue}>{value}</Text>
+          </View>
+        ))}
+      </View>
+
+      <View style={styles.filterSection}>
+        <View style={styles.filterHeader}>
+          <Text style={styles.filterHeaderTitle}>Find the right job for you</Text>
+          <TouchableOpacity style={styles.filterAction} onPress={handleSortChange}>
+            <Filter size={16} color="#2563EB" />
+            <Text style={styles.filterActionText}>
+              {`Sort: ${SORT_OPTIONS.find((option) => option.key === activeSort)?.label}`}
+            </Text>
+          </TouchableOpacity>
         </View>
 
-        {(jobsLoading || loading) ? (
-          <View style={dashboardStyles.loadingContainer || { alignItems: 'center', padding: 32 }}>
-            <ActivityIndicator size="large" color="#3B82F6" />
-            <Text style={dashboardStyles.loadingText || { marginTop: 8, color: '#666' }}>Loading jobs...</Text>
-          </View>
-        ) : filteredJobs && filteredJobs.length > 0 ? (
-          <View style={localStyles.jobsList}>
-            {filteredJobs.map((job, index) => (
-              <JobCard 
-                key={job.id || job._id || `job-${index}`} 
-                job={job}
-                onApply={onJobApply}
-                onView={onJobView}
-              />
-            ))}
-          </View>
-        ) : (
-          <EmptyState 
-            icon="briefcase" 
-            title="No jobs available"
-            subtitle={filter === 'all' ? "Please check back later for new job postings" : "No jobs match your current filter. Try adjusting your filters."}
-          />
-        )}
+        <View style={styles.chipRow}>
+          {FILTER_OPTIONS.map(({ key, label, icon: Icon }) => (
+            <Chip
+              key={key}
+              mode={activeFilter === key ? 'contained' : 'outlined'}
+              selected={activeFilter === key}
+              onPress={() => handleFilterChange(key)}
+              style={{
+                borderRadius: 999,
+                backgroundColor: activeFilter === key ? '#2563EB' : '#FFFFFF',
+                borderColor: '#CBD5F5',
+              }}
+              textStyle={{
+                color: activeFilter === key ? '#FFFFFF' : '#1E3A8A',
+                fontWeight: '600',
+              }}
+              icon={({ size }) => <Icon size={size} color={activeFilter === key ? '#FFFFFF' : '#1E40AF'} />}
+            >
+              {label}
+            </Chip>
+          ))}
+        </View>
       </View>
-    </ScrollView>
+    </View>
+  ), [activeFilter, activeSort, handleFilterChange, handleSortChange, summaryMetrics]);
+
+  const isLoading = jobsLoading || loading;
+
+  return (
+    <View style={styles.screenContainer}>
+      <FlatList
+        data={filteredAndSortedJobs}
+        keyExtractor={(item, index) => String(item?.id || item?._id || index)}
+        renderItem={renderJobItem}
+        ListHeaderComponent={listHeader}
+        ListEmptyComponent={
+          isLoading
+            ? renderSkeletons
+            : () => (
+              <EmptyState
+                title={activeFilter === 'all' ? 'No jobs available' : 'No jobs match your filters'}
+                subtitle={
+                  activeFilter === 'all'
+                    ? 'Please check back later for new job postings.'
+                    : 'Try adjusting your filters to discover more opportunities.'
+                }
+              />
+            )
+        }
+        contentContainerStyle={styles.listContent}
+        refreshing={refreshing || isLoading}
+        onRefresh={onRefresh}
+        showsVerticalScrollIndicator={false}
+      />
+    </View>
   );
 }

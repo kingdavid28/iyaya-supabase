@@ -1255,37 +1255,19 @@ export const supabaseService = {
       return 0
     }
   },
-
   async markNotificationAsRead(notificationId) {
     try {
       this._validateId(notificationId, 'Notification ID')
       
       const { error } = await supabase
         .from('notifications')
-        .update({ read: true, read_at: new Date().toISOString() })
+        .update({ read: true })
         .eq('id', notificationId)
       
       if (error) throw error
       return { success: true }
     } catch (error) {
       return this._handleError('markNotificationAsRead', error)
-    }
-  },
-
-  async markAllNotificationsAsRead(userId) {
-    try {
-      this._validateId(userId, 'User ID')
-      
-      const { error } = await supabase
-        .from('notifications')
-        .update({ read: true, read_at: new Date().toISOString() })
-        .eq('user_id', userId)
-        .eq('read', false)
-      
-      if (error) throw error
-      return { success: true }
-    } catch (error) {
-      return this._handleError('markAllNotificationsAsRead', error)
     }
   },
 

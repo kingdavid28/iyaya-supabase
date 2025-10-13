@@ -118,50 +118,32 @@ npx expo start
 - **Android Emulator:** Press 'a' in Expo CLI
 - **Network Issues:** Use `npx expo start --tunnel`
 
-## Project Structure
+## Project Layout
 
 ```
-iyayav0CleanStart/
-├── src/
-│   ├── components/
-│   │   ├── DateTimePicker/     # Custom date picker component
-│   │   ├── TimePicker/         # Custom time picker component
-│   │   └── ErrorBoundary/      # Error handling component
-│   ├── screens/
-│   │   ├── ParentDashboard/    # Parent-specific screens
-│   │   ├── profile/            # Profile management screens
-│   │   └── styles/             # Screen-specific styles
-│   ├── contexts/
-│   │   ├── AuthContext.js      # Authentication state
-│   │   ├── MessagingContext.js # Real-time messaging
-│   │   └── ThemeContext.js     # App theming
-│   ├── services/
-│   │   ├── jobsService.js      # Job-related API calls
-│   │   ├── bookingService.js   # Booking management
-│   │   ├── messagingService.js # Messaging API
-│   │   └── profileService.js   # Profile management
-│   ├── utils/
-│   │   ├── auth.js             # Authentication utilities
-│   │   ├── validation.js       # Form validation
-│   │   ├── errorHandler.js     # Error handling
-│   │   └── logger.js           # Logging utilities
-│   └── config/
-│       ├── api.js              # API configuration
-│       └── constants.js        # App constants
-├── iyaya-backend/
-│   ├── controllers/            # API route handlers
-│   ├── models/                 # MongoDB schemas
-│   ├── middleware/             # Authentication & validation
-│   ├── routes/                 # API routes
-│   └── config/                 # Database & environment config
-├── assets/                     # Images, fonts, icons
-└── docs/                       # Documentation
+iyayaSupa/
+ App.js                     # Expo entry point
+ app.json                   # Expo manifest
+ app.config.js              # Expo configuration overrides
+ babel.config.js            # Babel configuration
+ metro.config.js            # Metro bundler configuration
+ package.json               # Project dependencies & scripts
+ package-lock.json          # Lockfile
+ .env*                      # Environment configuration files
+ assets/                    # Images, fonts, icons
+ db/
+    migrations/            # SQL migration scripts
+ docs/
+    features/              # Feature playbooks & implementation notes
+    migrations/            # Migration plans & status reports
+ scripts/                   # Node/batch utilities and automation scripts
+ src/                       # React Native application source
+ __tests__/                 # Jest test suites
+ iyaya-backend/             # Legacy Node/Express backend
+ README.md                  # Project documentation (this file)
 ```
-│   ├── ApplicationsScreen.js
-│   └── JobDetailsScreen.js
-└── components/          # Reusable components (if needed)
-\`\`\`
 
+The `src/` directory houses the active mobile app, while supporting documentation now lives under `docs/`, helper scripts under `scripts/`, and database change scripts under `db/migrations/`.
 ## API Endpoints Reference
 
 ### Authentication Routes (`/api/auth`)

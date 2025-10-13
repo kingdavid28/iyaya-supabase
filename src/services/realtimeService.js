@@ -1,4 +1,4 @@
-import { supabaseService } from './supabaseService'
+import { supabaseService } from './supabase'
 
 class RealtimeService {
   subscribeToMessages(conversationId, callback) {

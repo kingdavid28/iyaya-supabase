@@ -505,7 +505,7 @@ export const styles = StyleSheet.create({
     gap: 12,
   },
   bookingCard: {
-    flexDirection: 'column',
+    flexDirection: 'row',
     alignItems: 'stretch',
     justifyContent: 'flex-start',
     padding: 12,

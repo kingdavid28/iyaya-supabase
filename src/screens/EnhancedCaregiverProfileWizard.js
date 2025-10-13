@@ -44,7 +44,7 @@ import { styles } from './styles/EnhancedCaregiverProfileWizard.styles';
 import { getCurrentDeviceLocation, searchLocation, validateLocation, formatLocationForDisplay } from '../utils/locationUtils';
 import { handleUploadError } from '../utils/imageUploadUtils';
 import { supabase } from '../config/supabase';
-import { supabaseService } from '../services/supabaseService';
+import { supabaseService } from '../services/supabase';
 import imageUploadService from '../services/imageUploadService';
 
 const { width } = Dimensions.get('window');

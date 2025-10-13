@@ -1,4 +1,4 @@
-import { supabaseService } from './supabaseService'
+import { supabaseService } from './supabase'
 
 class MessagingService {
   async startConversation(participant1, participant2) {
