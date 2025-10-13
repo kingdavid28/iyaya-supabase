@@ -1,7 +1,6 @@
-import { useState, useEffect, useCallback } from 'react';
-import { useFocusEffect } from '@react-navigation/native';
-import { apiService } from '../services';
+import { useCallback, useEffect, useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
+import { apiService } from '../services';
 import { formatAddress } from '../utils/addressUtils';
 
 export const useParentDashboard = () => {

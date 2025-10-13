@@ -38,6 +38,7 @@ export class JobService extends SupabaseBase {
         childrenAges: job.children_ages,
         specialInstructions: job.special_instructions,
         contactPhone: job.contact_phone,
+        contactEmail: job.contact_email,
         emergencyContact: job.emergency_contact,
         rate: job.hourly_rate,
         workingHours: job.start_time && job.end_time ? 
@@ -152,12 +153,13 @@ export class JobService extends SupabaseBase {
         start_time: jobData.start_time || jobData.startTime || startTime,
         end_time: jobData.end_time || jobData.endTime || endTime,
         hourly_rate: jobData.hourly_rate || jobData.hourlyRate || jobData.rate || jobData.salary || 300,
-        number_of_children: jobData.number_of_children || jobData.numberOfChildren || (jobData.children ? jobData.children.length : 1),
+        number_of_children: jobData.number_of_children || jobData.numberOfChildren || jobData.childrenCount || (jobData.children ? jobData.children.length : 1),
         children_ages: jobData.children_ages || jobData.childrenAges || jobData.ages || 'Various ages',
         urgent: Boolean(jobData.urgent),
         status: ['active', 'filled', 'cancelled', 'completed'].includes(jobData.status) ? jobData.status : 'active',
         special_instructions: jobData.special_instructions || jobData.specialInstructions || null,
         contact_phone: jobData.contact_phone || jobData.contactPhone || null,
+        contact_email: jobData.contact_email || jobData.contactEmail || null,
         emergency_contact: jobData.emergency_contact || jobData.emergencyContact || null,
         created_at: new Date().toISOString()
       }

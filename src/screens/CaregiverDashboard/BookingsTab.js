@@ -1,6 +1,5 @@
-import React from 'react';
+import React, { useMemo, useState } from 'react';
 import { ScrollView, View, Text, RefreshControl, ActivityIndicator, TouchableOpacity } from 'react-native';
-import { Chip } from 'react-native-paper';
 import { Ionicons } from '@expo/vector-icons';
 import { EmptyState } from '../../shared/ui';
 import { styles } from '../styles/CaregiverDashboard.styles';
@@ -248,9 +247,71 @@ const bookingCardStyles = {
   },
 };
 
-export default function BookingsTab({ 
-  bookings, 
-  onBookingView, 
+const normalizeStatus = (status) => String(status || '').toLowerCase();
+
+const isUpcomingBooking = (booking) => {
+  if (!booking?.date) return false;
+  const bookingDate = new Date(booking.date);
+  if (Number.isNaN(bookingDate.getTime())) return false;
+  const today = new Date();
+  bookingDate.setHours(0, 0, 0, 0);
+  today.setHours(0, 0, 0, 0);
+  return bookingDate >= today;
+};
+
+const computeFilterCounts = (bookings) => {
+  const counts = {
+    all: Array.isArray(bookings) ? bookings.length : 0,
+    upcoming: 0,
+    pending: 0,
+    confirmed: 0,
+    completed: 0
+  };
+
+  if (!Array.isArray(bookings)) return counts;
+
+  bookings.forEach((booking) => {
+    const status = normalizeStatus(booking?.status);
+    if (isUpcomingBooking(booking)) counts.upcoming += 1;
+    if (status === 'pending') counts.pending += 1;
+    if (status === 'confirmed' || status === 'in-progress' || status === 'in_progress') counts.confirmed += 1;
+    if (status === 'completed' || status === 'done' || status === 'paid') counts.completed += 1;
+  });
+
+  return counts;
+};
+
+const getFilteredBookings = (bookings, activeFilter) => {
+  if (!Array.isArray(bookings)) return [];
+
+  return bookings.filter((booking) => {
+    const status = normalizeStatus(booking?.status);
+
+    switch (activeFilter) {
+      case 'upcoming':
+        return isUpcomingBooking(booking);
+      case 'pending':
+        return status === 'pending';
+      case 'confirmed':
+        return status === 'confirmed' || status === 'in-progress' || status === 'in_progress';
+      case 'completed':
+        return status === 'completed' || status === 'done' || status === 'paid';
+      default:
+        return true;
+    }
+  });
+};
+
+const buildFilterOptions = (metrics) => ([
+  { key: 'all', label: 'All', count: metrics.all },
+  { key: 'upcoming', label: 'Upcoming', count: metrics.upcoming },
+  { key: 'pending', label: 'Pending', count: metrics.pending },
+  { key: 'confirmed', label: 'Active', count: metrics.confirmed },
+  { key: 'completed', label: 'Done', count: metrics.completed }
+]);
+
+export default function BookingsTab({
+  bookings,
   onMessageFamily,
   onConfirmBooking,
   onViewDetails,
@@ -258,6 +319,12 @@ export default function BookingsTab({
   onRefresh,
   loading = false
 }) {
+  const [activeFilter, setActiveFilter] = useState('all');
+
+  const filterMetrics = useMemo(() => computeFilterCounts(bookings), [bookings]);
+  const visibleBookings = useMemo(() => getFilteredBookings(bookings, activeFilter), [bookings, activeFilter]);
+  const options = useMemo(() => buildFilterOptions(filterMetrics), [filterMetrics]);
+
   if (loading) {
     return (
       <View style={styles.loadingContainer}>
@@ -268,7 +335,7 @@ export default function BookingsTab({
   }
 
   return (
-    <ScrollView 
+    <ScrollView
       style={styles.content}
       refreshControl={
         <RefreshControl
@@ -280,29 +347,45 @@ export default function BookingsTab({
       }
     >
       <View style={styles.section}>
-        <View style={styles.bookingFilters}>
-          <Chip
-            style={[styles.bookingFilterChip, styles.bookingFilterChipActive]}
-            textStyle={styles.bookingFilterChipText}
+        <View style={styles.bookingFilterTabsContainer}>
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.bookingFilterTabs}
           >
-            Upcoming
-          </Chip>
-          <Chip
-            style={styles.bookingFilterChip}
-            textStyle={styles.bookingFilterChipText}
-          >
-            Past
-          </Chip>
-          <Chip
-            style={styles.bookingFilterChip}
-            textStyle={styles.bookingFilterChipText}
-          >
-            Cancelled
-          </Chip>
+            {options.map((option) => {
+              const isActive = activeFilter === option.key;
+              return (
+                <TouchableOpacity
+                  key={option.key}
+                  style={[
+                    styles.bookingFilterTab,
+                    isActive && styles.activeBookingFilterTab
+                  ]}
+                  onPress={() => setActiveFilter(option.key)}
+                  activeOpacity={0.8}
+                >
+                  <Text
+                    style={[
+                      styles.bookingFilterTabText,
+                      isActive && styles.activeBookingFilterTabText
+                    ]}
+                    numberOfLines={1}
+                    ellipsizeMode="tail"
+                  >
+                    {option.label}
+                    {typeof option.count === 'number' && option.count > 0 && (
+                      <Text style={styles.bookingFilterTabCount}>{` (${option.count})`}</Text>
+                    )}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
+          </ScrollView>
         </View>
 
-        {bookings.length > 0 ? (
-          bookings.map((booking) => (
+        {visibleBookings.length > 0 ? (
+          visibleBookings.map((booking) => (
             <BookingCard
               key={booking.id || booking._id}
               booking={booking}
@@ -312,10 +395,14 @@ export default function BookingsTab({
             />
           ))
         ) : (
-          <EmptyState 
-            icon="calendar" 
-            title="No bookings yet"
-            subtitle="Your upcoming bookings will appear here"
+          <EmptyState
+            icon="calendar"
+            title="No bookings found"
+            subtitle={
+              activeFilter === 'all'
+                ? 'Your bookings will appear here once available'
+                : 'Try another tab to see more bookings'
+            }
           />
         )}
       </View>

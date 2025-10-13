@@ -1,5 +1,5 @@
 import React, { useMemo } from 'react';
-import { View, Text, FlatList, RefreshControl, TouchableOpacity, Alert, Linking, ActivityIndicator } from 'react-native';
+import { View, Text, FlatList, RefreshControl, TouchableOpacity, Alert, Linking, ActivityIndicator, ScrollView } from 'react-native';
 import { Calendar, Clock, DollarSign, Filter, Plus } from 'lucide-react-native';
 import { styles, colors } from '../../styles/ParentDashboard.styles';
 import BookingItem from './BookingItem';
@@ -194,7 +194,12 @@ const BookingsTab = ({
     ];
 
     return (
-      <View style={styles.bookingsFilterTabs}>
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        style={styles.bookingsFilterTabs}
+        contentContainerStyle={styles.bookingsFilterTabsContent}
+      >
         {filterOptions.map((option) => {
           const isActive = bookingsFilter === option.key;
           return (
@@ -210,22 +215,30 @@ const BookingsTab = ({
               accessibilityLabel={`Filter by ${option.label} bookings`}
               accessibilityState={{ selected: isActive }}
             >
-              <Text style={[
-                styles.filterTabText,
-                isActive && styles.activeFilterTabText
-              ]}>
+              <Text
+                style={[
+                  styles.filterTabText,
+                  isActive && styles.activeFilterTabText
+                ]}
+                numberOfLines={1}
+                ellipsizeMode="tail"
+              >
                 {option.label}
                 {option.count !== null && option.count > 0 && (
-                  <Text style={[
-                    styles.filterTabCount,
-                    isActive && { color: colors.textInverse }
-                  ]}> ({option.count})</Text>
+                  <Text
+                    style={[
+                      styles.filterTabCount,
+                      isActive && { color: colors.textInverse }
+                    ]}
+                  >
+                    {` (${option.count})`}
+                  </Text>
                 )}
               </Text>
             </TouchableOpacity>
           );
         })}
-      </View>
+      </ScrollView>
     );
   };
 

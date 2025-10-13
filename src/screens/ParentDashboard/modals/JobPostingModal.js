@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   View,
   Text,
@@ -22,6 +22,7 @@ import {
   AlertCircle,
   Plus
 } from 'lucide-react-native';
+import { useHeaderHeight } from '@react-navigation/elements';
 import jobService from '../../../services/jobService';
 import { useAuth } from '../../../contexts/AuthContext';
 import { getCurrentDeviceLocation } from '../../../utils/locationUtils';
@@ -38,6 +39,14 @@ const SUGGESTED_SKILLS = [
 
 const JobPostingModal = ({ visible, onClose, onJobPosted }) => {
   const { user } = useAuth();
+  const headerHeight = useHeaderHeight?.() ?? 0;
+  const keyboardOffset = useMemo(() => {
+    const baseOffset = headerHeight || 64;
+    if (Platform.OS === 'ios') {
+      return baseOffset + 20;
+    }
+    return baseOffset;
+  }, [headerHeight]);
   const [step, setStep] = useState(1);
   const [loading, setLoading] = useState(false);
   const [errors, setErrors] = useState({});
@@ -428,64 +437,162 @@ const JobPostingModal = ({ visible, onClose, onJobPosted }) => {
             </View>
           </View>
         );
-
-      case 3:
-        return (
-          <View style={styles.stepContainer}>
-            <Text style={styles.stepTitle}>Review & Post</Text>
-            <Text style={styles.reviewDescription}>
-              Please review the summary below. Use the Back button if you need to edit anything before posting.
-            </Text>
-
-            <View style={styles.summaryCard}>
-              <Text style={styles.summarySectionTitle}>Job Information</Text>
-              {renderSummaryRow({
-                icon: <MapPin size={18} color="#4F46E5" />, label: 'Location', value: jobData.location?.trim()
-              })}
-              {renderSummaryRow({
-                icon: <DollarSign size={18} color="#0EA5E9" />, label: 'Hourly Rate', value: formatCurrency(jobData.rate)
-              })}
-              <View style={styles.summaryDivider} />
-              <Text style={styles.summaryLabel}>Job Title</Text>
-              <Text style={styles.summaryValueMultiline}>{jobData.title || '—'}</Text>
-              <Text style={[styles.summaryLabel, styles.summaryLabelSpacer]}>Description</Text>
-              <Text style={styles.summaryValueMultiline}>{jobData.description?.trim() || '—'}</Text>
-            </View>
-
-            <View style={styles.summaryCard}>
-              <Text style={styles.summarySectionTitle}>Schedule</Text>
-              {renderSummaryRow({
-                icon: <Calendar size={18} color="#22C55E" />, label: 'Start Date', value: formatDate(jobData.startDate)
-              })}
-              {renderSummaryRow({
-                icon: <Calendar size={18} color="#F59E0B" />, label: 'End Date', value: jobData.endDate ? formatDate(jobData.endDate) : 'Not specified'
-              })}
-              {renderSummaryRow({
-                icon: <Clock size={18} color="#8B5CF6" />, label: 'Working Hours', value: jobData.workingHours?.trim()
-              })}
-            </View>
-
-            <View style={styles.summaryCard}>
-              <Text style={styles.summarySectionTitle}>Skills & Requirements</Text>
-              {jobData.requirements.length > 0 ? (
-                <View style={styles.summaryChipContainer}>
-                  {jobData.requirements.map((req, index) => (
-                    <View key={`${req}-${index}`} style={styles.summaryChip}>
-                      <Text style={styles.summaryChipText}>{req}</Text>
-                    </View>
-                  ))}
-                </View>
-              ) : (
-                <Text style={styles.summaryPlaceholder}>No additional skills provided.</Text>
-              )}
-            </View>
-          </View>
-        );
         
-      default:
-        return null;
-    }
-  };
+              case 3:
+                return (
+                  <View style={styles.stepContainer}>
+                    <Text style={styles.stepTitle}>Review & Post</Text>
+                    <Text style={styles.reviewDescription}>
+                      Please review your job posting below. Your job will be visible to qualified caregivers in your area.
+                    </Text>
+        
+                    {/* Job Details Card */}
+                    <View style={styles.summaryCard}>
+                      <View style={styles.summaryCardHeader}>
+                        <Text style={styles.summarySectionTitle}>Job Details</Text>
+                        <TouchableOpacity 
+                          style={styles.editButton}
+                          onPress={() => setStep(1)}
+                        >
+                          <Text style={styles.editButtonText}>Edit</Text>
+                        </TouchableOpacity>
+                      </View>
+                      
+                      <View style={styles.summaryGrid}>
+                        <View style={styles.summaryItem}>
+                          <View style={styles.summaryIconContainer}>
+                            <MapPin size={16} color="#4F46E5" />
+                          </View>
+                          <View style={styles.summaryContent}>
+                            <Text style={styles.summaryLabel}>Location</Text>
+                            <Text style={styles.summaryValue} numberOfLines={2}>
+                              {jobData.location?.trim() || 'Not specified'}
+                            </Text>
+                          </View>
+                        </View>
+        
+                        <View style={styles.summaryItem}>
+                          <View style={styles.summaryIconContainer}>
+                            <DollarSign size={16} color="#10B981" />
+                          </View>
+                          <View style={styles.summaryContent}>
+                            <Text style={styles.summaryLabel}>Hourly Rate</Text>
+                            <Text style={styles.summaryValue}>
+                              {formatCurrency(jobData.rate)}
+                            </Text>
+                          </View>
+                        </View>
+                      </View>
+        
+                      <View style={styles.summaryItemFull}>
+                        <Text style={styles.summaryLabel}>Job Title</Text>
+                        <Text style={styles.summaryTitle}>{jobData.title || '—'}</Text>
+                      </View>
+        
+                      <View style={styles.summaryItemFull}>
+                        <Text style={styles.summaryLabel}>Description</Text>
+                        <Text style={styles.summaryDescription} numberOfLines={4}>
+                          {jobData.description?.trim() || 'No description provided'}
+                        </Text>
+                      </View>
+                    </View>
+        
+                    {/* Schedule Card */}
+                    <View style={styles.summaryCard}>
+                      <View style={styles.summaryCardHeader}>
+                        <Text style={styles.summarySectionTitle}>Schedule</Text>
+                        <TouchableOpacity 
+                          style={styles.editButton}
+                          onPress={() => setStep(2)}
+                        >
+                          <Text style={styles.editButtonText}>Edit</Text>
+                        </TouchableOpacity>
+                      </View>
+        
+                      <View style={styles.summaryGrid}>
+                        <View style={styles.summaryItem}>
+                          <View style={styles.summaryIconContainer}>
+                            <Calendar size={16} color="#8B5CF6" />
+                          </View>
+                          <View style={styles.summaryContent}>
+                            <Text style={styles.summaryLabel}>Start Date</Text>
+                            <Text style={styles.summaryValue}>
+                              {formatDate(jobData.startDate) || 'Not specified'}
+                            </Text>
+                          </View>
+                        </View>
+        
+                        <View style={styles.summaryItem}>
+                          <View style={styles.summaryIconContainer}>
+                            <Calendar size={16} color="#F59E0B" />
+                          </View>
+                          <View style={styles.summaryContent}>
+                            <Text style={styles.summaryLabel}>End Date</Text>
+                            <Text style={styles.summaryValue}>
+                              {jobData.endDate ? formatDate(jobData.endDate) : 'Not specified'}
+                            </Text>
+                          </View>
+                        </View>
+                      </View>
+        
+                      <View style={styles.summaryItemFull}>
+                        <View style={styles.summaryIconContainer}>
+                          <Clock size={16} color="#EF4444" />
+                        </View>
+                        <View style={styles.summaryContent}>
+                          <Text style={styles.summaryLabel}>Working Hours</Text>
+                          <Text style={styles.summaryValue}>
+                            {jobData.workingHours?.trim() || 'Not specified'}
+                          </Text>
+                        </View>
+                      </View>
+                    </View>
+        
+                    {/* Requirements Card */}
+                    <View style={styles.summaryCard}>
+                      <View style={styles.summaryCardHeader}>
+                        <Text style={styles.summarySectionTitle}>Skills & Requirements</Text>
+                        <TouchableOpacity 
+                          style={styles.editButton}
+                          onPress={() => setStep(1)}
+                        >
+                          <Text style={styles.editButtonText}>Edit</Text>
+                        </TouchableOpacity>
+                      </View>
+        
+                      {jobData.requirements.length > 0 ? (
+                        <View style={styles.requirementsGrid}>
+                          {jobData.requirements.map((req, index) => (
+                            <View key={`${req}-${index}`} style={styles.requirementChip}>
+                              <Check size={14} color="#10B981" style={styles.chipIcon} />
+                              <Text style={styles.requirementChipText}>{req}</Text>
+                            </View>
+                          ))}
+                        </View>
+                      ) : (
+                        <View style={styles.emptyState}>
+                          <AlertCircle size={24} color="#9CA3AF" />
+                          <Text style={styles.emptyStateText}>
+                            No skills or requirements added
+                          </Text>
+                        </View>
+                      )}
+                    </View>
+        
+                    {/* Final Note */}
+                    <View style={styles.finalNote}>
+                      <AlertCircle size={16} color="#6B7280" />
+                      <Text style={styles.finalNoteText}>
+                        Once posted, your job will be visible to caregivers. You can edit or close it anytime from your job listings.
+                      </Text>
+                    </View>
+                  </View>
+                );
+                
+              default:
+                return null;
+            }
+          };
 
   return (
     <Modal
@@ -498,7 +605,7 @@ const JobPostingModal = ({ visible, onClose, onJobPosted }) => {
         <KeyboardAvoidingView
           style={{ flex: 1 }}
           behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-          keyboardVerticalOffset={Platform.OS === 'ios' ? 100 : 0}
+          keyboardVerticalOffset={keyboardOffset}
         >
           <View style={styles.modalContainer}>
             <View style={styles.modalHeader}>
@@ -850,6 +957,154 @@ const styles = StyleSheet.create({
   summaryPlaceholder: {
     fontSize: 13,
     color: '#6B7280',
+  },
+  reviewDescription: {
+    fontSize: 14,
+    color: '#4B5563',
+    lineHeight: 20,
+    marginBottom: 20,
+  },
+  summaryCard: {
+    backgroundColor: '#fff',
+    borderRadius: 16,
+    padding: 16,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    shadowColor: '#0F172A',
+    shadowOpacity: 0.06,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 2,
+  },
+  summaryCardHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  summarySectionTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#111827',
+  },
+  editButton: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 999,
+    backgroundColor: '#EEF2FF',
+  },
+  editButtonText: {
+    color: '#4F46E5',
+    fontWeight: '600',
+    fontSize: 12,
+  },
+  summaryGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 12,
+    marginBottom: 16,
+  },
+  summaryItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+    minWidth: 140,
+    backgroundColor: '#F9FAFB',
+    borderRadius: 12,
+    padding: 12,
+    gap: 12,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+  },
+  summaryItemFull: {
+    marginBottom: 16,
+  },
+  summaryIconContainer: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: '#EEF2FF',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  summaryContent: {
+    flex: 1,
+  },
+  summaryLabel: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#6B7280',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+    marginBottom: 4,
+  },
+  summaryValue: {
+    fontSize: 14,
+    color: '#111827',
+    fontWeight: '500',
+  },
+  summaryTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#111827',
+    marginTop: 4,
+  },
+  summaryDescription: {
+    fontSize: 14,
+    color: '#374151',
+    lineHeight: 20,
+  },
+  requirementsGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  requirementChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 20,
+    backgroundColor: '#ECFDF5',
+    borderWidth: 1,
+    borderColor: '#A7F3D0',
+  },
+  chipIcon: {
+    marginRight: 6,
+  },
+  requirementChipText: {
+    fontSize: 13,
+    color: '#065F46',
+    fontWeight: '600',
+  },
+  emptyState: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 20,
+    gap: 8,
+    backgroundColor: '#F9FAFB',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+  },
+  emptyStateText: {
+    fontSize: 13,
+    color: '#6B7280',
+  },
+  finalNote: {
+    flexDirection: 'row',
+    gap: 12,
+    backgroundColor: '#F3F4F6',
+    borderRadius: 12,
+    padding: 16,
+    marginTop: 12,
+  },
+  finalNoteText: {
+    flex: 1,
+    fontSize: 13,
+    color: '#4B5563',
+    lineHeight: 18,
   },
 });
 

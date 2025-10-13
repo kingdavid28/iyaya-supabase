@@ -159,7 +159,7 @@ const BookingModal = ({ caregiver, childrenList = [], onConfirm, onClose, visibl
       hourlyRate: resolveHourlyRate(),
       totalCost: calculateTotalCost(),
       time: `${bookingData.startTime} - ${bookingData.endTime}`,
-      status: 'pending_confirmation',
+      status: 'pending',
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString()
     };
@@ -287,7 +287,7 @@ const BookingModal = ({ caregiver, childrenList = [], onConfirm, onClose, visibl
               </View>
             </TouchableOpacity>
             <View style={styles.childInfo}>
-            <Text style={styles.childHeaderName}>{childData.name}</Text>
+            <Text style={styles.childHeaderName}>{child.name}</Text>
               <Text style={styles.childDetailsText}>{`Age ${child.age} • ${child.preferences}`}</Text>
               {child.allergies && child.allergies !== 'None' && (
                 <Text style={styles.allergyWarning}>{`⚠️ Allergies: ${child.allergies}`}</Text>
@@ -690,44 +690,13 @@ const BookingDetailsModal = ({
 }) => {
   
   // Enhanced booking data with defaults
-  const enhancedBooking = {
-    ...booking,
-    location: booking.location || "Cebu City",
-    address: booking.address || "123 Osmeña Blvd, Cebu City, 6000 Cebu",
-    contactPhone: booking.contactPhone || "0917 123 4567",
-    contactEmail: booking.contactEmail || "delacruz.family@email.ph",
-    totalHours: booking.totalHours || 4,
-    totalAmount: booking.totalAmount || (booking.hourlyRate * 4),
-    requirements: booking.requirements || ["CPR Certified", "Background Check", "Non-smoker"],
-    childrenDetails: booking.childrenDetails || [
-      {
-        name: "Maya",
-        age: 3,
-        specialInstructions: "Loves puzzles and quiet activities",
-        allergies: "None",
-        preferences: "Story time before nap"
-      },
-      {
-        name: "Miguel", 
-        age: 5,
-        specialInstructions: "Needs help with homework",
-        allergies: "Peanuts",
-        preferences: "Outdoor play, building blocks"
-      }
-    ],
-    emergencyContact: booking.emergencyContact || {
-      name: "Dra. Ana Dela Cruz",
-      phone: "0918 987 6543",
-      relation: "Mother"
-    }
-  };
+  const enhancedBooking = booking;
 
   const getStatusColor = (status) => {
     switch (status.toLowerCase()) {
       case 'confirmed':
         return { bg: '#e8f5e9', border: '#c8e6c9', text: '#2e7d32' };
       case 'pending':
-      case 'pending_confirmation':
         return { bg: '#fff8e1', border: '#ffecb3', text: '#ff8f00' };
       case 'completed':
         return { bg: '#e3f2fd', border: '#bbdefb', text: '#1976d2' };
@@ -978,7 +947,7 @@ const BookingDetailsModal = ({
               </TouchableOpacity>
             )}
 
-            {(enhancedBooking.status === 'pending_confirmation' || enhancedBooking.status === 'confirmed') && (
+            {(enhancedBooking.status === 'pending' || enhancedBooking.status === 'confirmed') && (
               <TouchableOpacity
                 onPress={onCancelBooking}
                 style={[styles.actionButton, styles.cancelButton]}
@@ -1491,6 +1460,58 @@ emergencyDetailText: {
   gpsButton: {
     width: '100%',
   },
+    modalFooter: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      padding: 16,
+      borderTopWidth: 1,
+      borderTopColor: '#e5e7eb',
+      backgroundColor: 'white',
+      gap: 12,
+    },
+    
+    footerButton: {
+      flex: 1,
+      paddingVertical: 12,
+      paddingHorizontal: 16,
+      borderRadius: 8,
+      alignItems: 'center',
+      justifyContent: 'center',
+      minHeight: 44,
+    },
+    
+    secondaryButton: {
+      backgroundColor: '#f3f4f6',
+      borderWidth: 1,
+      borderColor: '#d1d5db',
+    },
+    
+    primaryButton: {
+      backgroundColor: '#ec4899',
+    },
+    
+    successButton: {
+      backgroundColor: '#10b981',
+      flexDirection: 'row',
+      alignItems: 'center',
+    },
+    
+    disabledButton: {
+      opacity: 0.6,
+    },
+    
+    secondaryButtonText: {
+      color: '#374151',
+      fontSize: 16,
+      fontWeight: '500',
+    },
+    
+    primaryButtonText: {
+      color: 'white',
+      fontSize: 16,
+      fontWeight: '600',
+    },
 });
 
 export default BookingModal;

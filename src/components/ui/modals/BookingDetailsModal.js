@@ -104,29 +104,60 @@ export function BookingDetailsModal({
 
     const processEmergencyContact = () => {
       const contact = booking.emergencyContact || booking.emergency_contact;
+      
+      if (!contact) return null;
+
+      // If it's already a properly formatted object
+      if (typeof contact === 'object' && contact !== null) {
+        return {
+          name: contact.name || 'Not specified',
+          phone: contact.phone || contact.phoneNumber || null,
+          relation: contact.relation || contact.relationship || 'Emergency Contact'
+        };
+      }
+
+      // If it's a string, try to parse it
       if (typeof contact === 'string') {
         try {
-          // Parse string format like "Name: John Doe, Phone: 123-456-7890"
-          const nameMatch = contact.match(/Name:\s*([^,]+)/);
-          const phoneMatch = contact.match(/Phone:\s*([^,]+)/);
+          const nameMatch = contact.match(/(?:Name:?\s*)([^,]+)/i);
+          const phoneMatch = contact.match(/(?:Phone:?\s*)([^,]+)/i);
+          const relationMatch = contact.match(/(?:Relation:?\s*|Relationship:?\s*)([^,]+)/i);
+          
           return {
             name: nameMatch ? nameMatch[1].trim() : contact,
             phone: phoneMatch ? phoneMatch[1].trim() : null,
-            relation: 'Emergency Contact'
+            relation: relationMatch ? relationMatch[1].trim() : 'Emergency Contact'
           };
         } catch (error) {
-          return { name: contact, phone: null, relation: 'Emergency Contact' };
+          return { 
+            name: contact, 
+            phone: null, 
+            relation: 'Emergency Contact' 
+          };
         }
       }
-      return contact || null;
+      
+      return null;
     };
+
+    const processContactInfo = () => {
+      const phone = booking.contactPhone || booking.contact_phone || booking.phone || booking.parentPhone;
+      const email = booking.contactEmail || booking.contact_email || booking.email || booking.parentEmail;
+      
+      return {
+        phone: phone && typeof phone === 'string' ? phone.replace(/\s+/g, '') : null,
+        email: email && typeof email === 'string' ? email.trim() : null
+      };
+    };
+
+    const contactInfo = processContactInfo();
 
     return {
       ...booking,
       location: booking.location || booking.address || "Location not specified",
       address: booking.address || booking.location || "Address not provided",
-      contactPhone: booking.contactPhone || booking.contact_phone || booking.phone,
-      contactEmail: booking.contactEmail || booking.contact_email || booking.email,
+      contactPhone: contactInfo.phone,
+      contactEmail: contactInfo.email,
       totalHours: booking.totalHours || booking.total_hours || 4,
       totalAmount: booking.totalAmount || booking.total_amount || booking.totalCost || (booking.hourlyRate * 4) || 0,
       hourlyRate: booking.hourlyRate || booking.hourly_rate || 300,
@@ -162,10 +193,14 @@ export function BookingDetailsModal({
 
   const handlePhonePress = async (phone) => {
     if (!phone || typeof phone !== 'string') return;
+    
+    // Clean phone number for dialing
+    const cleanPhone = phone.replace(/[^\d+]/g, '');
+    
     try {
-      const canOpen = await Linking.canOpenURL(`tel:${phone}`);
+      const canOpen = await Linking.canOpenURL(`tel:${cleanPhone}`);
       if (canOpen) {
-        await Linking.openURL(`tel:${phone}`);
+        await Linking.openURL(`tel:${cleanPhone}`);
       } else {
         Alert.alert('Error', 'Phone calls are not supported on this device');
       }
@@ -177,6 +212,14 @@ export function BookingDetailsModal({
 
   const handleEmailPress = async (email) => {
     if (!email || typeof email !== 'string') return;
+    
+    // Validate email format
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email)) {
+      Alert.alert('Invalid Email', 'The email address format is invalid');
+      return;
+    }
+
     try {
       const canOpen = await Linking.canOpenURL(`mailto:${email}`);
       if (canOpen) {
@@ -190,6 +233,68 @@ export function BookingDetailsModal({
     }
   };
 
+  // Format phone number for display
+  const formatPhoneNumber = (phone) => {
+    if (!phone) return null;
+    
+    // Remove all non-digit characters except +
+    const cleaned = phone.replace(/[^\d+]/g, '');
+    
+    // Format based on length and country code
+    if (cleaned.startsWith('+')) {
+      return cleaned; // Keep international format as is
+    } else if (cleaned.length === 10) {
+      return cleaned.replace(/(\d{3})(\d{3})(\d{4})/, '($1) $2-$3');
+    } else if (cleaned.length === 11) {
+      return cleaned.replace(/(\d{1})(\d{3})(\d{3})(\d{4})/, '$1 ($2) $3-$4');
+    }
+    
+    return phone; // Return original if format doesn't match
+  };
+
+  const ContactInfoItem = ({ icon: Icon, label, value, onPress, isPressable = false }) => {
+    const Container = isPressable ? Pressable : View;
+    
+    return (
+      <Container 
+        style={styles.contactItem} 
+        onPress={onPress}
+        disabled={!isPressable}
+      >
+        <Icon size={20} color={isPressable ? '#3b82f6' : '#6b7280'} />
+        <View style={styles.contactText}>
+          <Text style={styles.contactLabel}>{label}</Text>
+          <Text style={[
+            styles.contactValue, 
+            isPressable && styles.contactValuePressable
+          ]}>
+            {value}
+          </Text>
+        </View>
+      </Container>
+    );
+  };
+
+  const EmergencyContactItem = ({ label, value, isPhone = false }) => {
+    const Container = isPhone && value ? Pressable : View;
+    
+    return (
+      <Container 
+        style={styles.emergencyItem} 
+        onPress={isPhone ? () => handlePhonePress(value) : undefined}
+        disabled={!isPhone}
+      >
+        <Text style={styles.emergencyLabel}>{label}</Text>
+        <Text style={[
+          styles.emergencyValue,
+          isPhone && value && styles.emergencyPhoneValue
+        ]}>
+          {value || 'Not specified'}
+        </Text>
+      </Container>
+    );
+  };
+
   return (
     <Modal
       visible={visible}
@@ -201,21 +306,35 @@ export function BookingDetailsModal({
         <View style={[styles.container, styles.card]}>
           {/* Header */}
           <View style={styles.header}>
-            <Text style={styles.headerTitle}>Booking Details</Text>
-            <Pressable onPress={onClose} style={styles.closeButton}>
-              <X size={24} color="#9ca3af" />
-            </Pressable>
+            <View style={styles.headerLeft}>
+              <View style={styles.iconContainer}>
+                <User size={24} color="#3b82f6" />
+              </View>
+              <View>
+                <Text style={styles.headerTitle}>{t('booking.details')}</Text>
+                <Text style={styles.headerSubtitle}>{enhancedBooking.parentName}</Text>
+              </View>
+            </View>
+            <View style={styles.headerRight}>
+              <View style={[styles.statusBadge, { backgroundColor: statusColors.bg }]}>
+                <Text style={[styles.statusText, { color: statusColors.text }]}>
+                  {enhancedBooking.status || 'Unknown'}
+                </Text>
+              </View>
+              <Pressable 
+                onPress={onClose} 
+                style={styles.closeButton}
+                accessibilityLabel="Close modal"
+                accessibilityRole="button"
+              >
+                <X size={24} color="#9ca3af" />
+              </Pressable>
+            </View>
           </View>
 
-          {/* Simple Content */}
-          <View style={{ flex: 1, padding: 20 }}>
-            <Text style={{ fontSize: 16, marginBottom: 10 }}>Date: {enhancedBooking.date}</Text>
-            <Text style={{ fontSize: 16, marginBottom: 10 }}>Time: {enhancedBooking.time}</Text>
-            <Text style={{ fontSize: 16, marginBottom: 10 }}>Caregiver: {enhancedBooking.caregiverName}</Text>
-            <Text style={{ fontSize: 16, marginBottom: 10 }}>Rate: ₱{enhancedBooking.hourlyRate}/hr</Text>
-            <Text style={{ fontSize: 16, marginBottom: 10 }}>Total: ₱{enhancedBooking.totalAmount}</Text>
-            <Text style={{ fontSize: 16, marginBottom: 10 }}>Location: {enhancedBooking.address}</Text>
-            <Text style={{ fontSize: 16, marginBottom: 10 }}>Status: {enhancedBooking.status}</Text>
+          {/* Content */}
+          <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
+            <View style={styles.content}>
               {/* Caregiver Information */}
               <View style={styles.caregiverSection}>
                 <View style={styles.sectionHeader}>
@@ -285,55 +404,48 @@ export function BookingDetailsModal({
               <View style={styles.sectionBordered}>
                 <Text style={styles.sectionTitle}>Parent Contact Information</Text>
                 <View style={styles.contactList}>
-                  <View style={styles.contactItem}>
-                    <User size={20} color="#6b7280" />
-                    <View style={styles.contactText}>
-                      <Text style={styles.contactLabel}>Parent Name</Text>
-                      <Text style={styles.contactValue}>{enhancedBooking.parentName}</Text>
-                    </View>
-                  </View>
-                  <View style={styles.contactItem}>
-                    <MapPin size={20} color="#6b7280" />
-                    <View style={styles.contactText}>
-                      <Text style={styles.contactValue}>{enhancedBooking.location}</Text>
-                      <Text style={styles.contactSubtext}>{enhancedBooking.address}</Text>
-                    </View>
-                  </View>
+                  <ContactInfoItem
+                    icon={User}
+                    label="Parent Name"
+                    value={enhancedBooking.parentName}
+                  />
+                  
+                  <ContactInfoItem
+                    icon={MapPin}
+                    label="Location"
+                    value={enhancedBooking.location}
+                  />
                   
                   {enhancedBooking.contactPhone ? (
-                    <Pressable style={styles.contactItem} onPress={() => handlePhonePress(enhancedBooking.contactPhone)}>
-                      <Phone size={20} color="#3b82f6" />
-                      <View style={styles.contactText}>
-                        <Text style={styles.contactLabel}>Phone</Text>
-                        <Text style={[styles.contactValue, { color: '#3b82f6' }]}>{enhancedBooking.contactPhone}</Text>
-                      </View>
-                    </Pressable>
+                    <ContactInfoItem
+                      icon={Phone}
+                      label="Phone"
+                      value={formatPhoneNumber(enhancedBooking.contactPhone)}
+                      onPress={() => handlePhonePress(enhancedBooking.contactPhone)}
+                      isPressable={true}
+                    />
                   ) : (
-                    <View style={styles.contactItem}>
-                      <Phone size={20} color="#9ca3af" />
-                      <View style={styles.contactText}>
-                        <Text style={styles.contactLabel}>Phone</Text>
-                        <Text style={styles.privacyText}>Contact info hidden for privacy</Text>
-                      </View>
-                    </View>
+                    <ContactInfoItem
+                      icon={Phone}
+                      label="Phone"
+                      value={t('contact.hidden')}
+                    />
                   )}
                   
                   {enhancedBooking.contactEmail ? (
-                    <Pressable style={styles.contactItem} onPress={() => handleEmailPress(enhancedBooking.contactEmail)}>
-                      <Mail size={20} color="#3b82f6" />
-                      <View style={styles.contactText}>
-                        <Text style={styles.contactLabel}>Email</Text>
-                        <Text style={[styles.contactValue, { color: '#3b82f6' }]}>{enhancedBooking.contactEmail}</Text>
-                      </View>
-                    </Pressable>
+                    <ContactInfoItem
+                      icon={Mail}
+                      label="Email"
+                      value={enhancedBooking.contactEmail}
+                      onPress={() => handleEmailPress(enhancedBooking.contactEmail)}
+                      isPressable={true}
+                    />
                   ) : (
-                    <View style={styles.contactItem}>
-                      <Mail size={20} color="#9ca3af" />
-                      <View style={styles.contactText}>
-                        <Text style={styles.contactLabel}>Email</Text>
-                        <Text style={styles.privacyText}>Contact info hidden for privacy</Text>
-                      </View>
-                    </View>
+                    <ContactInfoItem
+                      icon={Mail}
+                      label="Email"
+                      value={t('contact.hidden')}
+                    />
                   )}
                 </View>
               </View>
@@ -411,30 +523,35 @@ export function BookingDetailsModal({
                     <Text style={styles.sectionTitle}>Emergency Contact</Text>
                   </View>
                   <View style={styles.emergencyDetails}>
-                    <View style={styles.emergencyItem}>
-                      <Text style={styles.emergencyLabel}>Name:</Text>
-                      <Text style={styles.emergencyValue}>{enhancedBooking.emergencyContact.name}</Text>
-                    </View>
-                    {enhancedBooking.emergencyContact.relation && (
-                      <View style={styles.emergencyItem}>
-                        <Text style={styles.emergencyLabel}>Relation:</Text>
-                        <Text style={styles.emergencyValue}>{enhancedBooking.emergencyContact.relation}</Text>
-                      </View>
-                    )}
-                    {enhancedBooking.emergencyContact.phone && (
-                      <Pressable style={styles.emergencyItem} onPress={() => handlePhonePress(enhancedBooking.emergencyContact.phone)}>
-                        <Text style={styles.emergencyLabel}>Phone:</Text>
-                        <Text style={[styles.emergencyValue, { color: '#dc2626', fontWeight: '600' }]}>{enhancedBooking.emergencyContact.phone}</Text>
-                      </Pressable>
-                    )}
+                    <EmergencyContactItem
+                      label="Name:"
+                      value={enhancedBooking.emergencyContact.name}
+                    />
+                    
+                    <EmergencyContactItem
+                      label="Relation:"
+                      value={enhancedBooking.emergencyContact.relation}
+                    />
+                    
+                    <EmergencyContactItem
+                      label="Phone:"
+                      value={formatPhoneNumber(enhancedBooking.emergencyContact.phone)}
+                      isPhone={true}
+                    />
                   </View>
                 </View>
               )}
-          </View>
+            </View>
+          </ScrollView>
 
           {/* Footer Actions */}
           <View style={styles.footer}>
-            <Pressable style={[styles.actionButton, styles.messageButton]} onPress={onMessage}>
+            <Pressable 
+              style={[styles.actionButton, styles.messageButton]} 
+              onPress={onMessage}
+              accessibilityLabel="Message family"
+              accessibilityRole="button"
+            >
               <MessageCircle size={16} color="#3b82f6" />
               <Text style={styles.messageButtonText}>{t('actions.message')}</Text>
             </Pressable>
@@ -443,12 +560,14 @@ export function BookingDetailsModal({
               style={[styles.actionButton, styles.directionsButton]} 
               onPress={() => {
                 try {
-                  Linking.openURL(`https://maps.google.com/?q=${enhancedBooking.address}`);
+                  Linking.openURL(`https://maps.google.com/?q=${encodeURIComponent(enhancedBooking.address)}`);
                   onGetDirections?.();
                 } catch (error) {
                   Alert.alert('Error', 'Unable to open maps');
                 }
               }}
+              accessibilityLabel="Get directions"
+              accessibilityRole="button"
             >
               <Navigation size={16} color="#16a34a" />
               <Text style={styles.directionsButtonText}>{t('actions.directions')}</Text>
@@ -458,9 +577,14 @@ export function BookingDetailsModal({
               <Pressable
                 style={[styles.actionButton, styles.completeButton]}
                 onPress={() => {
-                  Alert.alert("Booking Completed", "The booking has been marked as complete");
-                  onCompleteBooking?.();
+                  Alert.alert(
+                    t('alerts.completed'),
+                    t('alerts.completed.message'),
+                    [{ text: 'OK', onPress: onCompleteBooking }]
+                  );
                 }}
+                accessibilityLabel="Mark booking as complete"
+                accessibilityRole="button"
               >
                 <CheckCircle size={16} color="#ffffff" />
                 <Text style={styles.completeButtonText}>{t('actions.complete')}</Text>
@@ -471,9 +595,14 @@ export function BookingDetailsModal({
               <Pressable
                 style={[styles.actionButton, styles.cancelButton]}
                 onPress={() => {
-                  Alert.alert("Booking Cancelled", "The booking has been cancelled");
-                  onCancelBooking?.();
+                  Alert.alert(
+                    t('alerts.cancelled'),
+                    t('alerts.cancelled.message'),
+                    [{ text: 'OK', onPress: onCancelBooking }]
+                  );
                 }}
+                accessibilityLabel="Cancel booking"
+                accessibilityRole="button"
               >
                 <Text style={styles.cancelButtonText}>{t('actions.cancel')}</Text>
               </Pressable>
@@ -499,22 +628,27 @@ BookingDetailsModal.propTypes = {
     childrenDetails: PropTypes.arrayOf(
       PropTypes.shape({
         name: PropTypes.string,
-        age: PropTypes.number,
+        age: PropTypes.oneOfType([PropTypes.number, PropTypes.string]),
         specialInstructions: PropTypes.string,
         allergies: PropTypes.string,
         preferences: PropTypes.string
       })
     ),
-    emergencyContact: PropTypes.shape({
-      name: PropTypes.string,
-      phone: PropTypes.string,
-      relation: PropTypes.string
-    }),
+    emergencyContact: PropTypes.oneOfType([
+      PropTypes.shape({
+        name: PropTypes.string,
+        phone: PropTypes.string,
+        relation: PropTypes.string
+      }),
+      PropTypes.string
+    ]),
     status: PropTypes.string,
     family: PropTypes.string,
     date: PropTypes.string,
     time: PropTypes.string,
-    notes: PropTypes.string
+    notes: PropTypes.string,
+    parentPhone: PropTypes.string,
+    parentEmail: PropTypes.string
   }),
   onClose: PropTypes.func.isRequired,
   onMessage: PropTypes.func,
@@ -522,6 +656,7 @@ BookingDetailsModal.propTypes = {
   onCompleteBooking: PropTypes.func,
   onCancelBooking: PropTypes.func
 };
+
 const styles = StyleSheet.create({
   overlay: {
     flex: 1,
@@ -594,7 +729,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 6,
     borderRadius: 20,
-    backgroundColor: '#f3f4f6',
   },
   statusText: {
     fontSize: 12,
@@ -610,12 +744,7 @@ const styles = StyleSheet.create({
   },
   content: {
     padding: 20,
-    minHeight: 400,
-  },
-  section: {
-    backgroundColor: '#f9fafb',
-    borderRadius: 12,
-    padding: 16,
+    gap: 16,
   },
   sectionBordered: {
     backgroundColor: '#fff',
@@ -634,31 +763,6 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: '700',
     color: '#1f2937',
-    marginBottom: 16,
-  },
-  overviewGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 16,
-  },
-  overviewItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    minWidth: 120,
-    gap: 8,
-  },
-  overviewText: {
-    flex: 1,
-  },
-  overviewLabel: {
-    fontSize: 12,
-    color: '#6b7280',
-    marginBottom: 2,
-  },
-  overviewValue: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#1f2937',
   },
   contactList: {
     gap: 12,
@@ -667,6 +771,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'flex-start',
     gap: 12,
+    paddingVertical: 4,
   },
   contactText: {
     flex: 1,
@@ -681,10 +786,8 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#1f2937',
   },
-  contactSubtext: {
-    fontSize: 12,
-    color: '#6b7280',
-    marginTop: 2,
+  contactValuePressable: {
+    color: '#3b82f6',
   },
   privacyText: {
     fontSize: 14,
@@ -741,6 +844,7 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '500',
     color: '#dc2626',
+    marginLeft: 4,
   },
   allergyValue: {
     fontSize: 14,
@@ -755,6 +859,94 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: '#dcfce7',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 20,
+    gap: 6,
+  },
+  requirementText: {
+    fontSize: 12,
+    color: '#166534',
+    fontWeight: '500',
+  },
+  specialSection: {
+    backgroundColor: '#fff7ed',
+    borderWidth: 1,
+    borderColor: '#fed7aa',
+    borderRadius: 12,
+    padding: 16,
+  },
+  specialText: {
+    fontSize: 14,
+    color: '#92400e',
+    lineHeight: 20,
+  },
+  emergencySection: {
+    backgroundColor: '#fef2f2',
+    borderWidth: 1,
+    borderColor: '#fecaca',
+    borderRadius: 12,
+    padding: 16,
+  },
+  emergencyDetails: {
+    gap: 8,
+  },
+  emergencyItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 4,
+  },
+  emergencyLabel: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: '#374151',
+    width: 80,
+    marginRight: 8,
+  },
+  emergencyValue: {
+    fontSize: 14,
+    color: '#1f2937',
+    flex: 1,
+  },
+  emergencyPhoneValue: {
+    color: '#dc2626',
+    fontWeight: '600',
+  },
+  footer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    padding: 20,
+    borderTopWidth: 1,
+    borderTopColor: '#e5e7eb',
+    backgroundColor: '#f8fafc',
+    flexWrap: 'wrap',
+  },
+  actionButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderRadius: 8,
+    flex: 1,
+    minWidth: 120,
+    justifyContent: 'center',
+  },
+  messageButton: {
+    backgroundColor: '#eff6ff',
+    borderWidth: 1,
+    borderColor: '#dbeafe',
+  },
+  messageButtonText: {
+    color: '#3b82f6',
+    fontWeight: '600',
+    fontSize: 14,
+  },
+  directionsButton: {
+    backgroundColor: '#f0fdf4',
+    borderWidth: 1,
+    borderColor: '#bbf7d0',
   },
   directionsButtonText: {
     color: '#166534',

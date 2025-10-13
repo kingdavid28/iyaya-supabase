@@ -27,8 +27,6 @@ import HomeTab from './components/HomeTab';
 import SearchTab from './components/SearchTab';
 import BookingsTab from './components/BookingsTab';
 import JobsTab from './components/JobsTab';
-import MyJobsTab from './components/MyJobsTab';
-import PostJobsTab from './components/PostJobsTab';
 import MessagesTab from './components/MessagesTab'; // Added missing import
 import ReviewsTab from './components/ReviewsTab';
 import AlertsTab from './components/AlertsTab';
@@ -144,13 +142,13 @@ const ParentDashboard = () => {
   const [selectedBooking, setSelectedBooking] = useState(null);
 
   // Search and filter state
-  const [searchQuery] = useState('');
-  const [searchResults] = useState([]);
-  const [filteredCaregivers] = useState([]);
-  const [searchLoading] = useState(false);
-  const [filters] = useState(DEFAULT_FILTERS);
-  const [activeFilters] = useState(0);
-  const [quickFilters] = useState({
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchResults, setSearchResults] = useState([]);
+  const [filteredCaregivers, setFilteredCaregivers] = useState([]);
+  const [searchLoading, setSearchLoading] = useState(false);
+  const [filters, setFilters] = useState(DEFAULT_FILTERS);
+  const [activeFilters, setActiveFilters] = useState(0);
+  const [quickFilters, setQuickFilters] = useState({
     availableNow: false,
     nearMe: false,
     topRated: false,
@@ -605,9 +603,31 @@ const ParentDashboard = () => {
   }, [paymentData, toggleModal, fetchBookings]);
 
   // Search function
-  const handleSearch = useCallback(() => {
-    Alert.alert('Feature unavailable', 'Caregiver search is temporarily disabled.');
-  }, []);
+  const handleSearch = useCallback((text) => {
+    setSearchQuery(text);
+    const normalized = String(text).trim().toLowerCase();
+  
+    if (!normalized) {
+      setFilteredCaregivers(caregivers);
+      return;
+    }
+  
+    const results = caregivers.filter((caregiver) => {
+      const haystack = [
+        caregiver.name,
+        caregiver.location,
+        caregiver.skills?.join(' '),
+        caregiver.bio,
+      ]
+        .filter(Boolean)
+        .join(' ')
+        .toLowerCase();
+  
+      return haystack.includes(normalized);
+    });
+  
+    setFilteredCaregivers(results);
+  }, [caregivers]);
 
   // Filter functions
   const handleApplyFilters = (newFilters) => {
@@ -913,19 +933,6 @@ const ParentDashboard = () => {
             onDeleteJob={handleDeleteJob}
             onCompleteJob={handleCompleteJob}
             onJobPosted={handleJobPosted}
-            loading={loading}
-          />
-        );
-      case 'job-management':
-        return (
-          <MyJobsTab
-            jobs={jobs}
-            refreshing={refreshing}
-            onRefresh={onRefresh}
-            onCreateJob={handleCreateJob}
-            onEditJob={handleEditJob}
-            onDeleteJob={handleDeleteJob}
-            onCompleteJob={handleCompleteJob}
             loading={loading}
           />
         );

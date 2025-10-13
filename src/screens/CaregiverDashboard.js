@@ -3,7 +3,7 @@ import { useFocusEffect, useNavigation } from "@react-navigation/native"
 import { LinearGradient } from "expo-linear-gradient"
 import React, { useCallback, useEffect, useMemo, useState } from "react"
 import { ActivityIndicator, Alert, Dimensions, Image, Linking, Modal, Platform, Pressable, RefreshControl, ScrollView, Text, TextInput, View, FlatList } from "react-native"
-import { Button, Card, Chip, Searchbar } from "react-native-paper"
+import { Button, Card, Chip } from "react-native-paper"
 import Toast from "../components/ui/feedback/Toast"
 import { supabaseService } from '../services/supabase'
 import { getCurrentSocketURL } from '../config/api'
@@ -30,8 +30,7 @@ import {
   FormInput,
   QuickStat, 
   QuickAction,
-  formatDate,
-  useDebounce
+  formatDate
 } from '../shared/ui';
 
 import { styles } from './styles/CaregiverDashboard.styles';
@@ -551,8 +550,6 @@ function CaregiverDashboard({ onLogout, route }) {
     console.warn('setActiveTab not available from useCaregiverDashboard');
   });
   
-  const [searchQuery, setSearchQuery] = useState("")
-  const debouncedSearch = useDebounce(searchQuery, 300)
   const [editProfileModalVisible, setEditProfileModalVisible] = useState(false)
   const [profileName, setProfileName] = useState("Ana Dela Cruz")
   const [profileHourlyRate, setProfileHourlyRate] = useState("25")
@@ -796,6 +793,48 @@ function CaregiverDashboard({ onLogout, route }) {
     } catch (error) {
       console.error('Confirm attendance failed:', error);
       showToast('Failed to confirm attendance. Please try again.', 'error');
+    }
+  }
+
+  const handleCompleteBooking = async (booking) => {
+    if (!booking?.id) return;
+    try {
+      await supabaseService.bookings.updateBookingStatus(booking.id, 'completed');
+      showToast('Booking marked as completed!', 'success');
+      setShowBookingDetails(false);
+      fetchBookings();
+    } catch (error) {
+      console.error('Complete booking failed:', error);
+      showToast('Failed to complete booking. Please try again.', 'error');
+    }
+  }
+
+  const handleCancelBooking = async (booking) => {
+    if (!booking?.id) return;
+    try {
+      await supabaseService.bookings.updateBookingStatus(booking.id, 'cancelled');
+      showToast('Booking cancelled.', 'success');
+      setShowBookingDetails(false);
+      fetchBookings();
+    } catch (error) {
+      console.error('Cancel booking failed:', error);
+      showToast('Failed to cancel booking. Please try again.', 'error');
+    }
+  }
+
+  const handleGetDirections = (booking) => {
+    const destination = booking?.address || booking?.location;
+    if (!destination) {
+      showToast('No address available for this booking.', 'info');
+      return;
+    }
+
+    try {
+      const mapsUrl = `https://maps.google.com/?q=${encodeURIComponent(destination)}`;
+      Linking.openURL(mapsUrl);
+    } catch (error) {
+      console.error('Get directions failed:', error);
+      Alert.alert('Error', 'Unable to open maps');
     }
   }
 
@@ -1289,23 +1328,6 @@ function CaregiverDashboard({ onLogout, route }) {
       {renderTopNav()}
       
       <View style={{ flex: 1 }}>
-        {/* Only show search bar on specific tabs, not messages */}
-        {(activeTab === 'jobs' || activeTab === 'search' || activeTab === 'applications' || activeTab === 'bookings') && (
-          <Searchbar
-            placeholder="Search jobs, families..."
-            onChangeText={setSearchQuery}
-            value={searchQuery}
-            style={styles.searchBar}
-            iconColor="#9CA3AF"
-            placeholderTextColor="#9CA3AF"
-            inputStyle={styles.searchInput}
-          />
-        )}
-
-        {__DEV__ && debouncedSearch && (
-          <Text style={{ padding: 8, fontSize: 12, color: '#666' }}>Searching: {debouncedSearch}</Text>
-        )}
-
         {activeTab === "dashboard" && (
           jobsLoading ? (
             <View style={styles.loadingContainer}>
@@ -1518,7 +1540,6 @@ function CaregiverDashboard({ onLogout, route }) {
             onJobView={handleViewJob}
             refreshing={refreshing}
             loading={jobsLoading}
-            searchQuery={debouncedSearch}
           />
         )}
 
@@ -1599,8 +1620,11 @@ function CaregiverDashboard({ onLogout, route }) {
           visible={showBookingDetails}
           booking={selectedBooking}
           onClose={() => setShowBookingDetails(false)}
-          onMessage={(booking) => handleBookingMessage(booking)}
-          onConfirm={(booking) => handleConfirmAttendance(booking)}
+          onMessage={() => handleBookingMessage(selectedBooking)}
+          onCompleteBooking={() => handleCompleteBooking(selectedBooking)}
+          onCancelBooking={() => handleCancelBooking(selectedBooking)}
+          onGetDirections={() => handleGetDirections(selectedBooking)}
+          onConfirmAttendance={() => handleConfirmAttendance(selectedBooking)}
           colors={['#667eea', '#764ba2']}
           userType="caregiver"
         />

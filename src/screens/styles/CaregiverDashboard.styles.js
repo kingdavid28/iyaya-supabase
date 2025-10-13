@@ -946,21 +946,45 @@ export const styles = StyleSheet.create({
   filterChipTextActive: {
     color: '#2563EB',
   },
-  bookingFilters: {
-    flexDirection: 'row',
+  bookingFilterTabsContainer: {
     marginBottom: 16,
   },
-  bookingFilterChip: {
-    marginRight: 8,
+  bookingFilterTabs: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 2,
+  },
+  bookingFilterTab: {
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    borderRadius: 999,
     backgroundColor: '#F3F4F6',
-    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    marginRight: 8,
+    minHeight: 40,
+    justifyContent: 'center',
   },
-  bookingFilterChipActive: {
-    backgroundColor: '#EFF6FF',
+  activeBookingFilterTab: {
+    backgroundColor: '#3B82F6',
+    borderColor: '#1D4ED8',
+    shadowColor: '#3B82F6',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.18,
+    shadowRadius: 4,
+    elevation: 4,
   },
-  bookingFilterChipText: {
-    color: '#6B7280',
+  bookingFilterTabText: {
     fontSize: 13,
+    fontWeight: '600',
+    color: '#4B5563',
+    textAlign: 'center',
+  },
+  activeBookingFilterTabText: {
+    color: '#FFFFFF',
+  },
+  bookingFilterTabCount: {
+    color: '#1F2937',
     fontWeight: '500',
   },
 
