@@ -1,7 +1,7 @@
 import { Ionicons } from '@expo/vector-icons'
 import { useFocusEffect, useNavigation } from "@react-navigation/native"
 import { LinearGradient } from "expo-linear-gradient"
-import React, { useCallback, useEffect, useState } from "react"
+import React, { useCallback, useEffect, useMemo, useState } from "react"
 import { ActivityIndicator, Alert, Dimensions, Image, Linking, Modal, Platform, Pressable, RefreshControl, ScrollView, Text, TextInput, View, FlatList } from "react-native"
 import { Button, Card, Chip, Searchbar } from "react-native-paper"
 import Toast from "../components/ui/feedback/Toast"
@@ -545,8 +545,11 @@ function CaregiverDashboard({ onLogout, route }) {
     jobsLoading,
     loadProfile, fetchJobs, fetchApplications, fetchBookings
   } = useCaregiverDashboard();
+  const { pendingRequests, notifications } = usePrivacy();
   
-  const setActiveTab = setActiveTabHook;
+  const setActiveTab = setActiveTabHook ? setActiveTabHook : (() => {
+    console.warn('setActiveTab not available from useCaregiverDashboard');
+  });
   
   const [searchQuery, setSearchQuery] = useState("")
   const debouncedSearch = useDebounce(searchQuery, 300)
@@ -575,6 +578,35 @@ function CaregiverDashboard({ onLogout, route }) {
   const [toast, setToast] = useState({ visible: false, message: '', type: 'success' })
   const showToast = (message, type = 'success') => setToast({ visible: true, message, type })
   const [refreshing, setRefreshing] = useState(false)
+
+  const tabBadgeCounts = useMemo(() => {
+    const pendingBookingsCount = Array.isArray(bookings)
+      ? bookings.filter(booking => (booking?.status || '').toLowerCase() === 'pending').length
+      : 0
+
+    const pendingApplicationsCount = Array.isArray(applications)
+      ? applications.filter(application => (application?.status || '').toLowerCase() === 'pending').length
+      : 0
+
+    const unreadMessagesCount = Array.isArray(parents)
+      ? parents.reduce((sum, parent) => sum + (parent?.unreadCount || 0), 0)
+      : 0
+
+    const unreadReviewsCount = Array.isArray(reviews)
+      ? reviews.filter(review => !review?.read).length
+      : 0
+
+    const unreadNotifications = notifications?.filter?.(n => !n.read)?.length || 0
+    const pendingRequestsCount = pendingRequests?.length || 0
+
+    return {
+      bookings: pendingBookingsCount,
+      applications: pendingApplicationsCount,
+      messages: unreadMessagesCount,
+      reviews: unreadReviewsCount,
+      notifications: unreadNotifications + pendingRequestsCount
+    }
+  }, [applications, bookings, notifications, parents, pendingRequests, reviews])
   
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
@@ -606,7 +638,8 @@ function CaregiverDashboard({ onLogout, route }) {
           return {
             id: otherParticipant,
             name: otherUser?.name || 'Parent',
-            profileImage: otherUser?.profile_image || null
+            profileImage: otherUser?.profile_image || null,
+            unreadCount: conv?.unread_count ?? conv?.unreadCount ?? 0
           };
         }));
       } catch (error) {
@@ -628,6 +661,9 @@ function CaregiverDashboard({ onLogout, route }) {
         const messagesData = await supabaseService.messaging.getMessages(conversation.id);
         console.log('📨 Received messages:', messagesData.length);
         setMessages(messagesData);
+        if (selectedParent?.id) {
+          setParents(prev => prev.map(parent => parent.id === selectedParent.id ? { ...parent, unreadCount: 0 } : parent));
+        }
       } catch (error) {
         console.error('Error loading messages:', error);
         setMessages([]);
@@ -661,7 +697,6 @@ function CaregiverDashboard({ onLogout, route }) {
     fetchReviews();
   }, [user?.id]);
   
-  const { pendingRequests, notifications } = usePrivacy();
   const [showNotifications, setShowNotifications] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [showRequestModal, setShowRequestModal] = useState(false);
@@ -735,6 +770,7 @@ function CaregiverDashboard({ onLogout, route }) {
         // Mark messages as read when opening chat
         const conversation = await supabaseService.getOrCreateConversation(user.id, existingParent.id);
         await supabaseService.markMessagesAsRead(conversation.id, user.id);
+        setParents(prev => prev.map(parent => parent.id === existingParent.id ? { ...parent, unreadCount: 0 } : parent));
         showToast(`Opened conversation with ${existingParent.name}`, 'success');
       } else {
         // No existing conversation found
@@ -1139,7 +1175,7 @@ function CaregiverDashboard({ onLogout, route }) {
     return (
       <View style={styles.parentLikeHeaderContainer}>
         <LinearGradient
-          colors={["#5bbafa", "#b672ff"]}
+          colors={['#667eea', '#764ba2']}
           start={{ x: 0, y: 0 }}
           end={{ x: 1, y: 0 }}
           style={styles.parentLikeHeaderGradient}
@@ -1472,19 +1508,19 @@ function CaregiverDashboard({ onLogout, route }) {
           )
         )}
 
-            {activeTab === 'jobs' && (
-              <JobsTab
-                jobs={jobs}
-                jobsLoading={jobsLoading}
-                applications={applications}
-                onRefresh={onRefresh}
-                onJobApply={handleJobApplication}
-                onJobView={handleViewJob}
-                refreshing={refreshing}
-                loading={jobsLoading}
-                searchQuery={debouncedSearch}
-              />
-            )}
+        {activeTab === 'jobs' && (
+          <JobsTab
+            jobs={jobs}
+            jobsLoading={jobsLoading}
+            applications={applications}
+            onRefresh={onRefresh}
+            onJobApply={handleJobApplication}
+            onJobView={handleViewJob}
+            refreshing={refreshing}
+            loading={jobsLoading}
+            searchQuery={debouncedSearch}
+          />
+        )}
 
         {activeTab === "applications" && (
           jobsLoading ? (
@@ -1541,34 +1577,34 @@ function CaregiverDashboard({ onLogout, route }) {
           />
         )}
 
-        {activeTab === "messages" && (
+        {activeTab === 'messages' && (
           <MessagesTab
             navigation={navigation}
             refreshing={refreshing}
             onRefresh={onRefresh}
           />
         )}
-        {activeTab === "reviews" && renderReviewsTab()}
 
-        {activeTab === "notifications" && (
-          <NotificationsTab 
+        {activeTab === 'notifications' && (
+          <NotificationsTab
             navigation={navigation}
-            refreshing={refreshing}
-            onRefresh={onRefresh}
+            onNavigateTab={(tabId) => setActiveTab(tabId)}
           />
         )}
+
       </View>
 
-      {renderEditProfileModal()}
-
-      <BookingDetailsModal
-        visible={showBookingDetails}
-        booking={selectedBooking}
-        onClose={() => setShowBookingDetails(false)}
-        onMessage={(booking) => handleBookingMessage(booking)}
-        onConfirm={(booking) => handleConfirmAttendance(booking)}
-        userType="caregiver"
-      />
+      {showBookingDetails && selectedBooking && (
+        <BookingDetailsModal
+          visible={showBookingDetails}
+          booking={selectedBooking}
+          onClose={() => setShowBookingDetails(false)}
+          onMessage={(booking) => handleBookingMessage(booking)}
+          onConfirm={(booking) => handleConfirmAttendance(booking)}
+          colors={['#667eea', '#764ba2']}
+          userType="caregiver"
+        />
+      )}
 
       {showJobApplication && selectedJob && (
         <Modal
