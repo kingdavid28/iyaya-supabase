@@ -205,6 +205,7 @@ const headerStyles = {
   parentLikeHeaderGradient: {
     borderRadius: 16,
     paddingHorizontal: 16,
+    marginTop: 30,
     paddingVertical: 4,
   },
   headerButton: {

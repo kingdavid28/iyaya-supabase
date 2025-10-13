@@ -328,6 +328,18 @@ const BookingDetailsModal = ({
   const shouldShowFooter =
     showFooterActions && (onMessage || onGetDirections || onCompleteBooking || onCancelBooking);
 
+  const handleMessagePress = () => {
+    const bookingPayload = booking || enhancedBooking;
+
+    // Close the modal before navigating to messages to avoid overlay lingering
+    onClose?.();
+
+    // Defer navigation until after modal close animation completes
+    setTimeout(() => {
+      onMessage?.(bookingPayload);
+    }, 150);
+  };
+
   const sharedColors = {
     primary: colors[0] || '#ebc5dd',
     secondary: colors[1] || colors[0] || '#ccc8e8',
@@ -665,7 +677,10 @@ const BookingDetailsModal = ({
           {shouldShowFooter && (
             <View style={styles.footer}>
               {onMessage && (
-                <TouchableOpacity style={[styles.actionButton, styles.messageButton]} onPress={onMessage}>
+                <TouchableOpacity
+                  style={[styles.actionButton, styles.messageButton]}
+                  onPress={handleMessagePress}
+                >
                   <Ionicons name="chatbubble-ellipses" size={18} color="#1d4ed8" />
                   <Text style={styles.actionButtonLabel}>Message Family</Text>
                 </TouchableOpacity>

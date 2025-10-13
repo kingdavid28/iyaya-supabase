@@ -944,6 +944,7 @@ const ParentDashboard = () => {
             refreshing={refreshing}
             onRefresh={onRefresh}
             loading={loading}
+            onNavigateTab={setActiveTab}
           />
         );
       default:
