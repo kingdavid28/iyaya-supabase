@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import supabaseService from '../services/supabaseService';
+import supabaseService from '../services/supabase';
 import { useAuth } from '../contexts/AuthContext';
 
 export const useMessaging = () => {

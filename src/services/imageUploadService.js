@@ -12,7 +12,7 @@ export const imageUploadService = {
 
       // Pick image
       const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: 'Images',
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
         allowsEditing: true,
         aspect: [1, 1],
         quality: 0.8,
@@ -33,7 +33,8 @@ export const imageUploadService = {
       }
 
       // Upload to Supabase using new architecture
-      const uploadResult = await supabaseService.user.uploadProfileImage(userId, asset.base64);
+      const base64WithPrefix = `data:image/jpeg;base64,${asset.base64}`;
+      const uploadResult = await supabaseService.uploadProfileImage(userId, base64WithPrefix);
       return uploadResult;
 
     } catch (error) {

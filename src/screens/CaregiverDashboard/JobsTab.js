@@ -23,6 +23,7 @@ import {
   Filter,
 } from 'lucide-react-native';
 import { styles as dashboardStyles } from '../styles/CaregiverDashboard.styles';
+import SharedJobCard from '../../shared/ui/cards/JobCard';
 
 const localStyles = StyleSheet.create({
   screenContainer: { flex: 1 },
@@ -70,22 +71,32 @@ const localStyles = StyleSheet.create({
   statusPill: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 10,
+    paddingHorizontal: 12,
     paddingVertical: 6,
-    borderRadius: 999,
+    borderRadius: 16,
     backgroundColor: '#ECFDF5',
     borderWidth: 1,
     borderColor: '#D1FAE5',
     gap: 6,
+    minWidth: 80,
+    justifyContent: 'center',
   },
   urgentBadge: { backgroundColor: '#FEE2E2', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 999, marginLeft: 8 },
   urgentText: { color: '#DC2626', fontSize: 11, fontWeight: '700', letterSpacing: 0.3 },
   jobDetails: { marginBottom: 16, gap: 10 },
   jobDetailRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   jobDetailText: { flex: 1, fontSize: 14, color: '#4B5563' },
-  tagContainer: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 12 },
-  tagPill: { backgroundColor: '#EFF6FF', borderRadius: 999, paddingHorizontal: 12, paddingVertical: 6, borderWidth: 1, borderColor: '#DBEAFE' },
-  tagText: { color: '#2563EB', fontSize: 12, fontWeight: '500' },
+  tagContainer: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginBottom: 12 },
+  tagPill: {
+    backgroundColor: '#F0F9FF',
+    borderRadius: 12,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderWidth: 1,
+    borderColor: '#BAE6FD',
+    maxWidth: 120
+  },
+  tagText: { color: '#0369A1', fontSize: 11, fontWeight: '500', textAlign: 'center' },
   jobDescription: { fontSize: 14, color: '#374151', lineHeight: 20, marginBottom: 16 },
   jobActions: { flexDirection: 'row', gap: 12 },
   viewButton: { flex: 1, paddingVertical: 12, borderRadius: 12, borderWidth: 1, borderColor: '#CBD5F5', alignItems: 'center', backgroundColor: '#F8FAFC' },
@@ -156,7 +167,10 @@ const resolveJobTags = (job) => {
   if (Array.isArray(job?.skills)) tags.push(...job.skills);
   if (job?.careType) tags.push(job.careType);
   if (job?.childrenCount) tags.push(`${job.childrenCount} children`);
-  return tags.filter(Boolean).slice(0, 6);
+  if (job?.schedule) tags.push(job.schedule);
+  if (job?.specialRequirements) tags.push(...job.specialRequirements);
+  if (job?.experience) tags.push(job.experience);
+  return tags.filter(Boolean).slice(0, 8); // Increased limit for more tags
 };
 
 const JobSkeleton = () => (
@@ -188,8 +202,15 @@ export const CaregiverJobCard = ({ job, onApply, onView, hasApplied, style }) =>
   const tags = useMemo(() => resolveJobTags(job), [job]);
   const childrenSummary = useMemo(() => {
     if (job?.childrenSummary) return job.childrenSummary;
-    if (Array.isArray(job?.children) && job.children.length) return `${job.children.length} children`;
-    if (job?.childrenCount) return `${job.childrenCount} children`;
+    if (Array.isArray(job?.children) && job.children.length) {
+      const count = job.children.length;
+      const ages = job?.childrenAges ? ` (${job.childrenAges})` : '';
+      return `${count} child${count > 1 ? 'ren' : ''}${ages}`;
+    }
+    if (job?.childrenCount) {
+      const ages = job?.childrenAges ? ` (${job.childrenAges})` : '';
+      return `${job.childrenCount} child${job.childrenCount > 1 ? 'ren' : ''}${ages}`;
+    }
     return 'Child details on request';
   }, [job]);
 
@@ -227,7 +248,10 @@ export const CaregiverJobCard = ({ job, onApply, onView, hasApplied, style }) =>
         </View>
         <View style={styles.jobDetailRow}>
           <Clock size={18} color="#1D4ED8" />
-          <Text style={styles.jobDetailText}>{job?.schedule || job?.time || 'Flexible schedule'}</Text>
+          <Text style={styles.jobDetailText}>
+            {job?.schedule || job?.time || job?.workingHours || 'Flexible schedule'}
+            {job?.startTime && job?.endTime ? ` (${job.startTime} - ${job.endTime})` : ''}
+          </Text>
         </View>
         <View style={styles.jobDetailRow}>
           <Users size={18} color="#1D4ED8" />
@@ -243,8 +267,8 @@ export const CaregiverJobCard = ({ job, onApply, onView, hasApplied, style }) =>
 
       {tags.length > 0 && (
         <View style={styles.tagContainer}>
-          {tags.map((tag) => (
-            <View key={`${job?.id || job?._id || job?.title}-${tag}`} style={styles.tagPill}>
+          {tags.map((tag, index) => (
+            <View key={`${job?.id || job?._id || job?.title}-${tag}-${index}`} style={styles.tagPill}>
               <Text style={styles.tagText}>{tag}</Text>
             </View>
           ))}
@@ -383,11 +407,11 @@ export default function JobsTab({
   }, []);
 
   const renderJobItem = useCallback(({ item }) => (
-    <CaregiverJobCard
+    <SharedJobCard
       job={item}
-      onApply={onJobApply}
-      onView={onJobView}
-      hasApplied={applicationJobIds.has(item?.id || item?._id)}
+      onApply={() => onJobApply?.(item)}
+      onPress={() => onJobView?.(item)}
+      showActions={!applicationJobIds.has(item?.id || item?._id)}
     />
   ), [applicationJobIds, onJobApply, onJobView]);
 

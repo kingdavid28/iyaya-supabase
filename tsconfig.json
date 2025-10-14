@@ -4,9 +4,9 @@
     "strict": false,
     "baseUrl": ".",
     "paths": {
-      "@/*": [
-        "./src/*"
-      ]
-    }
-  }
+      "@/*": ["./src/*"]
+    },
+    "skipLibCheck": true
+  },
+  "exclude": ["node_modules"]
 }

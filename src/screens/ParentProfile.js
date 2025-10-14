@@ -3,7 +3,7 @@ import { View, ScrollView, StyleSheet, Alert, Modal, TouchableOpacity, Image } f
 import { Text, Card, Avatar, Button, Divider, ActivityIndicator, TextInput } from 'react-native-paper';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
-import { authAPI, getCurrentAPIURL } from '../config/api';
+import { supabaseService, getCurrentAPIURL } from '../services';
 import { useAuth } from '../contexts/AuthContext';
 import ProfileImage from '../components/ui/feedback/ProfileImage';
 import { getCurrentDeviceLocation } from '../utils/locationUtils';
@@ -32,7 +32,7 @@ const ParentProfile = ({ navigation }) => {
       
       while (retries > 0) {
         try {
-          const result = await authAPI.getProfile();
+          const result = await supabaseService.getProfile(user?.id || user?.uid);
           const profileData = result?.data || result;
           if (!profileData) {
             throw new Error('No profile data received');
@@ -105,7 +105,7 @@ const ParentProfile = ({ navigation }) => {
       }
 
       const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: 'Images',
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
         allowsEditing: true,
         aspect: [1, 1],
         quality: 0.8,
@@ -115,9 +115,15 @@ const ParentProfile = ({ navigation }) => {
       if (!result.canceled && result.assets?.[0]) {
         setUploading(true);
         const asset = result.assets[0];
+        
+        if (!asset.base64) {
+          console.error('No base64 data in asset:', asset);
+          throw new Error('Image data not available');
+        }
+        
         const dataUrl = `data:image/jpeg;base64,${asset.base64}`;
         
-        const response = await authAPI.uploadProfileImage(dataUrl);
+        const response = await supabaseService.uploadProfileImage(user?.id || user?.uid, dataUrl);
         console.log('Upload response:', response);
         
         // Handle different response structures
@@ -174,7 +180,7 @@ const ParentProfile = ({ navigation }) => {
       
       while (retries > 0) {
         try {
-          const result = await authAPI.updateProfile(updateData);
+          const result = await supabaseService.updateProfile(user?.id || user?.uid, updateData);
           console.log('ParentProfile update result:', result);
           // Update profile with both server data and our sent data since server doesn't return address
           setProfile(prev => ({ 

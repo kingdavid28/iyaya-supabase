@@ -10,7 +10,6 @@ import { useParentDashboard } from '../../hooks/useParentDashboard';
 
 // Supabase service import
 import { supabaseService } from '../../services/supabase';
-import { childrenAPI } from '../../services';
 
 // Utility imports
 import { applyFilters, countActiveFilters } from '../../utils/caregiverUtils';

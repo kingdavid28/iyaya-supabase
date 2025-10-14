@@ -4,6 +4,7 @@ import { Calendar, MapPin, Clock, DollarSign, Users, Edit2, Trash2, Clock as Clo
 import { StatusBadge } from '../../../shared/ui';
 import { jobsAPI } from '../../../config/api';
 import { useNavigation } from '@react-navigation/native';
+import ProfileImage from '../../../components/ui/feedback/ProfileImage';
 
 const JobCard = ({ job, onPress, onUpdate }) => {
   const navigation = useNavigation();
@@ -48,6 +49,39 @@ const JobCard = ({ job, onPress, onUpdate }) => {
     }
   };
 
+  const handleViewApplicants = () => {
+    navigation.navigate('JobApplications', { jobId: job.id, jobTitle: job.title });
+  };
+
+  const handleConfirmJob = async () => {
+    Alert.alert(
+      'Confirm Job',
+      'Mark this job as confirmed? This will notify applicants.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Confirm',
+          onPress: () => handleStatusChange('confirmed')
+        }
+      ]
+    );
+  };
+
+  const handleCancelJob = async () => {
+    Alert.alert(
+      'Cancel Job',
+      'Are you sure you want to cancel this job? This action cannot be undone.',
+      [
+        { text: 'No', style: 'cancel' },
+        {
+          text: 'Yes, Cancel',
+          style: 'destructive',
+          onPress: () => handleStatusChange('cancelled')
+        }
+      ]
+    );
+  };
+
   const formatDate = (dateString) => {
     if (!dateString) return 'Flexible';
     const options = { year: 'numeric', month: 'short', day: 'numeric' };
@@ -60,7 +94,18 @@ const JobCard = ({ job, onPress, onUpdate }) => {
   return (
     <View style={styles.card}>
       <View style={styles.cardHeader}>
-        <StatusBadge status={job.status} />
+        <View style={styles.headerLeft}>
+          <ProfileImage
+            imageUrl={job.parentPhoto || job.client_photo}
+            size={32}
+            style={styles.parentAvatar}
+            defaultIconSize={16}
+          />
+          <View style={styles.parentInfo}>
+            <Text style={styles.parentName}>{job.parentName || job.client_name || 'Parent'}</Text>
+            <StatusBadge status={job.status} />
+          </View>
+        </View>
         
         <Text style={styles.postedDate}>
           {(() => {
@@ -107,13 +152,16 @@ const JobCard = ({ job, onPress, onUpdate }) => {
             </Text>
           </View>
           
-          {job.applicants?.length > 0 && (
-            <View style={[styles.metaItem, styles.applicantsBadge]}>
+          {(job.applicants?.length > 0 || job.applications_count > 0) && (
+            <TouchableOpacity 
+              style={[styles.metaItem, styles.applicantsBadge]}
+              onPress={handleViewApplicants}
+            >
               <Users size={14} color="#4F46E5" />
               <Text style={[styles.metaText, styles.applicantsText]}>
-                {job.applicants.length} {job.applicants.length === 1 ? 'Applicant' : 'Applicants'}
+                {job.applicants?.length || job.applications_count || 0} {(job.applicants?.length || job.applications_count) === 1 ? 'Applicant' : 'Applicants'}
               </Text>
-            </View>
+            </TouchableOpacity>
           )}
         </View>
         
@@ -149,13 +197,36 @@ const JobCard = ({ job, onPress, onUpdate }) => {
               </TouchableOpacity>
               
               {job.status === 'open' && (
+                <>
+                  <TouchableOpacity 
+                    style={[styles.actionButton, styles.confirmButton]}
+                    onPress={handleConfirmJob}
+                  >
+                    <Check size={16} color="#10B981" />
+                    <Text style={[styles.actionButtonText, { color: '#10B981' }]}>
+                      Confirm
+                    </Text>
+                  </TouchableOpacity>
+                  
+                  <TouchableOpacity 
+                    style={[styles.actionButton, styles.cancelButton]}
+                    onPress={handleCancelJob}
+                  >
+                    <Text style={[styles.actionButtonText, { color: '#F59E0B' }]}>
+                      Cancel Job
+                    </Text>
+                  </TouchableOpacity>
+                </>
+              )}
+              
+              {(job.applicants?.length > 0 || job.applications_count > 0) && (
                 <TouchableOpacity 
-                  style={[styles.actionButton, styles.markFilledButton]}
-                  onPress={() => handleStatusChange('filled')}
+                  style={[styles.actionButton, styles.viewApplicantsButton]}
+                  onPress={handleViewApplicants}
                 >
-                  <Check size={16} color="#8B5CF6" />
-                  <Text style={[styles.actionButtonText, { color: '#8B5CF6' }]}>
-                    Mark Filled
+                  <Users size={16} color="#6366F1" />
+                  <Text style={[styles.actionButtonText, { color: '#6366F1' }]}>
+                    View Applicants
                   </Text>
                 </TouchableOpacity>
               )}
@@ -195,6 +266,23 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     marginBottom: 12,
+  },
+  headerLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+  },
+  parentAvatar: {
+    marginRight: 8,
+  },
+  parentInfo: {
+    flex: 1,
+  },
+  parentName: {
+    fontSize: 12,
+    fontWeight: '500',
+    color: '#374151',
+    marginBottom: 2,
   },
   statusBadge: {
     flexDirection: 'row',
@@ -294,9 +382,17 @@ const styles = StyleSheet.create({
     borderColor: '#FEE2E2',
     backgroundColor: '#FEF2F2',
   },
-  markFilledButton: {
-    borderColor: '#EDE9FE',
-    backgroundColor: '#F5F3FF',
+  confirmButton: {
+    borderColor: '#D1FAE5',
+    backgroundColor: '#ECFDF5',
+  },
+  cancelButton: {
+    borderColor: '#FEF3C7',
+    backgroundColor: '#FFFBEB',
+  },
+  viewApplicantsButton: {
+    borderColor: '#E0E7FF',
+    backgroundColor: '#EEF2FF',
   },
   viewButton: {
     borderColor: '#E0E7FF',

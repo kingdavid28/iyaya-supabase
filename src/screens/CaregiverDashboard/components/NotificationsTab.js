@@ -18,7 +18,7 @@ import {
   XCircle,
   Clock
 } from 'lucide-react-native';
-import { supabaseService } from '../../../services/supabaseService';
+import { supabaseService } from '../../../services/supabase';
 import { useAuth } from '../../../contexts/AuthContext';
 
 const NotificationsTab = ({ navigation, onNavigateTab }) => {

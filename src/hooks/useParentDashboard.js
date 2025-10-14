@@ -49,65 +49,45 @@ export const useParentDashboard = () => {
     }
   }, [user?.id]);
 
-  // Fetch jobs
   const fetchJobs = useCallback(async () => {
-    if (!user?.id || user?.role !== 'parent') return;
-    
     setLoading(true);
     try {
-      console.log('📋 Fetching jobs for parent:', user?.id);
       const res = await apiService.jobs.getMy();
       console.log('📋 Jobs API response:', res);
-      
-      // Handle different response structures
-      const jobsList = res?.data || res || [];
-      console.log('📋 Jobs list:', jobsList);
-      
-      const transformedJobs = jobsList.map(job => ({
-        id: job._id || job.id,
-        _id: job._id || job.id,
-        title: job.title || 'Childcare Position',
-        description: job.description || '',
-        hourlyRate: job.hourlyRate || job.hourly_rate || job.rate || 300,
-        location: job.location || 'Cebu City',
-        startDate: job.startDate || job.date,
-        endDate: job.endDate || job.date,
-        startTime: job.startTime || job.start_time,
-        endTime: job.endTime || job.end_time,
-        status: job.status || 'active',
-        applications: job.applications || [],
-        createdAt: job.createdAt || job.created_at,
-        date: job.date || job.startDate
-      }));
-      
-      console.log('📋 Transformed jobs:', transformedJobs);
-      setJobs(transformedJobs);
+
+      const jobsList = Array.isArray(res?.data)
+        ? res.data
+        : (Array.isArray(res) ? res : []);
+
+      console.log('📋 Jobs list (normalized):', jobsList);
+      setJobs(jobsList);
     } catch (error) {
       console.error('❌ Error fetching jobs:', error);
       setJobs([]);
     } finally {
       setLoading(false);
     }
-  }, [user?.id, user?.role]);
+  }, [user?.id]);
 
   // Fetch caregivers
   const fetchCaregivers = useCallback(async () => {
     if (!user?.id) return;
-    
     try {
       console.log('🔍 Fetching caregivers...');
       const res = await apiService.caregivers.getAll();
       console.log('🔍 Raw API response:', res);
-      
-      const caregiversList = res?.data || res || [];
+
+      const caregiversList = Array.isArray(res?.data)
+        ? res.data
+        : (Array.isArray(res) ? res : []);
       console.log('🔍 Caregivers list:', caregiversList);
-      
+
       if (!Array.isArray(caregiversList)) {
         console.warn('⚠️ Caregivers response is not an array:', typeof caregiversList);
         setCaregivers([]);
         return;
       }
-      
+
       const transformedCaregivers = caregiversList.map(caregiver => ({
         id: caregiver.id,
         _id: caregiver.id,
@@ -121,7 +101,7 @@ export const useParentDashboard = () => {
         bio: caregiver.bio || 'Experienced caregiver',
         createdAt: caregiver.created_at || new Date().toISOString()
       }));
-      
+
       console.log('✅ Transformed caregivers:', transformedCaregivers.length);
       setCaregivers(transformedCaregivers);
     } catch (error) {

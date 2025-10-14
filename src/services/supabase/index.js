@@ -10,6 +10,10 @@ import { storageService } from './storageService'
 import { realtimeService } from './realtimeService'
 import { reviewService } from './reviewService'
 
+// Import the main supabaseService for upload functionality
+// Note: This creates a circular dependency issue since we're importing from parent directory
+// TODO: Move uploadProfileImage to storageService and remove this import
+
 // Export individual services (preferred approach)
 export { userService, childrenService, jobService, applicationService, bookingService, messagingService, notificationService, storageService, realtimeService, reviewService }
 
@@ -31,7 +35,7 @@ export class SupabaseServiceFacade {
   // === USER & PROFILE METHODS ===
   async getProfile(userId) { return this.user.getProfile(userId) }
   async updateProfile(userId, data) { return this.user.updateProfile(userId, data) }
-  async uploadProfileImage(userId, imageData) { return this.user.uploadProfileImage(userId, imageData) }
+  async uploadProfileImage(userId, imageData) { return this.storage.uploadProfileImage(userId, imageData) }
   async getCaregivers(filters) { return this.user.getCaregivers(filters) }
   async _getCurrentUser() { return this.user._getCurrentUser() }
 
@@ -52,6 +56,8 @@ export class SupabaseServiceFacade {
   // === APPLICATION METHODS ===
   async applyToJob(jobId, caregiverId, data) { return this.applications.applyToJob(jobId, caregiverId, data) }
   async getMyApplications(userId) { return this.applications.getMyApplications(userId) }
+  async getJobApplications(jobId) { return this.applications.getJobApplications(jobId) }
+  async getForJob(jobId) { return this.applications.getForJob(jobId) }
   async updateApplicationStatus(applicationId, status) { return this.applications.updateApplicationStatus(applicationId, status) }
 
   // === BOOKING METHODS ===

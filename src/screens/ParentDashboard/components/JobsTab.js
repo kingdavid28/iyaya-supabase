@@ -5,6 +5,8 @@ import { styles, colors } from '../../styles/ParentDashboard.styles';
 import { applicationsAPI } from '../../../services';
 import PesoSign from '../../../components/ui/feedback/PesoSign';
 import JobPostingModal from '../modals/JobPostingModal';
+import { getProfileImageUrl } from '../../../utils/imageUtils';
+import JobCard from './JobCard';
 
 const JobsTab = ({
   jobs = [],
@@ -38,7 +40,30 @@ const JobsTab = ({
     setApplicationsLoading(true);
     try {
       const response = await applicationsAPI.getForJob(jobId);
-      setApplications(response.data?.applications || []);
+      const rawApplications = Array.isArray(response?.data)
+        ? response.data
+        : (Array.isArray(response) ? response : []);
+
+      const normalizedApplications = rawApplications.map((app) => {
+        const caregiverProfile = app.caregiverProfile || app.caregiver || app.caregiverId || {};
+        const jobInfo = app.job || app.jobs || {};
+        const parentInfo = jobInfo?.parent || null;
+
+        return {
+          id: app.id || app._id,
+          _id: app.id || app._id,
+          status: app.status || 'pending',
+          message: app.message || '',
+          appliedAt: app.applied_at || app.appliedAt || app.created_at || app.createdAt || null,
+          createdAt: app.created_at || app.createdAt || null,
+          caregiverProfile,
+          caregiverId: caregiverProfile?.id || app.caregiver_id,
+          job: jobInfo,
+          jobParent: parentInfo,
+        };
+      });
+
+      setApplications(normalizedApplications);
       setSelectedJob(jobId);
     } catch (error) {
       console.error('Error fetching applications:', error);
@@ -80,12 +105,12 @@ const JobsTab = ({
 
   const getJobStatusColor = useCallback((status) => {
     return {
-      active: colors.success,
-      pending: colors.warning,
-      completed: colors.info,
-      cancelled: colors.error,
-      filled: colors.primary,
-    }[status] || colors.success;
+      active: '#10B981', // Green for active
+      pending: '#F59E0B', // Amber for pending
+      completed: '#3B82F6', // Blue for completed
+      cancelled: '#EF4444', // Red for cancelled
+      filled: '#8B5CF6', // Purple for filled
+    }[status] || '#6B7280'; // Default gray
   }, []);
 
   const getApplicationStatusColor = useCallback((status) => {
@@ -96,99 +121,21 @@ const JobsTab = ({
     }[status] || colors.textSecondary;
   }, []);
 
-  const JobCard = ({ job }) => (
-    <View style={styles.jobCard}>
-      <View style={styles.jobHeader}>
-        <Text style={styles.jobTitle}>{job.title || 'Childcare Needed'}</Text>
-        <View style={[styles.statusBadge, { backgroundColor: getJobStatusColor(job.status) }]}>
-          <Text style={styles.statusText}>{job.status || 'active'}</Text>
-        </View>
-      </View>
+  // Use dedicated JobCard component with proper handlers
+  const handleJobPress = (job) => {
+    // Handle job details view
+    console.log('View job details:', job.id);
+  };
 
-      <View style={styles.jobDetails}>
-        <View style={styles.jobDetailRow}>
-          <Calendar size={16} color={colors.textSecondary} />
-          <Text style={styles.jobDetailText}>
-            {job.date ? new Date(job.date).toLocaleDateString() : 'Date not set'}
-          </Text>
-        </View>
-
-        <View style={styles.jobDetailRow}>
-          <Clock size={16} color={colors.textSecondary} />
-          <Text style={styles.jobDetailText}>
-            {job.startTime || '9:00 AM'} - {job.endTime || '5:00 PM'}
-          </Text>
-        </View>
-
-        <View style={styles.jobDetailRow}>
-          <MapPin size={16} color={colors.textSecondary} />
-          <Text style={[styles.jobDetailText, { flex: 1 }]} numberOfLines={1} ellipsizeMode="tail">
-            {job.location || 'Location not specified'}
-          </Text>
-        </View>
-
-        <View style={styles.jobDetailRowInline}>
-          <View style={styles.jobDetailItem}>
-            <PesoSign size={16} color={colors.textSecondary} />
-            <Text style={styles.jobDetailText}>₱{job.hourlyRate || 350}/hr</Text>
-          </View>
-          <View style={styles.jobDetailItem}>
-            <Users size={16} color={colors.textSecondary} />
-            <Text style={styles.jobDetailText}>{job.applicationCount || 0} apps</Text>
-          </View>
-        </View>
-      </View>
-
-      <View style={styles.jobActions}>
-        <View style={styles.jobActionsRow1}>
-          <TouchableOpacity
-            style={styles.viewApplicationsButton}
-            onPress={() => {
-              const jobId = job.id || job._id;
-              if (jobId) {
-                fetchJobApplications(jobId);
-              } else {
-                Alert.alert('Error', 'Job ID not found');
-              }
-            }}
-          >
-            <Eye size={16} color={colors.primary} />
-            <Text style={styles.viewApplicationsText}>Applications</Text>
-          </TouchableOpacity>
-        </View>
-
-        <View style={styles.jobActionsRow2}>
-          {(job.status === 'active' || job.status === 'pending') && (
-            <TouchableOpacity
-              style={[styles.jobActionButton, styles.completeButton]}
-              onPress={() => onCompleteJob(job.id || job._id)}
-            >
-              <Text style={[styles.jobActionText, styles.completeText]}>Complete</Text>
-            </TouchableOpacity>
-          )}
-          <TouchableOpacity
-            style={styles.jobActionButton}
-            onPress={() => onEditJob(job)}
-          >
-            <Text style={styles.jobActionText}>Edit</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[styles.jobActionButton, styles.deleteButton]}
-            onPress={() => onDeleteJob(job.id || job._id)}
-          >
-            <Text style={[styles.jobActionText, styles.deleteText]}>Delete</Text>
-          </TouchableOpacity>
-        </View>
-      </View>
-    </View>
-  );
+  const handleJobUpdate = () => {
+    // Refresh jobs after update
+    if (onRefresh) onRefresh();
+  };
 
   const renderApplicationItem = ({ item }) => {
     // Debug logging to see actual data structure
-    console.log('🔍 Application item data:', JSON.stringify(item, null, 2));
-    console.log('🔍 Caregiver data:', item.caregiverId);
-    console.log('🔍 Profile image URL:', item.caregiverId?.profileImage);
-    console.log('🔍 Caregiver name:', item.caregiverId?.name);
+    const caregiver = item.caregiverProfile || {};
+    const caregiverImageUrl = getProfileImageUrl(caregiver);
 
     const getStatusInfo = (status) => {
       switch (status?.toLowerCase()) {
@@ -208,28 +155,23 @@ const JobsTab = ({
         <View style={styles.applicationHeader}>
           <View style={styles.caregiverInfo}>
             <View style={styles.caregiverAvatar}>
-              {item.caregiverId?.profileImage ? (
+              {caregiverImageUrl ? (
                 <Image
-                  source={{
-                    uri: item.caregiverId.profileImage.startsWith('http')
-                      ? item.caregiverId.profileImage
-                      : `http://192.168.1.9:5000/${item.caregiverId.profileImage}`
-                  }}
+                  source={{ uri: caregiverImageUrl }}
                   style={styles.caregiverAvatarImage}
                   onError={(error) => console.log('🚨 Image load error:', error.nativeEvent.error)}
-                  onLoad={() => console.log('✅ Image loaded successfully:', item.caregiverId.profileImage)}
                 />
               ) : (
                 <View style={styles.avatarFallback}>
                   <Text style={styles.avatarInitials}>
-                    {item.caregiverId?.name ? item.caregiverId.name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2) : 'CG'}
+                    {caregiver?.name ? caregiver.name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2) : 'CG'}
                   </Text>
                 </View>
               )}
             </View>
             <View style={styles.caregiverDetails}>
               <Text style={styles.modernCaregiverName}>
-                {item.caregiverId?.name || 'Caregiver'}
+                {caregiver?.name || caregiver?.displayName || 'Caregiver'}
               </Text>
               <Text style={styles.applicationDate}>
                 Applied recently
@@ -251,12 +193,13 @@ const JobsTab = ({
           </View>
         )}
 
-        {item.status === 'pending' && (
+        {(item.status === 'pending' || item.status === 'shortlisted') && (
           <View style={styles.modernApplicationActions}>
             <TouchableOpacity
               style={styles.modernAcceptButton}
-              onPress={() => handleApplicationAction(item._id, 'accepted')}
+              onPress={() => handleApplicationAction(item._id || item.id, 'accepted')}
               activeOpacity={0.8}
+              disabled={item.status === 'shortlisted' && item.caregiverProfile?.isVerified !== true}
             >
               <CheckCircle size={16} color="#FFFFFF" />
               <Text style={styles.modernAcceptButtonText}>Accept</Text>
@@ -264,7 +207,7 @@ const JobsTab = ({
 
             <TouchableOpacity
               style={styles.modernRejectButton}
-              onPress={() => handleApplicationAction(item._id, 'rejected')}
+              onPress={() => handleApplicationAction(item._id || item.id, 'rejected')}
               activeOpacity={0.8}
             >
               <XCircle size={16} color="#EF4444" />
@@ -272,6 +215,14 @@ const JobsTab = ({
             </TouchableOpacity>
           </View>
         )}
+
+        <TouchableOpacity
+          style={styles.viewProfileButton}
+          onPress={() => onViewApplicant(item.caregiverId)}
+          activeOpacity={0.7}
+        >
+          <Text style={styles.viewProfileButtonText}>View Profile</Text>
+        </TouchableOpacity>
       </View>
     );
   };
@@ -302,7 +253,7 @@ const JobsTab = ({
           <FlatList
             data={applications}
             renderItem={renderApplicationItem}
-            keyExtractor={(item) => item._id}
+            keyExtractor={(item) => item.id || item._id}
             contentContainerStyle={styles.applicationsList}
             refreshing={applicationsLoading}
             onRefresh={() => selectedJob && fetchJobApplications(selectedJob)}
@@ -363,7 +314,12 @@ const JobsTab = ({
           >
             {filteredJobs.length > 0 ? (
               filteredJobs.map((job, index) => (
-                <JobCard key={job._id || job.id || `job-${index}`} job={job} />
+                <JobCard 
+                  key={job._id || job.id || `job-${index}`} 
+                  job={job} 
+                  onPress={() => handleJobPress(job)}
+                  onUpdate={handleJobUpdate}
+                />
               ))
             ) : (
               <View style={styles.emptyState}>

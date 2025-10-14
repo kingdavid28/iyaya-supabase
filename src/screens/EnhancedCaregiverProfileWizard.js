@@ -903,25 +903,70 @@ const handleProfileImageUpload = async () => {
     setProfileImageError(false);
   }, [formData.profileImage]);
 
+  useEffect(() => {
+    if (!Array.isArray(formData.certifications) || formData.certifications.length === 0) {
+      return;
+    }
+
+    let changed = false;
+    const seen = new Set();
+    const normalizedCerts = [];
+
+    formData.certifications.forEach((cert) => {
+      if (!cert) {
+        changed = true;
+        return;
+      }
+
+      if (typeof cert === 'string') {
+        const trimmed = cert.trim();
+        if (trimmed !== cert) {
+          changed = true;
+        }
+        const key = trimmed.toLowerCase();
+        if (!seen.has(key)) {
+          seen.add(key);
+          normalizedCerts.push(trimmed);
+        } else {
+          changed = true;
+        }
+      } else {
+        const id = cert?.id ? String(cert.id).trim() : '';
+        const name = (cert?.name || cert?.title || '').trim();
+        const keySource = id || name;
+        if (!keySource) {
+          changed = true;
+          return;
+        }
+        const key = keySource.toLowerCase();
+
+        if (!seen.has(key)) {
+          seen.add(key);
+          if (name && name !== (cert?.name || cert?.title || '')) {
+            normalizedCerts.push({ ...cert, name });
+            changed = true;
+          } else {
+            normalizedCerts.push(cert);
+          }
+        } else {
+          changed = true;
+        }
+      }
+    });
+
+    if (changed) {
+      updateFormData('certifications', normalizedCerts);
+    }
+  }, [formData.certifications, updateFormData]);
+
   const showSnackbar = (message) => {
     setSnackbarMessage(message);
     setSnackbarVisible(true);
   };
 
-  // Normalize certifications on component mount
-  useEffect(() => {
-    if (formData.certifications.some(cert => typeof cert === 'object')) {
-      const stringCerts = formData.certifications
-        .filter(cert => cert && (typeof cert === 'string' || cert.name))
-        .map(cert => typeof cert === 'string' ? cert : cert.name);
-      updateFormData('certifications', stringCerts);
-    }
-  }, []);
-
   const validateCurrentStep = () => {
     const step = ENHANCED_STEPS[currentStep];
     let isValid = true;
-    
     switch (step.id) {
       case 'basic':
         isValid = validateField('name', formData.name) && 
@@ -1522,7 +1567,17 @@ const handleProfileImageUpload = async () => {
             onPress={() => {
               const cert = tempInputs.newCertification.trim();
               if (cert) {
-                updateFormData('certifications', [...formData.certifications, cert]);
+                const hasCert = formData.certifications.some(existing => {
+                  if (!existing) return false;
+                  if (typeof existing === 'string') {
+                    return existing.trim().toLowerCase() === cert.toLowerCase();
+                  }
+                  const existingName = (existing?.name || existing?.title || '').trim();
+                  return existingName.toLowerCase() === cert.toLowerCase();
+                });
+                if (!hasCert) {
+                  updateFormData('certifications', [...formData.certifications, cert]);
+                }
                 setTempInputs(prev => ({ ...prev, newCertification: '' }));
               }
             }}
@@ -1536,28 +1591,37 @@ const handleProfileImageUpload = async () => {
         <View style={styles.selectedSkills}>
           <Text style={styles.selectedTitle}>Your Certifications ({formData.certifications.length}):</Text>
           <View style={styles.certificationsContainer}>
-            {formData.certifications.map((cert, index) => (
-              <Card key={index} style={styles.certificationCard}>
-                <Card.Content>
-                  <View style={styles.certificationHeader}>
-                    <Text style={styles.certificationName}>
-                      {typeof cert === 'string' ? cert : (cert?.name || 'Unnamed Certificate')}
-                    </Text>
-                    <IconButton
-                      icon="close"
-                      size={20}
-                      onPress={() => {
-                        const updatedCerts = formData.certifications.filter((_, i) => i !== index);
-                        updateFormData('certifications', updatedCerts);
-                      }}
-                    />
-                  </View>
-                  {cert?.verified && (
-                    <Badge style={styles.verifiedBadge}>Verified</Badge>
-                  )}
-                </Card.Content>
-              </Card>
-            ))}
+            {formData.certifications.map((cert, index) => {
+              const certName = typeof cert === 'string' ? cert : (cert?.name || cert?.title || 'Unnamed Certificate');
+              const baseId = typeof cert === 'object' && cert?.id ? cert.id : certName;
+              const sanitizedBaseIdRaw = baseId
+                ? baseId.toString().trim().replace(/\s+/g, '-').toLowerCase()
+                : '';
+              const sanitizedBaseId = sanitizedBaseIdRaw || `cert-${index}`;
+              const certId = `${sanitizedBaseId}-${index}`;
+              return (
+                <Card key={certId} style={styles.certificationCard}>
+                  <Card.Content>
+                    <View style={styles.certificationHeader}>
+                      <Text style={styles.certificationName}>
+                        {typeof cert === 'string' ? cert : (cert?.name || cert?.title || 'Unnamed Certificate')}
+                      </Text>
+                      <IconButton
+                        icon="close"
+                        size={20}
+                        onPress={() => {
+                          const updatedCerts = formData.certifications.filter((_, i) => i !== index);
+                          updateFormData('certifications', updatedCerts);
+                        }}
+                      />
+                    </View>
+                    {cert?.verified && (
+                      <Badge style={styles.verifiedBadge}>Verified</Badge>
+                    )}
+                  </Card.Content>
+                </Card>
+              );
+            })}
           </View>
         </View>
       </View>

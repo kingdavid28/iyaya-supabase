@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useFocusEffect } from '@react-navigation/native';
-import { supabaseService } from '../services/supabaseService';
+import { supabaseService } from '../services/supabase';
 import { supabase } from '../config/supabase';
 import { useAuth } from '../contexts/AuthContext';
 import { formatAddress } from '../utils/addressUtils';
@@ -120,29 +120,8 @@ export const useCaregiverDashboard = () => {
       const jobsList = await supabaseService.getJobs({ status: 'active' });
       console.log('📋 Available jobs from Supabase:', jobsList);
 
-      const transformedJobs = jobsList.map(job => ({
-        id: job.id,
-        _id: job.id,
-        title: job.title || 'Childcare Position',
-        family: job.users?.name || 'Family',
-        location: job.location || 'Location TBD',
-        distance: '2-5 km away',
-        hourlyRate: job.hourly_rate || job.hourlyRate || 300,
-        schedule: job.start_time && job.end_time ? `${job.start_time} - ${job.end_time}` : 'Flexible hours',
-        requirements: ['Experience with children'],
-        postedDate: 'Recently posted',
-        urgent: job.urgent || false,
-        children: job.number_of_children || 1,
-        ages: job.children_ages || 'Various ages',
-        description: job.description || '',
-        date: job.date,
-        startTime: job.start_time,
-        endTime: job.end_time,
-        parentId: job.parent_id
-      }));
-
-      console.log('📋 Transformed jobs:', transformedJobs);
-      setJobs(transformedJobs);
+      const normalizedJobs = Array.isArray(jobsList) ? jobsList : [];
+      setJobs(normalizedJobs);
     } catch (error) {
       console.error('❌ Error fetching jobs:', error);
       setJobs([]);
@@ -150,8 +129,6 @@ export const useCaregiverDashboard = () => {
       setJobsLoading(false);
     }
   }, [user?.id, user?.role]);
-
-  // Fetch applications from Supabase
   const fetchApplications = useCallback(async () => {
     if (!user?.id || user?.role !== 'caregiver') return;
 

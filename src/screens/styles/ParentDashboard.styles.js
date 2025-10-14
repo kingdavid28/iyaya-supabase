@@ -2001,6 +2001,90 @@ messageSendButtonText: {
   fontSize: 14,
 },
 
+// New JobCard Styles for Enhanced Features
+jobOriginSection: {
+  flexDirection: 'row',
+  alignItems: 'center',
+  paddingHorizontal: spacing.md,
+  paddingVertical: spacing.sm,
+  backgroundColor: colors.primaryLighter,
+  borderRadius: 8,
+  marginHorizontal: spacing.md,
+  marginBottom: spacing.md,
+},
+parentInfo: {
+  flexDirection: 'row',
+  alignItems: 'center',
+  flex: 1,
+},
+parentAvatar: {
+  width: 40,
+  height: 40,
+  borderRadius: 20,
+  backgroundColor: colors.primaryLight,
+  justifyContent: 'center',
+  alignItems: 'center',
+  marginRight: spacing.sm,
+},
+parentAvatarImage: {
+  width: '100%',
+  height: '100%',
+  borderRadius: 20,
+},
+avatarFallback: {
+  width: '100%',
+  height: '100%',
+  borderRadius: 20,
+  backgroundColor: colors.primaryLight,
+  justifyContent: 'center',
+  alignItems: 'center',
+},
+avatarInitials: {
+  fontSize: 16,
+  fontWeight: 'bold',
+  color: colors.primary,
+},
+parentDetails: {
+  flex: 1,
+},
+parentName: {
+  ...typography.body1,
+  color: colors.text,
+  fontWeight: '600',
+},
+postedDate: {
+  ...typography.caption,
+  color: colors.textSecondary,
+},
+requirementsSection: {
+  marginTop: spacing.sm,
+  paddingHorizontal: spacing.md,
+},
+requirementsLabel: {
+  ...typography.caption,
+  color: colors.textSecondary,
+  marginBottom: spacing.xs,
+  fontWeight: '500',
+},
+requirementsChips: {
+  flexDirection: 'row',
+  flexWrap: 'wrap',
+  gap: spacing.xs,
+},
+requirementChip: {
+  backgroundColor: colors.primaryLight,
+  paddingHorizontal: spacing.sm,
+  paddingVertical: spacing.xs,
+  borderRadius: 12,
+  borderWidth: 1,
+  borderColor: colors.primary,
+},
+requirementChipText: {
+  ...typography.caption,
+  color: colors.primary,
+  fontWeight: '500',
+},
+
 });
 export default styles;
 

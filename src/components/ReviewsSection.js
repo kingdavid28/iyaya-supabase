@@ -10,7 +10,7 @@ import {
   Alert
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import supabaseService from '../services/supabaseService';
+import supabaseService from '../services/supabase';
 import { useAuth } from '../contexts/AuthContext';
 
 const ReviewsSection = ({ userId, userType = 'caregiver', showAddReview = false, bookingId = null }) => {
