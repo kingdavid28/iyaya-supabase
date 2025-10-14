@@ -2031,19 +2031,7 @@ parentAvatarImage: {
   height: '100%',
   borderRadius: 20,
 },
-avatarFallback: {
-  width: '100%',
-  height: '100%',
-  borderRadius: 20,
-  backgroundColor: colors.primaryLight,
-  justifyContent: 'center',
-  alignItems: 'center',
-},
-avatarInitials: {
-  fontSize: 16,
-  fontWeight: 'bold',
-  color: colors.primary,
-},
+
 parentDetails: {
   flex: 1,
 },
