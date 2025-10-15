@@ -5,7 +5,7 @@ import { ActivityIndicator, View } from "react-native";
 
 // Core imports
 import { useAuth } from "../../contexts/AuthContext";
-import { useThemeContext } from "../../core/contexts/ThemeContext";
+import { useThemeContext } from "../../contexts/ThemeContext";
 
 // Main screen imports
 import WelcomeScreen from "../../screens/WelcomeScreen";
@@ -35,7 +35,6 @@ import AvailabilityManagementScreen from "../../screens/AvailabilityManagementSc
 import BookingManagementScreen from "../../screens/BookingManagementScreen";
 import ChildrenManagementScreen from "../../screens/ChildrenManagementScreen";
 import EnhancedCaregiverProfileWizard from "../../screens/EnhancedCaregiverProfileWizard";
-import JobPostingScreen from "../../screens/JobPostingScreen";
 import JobSearchScreen from "../../screens/JobSearchScreen";
 import OnboardingScreen from "../../screens/OnboardingScreen";
 import PaymentConfirmationScreen from "../../screens/PaymentConfirmationScreen";
@@ -43,6 +42,7 @@ import ProfileScreen from "../../screens/profile/ProfileScreen";
 import EmailVerificationPendingScreen from "../../screens/EmailVerificationPendingScreen";
 
 import CaregiverChat from "../../screens/CaregiverChat";
+import JobApplications from "../../screens/ParentDashboard/components/JobApplications";
 
 // Utils
 import { hasSeenOnboarding } from "../../utils/onboarding";
@@ -119,7 +119,6 @@ const AppNavigatorWithAuth = () => {
         <Stack.Screen name="CaregiverDashboard" component={CaregiverDashboard} options={{ headerShown: false }} />
         <Stack.Screen name="Profile" component={ProfileScreen} options={{ title: "Edit Profile", headerBackTitle: "Back" }} />
         <Stack.Screen name="PaymentConfirmation" component={PaymentConfirmationScreen} options={{ title: "Confirm Payment", headerBackTitle: "Back" }} />
-        <Stack.Screen name="JobPosting" component={JobPostingScreen} options={{ title: "Post a Job", headerBackTitle: "Back" }} />
         <Stack.Screen name="JobSearch" component={JobSearchScreen} options={{ title: "Find Jobs", headerBackTitle: "Back" }} />
         <Stack.Screen name="BookingFlow" component={BookingManagementScreen} options={{ title: "Book Caregiver", headerBackTitle: "Back" }} />
         <Stack.Screen name="BookingManagement" component={BookingManagementScreen} options={{ title: "Manage Bookings", headerBackTitle: "Back" }} />
@@ -135,6 +134,8 @@ const AppNavigatorWithAuth = () => {
         <Stack.Screen name="CaregiverChat" component={CaregiverChat} options={{ title: "Chat with Caregiver" }} />
         <Stack.Screen name="CaregiverReviews" component={CaregiverReviewsScreen} options={{ title: "Caregiver Reviews" }} />
         <Stack.Screen name="Notifications" component={NotificationsScreen} options={{ headerShown: false }} />
+        <Stack.Screen name="JobApplications" component={JobApplications} options={{ title: "Job Applications", headerBackTitle: "Back" }} />
+        <Stack.Screen name="CaregiverProfile" component={CaregiverProfileComplete} options={{ title: "Caregiver Profile", headerBackTitle: "Back" }} />
       </Stack.Navigator>
     </NavigationContainer>
   );

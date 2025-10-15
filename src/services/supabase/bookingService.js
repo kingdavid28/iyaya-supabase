@@ -65,12 +65,7 @@ export class BookingService extends SupabaseBase {
 
       let query = supabase
         .from('bookings')
-        .select(`
-          *,
-          jobs(*),
-          parent:users!bookings_parent_id_fkey(id, name, email, phone, profile_image),
-          caregiver:users!bookings_caregiver_id_fkey(id, name, email, phone, profile_image)
-        `)
+        .select('*')
 
       if (role === 'parent') {
         query = query.eq('parent_id', userId)
@@ -137,12 +132,7 @@ export class BookingService extends SupabaseBase {
       
       const { data, error } = await supabase
         .from('bookings')
-        .select(`
-          *,
-          jobs(*),
-          parent:users!bookings_parent_id_fkey(id, name, email, phone, profile_image),
-          caregiver:users!bookings_caregiver_id_fkey(id, name, email, phone, profile_image)
-        `)
+        .select('*')
         .eq('id', bookingId)
         .or(`parent_id.eq.${userId},caregiver_id.eq.${userId}`)
         .single()

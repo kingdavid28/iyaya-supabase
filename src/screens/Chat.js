@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState, useRef } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -7,27 +7,37 @@ import {
   KeyboardAvoidingView,
   Platform,
   TouchableOpacity,
-  Image,
-  Alert,
   FlatList,
   TextInput,
   Pressable,
+  Alert,
 } from 'react-native';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../contexts/AuthContext';
-import { messagingAPI, realtimeService } from '../services';
+import { messagingAPI } from '../services';
+import { supabase } from '../config/supabase';
 
-export default function CaregiverChat({ route }) {
+export default function Chat() {
   const { user } = useAuth();
   const navigation = useNavigation();
-  // Use the useRoute hook to get params if route is not passed as prop
-  const routeHook = useRoute();
-  const { caregiverId, caregiverName, parentId, parentName } = route?.params || routeHook?.params || {};
+  const route = useRoute();
   
-  // Determine if this is a caregiver chatting with parent or parent chatting with caregiver
-  const otherUserId = parentId || caregiverId;
-  const otherUserName = parentName || caregiverName;
+  // Extract parameters - works for both parent->caregiver and caregiver->parent
+  const { 
+    targetUserId, 
+    targetUserName, 
+    targetUserType,
+    caregiverId, 
+    caregiverName,
+    parentId,
+    parentName 
+  } = route.params || {};
+
+  // Determine the other participant
+  const otherUserId = targetUserId || caregiverId || parentId;
+  const otherUserName = targetUserName || caregiverName || parentName || 'User';
+  const otherUserType = targetUserType || (caregiverName ? 'Caregiver' : 'Parent');
 
   const [messages, setMessages] = useState([]);
   const [newMessage, setNewMessage] = useState('');
@@ -35,18 +45,58 @@ export default function CaregiverChat({ route }) {
   const [conversationId, setConversationId] = useState(null);
   const flatListRef = useRef();
 
-  // Initialize conversation when component mounts
   useEffect(() => {
-    if (!user?.id || !otherUserId) {
-      Alert.alert('Error', 'Missing user information');
-      navigation.goBack();
-      return;
-    }
+    const initChat = async () => {
+      // Extract user ID from different possible formats with more debugging
+      let currentUserId = user?.id || user?.uid || user?.user_id || route.params?.userId;
+      
+      // If no user ID from context, try to get it directly from Supabase
+      if (!currentUserId) {
+        try {
+          const { data: { user: authUser } } = await supabase.auth.getUser();
+          currentUserId = authUser?.id;
+          console.log('🔍 Chat - Got user ID from Supabase auth:', currentUserId);
+        } catch (error) {
+          console.error('❌ Chat - Failed to get user from Supabase:', error);
+        }
+      }
+      
+      console.log('🔍 Chat useEffect - Full debug info:', {
+        user: user,
+        userKeys: user ? Object.keys(user) : 'no user',
+        userId: currentUserId,
+        otherUserId,
+        routeParams: route.params,
+        routeParamsKeys: route.params ? Object.keys(route.params) : 'no params'
+      });
+      
+      if (!currentUserId) {
+        console.error('❌ Missing current user ID:', { 
+          user,
+          userType: typeof user,
+          userKeys: user ? Object.keys(user) : 'no user',
+          routeUserId: route.params?.userId
+        });
+        Alert.alert('Error', 'Current user information not available. Please try logging out and back in.');
+        navigation.goBack();
+        return;
+      }
+      
+      if (!otherUserId) {
+        console.error('❌ Missing other user ID:', { 
+          otherUserId,
+          routeParams: route.params
+        });
+        Alert.alert('Error', 'Target user information not available');
+        navigation.goBack();
+        return;
+      }
 
-    const init = async () => {
       try {
         setIsLoading(true);
-        const conversation = await messagingAPI.getOrCreateConversation(user.id, otherUserId);
+        console.log('🚀 Creating conversation between:', currentUserId, 'and', otherUserId);
+        // Pass null as first parameter to let the service get current user from auth
+        const conversation = await messagingAPI.getOrCreateConversation(null, otherUserId);
         setConversationId(conversation.id);
         
         const existingMessages = await messagingAPI.getMessages(conversation.id);
@@ -59,27 +109,41 @@ export default function CaregiverChat({ route }) {
       }
     };
 
-    init();
-  }, [user?.id, otherUserId, navigation]);
+    initChat();
+  }, [user, otherUserId, navigation, route.params]);
 
-  // Handle sending a new message
   const sendMessage = async () => {
-    if (!newMessage?.trim() || !user?.id || !otherUserId || !conversationId) return;
+    let currentUserId = user?.id || user?.uid || user?.user_id || route.params?.userId;
+    
+    // If no user ID, try to get it directly from Supabase
+    if (!currentUserId) {
+      try {
+        const { data: { user: authUser } } = await supabase.auth.getUser();
+        currentUserId = authUser?.id;
+      } catch (error) {
+        console.error('Failed to get user for sending message:', error);
+      }
+    }
+    
+    if (!newMessage?.trim() || !conversationId || !currentUserId) return;
 
     try {
-      await messagingAPI.sendMessage(conversationId, user.id, newMessage.trim());
+      await messagingAPI.sendMessage(conversationId, currentUserId, newMessage.trim());
       setNewMessage('');
+      
+      // Refresh messages
+      const updatedMessages = await messagingAPI.getMessages(conversationId);
+      setMessages(updatedMessages || []);
     } catch (error) {
       console.error('Error sending message:', error);
       Alert.alert('Error', 'Failed to send message. Please try again.');
     }
   };
 
-  // Message item component
   const MessageItem = ({ message, isCurrentUser }) => {
     const formatTime = (timestamp) => {
       if (!timestamp) return '';
-      const date = timestamp?.toDate ? timestamp.toDate() : new Date(timestamp);
+      const date = new Date(timestamp);
       return date.toLocaleTimeString('en-US', {
         hour: '2-digit',
         minute: '2-digit',
@@ -100,31 +164,14 @@ export default function CaregiverChat({ route }) {
             styles.messageText,
             isCurrentUser ? styles.currentUserText : styles.otherUserText
           ]}>
-            {message.text || message.content || message.message || 'No message content'}
+            {message.content || message.text || 'No message content'}
           </Text>
-
-          <View style={styles.messageFooter}>
-            <Text style={[
-              styles.messageTime,
-              isCurrentUser ? styles.currentUserTime : styles.otherUserTime
-            ]}>
-              {formatTime(message.timestamp || message.createdAt)}
-            </Text>
-
-            {isCurrentUser && (
-              <View style={styles.messageStatus}>
-                {message.status === 'sent' && (
-                  <Ionicons name="checkmark" size={12} color="#10B981" />
-                )}
-                {message.status === 'delivered' && (
-                  <Ionicons name="checkmark-done" size={12} color="#10B981" />
-                )}
-                {message.status === 'read' && (
-                  <Ionicons name="checkmark-done" size={12} color="#3B82F6" />
-                )}
-              </View>
-            )}
-          </View>
+          <Text style={[
+            styles.messageTime,
+            isCurrentUser ? styles.currentUserTime : styles.otherUserTime
+          ]}>
+            {formatTime(message.created_at || message.timestamp)}
+          </Text>
         </View>
       </View>
     );
@@ -145,7 +192,6 @@ export default function CaregiverChat({ route }) {
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
     >
-      {/* Custom Header */}
       <View style={styles.header}>
         <TouchableOpacity
           style={styles.backButton}
@@ -155,26 +201,27 @@ export default function CaregiverChat({ route }) {
         </TouchableOpacity>
         <View style={styles.headerContent}>
           <Text style={styles.headerTitle} numberOfLines={1}>
-            {otherUserName || 'Chat'}
+            {otherUserName}
           </Text>
-          <Text style={styles.subtitle}>{parentName ? 'Parent' : 'Caregiver'}</Text>
+          <Text style={styles.subtitle}>{otherUserType}</Text>
         </View>
       </View>
 
-      {/* Messages List */}
       <FlatList
         ref={flatListRef}
         data={messages}
-        renderItem={({ item }) => (
-          <MessageItem
-            message={item}
-            isCurrentUser={item.senderId === user?.id}
-          />
-        )}
+        renderItem={({ item }) => {
+          const currentUserId = user?.id || user?.uid || user?.user_id || route.params?.userId;
+          return (
+            <MessageItem
+              message={item}
+              isCurrentUser={item.sender_id === currentUserId}
+            />
+          );
+        }}
         keyExtractor={(item, index) => item.id || `message-${index}`}
         style={styles.messagesList}
         contentContainerStyle={styles.messagesContent}
-        inverted={false}
         showsVerticalScrollIndicator={false}
         onContentSizeChange={() => {
           if (messages.length > 0 && flatListRef.current) {
@@ -183,7 +230,6 @@ export default function CaregiverChat({ route }) {
         }}
       />
 
-      {/* Message Input */}
       <View style={styles.inputContainer}>
         <TextInput
           style={styles.messageInput}
@@ -201,11 +247,7 @@ export default function CaregiverChat({ route }) {
           onPress={sendMessage}
           disabled={!newMessage?.trim()}
         >
-          <Ionicons
-            name="send"
-            size={20}
-            color="#FFFFFF"
-          />
+          <Ionicons name="send" size={20} color="#FFFFFF" />
         </Pressable>
       </View>
     </KeyboardAvoidingView>
@@ -291,19 +333,13 @@ const styles = StyleSheet.create({
   messageText: {
     fontSize: 16,
     lineHeight: 20,
+    marginBottom: 4,
   },
   currentUserText: {
     color: '#FFFFFF',
   },
   otherUserText: {
     color: '#374151',
-  },
-  messageFooter: {
-    flexDirection: 'row',
-    justifyContent: 'flex-end',
-    alignItems: 'center',
-    marginTop: 4,
-    gap: 4,
   },
   messageTime: {
     fontSize: 11,
@@ -313,9 +349,6 @@ const styles = StyleSheet.create({
   },
   otherUserTime: {
     color: '#9CA3AF',
-  },
-  messageStatus: {
-    marginLeft: 2,
   },
   inputContainer: {
     flexDirection: 'row',

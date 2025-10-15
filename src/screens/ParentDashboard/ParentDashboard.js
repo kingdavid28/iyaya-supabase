@@ -70,7 +70,7 @@ const ParentDashboard = () => {
   // Dashboard data
   const {
     activeTab, 
-    setActiveTab: setActiveTabHook,
+    setActiveTab,
     profile,
     jobs, 
     caregivers, 
@@ -120,8 +120,6 @@ const ParentDashboard = () => {
       notifications: otherNotifications
     };
   }, [notifications, bookings]);
-
-  const setActiveTab = setActiveTabHook || (() => console.warn('setActiveTab not available'));
 
   // UI State
   const [refreshing, setRefreshing] = useState(false);
@@ -451,16 +449,35 @@ const ParentDashboard = () => {
   };
 
   const handleMessageCaregiver = useCallback(async (caregiver) => {
+    console.log('🔍 ParentDashboard - handleMessageCaregiver called with:', {
+      caregiver,
+      user,
+      userId: user?.id
+    });
+    
+    if (!user?.id) {
+      console.error('❌ ParentDashboard - No user ID available');
+      Alert.alert('Error', 'User authentication required. Please log out and back in.');
+      return;
+    }
+    
+    const caregiverId = caregiver._id || caregiver.id;
+    if (!caregiverId) {
+      console.error('❌ ParentDashboard - No caregiver ID available');
+      Alert.alert('Error', 'Caregiver information not available');
+      return;
+    }
+    
     try {
       // Create or get conversation in Supabase
-      await supabaseService.getOrCreateConversation(user.id, caregiver._id || caregiver.id);
+      await supabaseService.getOrCreateConversation(user.id, caregiverId);
     } catch (error) {
       console.log('Connection setup warning:', error.message);
     }
 
     navigation.navigate('Chat', {
       userId: user.id,
-      targetUserId: caregiver._id || caregiver.id,
+      targetUserId: caregiverId,
       targetUserName: caregiver.name,
       userType: 'parent',
       targetUserType: 'caregiver'
@@ -692,7 +709,6 @@ const ParentDashboard = () => {
   }, [toggleModal]);
 
   const handleEditJob = useCallback((job) => {
-    // Set job data for editing
     toggleModal('jobPosting', true);
   }, [toggleModal]);
 

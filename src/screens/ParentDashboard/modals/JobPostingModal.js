@@ -200,12 +200,7 @@ const JobPostingModal = ({ visible, onClose, onJobPosted }) => {
       const createdJob = response?.data?.job || { ...payload, id: Date.now(), _id: Date.now() };
       if (onJobPosted) onJobPosted(createdJob);
       
-      onClose();
-      
-      // Show success message
-      Alert.alert('Success', 'Job posted successfully!');
-      
-      // Reset form
+      // Reset form first
       setJobData({
         title: '',
         description: '',
@@ -218,6 +213,17 @@ const JobPostingModal = ({ visible, onClose, onJobPosted }) => {
         children: [],
       });
       setStep(1);
+      setErrors({});
+      
+      // Close modal and notify parent
+      if (onClose) {
+        onClose();
+      }
+      
+      // Show success message after modal closes
+      setTimeout(() => {
+        Alert.alert('Success', 'Job posted successfully!');
+      }, 300);
       
     } catch (error) {
       console.error('Error posting job:', error);
@@ -601,12 +607,16 @@ const JobPostingModal = ({ visible, onClose, onJobPosted }) => {
       visible={visible}
       animationType="slide"
       transparent
-      onRequestClose={onClose}
+      onRequestClose={() => {
+        if (!loading) {
+          onClose();
+        }
+      }}
     >
       <View style={styles.modalOverlay}>
         <KeyboardAvoidingView
           style={{ flex: 1 }}
-          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
           keyboardVerticalOffset={keyboardOffset}
         >
           <View style={styles.modalContainer}>
@@ -614,12 +624,24 @@ const JobPostingModal = ({ visible, onClose, onJobPosted }) => {
               <Text style={styles.modalTitle}>
                 {step === 1 ? 'Job Details' : step === 2 ? 'Schedule' : 'Review & Post'}
               </Text>
-              <TouchableOpacity onPress={onClose} style={styles.closeButton}>
+              <TouchableOpacity 
+                onPress={() => {
+                  if (!loading) {
+                    onClose();
+                  }
+                }} 
+                style={[styles.closeButton, loading && { opacity: 0.5 }]}
+                disabled={loading}
+              >
                 <X size={24} color="#6B7280" />
               </TouchableOpacity>
             </View>
 
-            <ScrollView style={styles.modalContent}>
+            <ScrollView 
+              style={styles.modalContent}
+              keyboardShouldPersistTaps="handled"
+              showsVerticalScrollIndicator={false}
+            >
               <View style={styles.stepIndicatorContainer}>
                 {[1, 2, 3].map((stepNum) => (
                   <React.Fragment key={stepNum}>

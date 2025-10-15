@@ -44,6 +44,7 @@ const localStyles = StyleSheet.create({
     elevation: 2,
   },
   summaryTitleRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 8, gap: 8 },
+  summaryIconContainer: { marginBottom: 8 },
   summaryValue: { fontSize: 22, fontWeight: '700', color: '#111827' },
   summaryLabel: { fontSize: 13, color: '#6B7280' },
   filterSection: { marginBottom: 20 },
@@ -199,32 +200,42 @@ export const CaregiverJobCard = ({ job, onApply, onView, hasApplied, style }) =>
     }
   }, [applying, hasApplied, job, onApply]);
 
-  const tags = useMemo(() => resolveJobTags(job), [job]);
+  const allTags = useMemo(() => {
+    const tags = [];
+    if (job?.childrenCount) tags.push(`${job.childrenCount} child${job.childrenCount > 1 ? 'ren' : ''}`);
+    if (job?.urgent) tags.push('Urgent');
+    if (job?.careType) tags.push(String(job.careType));
+    if (Array.isArray(job?.requirements)) {
+      tags.push(...job.requirements.filter(Boolean).map(String).slice(0, 3));
+    }
+    return [...new Set(tags)].filter(Boolean).slice(0, 5);
+  }, [job]);
+
   const childrenSummary = useMemo(() => {
-    if (job?.childrenSummary) return job.childrenSummary;
+    if (job?.childrenSummary) return String(job.childrenSummary);
     if (Array.isArray(job?.children) && job.children.length) {
       const count = job.children.length;
-      const ages = job?.childrenAges ? ` (${job.childrenAges})` : '';
+      const ages = job?.childrenAges ? ` (${String(job.childrenAges)})` : '';
       return `${count} child${count > 1 ? 'ren' : ''}${ages}`;
     }
     if (job?.childrenCount) {
-      const ages = job?.childrenAges ? ` (${job.childrenAges})` : '';
+      const ages = job?.childrenAges ? ` (${String(job.childrenAges)})` : '';
       return `${job.childrenCount} child${job.childrenCount > 1 ? 'ren' : ''}${ages}`;
     }
-    return 'Child details on request';
+    return 'Child details available';
   }, [job]);
 
   return (
     <View style={[styles.jobCard, style]}>
       <View style={styles.jobHeader}>
         <View style={styles.jobTitleWrapper}>
-          <Text style={styles.jobTitle} numberOfLines={2}>{job?.title || 'Childcare Position'}</Text>
+          <Text style={styles.jobTitle} numberOfLines={2}>{String(job?.title || 'Childcare Position')}</Text>
           <Text style={styles.jobMetaText} numberOfLines={1}>
-            {(job?.family || job?.familyName || 'Family')} · {(job?.location || 'Location not specified')}
+            {String(job?.family || job?.familyName || 'Family')} · {String(job?.location || 'Location not specified')}
           </Text>
           {hasApplied && (
             <View style={styles.appliedBadge}>
-              <Text style={styles.appliedBadgeText}>Application Submitted</Text>
+              <Text style={styles.appliedBadgeText}>Applied</Text>
             </View>
           )}
         </View>
@@ -243,42 +254,44 @@ export const CaregiverJobCard = ({ job, onApply, onView, hasApplied, style }) =>
 
       <View style={styles.jobDetails}>
         <View style={styles.jobDetailRow}>
-          <MapPin size={18} color="#1D4ED8" />
-          <Text style={styles.jobDetailText}>{job?.address || job?.location || 'Location not specified'}</Text>
-        </View>
-        <View style={styles.jobDetailRow}>
-          <Clock size={18} color="#1D4ED8" />
+          <MapPin size={16} color="#6B7280" />
           <Text style={styles.jobDetailText}>
-            {job?.schedule || job?.time || job?.workingHours || 'Flexible schedule'}
-            {job?.startTime && job?.endTime ? ` (${job.startTime} - ${job.endTime})` : ''}
+            {String(job?.address || job?.location || 'Location not specified')}
           </Text>
         </View>
         <View style={styles.jobDetailRow}>
-          <Users size={18} color="#1D4ED8" />
-          <Text style={styles.jobDetailText}>{childrenSummary}</Text>
+          <Clock size={16} color="#6B7280" />
+          <Text style={styles.jobDetailText}>
+            {String(job?.schedule || job?.time || job?.workingHours || 'Flexible schedule')}
+            {job?.startTime && job?.endTime ? ` (${String(job.startTime)} - ${String(job.endTime)})` : ''}
+          </Text>
+        </View>
+        <View style={styles.jobDetailRow}>
+          <Users size={16} color="#6B7280" />
+          <Text style={styles.jobDetailText}>{String(childrenSummary)}</Text>
         </View>
         {job?.date && (
           <View style={styles.jobDetailRow}>
-            <Calendar size={18} color="#1D4ED8" />
+            <Calendar size={16} color="#6B7280" />
             <Text style={styles.jobDetailText}>{formatDateDisplay(job?.date)}</Text>
           </View>
         )}
       </View>
 
-      {tags.length > 0 && (
+      {job?.description && (
+        <Text style={styles.jobDescription} numberOfLines={2}>
+          {String(job.description)}
+        </Text>
+      )}
+
+      {allTags.length > 0 && (
         <View style={styles.tagContainer}>
-          {tags.map((tag, index) => (
-            <View key={`${job?.id || job?._id || job?.title}-${tag}-${index}`} style={styles.tagPill}>
-              <Text style={styles.tagText}>{tag}</Text>
+          {allTags.map((tag, index) => (
+            <View key={`${job?.id || job?._id}-${tag}-${index}`} style={styles.tagPill}>
+              <Text style={styles.tagText}>{String(tag)}</Text>
             </View>
           ))}
         </View>
-      )}
-
-      {job?.description && (
-        <Text style={styles.jobDescription} numberOfLines={3}>
-          {job.description}
-        </Text>
       )}
 
       <View style={styles.jobActions}>
@@ -297,8 +310,7 @@ export const CaregiverJobCard = ({ job, onApply, onView, hasApplied, style }) =>
       </View>
 
       <View style={styles.metaFooter}>
-        <Text style={styles.postedText}>Posted {getRelativeTime(job?.created_at || job?.createdAt || job?.postedAt || job?.date)}</Text>
-        {job?.duration ? <Text style={styles.postedText}>{job.duration}</Text> : null}
+        <Text style={styles.postedText}>Posted {getRelativeTime(job?.created_at || job?.createdAt || Date.now())}</Text>
       </View>
     </View>
   );
@@ -307,8 +319,8 @@ export const CaregiverJobCard = ({ job, onApply, onView, hasApplied, style }) =>
 const EmptyState = ({ title, subtitle }) => (
   <View style={styles.listEmptyContainer}>
     <Briefcase size={56} color="#E5E7EB" />
-    <Text style={styles.emptyTitle}>{title}</Text>
-    <Text style={styles.emptySubtitle}>{subtitle}</Text>
+    <Text style={styles.emptyTitle}>{String(title || '')}</Text>
+    <Text style={styles.emptySubtitle}>{String(subtitle || '')}</Text>
   </View>
 );
 
@@ -407,11 +419,11 @@ export default function JobsTab({
   }, []);
 
   const renderJobItem = useCallback(({ item }) => (
-    <SharedJobCard
+    <CaregiverJobCard
       job={item}
       onApply={() => onJobApply?.(item)}
-      onPress={() => onJobView?.(item)}
-      showActions={!applicationJobIds.has(item?.id || item?._id)}
+      onView={() => onJobView?.(item)}
+      hasApplied={applicationJobIds.has(item?.id || item?._id)}
     />
   ), [applicationJobIds, onJobApply, onJobView]);
 
@@ -420,11 +432,11 @@ export default function JobsTab({
       <View style={styles.summaryGrid}>
         {summaryMetrics.map(({ key, label, value, icon: Icon, accent }) => (
           <View key={key} style={styles.summaryCard}>
-            <View style={styles.summaryTitleRow}>
-              <Icon size={18} color={accent} />
-              <Text style={styles.summaryLabel}>{label}</Text>
+            <View style={styles.summaryIconContainer}>
+              <Icon size={20} color={accent} />
             </View>
             <Text style={styles.summaryValue}>{value}</Text>
+            <Text style={styles.summaryLabel}>{label}</Text>
           </View>
         ))}
       </View>
@@ -479,15 +491,15 @@ export default function JobsTab({
           isLoading
             ? renderSkeletons
             : () => (
-              <EmptyState
-                title={activeFilter === 'all' ? 'No jobs available' : 'No jobs match your filters'}
-                subtitle={
-                  activeFilter === 'all'
-                    ? 'Please check back later for new job postings.'
-                    : 'Try adjusting your filters to discover more opportunities.'
-                }
-              />
-            )
+                <EmptyState
+                  title={activeFilter === 'all' ? 'No jobs available' : 'No jobs match your filters'}
+                  subtitle={
+                    activeFilter === 'all'
+                      ? 'Please check back later for new job postings.'
+                      : 'Try adjusting your filters to discover more opportunities.'
+                  }
+                />
+              )
         }
         contentContainerStyle={styles.listContent}
         refreshing={refreshing || isLoading}

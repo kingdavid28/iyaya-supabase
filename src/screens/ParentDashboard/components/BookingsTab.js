@@ -316,18 +316,29 @@ const BookingsTab = ({
         style={{ flex: 1 }}
         data={filteredBookings}
         keyExtractor={(item, index) => item._id || item.id || `booking-${index}`}
-        renderItem={({ item }) => (
-          <BookingItem
-            booking={item}
-            user={item?.caregiverId || item?.caregiver || item?.caregiverProfile || item?.assignedCaregiver}
-            onCancelBooking={onCancelBooking}
-            onUploadPayment={onUploadPayment}
-            onViewBookingDetails={onViewBookingDetails}
-            onWriteReview={onWriteReview}
-            onMessageCaregiver={handleMessageCaregiver}
-            onCallCaregiver={handleCallCaregiver}
-          />
-        )}
+        renderItem={({ item }) => {
+          // Extract caregiver data properly
+          const caregiverData = item?.caregiverId || item?.caregiver || item?.caregiverProfile || item?.assignedCaregiver;
+          
+          console.log('🔍 BookingsTab - Booking item:', {
+            bookingId: item?.id || item?._id,
+            caregiverData: caregiverData,
+            caregiverKeys: caregiverData ? Object.keys(caregiverData) : 'none'
+          });
+          
+          return (
+            <BookingItem
+              booking={item}
+              user={caregiverData}
+              onCancelBooking={onCancelBooking}
+              onUploadPayment={onUploadPayment}
+              onViewBookingDetails={onViewBookingDetails}
+              onWriteReview={onWriteReview}
+              onMessageCaregiver={handleMessageCaregiver}
+              onCallCaregiver={handleCallCaregiver}
+            />
+          );
+        }}
         contentContainerStyle={[
           styles.bookingsList,
           filteredBookings.length === 0 && { flex: 1 }

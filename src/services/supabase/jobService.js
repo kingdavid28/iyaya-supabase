@@ -115,11 +115,7 @@ export class JobService extends SupabaseBase {
     try {
       let query = supabase
         .from('jobs')
-        .select(`
-          *,
-          users(name, email, phone, profile_image),
-          applications(id, caregiver_id, status, message, applied_at, created_at, updated_at)
-        `)
+        .select('*')
 
       if (filters.status) {
         query = query.eq('status', filters.status)
@@ -150,11 +146,7 @@ export class JobService extends SupabaseBase {
 
       const { data, error } = await supabase
         .from('jobs')
-        .select(`
-          *,
-          users(name, email, phone, profile_image),
-          applications(id, caregiver_id, status, message, applied_at, created_at, updated_at)
-        `)
+        .select('*')
         .eq('parent_id', clientId)
         .order('created_at', { ascending: false })
 

@@ -3,27 +3,51 @@ import { SupabaseBase, supabase } from './base'
 export class MessagingService extends SupabaseBase {
   async getOrCreateConversation(participant1, participant2) {
     try {
-      if (!participant1) {
-        throw new Error('Participant 1 ID is required')
-      }
-      if (!participant2) {
-        try {
-          const { data: { user } } = await supabase.auth.getUser()
-          if (user && user.id !== participant1) {
-            participant2 = user.id
-          } else {
-            throw new Error('Participant 2 ID is required')
-          }
-        } catch (authError) {
-          throw new Error('Participant 2 ID is required')
+      // If participant1 is missing, try to get current user from auth
+      if (!participant1 || participant1 === 'undefined' || participant1 === 'null') {
+        const currentUser = await this._getCurrentUser();
+        if (currentUser?.id) {
+          participant1 = currentUser.id;
+          console.log('🔄 Using current auth user as participant1:', participant1);
         }
+      }
+      
+      console.log('🔍 getOrCreateConversation called with:', { 
+        participant1, 
+        participant2,
+        participant1Type: typeof participant1,
+        participant2Type: typeof participant2,
+        participant1String: String(participant1),
+        participant2String: String(participant2)
+      });
+      
+      if (!participant1 || participant1 === 'undefined' || participant1 === 'null' || String(participant1) === 'undefined') {
+        console.error('❌ Invalid participant1:', participant1);
+        throw new Error(`Participant 1 ID is required. Received: ${participant1} (${typeof participant1})`)
+      }
+      
+      if (!participant2 || participant2 === 'undefined' || participant2 === 'null') {
+        const currentUser = await this._getCurrentUser()
+        if (!currentUser) {
+          throw new Error('User must be authenticated to create conversation')
+        }
+        if (currentUser.id === participant1) {
+          throw new Error('Cannot create conversation with yourself')
+        }
+        participant2 = currentUser.id
       }
       
       this._validateId(participant1, 'Participant 1 ID')
       this._validateId(participant2, 'Participant 2 ID')
       
       if (participant1 === participant2) {
-        throw new Error('Cannot create conversation with yourself')
+        console.error('❌ Attempted to create conversation with same user ID:', { participant1, participant2 })
+        throw new Error('Invalid conversation participants - cannot message yourself')
+      }
+      
+      if (!participant1 || !participant2) {
+        console.error('❌ Missing participant IDs:', { participant1, participant2 })
+        throw new Error('Both participant IDs are required for conversation')
       }
       
       let { data, error } = await supabase
@@ -61,16 +85,30 @@ export class MessagingService extends SupabaseBase {
       
       const { data, error } = await supabase
         .from('conversations')
-        .select(`
-          *,
-          participant1:users!conversations_participant_1_fkey(id, name, profile_image),
-          participant2:users!conversations_participant_2_fkey(id, name, profile_image)
-        `)
+        .select('*')
         .or(`participant_1.eq.${userId},participant_2.eq.${userId}`)
         .order('last_message_at', { ascending: false })
 
       if (error) throw error
-      return data || []
+      
+      // Get user details for other participants
+      const conversations = await Promise.all((data || []).map(async (conv) => {
+        const otherParticipantId = conv.participant_1 === userId ? conv.participant_2 : conv.participant_1
+        
+        // Fetch other participant's profile
+        const { data: otherUser } = await supabase
+          .from('users')
+          .select('id, name, profile_image')
+          .eq('id', otherParticipantId)
+          .single()
+        
+        return {
+          ...conv,
+          otherParticipant: otherUser || { id: otherParticipantId, name: 'User', profile_image: null }
+        }
+      }))
+      
+      return conversations
     } catch (error) {
       return this._handleError('getConversations', error)
     }
@@ -78,11 +116,20 @@ export class MessagingService extends SupabaseBase {
 
   async sendMessage(conversationId, senderId, content) {
     try {
+      // Get current user if senderId is missing
+      if (!senderId || senderId === 'undefined' || senderId === 'null') {
+        const currentUser = await this._getCurrentUser()
+        if (!currentUser?.id) {
+          throw new Error('User must be authenticated to send messages')
+        }
+        senderId = currentUser.id
+        console.log('🔄 Using current auth user as sender:', senderId)
+      }
+      
+      // Handle different conversation ID formats
       if (typeof conversationId === 'object' && conversationId !== null) {
         if (conversationId.id) {
           conversationId = conversationId.id
-        } else if (conversationId.conversationId) {
-          conversationId = conversationId.conversationId
         } else {
           throw new Error('Invalid conversation object - missing id property')
         }
@@ -90,6 +137,8 @@ export class MessagingService extends SupabaseBase {
         const [participant1, participant2] = conversationId.split('_')
         const conversation = await this.getOrCreateConversation(participant1, participant2)
         conversationId = conversation.id
+      } else if (!conversationId) {
+        throw new Error('Conversation ID is required')
       }
       
       this._validateId(conversationId, 'Conversation ID')
@@ -156,10 +205,7 @@ export class MessagingService extends SupabaseBase {
       
       const { data, error } = await supabase
         .from('messages')
-        .select(`
-          *,
-          sender:users!messages_sender_id_fkey(name, profile_image)
-        `)
+        .select('*')
         .eq('conversation_id', conversationId)
         .order('created_at', { ascending: true })
         .limit(limit)
@@ -173,6 +219,16 @@ export class MessagingService extends SupabaseBase {
 
   async markMessagesAsRead(conversationId, userId) {
     try {
+      // Get current user if userId is missing
+      if (!userId || userId === 'undefined' || userId === 'null') {
+        const currentUser = await this._getCurrentUser()
+        if (!currentUser?.id) {
+          console.warn('No authenticated user for markMessagesAsRead')
+          return { success: false }
+        }
+        userId = currentUser.id
+      }
+      
       if (typeof conversationId === 'object' && conversationId !== null) {
         if (conversationId.id) {
           conversationId = conversationId.id

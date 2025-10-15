@@ -11,7 +11,7 @@ const PostJobsTab = ({ onJobPosted }) => {
     if (onJobPosted) {
       onJobPosted(jobData);
     }
-    setShowJobModal(false);
+    // Modal will close itself, don't close here to avoid double-close
   };
 
   return (

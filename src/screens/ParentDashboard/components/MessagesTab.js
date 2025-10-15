@@ -48,14 +48,14 @@ const MessagesTab = ({ navigation, refreshing, onRefresh }) => {
       
       // Transform conversations for display
       const transformedConversations = conversations.map(conv => {
-        const otherParticipant = conv.participant_1 === userId ? conv.participant2 : conv.participant1;
+        const otherUser = conv.otherParticipant;
         return {
           id: conv.id,
-          name: otherParticipant?.name || 'User',
+          name: otherUser?.name || 'User',
           lastMessage: 'Tap to view messages',
           timestamp: conv.last_message_at,
-          avatar: otherParticipant?.profile_image,
-          participantId: otherParticipant?.id
+          avatar: otherUser?.profile_image,
+          participantId: otherUser?.id
         };
       });
       

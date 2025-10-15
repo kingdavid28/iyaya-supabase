@@ -1,20 +1,13 @@
 // UI Components - Modals
 export { default as BookingDetailsModal } from './BookingDetailsModal';
 export { default as BookingModal } from '../screens/ParentDashboard/modals/BookingModal';
-export { default as RequestInfoModal } from './ui/modals/RequestInfoModal';
-export { default as SettingsModal } from './ui/modals/SettingsModal';
+export { RequestInfoModal, SettingsModal } from '../shared/ui/modals';
 
 // UI Components - Feedback
-export { Toast } from './ui/feedback/Toast';
-export { default as PlaceholderImage } from './ui/feedback/PlaceholderImage';
-export { default as ProfileImage } from './ui/feedback/ProfileImage';
-export { default as RatingSystem } from './ui/feedback/RatingSystem';
-export { default as PesoSign } from './ui/feedback/PesoSign';
-export { default as NetworkStatus } from './ui/feedback/NetworkStatus';
+export { Toast, PlaceholderImage, ProfileImage, RatingSystem, PesoSign, NetworkStatus } from '../shared/ui/feedback';
 
 // UI Components - Inputs
-export { default as ValidatedInput } from './ui/inputs/ValidatedInput';
-export { ToggleSwitch } from './ui/inputs/ToggleSwitch';
+export { ValidatedInput, ToggleSwitch } from '../shared/ui/inputs';
 
 // Feature Components - Privacy
 export { default as PrivacyManager } from './features/privacy/PrivacyManager';

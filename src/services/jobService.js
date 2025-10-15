@@ -210,6 +210,23 @@ class JobService {
     }
   }
 
+  async updateJobPost(jobId, jobData) {
+    try {
+      // Import supabaseService dynamically to avoid circular imports
+      const { supabaseService } = await import('./supabase');
+      
+      console.log('📝 Updating job with ID:', jobId, 'Data:', jobData);
+      const result = await supabaseService.jobs.updateJob(jobId, jobData);
+      console.log('✅ Job updated successfully:', result);
+      
+      return { data: result };
+    } catch (error) {
+      logger.error('Update job post failed:', error);
+      console.error('❌ Job update error details:', error.message);
+      throw new Error(error.message || 'Failed to update job');
+    }
+  }
+
   async deleteJob(jobId) {
     try {
       const response = await this.makeJobRequest(`/${jobId}`, {
@@ -329,6 +346,7 @@ export const getAllJobs = (filters) => jobService.getAllJobs(filters);
 export const getJobById = (jobId) => jobService.getJobById(jobId);
 export const createJobPost = (jobData) => jobService.createJobPost(jobData);
 export const updateJob = (jobId, jobData) => jobService.updateJob(jobId, jobData);
+export const updateJobPost = (jobId, jobData) => jobService.updateJobPost(jobId, jobData);
 export const deleteJob = (jobId) => jobService.deleteJob(jobId);
 export const getMyJobs = (page, limit) => jobService.getMyJobs(page, limit);
 export const searchJobs = (query, filters) => jobService.searchJobs(query, filters);

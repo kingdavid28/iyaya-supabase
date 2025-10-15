@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, FlatList, TouchableOpacity, RefreshControl, Image, KeyboardAvoidingView, Platform } from 'react-native';
+import { View, Text, FlatList, TouchableOpacity, RefreshControl, Image, KeyboardAvoidingView, Platform, Alert } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Card } from 'react-native-paper';
 import { useAuth } from '../../../contexts/AuthContext';
@@ -37,12 +37,19 @@ const MessagesTab = ({ navigation, refreshing, onRefresh }) => {
         
         // Transform conversations for display
         const transformedConversations = conversations.map(conv => {
-          const otherParticipant = conv.participant_1 === userIdToUse ? conv.participant2 : conv.participant1;
+          console.log('🔄 Transforming conversation:', conv);
+          
+          const otherUser = conv.otherParticipant;
+          
+          console.log('🔍 Other participant info:', {
+            otherUser
+          });
+          
           return {
             id: conv.id,
-            parentId: otherParticipant?.id,
-            parentName: otherParticipant?.name || 'Parent',
-            parentAvatar: otherParticipant?.profile_image,
+            parentId: otherUser?.id,
+            parentName: otherUser?.name || 'Parent',
+            parentAvatar: otherUser?.profile_image,
             lastMessage: conv.last_message_preview || 'Tap to view messages',
             lastMessageTime: conv.last_message_at,
             isRead: true // Will be updated with actual read status
@@ -82,24 +89,42 @@ const MessagesTab = ({ navigation, refreshing, onRefresh }) => {
   };
 
   const handleConversationPress = async (conversation) => {
-    console.log(' MessagesTab: handleConversationPress called with:', {
+    console.log('🔍 MessagesTab: handleConversationPress called with:', {
       user: user,
       userId: user?.id || user?.uid,
       conversation: conversation
     });
 
-    // Mark messages as read when opening conversation
     const userIdToUse = user?.id || user?.uid;
-    if (userIdToUse && conversation.id) {
+    
+    if (!userIdToUse) {
+      Alert.alert('Error', 'User information not available');
+      return;
+    }
+    
+    if (!conversation.parentId) {
+      console.error('❌ Missing parentId in conversation:', conversation);
+      Alert.alert('Error', 'Conversation data incomplete');
+      return;
+    }
+
+    // Mark messages as read when opening conversation
+    if (conversation.id) {
       console.log('👁️ Marking messages as read for conversation:', conversation.id);
       await supabaseService.messaging.markMessagesAsRead(conversation.id, userIdToUse);
     }
 
+    console.log('🚀 Navigating to CaregiverChat with:', {
+      caregiverId: conversation.parentId,
+      caregiverName: conversation.parentName || 'Parent'
+    });
+
+    // Navigate to unified chat
     navigation.navigate('Chat', {
       userId: userIdToUse,
       userType: 'caregiver',
       targetUserId: conversation.parentId,
-      targetUserName: conversation.parentName,
+      targetUserName: conversation.parentName || 'Parent',
       targetUserType: 'parent'
     });
   };

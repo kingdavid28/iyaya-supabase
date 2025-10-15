@@ -5,6 +5,13 @@ export class NotificationService extends SupabaseBase {
     try {
       this._validateRequiredFields(notificationData, ['user_id', 'type', 'title', 'message'], 'createNotification')
       
+      // Ensure user is authenticated before creating notification
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) {
+        console.warn('No authenticated user for notification creation')
+        return null
+      }
+      
       const dbNotificationData = {
         user_id: notificationData.user_id,
         type: notificationData.type,
@@ -21,7 +28,14 @@ export class NotificationService extends SupabaseBase {
         .select()
         .single()
       
-      if (error) throw error
+      if (error) {
+        // Handle RLS policy violations gracefully
+        if (error.code === '42501') {
+          console.warn('RLS policy violation for notifications - user may not have permission')
+          return null
+        }
+        throw error
+      }
       
       console.log('✅ Notification created:', data)
       return data
@@ -120,9 +134,30 @@ export class NotificationService extends SupabaseBase {
       .subscribe()
   }
 
-  // Notification helpers
+  // Notification helpers with improved error handling
   async notifyNewMessage(senderId, recipientId, messageContent) {
     try {
+      // Validate inputs with detailed logging
+      if (!senderId || senderId === 'undefined' || senderId === 'null') {
+        console.warn('Invalid senderId for message notification:', { senderId, recipientId, messageContent })
+        return null
+      }
+      
+      if (!recipientId || recipientId === 'undefined' || recipientId === 'null') {
+        console.warn('Invalid recipientId for message notification:', { senderId, recipientId, messageContent })
+        return null
+      }
+      
+      if (!messageContent || typeof messageContent !== 'string') {
+        console.warn('Invalid messageContent for message notification:', { senderId, recipientId, messageContent })
+        return null
+      }
+      
+      if (senderId === recipientId) {
+        console.warn('Cannot send notification to self')
+        return null
+      }
+      
       const { userService } = await import('./userService')
       const senderProfile = await userService.getProfile(senderId)
       const senderName = senderProfile?.name || 'Someone'
@@ -146,17 +181,23 @@ export class NotificationService extends SupabaseBase {
 
   async notifyJobApplication(jobId, caregiverId, parentId) {
     try {
+      // Validate inputs
+      if (!jobId || !caregiverId || !parentId) {
+        console.warn('Invalid parameters for job application notification')
+        return null
+      }
+      
       const { userService } = await import('./userService')
       const caregiverProfile = await userService.getProfile(caregiverId)
       const caregiverName = caregiverProfile?.name || 'A caregiver'
       
-      const job = await supabase
+      const { data: job } = await supabase
         .from('jobs')
         .select('title')
         .eq('id', jobId)
         .single()
       
-      const jobTitle = job.data?.title || 'your job'
+      const jobTitle = job?.title || 'your job'
       
       return await this.createNotification({
         user_id: parentId,
@@ -178,6 +219,12 @@ export class NotificationService extends SupabaseBase {
 
   async notifyBookingRequest(bookingId, parentId, caregiverId) {
     try {
+      // Validate inputs
+      if (!bookingId || !parentId || !caregiverId) {
+        console.warn('Invalid parameters for booking request notification')
+        return null
+      }
+      
       const { userService } = await import('./userService')
       const parentProfile = await userService.getProfile(parentId)
       const parentName = parentProfile?.name || 'A parent'

@@ -5,7 +5,7 @@ import { StatusBar } from 'expo-status-bar';
 import * as SplashScreen from 'expo-splash-screen';
 
 // Core imports
-import AppProvider from '../core/providers/AppProvider';
+import AppProvider from '../providers/AppProvider';
 import AppIntegration from './AppIntegration';
 import PrivacyProvider from '../components/features/privacy/PrivacyManager';
 import ProfileDataProvider from '../components/features/privacy/ProfileDataManager';

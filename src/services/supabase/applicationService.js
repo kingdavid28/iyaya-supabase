@@ -34,8 +34,7 @@ export class ApplicationService extends SupabaseBase {
         .from('applications')
         .select(`
           *,
-          jobs(*),
-          users!applications_caregiver_id_fkey(name, email, phone)
+          jobs(*)
         `)
         .eq('caregiver_id', caregiverId)
         .order('applied_at', { ascending: false })
@@ -53,10 +52,7 @@ export class ApplicationService extends SupabaseBase {
       
       const { data, error } = await supabase
         .from('applications')
-        .select(`
-          *,
-          users!applications_caregiver_id_fkey(name, email, phone, profile_image)
-        `)
+        .select('*')
         .eq('job_id', jobId)
         .order('applied_at', { ascending: false })
       

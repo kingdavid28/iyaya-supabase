@@ -26,7 +26,7 @@ export default function StatusBadge({ status, showIcon = true, style }) {
         <Ionicons name={config.icon} size={14} color={config.text} style={{ marginRight: 4 }} />
       )}
       <Text style={{ color: config.text, fontSize: 12, fontWeight: '500' }}>
-        {status.charAt(0).toUpperCase() + status.slice(1)}
+        {String(status).charAt(0).toUpperCase() + String(status).slice(1)}
       </Text>
     </View>
   );

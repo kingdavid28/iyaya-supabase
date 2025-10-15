@@ -20,6 +20,7 @@ import { __DEV__ } from "../config/constants"
 import MessagesTab from './CaregiverDashboard/components/MessagesTab';
 import NotificationsTab from './CaregiverDashboard/components/NotificationsTab';
 import BookingsTab from './CaregiverDashboard/BookingsTab';
+import ApplicationsTab from './CaregiverDashboard/ApplicationsTab';
 
 import { 
   EmptyState, 
@@ -538,17 +539,13 @@ function CaregiverDashboard({ onLogout, route }) {
   const gridCardHeight = isAndroid ? undefined : 280
   
   const {
-    activeTab, setActiveTab: setActiveTabHook,
+    activeTab, setActiveTab,
     profile, setProfile,
     jobs, applications, setApplications, bookings,
     jobsLoading,
     loadProfile, fetchJobs, fetchApplications, fetchBookings
   } = useCaregiverDashboard();
   const { pendingRequests, notifications } = usePrivacy();
-  
-  const setActiveTab = setActiveTabHook ? setActiveTabHook : (() => {
-    console.warn('setActiveTab not available from useCaregiverDashboard');
-  });
   
   const [editProfileModalVisible, setEditProfileModalVisible] = useState(false)
   const [profileName, setProfileName] = useState("Ana Dela Cruz")
@@ -630,10 +627,9 @@ function CaregiverDashboard({ onLogout, route }) {
         const conversations = await supabaseService.messaging.getConversations(user.id);
         console.log('📨 Caregiver received conversations:', conversations.length);
         setParents(conversations.map(conv => {
-          const otherParticipant = conv.participant_1 === user.id ? conv.participant_2 : conv.participant_1;
-          const otherUser = conv.participant_1 === user.id ? conv.participant2 : conv.participant1;
+          const otherUser = conv.otherParticipant;
           return {
-            id: otherParticipant,
+            id: otherUser?.id,
             name: otherUser?.name || 'Parent',
             profileImage: otherUser?.profile_image || null,
             unreadCount: conv?.unread_count ?? conv?.unreadCount ?? 0
@@ -1544,43 +1540,23 @@ function CaregiverDashboard({ onLogout, route }) {
         )}
 
         {activeTab === "applications" && (
-          jobsLoading ? (
-            <View style={styles.loadingContainer}>
-              <ActivityIndicator size="large" color="#3B82F6" />
-              <Text style={styles.loadingText}>Loading applications...</Text>
-            </View>
-          ) : (
-            <ScrollView 
-              style={styles.content}
-              refreshControl={
-                <RefreshControl
-                  refreshing={refreshing}
-                  onRefresh={onRefresh}
-                  colors={['#3B82F6']}
-                  tintColor="#3B82F6"
-                />
+          <ApplicationsTab
+            applications={applications}
+            onViewJob={handleViewJob}
+            onWithdrawApplication={async (applicationId) => {
+              try {
+                await supabaseService.applications.updateApplicationStatus(applicationId, 'withdrawn');
+                fetchApplications();
+                showToast('Application withdrawn successfully', 'success');
+              } catch (error) {
+                console.error('Withdraw application failed:', error);
+                showToast('Failed to withdraw application', 'error');
               }
-            >
-              <View style={styles.section}>
-                {applications.length > 0 ? (
-                  (applications || []).map((application, index) => (
-                    <ApplicationCard 
-                      key={application.id || index} 
-                      application={application}
-                      onViewDetails={handleViewApplication}
-                      onMessage={handleMessageFamily}
-                    />
-                  ))
-                ) : (
-                  <EmptyState 
-                    icon="document-text" 
-                    title="No applications yet"
-                    subtitle="Apply to jobs to see them here"
-                  />
-                )}
-              </View>
-            </ScrollView>
-          )
+            }}
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            loading={jobsLoading}
+          />
         )}
 
         {activeTab === "bookings" && (
@@ -1852,31 +1828,59 @@ function CaregiverDashboard({ onLogout, route }) {
           animationType="slide"
         >
           <View style={styles.modalOverlay}>
-            <View style={styles.jobDetailsModal}>
+            <ScrollView style={styles.jobDetailsModal}>
               <View style={styles.jobDetailsContent}>
-                <Text style={styles.jobDetailsTitle}>{selectedJob.title}</Text>
-                <Text style={styles.jobDetailsFamily}>{selectedJob.family}</Text>
+                <View style={styles.jobDetailsHeader}>
+                  <Text style={styles.jobDetailsTitle}>{String(selectedJob.title || 'Childcare Position')}</Text>
+                  <Text style={styles.jobDetailsFamily}>{String(selectedJob.family || selectedJob.familyName || 'Family')}</Text>
+                  {selectedJob.urgent && (
+                    <View style={styles.urgentBadge}>
+                      <Text style={styles.urgentText}>URGENT</Text>
+                    </View>
+                  )}
+                </View>
                 
                 <View style={styles.jobDetailsInfo}>
                   <View style={styles.jobDetailsRow}>
                     <Ionicons name="location" size={16} color="#6B7280" />
-                    <Text style={styles.jobDetailsText}>{selectedJob.location}</Text>
+                    <Text style={styles.jobDetailsText}>{String(selectedJob.address || selectedJob.location || 'Location not specified')}</Text>
                   </View>
                   <View style={styles.jobDetailsRow}>
                     <Ionicons name="time" size={16} color="#6B7280" />
-                    <Text style={styles.jobDetailsText}>{selectedJob.schedule}</Text>
+                    <Text style={styles.jobDetailsText}>
+                      {String(selectedJob.schedule || selectedJob.time || selectedJob.workingHours || 'Flexible schedule')}
+                      {selectedJob.startTime && selectedJob.endTime ? ` (${String(selectedJob.startTime)} - ${String(selectedJob.endTime)})` : ''}
+                    </Text>
+                  </View>
+                  <View style={styles.jobDetailsRow}>
+                    <Ionicons name="calendar" size={16} color="#6B7280" />
+                    <Text style={styles.jobDetailsText}>{String(selectedJob.date ? new Date(selectedJob.date).toLocaleDateString() : 'Date flexible')}</Text>
+                  </View>
+                  <View style={styles.jobDetailsRow}>
+                    <Ionicons name="people" size={16} color="#6B7280" />
+                    <Text style={styles.jobDetailsText}>
+                      {String(selectedJob.childrenCount || selectedJob.children?.length || 1)} child{(selectedJob.childrenCount || selectedJob.children?.length || 1) > 1 ? 'ren' : ''}
+                      {selectedJob.childrenAges ? ` (${String(selectedJob.childrenAges)})` : ''}
+                    </Text>
                   </View>
                   <View style={styles.jobDetailsRow}>
                     <Ionicons name="cash" size={16} color="#059669" />
-                    <Text style={[styles.jobDetailsText, { color: '#059669', fontWeight: '600' }]}>₱{selectedJob.hourlyRate}/hr</Text>
+                    <Text style={[styles.jobDetailsText, { color: '#059669', fontWeight: '600' }]}>₱{String(selectedJob.hourlyRate || selectedJob.rate || 0)}/hr</Text>
                   </View>
                   {selectedJob.distance && (
                     <View style={styles.jobDetailsRow}>
                       <Ionicons name="navigate" size={16} color="#6B7280" />
-                      <Text style={styles.jobDetailsText}>{selectedJob.distance}</Text>
+                      <Text style={styles.jobDetailsText}>{String(selectedJob.distance)}</Text>
                     </View>
                   )}
                 </View>
+                
+                {selectedJob.description && (
+                  <View style={styles.jobDetailsSection}>
+                    <Text style={styles.jobDetailsSectionTitle}>Job Description</Text>
+                    <Text style={styles.jobDetailsDescription}>{String(selectedJob.description)}</Text>
+                  </View>
+                )}
                 
                 {Array.isArray(selectedJob.requirements) && selectedJob.requirements.length > 0 && (
                   <View style={styles.jobDetailsRequirements}>
@@ -1884,7 +1888,7 @@ function CaregiverDashboard({ onLogout, route }) {
                     {selectedJob.requirements.map((req, idx) => (
                       <View key={idx} style={styles.jobDetailsRequirementRow}>
                         <Ionicons name="checkmark-circle" size={14} color="#10B981" />
-                        <Text style={styles.jobDetailsRequirementText}>{req}</Text>
+                        <Text style={styles.jobDetailsRequirementText}>{String(req)}</Text>
                       </View>
                     ))}
                   </View>
@@ -1921,7 +1925,7 @@ function CaregiverDashboard({ onLogout, route }) {
                   )}
                 </View>
               </View>
-            </View>
+            </ScrollView>
           </View>
         </Modal>
       )}

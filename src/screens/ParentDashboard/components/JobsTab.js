@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { View, Text, FlatList, TouchableOpacity, Alert, ScrollView, RefreshControl, Image, ActivityIndicator } from 'react-native';
 import { Calendar, Users, Eye, CheckCircle, XCircle, Plus, MapPin, Clock, Briefcase } from 'lucide-react-native';
 import { styles, colors } from '../../styles/ParentDashboard.styles';
-import { applicationsAPI } from '../../../services';
+import { supabaseService } from '../../../services/supabase';
 import PesoSign from '../../../components/ui/feedback/PesoSign';
 import JobPostingModal from '../modals/JobPostingModal';
 import { getProfileImageUrl } from '../../../utils/imageUtils';
@@ -39,15 +39,20 @@ const JobsTab = ({
 
     setApplicationsLoading(true);
     try {
-      const response = await applicationsAPI.getForJob(jobId);
-      const rawApplications = Array.isArray(response?.data)
-        ? response.data
-        : (Array.isArray(response) ? response : []);
+      const rawApplications = await supabaseService.applications.getForJob(jobId);
+      
+      if (!rawApplications || !Array.isArray(rawApplications)) {
+        console.warn('Invalid applications data received:', rawApplications);
+        setApplications([]);
+        setSelectedJob(jobId);
+        return;
+      }
 
       const normalizedApplications = rawApplications.map((app) => {
         const caregiverProfile = app.caregiverProfile || app.caregiver || app.caregiverId || {};
         const jobInfo = app.job || app.jobs || {};
         const parentInfo = jobInfo?.parent || null;
+        const caregiverId = app.caregiver_id || caregiverProfile?.id;
 
         return {
           id: app.id || app._id,
@@ -57,7 +62,7 @@ const JobsTab = ({
           appliedAt: app.applied_at || app.appliedAt || app.created_at || app.createdAt || null,
           createdAt: app.created_at || app.createdAt || null,
           caregiverProfile,
-          caregiverId: caregiverProfile?.id || app.caregiver_id,
+          caregiverId,
           job: jobInfo,
           jobParent: parentInfo,
         };
@@ -80,7 +85,7 @@ const JobsTab = ({
     }
 
     try {
-      await applicationsAPI.updateStatus(applicationId, action);
+      await supabaseService.applications.updateApplicationStatus(applicationId, action);
       Alert.alert(
         'Success',
         `Application ${action} successfully`,
@@ -123,8 +128,19 @@ const JobsTab = ({
 
   // Use dedicated JobCard component with proper handlers
   const handleJobPress = (job) => {
-    // Handle job details view
-    console.log('View job details:', job.id);
+    Alert.alert(
+      job.title || 'Job Details',
+      `Location: ${job.location || 'Not specified'}\n` +
+      `Rate: ₱${job.hourlyRate || job.rate || 'Negotiable'}/hr\n` +
+      `Schedule: ${job.workingHours || job.schedule || 'Flexible'}\n` +
+      `Children: ${job.childrenAges || 'Details available'}\n` +
+      `Status: ${job.status || 'Active'}\n\n` +
+      `${job.description || 'No description provided'}`,
+      [
+        { text: 'Close', style: 'cancel' },
+        { text: 'Edit Job', onPress: () => onEditJob?.(job) },
+      ]
+    );
   };
 
   const handleJobUpdate = () => {
@@ -218,7 +234,13 @@ const JobsTab = ({
 
         <TouchableOpacity
           style={styles.viewProfileButton}
-          onPress={() => onViewApplicant(item.caregiverId)}
+          onPress={() => {
+            if (!item.caregiverId) {
+              Alert.alert('Error', 'Caregiver information not available');
+              return;
+            }
+            onViewApplicant(item.caregiverId);
+          }}
           activeOpacity={0.7}
         >
           <Text style={styles.viewProfileButtonText}>View Profile</Text>
@@ -319,6 +341,7 @@ const JobsTab = ({
                   job={job} 
                   onPress={() => handleJobPress(job)}
                   onUpdate={handleJobUpdate}
+                  onEdit={onEditJob}
                 />
               ))
             ) : (

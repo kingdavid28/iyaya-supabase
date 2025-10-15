@@ -9,8 +9,16 @@ export { LoadingSpinner } from './feedback/LoadingSpinner';
 export { QuickStat, QuickAction } from './QuickComponents';
 export { default as NotificationBadge } from './NotificationBadge';
 
-// Form Components
+// Feedback Components
+export * from './feedback';
 
+// Input Components
+export * from './inputs';
+
+// Modal Components
+export * from './modals';
+
+// Form Components
 export { default as FormTextArea } from './forms/FormTextArea';
 
 // Utilities - Import from existing comprehensive utils

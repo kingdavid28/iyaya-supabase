@@ -29,12 +29,36 @@ import { formatDistanceToNow } from 'date-fns';
 import { getProfileImageUrl } from '../../../utils/imageUtils';
 import { useRealtimeApplications } from '../../../hooks/useSupabaseRealtime';
 
-const JobApplications = ({ jobId, onViewApplicant }) => {
+const JobApplications = ({ route, navigation }) => {
   const { user } = useAuth();
-  const [applications, setApplications] = useState([]);
+  const { jobId, jobTitle, applications: initialApplications = [] } = route.params || {};
+  const [applications, setApplications] = useState(initialApplications);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [selectedTab, setSelectedTab] = useState('all'); // 'all', 'new', 'reviewed'
+
+  const handleViewApplicant = (caregiverId, startChat = false) => {
+    console.log('🔍 handleViewApplicant called with:', { caregiverId, startChat, currentUserId: user?.id });
+    
+    if (!caregiverId) {
+      Alert.alert('Error', 'Caregiver information not available');
+      return;
+    }
+    
+    if (caregiverId === user?.id) {
+      Alert.alert('Error', 'Cannot start conversation with yourself');
+      return;
+    }
+    
+    if (startChat) {
+      navigation.navigate('CaregiverChat', { 
+        caregiverId,
+        caregiverName: 'Caregiver' // Will be updated in chat screen
+      });
+    } else {
+      navigation.navigate('CaregiverProfile', { caregiverId });
+    }
+  };
 
   // Fetch job applications via REST and setup real-time
   useEffect(() => {
@@ -46,16 +70,28 @@ const JobApplications = ({ jobId, onViewApplicant }) => {
         const res = await applicationsAPI.getForJob(jobId);
         const raw = res?.data || [];
         // Normalize shape to align with previous UI expectations
-        const mapped = raw.map((a) => ({
-          id: a._id || a.id,
-          jobId: a.jobId?._id || a.jobId,
-          caregiverId: a.caregiverId?._id || a.caregiverId,
-          caregiver: a.caregiverId || a.caregiver || {},
-          message: a.message,
-          status: a.status,
-          appliedAt: a.createdAt ? new Date(a.createdAt) : null,
-          createdAt: a.createdAt,
-        }));
+        const mapped = raw.map((a) => {
+          // Extract caregiver ID properly
+          const caregiverId = a.caregiverId?._id || a.caregiverId?.id || a.caregiverId || a.caregiver?.id || a.caregiver?._id;
+          const caregiverData = (typeof a.caregiverId === 'object' ? a.caregiverId : a.caregiver) || {};
+          
+          console.log('🔍 Application mapping:', {
+            rawCaregiverId: a.caregiverId,
+            extractedCaregiverId: caregiverId,
+            caregiverData: caregiverData
+          });
+          
+          return {
+            id: a._id || a.id,
+            jobId: a.jobId?._id || a.jobId,
+            caregiverId: caregiverId,
+            caregiver: caregiverData,
+            message: a.message,
+            status: a.status,
+            appliedAt: a.createdAt ? new Date(a.createdAt) : null,
+            createdAt: a.createdAt,
+          };
+        });
 
         // Client-side filter based on selectedTab
         const filtered = mapped.filter((a) => {
@@ -157,15 +193,15 @@ const JobApplications = ({ jobId, onViewApplicant }) => {
             </View>
             <View style={styles.applicantDetails}>
               <Text style={styles.applicantName}>
-                {item.caregiver?.displayName || item.caregiver?.name || 'Anonymous Caregiver'}
+                {String(item.caregiver?.displayName || item.caregiver?.name || 'Anonymous Caregiver')}
               </Text>
               <Text style={styles.appliedDate}>
-                Applied {appliedAgo}
+                Applied {String(appliedAgo)}
               </Text>
               {item.caregiver?.rating && (
                 <View style={styles.ratingContainer}>
                   <Star size={12} color="#F59E0B" fill="#F59E0B" />
-                  <Text style={styles.ratingText}>{item.caregiver.rating.toFixed(1)}</Text>
+                  <Text style={styles.ratingText}>{String(item.caregiver.rating.toFixed(1))}</Text>
                 </View>
               )}
             </View>
@@ -174,7 +210,7 @@ const JobApplications = ({ jobId, onViewApplicant }) => {
           <View style={[styles.statusBadge, { backgroundColor: statusInfo.bgColor }]}>
             {statusInfo.icon}
             <Text style={[styles.statusText, { color: statusInfo.color }]}>
-              {statusInfo.label}
+              {String(statusInfo.label)}
             </Text>
           </View>
         </View>
@@ -182,7 +218,7 @@ const JobApplications = ({ jobId, onViewApplicant }) => {
         {item.message && (
           <View style={styles.messageContainer}>
             <Text style={styles.applicationMessage} numberOfLines={3}>
-              "{item.message}"
+              "{String(item.message)}"
             </Text>
           </View>
         )}
@@ -190,7 +226,7 @@ const JobApplications = ({ jobId, onViewApplicant }) => {
         <View style={styles.applicationActions}>
           <TouchableOpacity 
             style={styles.viewProfileButton}
-            onPress={() => onViewApplicant(item.caregiverId)}
+            onPress={() => handleViewApplicant(item.caregiverId)}
             activeOpacity={0.7}
           >
             <Text style={styles.viewProfileText}>View Full Profile</Text>
@@ -241,7 +277,7 @@ const JobApplications = ({ jobId, onViewApplicant }) => {
               
               <TouchableOpacity 
                 style={[styles.actionBtn, styles.messageBtn]}
-                onPress={() => onViewApplicant(item.caregiverId, true)}
+                onPress={() => handleViewApplicant(item.caregiverId, true)}
                 activeOpacity={0.8}
               >
                 <MessageCircle size={16} color="#3B82F6" />
@@ -263,7 +299,7 @@ const JobApplications = ({ jobId, onViewApplicant }) => {
             <View style={styles.contactButtonsContainer}>
               <TouchableOpacity 
                 style={[styles.contactBtn, styles.messageContactBtn]}
-                onPress={() => onViewApplicant(item.caregiverId, true)}
+                onPress={() => handleViewApplicant(item.caregiverId, true)}
                 activeOpacity={0.8}
               >
                 <MessageCircle size={16} color="#3B82F6" />
@@ -339,7 +375,7 @@ const JobApplications = ({ jobId, onViewApplicant }) => {
           {applications.some(app => app.status === 'pending') && selectedTab !== 'new' && (
             <View style={styles.newBadge}>
               <Text style={styles.newBadgeText}>
-                {applications.filter(app => app.status === 'pending').length}
+                {String(applications.filter(app => app.status === 'pending').length)}
               </Text>
             </View>
           )}

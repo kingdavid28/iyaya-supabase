@@ -6,7 +6,6 @@ import {
   FlatList,
   KeyboardAvoidingView,
   Platform,
-  SafeAreaView,
   StatusBar,
   StyleSheet,
   Text,
@@ -14,30 +13,31 @@ import {
   TouchableOpacity,
   View
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAuth } from '../contexts/AuthContext';
 import { messagingService, notificationService } from '../services/supabase';
 
 const CHAT_THEMES = {
   parent: {
+    headerGradient: ['#8B5CF6', '#7C3AED', '#6D28D9'],
+    primary: '#8B5CF6',
+    primaryLight: '#A78BFA',
+    primaryDark: '#7C3AED',
+    surface: '#FFFFFF',
+    surfaceTint: '#F5F3FF',
+    accent: '#EDE9FE',
+    textPrimary: '#5B21B6',
+    textSecondary: '#374151',
+  },
+  caregiver: {
     headerGradient: ['#3B82F6', '#2563EB', '#1D4ED8'],
     primary: '#2563EB',
     primaryLight: '#60A5FA',
     primaryDark: '#1D4ED8',
     surface: '#FFFFFF',
-    surfaceTint: '#F0F7FF',
-    accent: '#EFF6FF',
-    textPrimary: '#1E3A8A',
-    textSecondary: '#374151',
-  },
-  caregiver: {
-    headerGradient: ['#EC4899', '#DB2777', '#BE185D'],
-    primary: '#DB2777',
-    primaryLight: '#F472B6',
-    primaryDark: '#BE185D',
-    surface: '#FFFFFF',
-    surfaceTint: '#FDF2F8',
-    accent: '#FCE7F3',
-    textPrimary: '#831843',
+    surfaceTint: '#EFF6FF',
+    accent: '#DBEAFE',
+    textPrimary: '#1E40AF',
     textSecondary: '#374151',
   },
 };
@@ -96,7 +96,7 @@ const ChatScreen = ({ route, navigation }) => {
       let convId = conversationId;
       
       if (!convId) {
-        const conversation = await messagingService.getOrCreateConversation(userId, targetUserId);
+        const conversation = await messagingService.getOrCreateConversation(user?.id || userId, targetUserId);
         convId = conversation.id;
         setConversationId(convId);
       }
@@ -115,7 +115,7 @@ const ChatScreen = ({ route, navigation }) => {
       const transformedMessages = messagesData.map(transformMessage);
       setMessages(transformedMessages);
       
-      await messagingService.markMessagesAsRead(convId, userId);
+      await messagingService.markMessagesAsRead(convId, user?.id || userId);
       
       setTimeout(scrollToBottom, 100);
     } catch (error) {
@@ -134,7 +134,7 @@ const ChatScreen = ({ route, navigation }) => {
       name: message.sender?.name || 'User',
       avatar: message.sender?.profile_image
     },
-    isOwn: message.sender_id === userId
+    isOwn: message.sender_id === user?.id || message.sender_id === userId
   });
 
   const sendMessage = async () => {
@@ -142,10 +142,15 @@ const ChatScreen = ({ route, navigation }) => {
 
     try {
       const messageText = newMessage.trim();
+      const senderId = user?.id || userId;
       setNewMessage('');
 
-      await messagingService.sendMessage(conversationId, userId, messageText);
-      await notificationService.notifyNewMessage(userId, targetUserId, messageText);
+      await messagingService.sendMessage(conversationId, senderId, messageText);
+      
+      // Only send notification if we have valid recipient
+      if (targetUserId && targetUserId !== senderId) {
+        await notificationService.notifyNewMessage(senderId, targetUserId, messageText);
+      }
       
     } catch (error) {
       console.error('Error sending message:', error);
@@ -240,7 +245,7 @@ const ChatScreen = ({ route, navigation }) => {
             </View>
             <View style={styles.headerTextContainer}>
               <Text style={styles.headerName} numberOfLines={1}>
-                {targetUserName}
+                {targetUserName || 'Chat'}
               </Text>
               <View style={styles.roleBadge}>
                 <Ionicons

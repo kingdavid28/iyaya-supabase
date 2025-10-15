@@ -98,9 +98,41 @@ const BookingItem = ({
   };
 
   const handleMessagePress = () => {
-    if (onMessageCaregiver && user) {
-      onMessageCaregiver(user);
+    console.log('🔍 BookingItem - Message button pressed');
+    console.log('🔍 BookingItem - User data:', user);
+    console.log('🔍 BookingItem - Booking data:', booking);
+    
+    if (!onMessageCaregiver) {
+      console.warn('⚠️ BookingItem - onMessageCaregiver not provided');
+      return;
     }
+    
+    // Extract caregiver info from user prop or booking data
+    const caregiverData = user || booking?.caregiver || booking?.caregiverId || booking?.assignedCaregiver;
+    
+    if (!caregiverData) {
+      console.warn('⚠️ BookingItem - No caregiver data available');
+      Alert.alert('Error', 'Caregiver information not available');
+      return;
+    }
+    
+    // Create normalized caregiver object
+    const normalizedCaregiver = {
+      _id: caregiverData._id || caregiverData.id || caregiverData.caregiver_id,
+      id: caregiverData.id || caregiverData._id || caregiverData.caregiver_id,
+      name: caregiverData.name || caregiverData.caregiver_name || 'Caregiver',
+      avatar: caregiverData.avatar || caregiverData.profileImage || caregiverData.profile_image
+    };
+    
+    console.log('🔍 BookingItem - Normalized caregiver:', normalizedCaregiver);
+    
+    if (!normalizedCaregiver._id && !normalizedCaregiver.id) {
+      console.warn('⚠️ BookingItem - No valid caregiver ID found');
+      Alert.alert('Error', 'Caregiver ID not available');
+      return;
+    }
+    
+    onMessageCaregiver(normalizedCaregiver);
   };
 
 

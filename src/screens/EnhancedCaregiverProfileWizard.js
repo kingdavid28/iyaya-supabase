@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   View,
   Text,
@@ -36,12 +36,12 @@ import * as DocumentPicker from 'expo-document-picker';
 import * as FileSystem from 'expo-file-system/legacy';
 import * as Location from 'expo-location';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import CustomDateTimePicker from '../shared/ui/inputs/DateTimePicker';
-import TimePicker from '../shared/ui/inputs/TimePicker';
+import { DateTimePicker, TimePicker } from '../shared/ui/inputs';
 import { useAuth } from '../contexts/AuthContext';
 import { VALIDATION, CURRENCY, FEATURES } from '../config/constants';
 import { styles } from './styles/EnhancedCaregiverProfileWizard.styles';
 import { getCurrentDeviceLocation, searchLocation, validateLocation, formatLocationForDisplay } from '../utils/locationUtils';
+
 import { handleUploadError } from '../utils/imageUploadUtils';
 import { supabase } from '../config/supabase';
 import { supabaseService } from '../services/supabase';
@@ -329,7 +329,7 @@ const handleProfileImageUpload = async () => {
     return Object.keys(newErrors).length === 0;
   };
 
-  const updateFormData = (field, value) => {
+  const updateFormData = useCallback((field, value) => {
     if (field.includes('.')) {
       const [parent, child] = field.split('.');
       setFormData(prev => ({
@@ -343,8 +343,7 @@ const handleProfileImageUpload = async () => {
       setFormData(prev => ({ ...prev, [field]: value }));
     }
     setTouched(prev => ({ ...prev, [field]: true }));
-    validateField(field, value);
-  };
+  }, []);
 
   // Optimized portfolio image upload using Supabase
   const handlePortfolioImageUpload = async () => {
@@ -653,13 +652,13 @@ const handleProfileImageUpload = async () => {
                 styles.ageCareLabel,
                 formData.ageCareRanges.includes(range.key) && styles.ageCareSelectedText
               ]}>
-                {range.label}
+                {String(range.label)}
               </Text>
               {formData.ageCareRanges.includes(range.key) && (
                 <Ionicons name="checkmark-circle" size={24} color="#6366f1" />
               )}
             </View>
-            <Text style={styles.ageCareDescription}>{range.description}</Text>
+            <Text style={styles.ageCareDescription}>{String(range.description)}</Text>
           </TouchableOpacity>
         ))}
       </View>
@@ -695,7 +694,7 @@ const handleProfileImageUpload = async () => {
           style={styles.uploadButton}
           icon="camera"
         >
-          Add Portfolio Photo ({formData.portfolio.images.length}/{VALIDATION.PORTFOLIO_MAX_IMAGES})
+          Add Portfolio Photo ({String(formData.portfolio.images.length)}/{String(VALIDATION.PORTFOLIO_MAX_IMAGES)})
         </Button>
       </View>
 
@@ -704,7 +703,7 @@ const handleProfileImageUpload = async () => {
           <View key={index} style={styles.portfolioItem}>
             <Image source={{ uri: image.url }} style={styles.portfolioImage} />
             <Text style={styles.portfolioCaption} numberOfLines={2}>
-              {image.caption || 'No caption'}
+              {String(image.caption || 'No caption')}
             </Text>
             <IconButton
               icon="close"
@@ -780,14 +779,14 @@ const handleProfileImageUpload = async () => {
 
       <View style={styles.emergencyContactsList}>
         <Text style={styles.formSectionTitle}>
-          Emergency Contacts ({formData.emergencyContacts.length})
+          Emergency Contacts ({String(formData.emergencyContacts.length)})
         </Text>
         
         {formData.emergencyContacts.map((contact, index) => (
           <Card key={contact.id || index} style={styles.emergencyContactCard}>
             <Card.Content>
               <View style={styles.emergencyContactHeader}>
-                <Text style={styles.emergencyContactName}>{contact.name}</Text>
+                <Text style={styles.emergencyContactName}>{String(contact.name)}</Text>
                 <IconButton
                   icon="close"
                   size={20}
@@ -795,10 +794,10 @@ const handleProfileImageUpload = async () => {
                 />
               </View>
               <Text style={styles.emergencyContactDetail}>
-                {contact.relationship} • {contact.phone}
+                {String(contact.relationship)} • {String(contact.phone)}
               </Text>
               {contact.email && (
-                <Text style={styles.emergencyContactDetail}>{contact.email}</Text>
+                <Text style={styles.emergencyContactDetail}>{String(contact.email)}</Text>
               )}
             </Card.Content>
           </Card>
@@ -857,7 +856,7 @@ const handleProfileImageUpload = async () => {
               loading={loading}
               style={styles.backgroundCheckButton}
             >
-              {formData.backgroundCheck.requestBackgroundCheck ? 'Background Check Requested' : 'Request Background Check'}
+              {String(formData.backgroundCheck.requestBackgroundCheck ? 'Background Check Requested' : 'Request Background Check')}
             </Button>
           </View>
         </Card.Content>
@@ -957,7 +956,7 @@ const handleProfileImageUpload = async () => {
     if (changed) {
       updateFormData('certifications', normalizedCerts);
     }
-  }, [formData.certifications, updateFormData]);
+  }, []);
 
   const showSnackbar = (message) => {
     setSnackbarMessage(message);
@@ -1072,6 +1071,7 @@ const handleProfileImageUpload = async () => {
         .filter(v => ALLOWED_AGE_CARE_ENUMS.includes(v));
 
       const normalizedDocuments = (formData.documents || []).map(doc => {
+        if (!doc || typeof doc !== 'object') return null;
         const frontendType = typeof doc.type === 'string' ? doc.type : '';
         const mappedType = DOCUMENT_TYPE_MAP[frontendType] || 'other';
         return {
@@ -1079,7 +1079,7 @@ const handleProfileImageUpload = async () => {
           type: mappedType,
           name: doc.name || doc.label || doc.fileName || 'Document',
         };
-      });
+      }).filter(Boolean);
 
       // Split data between users table and caregiver_profiles table
       const userProfileData = {
@@ -1164,17 +1164,27 @@ const handleProfileImageUpload = async () => {
       console.error('❌ Profile submission failed:', error);
       
       let errorMessage = 'Failed to save profile. Please try again.';
-      if (error.response?.status === 404) {
-        errorMessage = 'Profile endpoint not found. Please check backend.';
-      } else if (error.response?.status === 401 || error.message.includes('401')) {
-        errorMessage = 'Session expired. Please login again.';
-        setTimeout(() => {
-          navigation.navigate('Welcome');
-        }, 2000);
-      } else if (error.response?.data?.message) {
-        errorMessage = error.response.data.message;
-      } else if (error.message) {
-        errorMessage = error.message;
+      
+      try {
+        if (error?.response?.status === 404) {
+          errorMessage = 'Profile endpoint not found. Please check backend.';
+        } else if (error?.response?.status === 401 || (error?.message && error.message.includes('401'))) {
+          errorMessage = 'Session expired. Please login again.';
+          setTimeout(() => {
+            if (navigation?.navigate) {
+              navigation.navigate('Welcome');
+            }
+          }, 2000);
+        } else if (error?.response?.data?.message && typeof error.response.data.message === 'string') {
+          errorMessage = error.response.data.message;
+        } else if (error?.message && typeof error.message === 'string') {
+          errorMessage = error.message;
+        } else if (error?.code) {
+          errorMessage = `Error code: ${error.code}. Please try again.`;
+        }
+      } catch (parseError) {
+        console.error('Error parsing error message:', parseError);
+        errorMessage = 'An unexpected error occurred. Please try again.';
       }
       
       Alert.alert('Submission Failed', errorMessage);
@@ -1187,10 +1197,10 @@ const handleProfileImageUpload = async () => {
     <View style={styles.progressContainer}>
       <View style={styles.progressHeader}>
         <Text style={styles.progressTitle}>
-          Step {currentStep + 1} of {ENHANCED_STEPS.length}
+          Step {String(currentStep + 1)} of {String(ENHANCED_STEPS.length)}
         </Text>
         <Text style={styles.progressSubtitle}>
-          {ENHANCED_STEPS[currentStep].title}
+          {String(ENHANCED_STEPS[currentStep].title)}
         </Text>
         {autoSaving && (
           <View style={styles.autoSaveIndicator}>
@@ -1230,9 +1240,7 @@ const handleProfileImageUpload = async () => {
                 <View style={styles.profileImageContainer}>
                   <Image 
                     source={{ 
-                      uri: formData.profileImage.startsWith('/') 
-                        ? `${getCurrentSocketURL() || ''}${formData.profileImage}` 
-                        : formData.profileImage,
+                      uri: formData.profileImage,
                       cache: 'reload'
                     }}
                     style={styles.profileImageDisplay}
@@ -1532,7 +1540,7 @@ const handleProfileImageUpload = async () => {
         </View>
 
         <View style={styles.selectedSkills}>
-          <Text style={styles.selectedTitle}>Your Skills ({formData.skills.length}):</Text>
+          <Text style={styles.selectedTitle}>Your Skills ({String(formData.skills.length)}):</Text>
           <View style={styles.chipContainer}>
             {formData.skills.map((skill) => (
               <Chip
@@ -1589,7 +1597,7 @@ const handleProfileImageUpload = async () => {
         </View>
 
         <View style={styles.selectedSkills}>
-          <Text style={styles.selectedTitle}>Your Certifications ({formData.certifications.length}):</Text>
+          <Text style={styles.selectedTitle}>Your Certifications ({String(formData.certifications.length)}):</Text>
           <View style={styles.certificationsContainer}>
             {formData.certifications.map((cert, index) => {
               const certName = typeof cert === 'string' ? cert : (cert?.name || cert?.title || 'Unnamed Certificate');
@@ -1604,7 +1612,7 @@ const handleProfileImageUpload = async () => {
                   <Card.Content>
                     <View style={styles.certificationHeader}>
                       <Text style={styles.certificationName}>
-                        {typeof cert === 'string' ? cert : (cert?.name || cert?.title || 'Unnamed Certificate')}
+                        {String(typeof cert === 'string' ? cert : (cert?.name || cert?.title || 'Unnamed Certificate'))}
                       </Text>
                       <IconButton
                         icon="close"
@@ -1694,7 +1702,7 @@ const handleProfileImageUpload = async () => {
                   >
                     <Ionicons name="location-outline" size={20} color="#6366f1" />
                     <Text style={styles.searchResultText}>
-                      {result.address?.formatted || 'Unknown location'}
+                      {String(result.address?.formatted || 'Unknown location')}
                     </Text>
                   </TouchableOpacity>
                 ))}
@@ -1769,7 +1777,7 @@ const handleProfileImageUpload = async () => {
         <View style={styles.coordinatesDisplay}>
           <Ionicons name="location" size={16} color="#6366f1" />
           <Text style={styles.coordinatesText}>
-            GPS: {formData.address.coordinates.latitude?.toFixed(6) || 'N/A'}, {formData.address.coordinates.longitude?.toFixed(6) || 'N/A'}
+            GPS: {String(formData.address.coordinates.latitude?.toFixed(6) || 'N/A')}, {String(formData.address.coordinates.longitude?.toFixed(6) || 'N/A')}
           </Text>
         </View>
       )}
@@ -1793,7 +1801,7 @@ const handleProfileImageUpload = async () => {
               <Card.Content>
                 <View style={styles.documentHeader}>
                   <Text style={styles.documentTitle}>
-                    {docType.label}
+                    {String(docType.label)}
                     {docType.required && <Text style={styles.requiredText}> *</Text>}
                   </Text>
                   {existingDoc && (
@@ -1801,13 +1809,13 @@ const handleProfileImageUpload = async () => {
                   )}
                 </View>
                 
-                <Text style={styles.documentDescription}>{docType.description}</Text>
+                <Text style={styles.documentDescription}>{String(docType.description)}</Text>
                 
                 {existingDoc ? (
                   <View style={styles.uploadedDocument}>
                     <View style={styles.documentInfo}>
                       <Ionicons name="document-text" size={20} color="#6366f1" />
-                      <Text style={styles.documentFileName}>{existingDoc.fileName}</Text>
+                      <Text style={styles.documentFileName}>{String(existingDoc.fileName)}</Text>
                     </View>
                     <View style={styles.documentActions}>
                       {existingDoc.verified && (
@@ -1832,7 +1840,7 @@ const handleProfileImageUpload = async () => {
                     style={styles.uploadButton}
                     icon="upload"
                   >
-                    Upload {docType.label}
+                    Upload {String(docType.label)}
                   </Button>
                 )}
               </Card.Content>
@@ -1844,11 +1852,11 @@ const handleProfileImageUpload = async () => {
       <View style={styles.documentsSummary}>
         <Text style={styles.summaryTitle}>Upload Summary</Text>
         <Text style={styles.summaryText}>
-          {formData.documents.length} of {DOCUMENT_TYPES.length} document types uploaded
+          {String(formData.documents.length)} of {String(DOCUMENT_TYPES.length)} document types uploaded
         </Text>
         <Text style={styles.summarySubtext}>
-          Required documents: {DOCUMENT_TYPES.filter(dt => dt.required).length} | 
-          Uploaded required: {formData.documents.filter(doc => DOCUMENT_TYPES.find(dt => dt.key === doc.type && dt.required)).length}
+          Required documents: {String(DOCUMENT_TYPES.filter(dt => dt.required).length)} | 
+          Uploaded required: {String(formData.documents.filter(doc => DOCUMENT_TYPES.find(dt => dt.key === doc.type && dt.required)).length)}
         </Text>
       </View>
     </View>
@@ -1882,7 +1890,7 @@ const handleProfileImageUpload = async () => {
                 styles.dayButtonText,
                 formData.availability.days.includes(day) && styles.dayButtonTextSelected
               ]}>
-                {day.substring(0, 3)}
+                {String(day.substring(0, 3))}
               </Text>
             </TouchableOpacity>
           ))}
@@ -1968,9 +1976,7 @@ const handleProfileImageUpload = async () => {
             {formData.profileImage && !profileImageError ? (
               <Image 
                 source={{ 
-                  uri: formData.profileImage.startsWith('/') 
-                    ? `${getCurrentSocketURL()}${formData.profileImage}` 
-                    : formData.profileImage,
+                  uri: formData.profileImage,
                   cache: 'reload'
                 }}
                 style={styles.reviewImage}
@@ -1987,51 +1993,51 @@ const handleProfileImageUpload = async () => {
           
           <View style={styles.reviewItem}>
             <Text style={styles.reviewLabel}>Name:</Text>
-            <Text style={styles.reviewValue}>{formData.name}</Text>
+            <Text style={styles.reviewValue}>{String(formData.name)}</Text>
           </View>
           <View style={styles.reviewItem}>
             <Text style={styles.reviewLabel}>Email:</Text>
-            <Text style={styles.reviewValue}>{formData.email}</Text>
+            <Text style={styles.reviewValue}>{String(formData.email)}</Text>
           </View>
           <View style={styles.reviewItem}>
             <Text style={styles.reviewLabel}>Phone:</Text>
-            <Text style={styles.reviewValue}>{formData.phone}</Text>
+            <Text style={styles.reviewValue}>{String(formData.phone)}</Text>
           </View>
           <View style={styles.reviewItem}>
             <Text style={styles.reviewLabel}>Experience:</Text>
             <Text style={styles.reviewValue}>
-              {formData.experience?.years || 0} years, {formData.experience?.months || 0} months
+              {String(formData.experience?.years || 0)} years, {String(formData.experience?.months || 0)} months
             </Text>
           </View>
           <View style={styles.reviewItem}>
             <Text style={styles.reviewLabel}>Hourly Rate:</Text>
-            <Text style={styles.reviewValue}>{CURRENCY.SYMBOL}{formData.hourlyRate}</Text>
+            <Text style={styles.reviewValue}>{String(CURRENCY.SYMBOL)}{String(formData.hourlyRate)}</Text>
           </View>
           <View style={styles.reviewItem}>
             <Text style={styles.reviewLabel}>Location:</Text>
             <Text style={styles.reviewValue}>
-              {formatLocationForDisplay(formData.address)}
+              {String(formatLocationForDisplay(formData.address))}
             </Text>
           </View>
           <View style={styles.reviewItem}>
             <Text style={styles.reviewLabel}>Skills:</Text>
-            <Text style={styles.reviewValue}>{formData.skills.join(', ')}</Text>
+            <Text style={styles.reviewValue}>{String(formData.skills.join(', '))}</Text>
           </View>
           <View style={styles.reviewItem}>
             <Text style={styles.reviewLabel}>Age Care Ranges:</Text>
             <Text style={styles.reviewValue}>
-              {formData.ageCareRanges.map(range => 
+              {String(formData.ageCareRanges.map(range => 
                 AGE_CARE_RANGES.find(r => r.key === range)?.label
-              ).filter(Boolean).join(', ')}
+              ).filter(Boolean).join(', '))}
             </Text>
           </View>
           <View style={styles.reviewItem}>
             <Text style={styles.reviewLabel}>Available Days:</Text>
-            <Text style={styles.reviewValue}>{formData.availability.days.join(', ')}</Text>
+            <Text style={styles.reviewValue}>{String(formData.availability.days.join(', '))}</Text>
           </View>
           <View style={styles.reviewItem}>
             <Text style={styles.reviewLabel}>Emergency Contacts:</Text>
-            <Text style={styles.reviewValue}>{formData.emergencyContacts.length} contacts</Text>
+            <Text style={styles.reviewValue}>{String(formData.emergencyContacts.length)} contacts</Text>
           </View>
         </Card.Content>
       </Card>
@@ -2116,7 +2122,7 @@ const handleProfileImageUpload = async () => {
               disabled={loading}
               style={styles.navButton}
             >
-              {isEdit ? 'Update Profile' : 'Create Profile'}
+              {String(isEdit ? 'Update Profile' : 'Create Profile')}
             </Button>
           ) : (
             <Button
@@ -2136,7 +2142,7 @@ const handleProfileImageUpload = async () => {
           onDismiss={() => setSnackbarVisible(false)}
           duration={3000}
         >
-          {snackbarMessage}
+          {String(snackbarMessage)}
         </Snackbar>
       </Portal>
     </KeyboardAvoidingView>

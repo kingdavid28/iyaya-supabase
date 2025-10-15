@@ -31,7 +31,7 @@ const ConversationList = ({ onSelectConversation, selectedConversation, navigati
       }
 
       try {
-        const { data } = await messagingService.getConversations();
+        const data = await messagingService.getConversations(user.id);
         
         // Transform Supabase conversations to match expected format
         const transformedConversations = data.map(conv => {

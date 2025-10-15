@@ -40,7 +40,12 @@ export const AuthProvider = ({ children }) => {
 
   const fetchUserWithProfile = async (authUser) => {
     try {
-      console.log('🔍 Fetching profile for user:', authUser.id)
+      console.log('🔍 Fetching profile for user:', {
+        id: authUser.id,
+        email: authUser.email,
+        authUserKeys: Object.keys(authUser)
+      })
+      
       const { data, error } = await supabase
         .from('users')
         .select('*')
@@ -67,7 +72,12 @@ export const AuthProvider = ({ children }) => {
         profile
       }
       
-      console.log('✅ Final user object with role:', userWithProfile.role)
+      console.log('✅ Final user object:', {
+        id: userWithProfile.id,
+        email: userWithProfile.email,
+        role: userWithProfile.role,
+        keys: Object.keys(userWithProfile)
+      })
       return userWithProfile
     } catch (err) {
       console.error('❌ Error fetching user profile:', {
