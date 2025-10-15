@@ -16,25 +16,30 @@ import { supabase } from '../config/supabase';
 
 const CaregiverProfileComplete = ({ navigation, route }) => {
   const { user } = useAuth();
+  const { caregiverId } = route.params || {};
   const [profile, setProfile] = useState(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  
+  // Use caregiverId from params if viewing another caregiver, otherwise use current user
+  const profileUserId = caregiverId || user?.id;
+  const isViewingOwnProfile = !caregiverId || caregiverId === user?.id;
 
   const loadProfile = async () => {
-    if (!user?.id) {
+    if (!profileUserId) {
       console.log('❌ No user ID available');
       return;
     }
     
     try {
       setLoading(true);
-      console.log('🔄 Loading profile for user:', user.id);
+      console.log('🔄 Loading profile for user:', profileUserId);
       
       // Get user data from users table
       const { data: userData, error: userError } = await supabase
         .from('users')
         .select('*')
-        .eq('id', user.id)
+        .eq('id', profileUserId)
         .single();
       
       console.log('👤 User data:', userData);
@@ -46,7 +51,7 @@ const CaregiverProfileComplete = ({ navigation, route }) => {
       const { data: caregiverData, error: caregiverError } = await supabase
         .from('caregiver_profiles')
         .select('*')
-        .eq('user_id', user.id)
+        .eq('user_id', profileUserId)
         .single();
       
       console.log('👨‍💼 Caregiver data:', caregiverData);
@@ -111,7 +116,7 @@ const CaregiverProfileComplete = ({ navigation, route }) => {
 
   useEffect(() => {
     loadProfile();
-  }, [user?.id]);
+  }, [profileUserId]);
 
   const onRefresh = async () => {
     setRefreshing(true);
@@ -176,10 +181,12 @@ const CaregiverProfileComplete = ({ navigation, route }) => {
         <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
           <Ionicons name="arrow-back" size={24} color="#333" />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>My Profile</Text>
-        <TouchableOpacity onPress={() => navigation.navigate('EnhancedCaregiverProfileWizard', { isEdit: true, existingProfile: profile })} style={styles.editButton}>
-          <Ionicons name="create" size={24} color="#2196F3" />
-        </TouchableOpacity>
+        <Text style={styles.headerTitle}>{isViewingOwnProfile ? 'My Profile' : 'Caregiver Profile'}</Text>
+        {isViewingOwnProfile && (
+          <TouchableOpacity onPress={() => navigation.navigate('EnhancedCaregiverProfileWizard', { isEdit: true, existingProfile: profile })} style={styles.editButton}>
+            <Ionicons name="create" size={24} color="#2196F3" />
+          </TouchableOpacity>
+        )}
       </View>
 
       {/* Profile Completion */}

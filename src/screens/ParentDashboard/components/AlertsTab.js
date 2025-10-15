@@ -31,22 +31,32 @@ const AlertsTab = ({ navigation, onNavigateTab }) => {
   const [refreshing, setRefreshing] = useState(false);
 
   useEffect(() => {
+    console.log('🚨 AlertsTab useEffect - user:', user?.id);
     loadAlerts();
-  }, []);
+  }, [user?.id]);
 
   const loadAlerts = async () => {
+    if (!user?.id) {
+      console.log('❌ AlertsTab - No user ID');
+      setLoading(false);
+      return;
+    }
+    
     try {
       setLoading(true);
+      console.log('🚨 Loading alerts for user:', user.id);
       const notifications = await notificationService.getNotifications(user.id);
+      console.log('🚨 Received notifications:', notifications);
       
       // Filter and categorize alerts for parents
       const parentAlerts = notifications.filter(notif => 
         ['job_application', 'booking_confirmed', 'booking_cancelled', 'message', 'system', 'payment', 'safety'].includes(notif.type)
       );
+      console.log('🚨 Filtered parent alerts:', parentAlerts);
       
       setAlerts(parentAlerts);
     } catch (error) {
-      console.error('Error loading alerts:', error);
+      console.error('❌ Error loading alerts:', error);
     } finally {
       setLoading(false);
     }

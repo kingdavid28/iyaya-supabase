@@ -123,7 +123,7 @@ const NavigationTabs = React.memo(({
           label="Alerts"
           notificationCount={otherNotifications}
           setActiveTab={setActiveTab}
-          showBadge={false}
+          showBadge={true}
         />
       </ScrollView>
     </View>

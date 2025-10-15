@@ -18,7 +18,7 @@ import {
   XCircle,
   Clock
 } from 'lucide-react-native';
-import { supabaseService } from '../../../services/supabase';
+import { notificationService } from '../../../services/supabase';
 import { useAuth } from '../../../contexts/AuthContext';
 
 const NotificationsTab = ({ navigation, onNavigateTab }) => {
@@ -28,7 +28,9 @@ const NotificationsTab = ({ navigation, onNavigateTab }) => {
   const [refreshing, setRefreshing] = useState(false);
 
   useEffect(() => {
+    console.log('🔔 NotificationsTab useEffect - user:', user?.id);
     if (!user?.id) {
+      console.log('❌ NotificationsTab - No user ID');
       setLoading(false);
       return;
     }
@@ -45,11 +47,13 @@ const NotificationsTab = ({ navigation, onNavigateTab }) => {
 
     try {
       setLoading(true);
-      const notificationsData = await supabaseService.getNotifications(user.id);
+      console.log('🔔 Loading notifications for user:', user.id);
+      const notificationsData = await notificationService.getNotifications(user.id);
+      console.log('🔔 Received notifications:', notificationsData);
       
       setNotifications(Array.isArray(notificationsData) ? notificationsData : []);
     } catch (error) {
-      console.error('Error loading notifications:', error);
+      console.error('❌ Error loading notifications:', error);
     } finally {
       setLoading(false);
     }
@@ -63,7 +67,7 @@ const NotificationsTab = ({ navigation, onNavigateTab }) => {
 
   const markAsRead = async (notificationId) => {
     try {
-      await supabaseService.markNotificationAsRead(notificationId);
+      await notificationService.markNotificationAsRead(notificationId);
       setNotifications(prev => prev.map(notif => 
         notif.id === notificationId ? { ...notif, read: true } : notif
       ));

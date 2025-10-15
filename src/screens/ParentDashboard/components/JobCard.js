@@ -463,6 +463,7 @@ const styles = StyleSheet.create({
     marginLeft: 4,
   },
   viewDetailsButton: {
+    paddingHorizontal: 18,
     borderColor: colors.primary,
     backgroundColor: colors.primary + '10',
   },

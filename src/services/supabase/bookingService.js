@@ -65,7 +65,23 @@ export class BookingService extends SupabaseBase {
 
       let query = supabase
         .from('bookings')
-        .select('*')
+        .select(`
+          *,
+          parent:users!parent_id(
+            id,
+            name,
+            email,
+            phone,
+            profile_image
+          ),
+          caregiver:users!caregiver_id(
+            id,
+            name,
+            email,
+            phone,
+            profile_image
+          )
+        `)
 
       if (role === 'parent') {
         query = query.eq('parent_id', userId)
@@ -116,7 +132,7 @@ export class BookingService extends SupabaseBase {
         specialInstructions: booking.special_instructions,
         emergencyContact: booking.emergency_contact,
         time: booking.start_time && booking.end_time ? `${booking.start_time} - ${booking.end_time}` : '',
-        family: booking.parent?.name || booking.parent_name || 'Unknown Family'
+        family: booking.parent?.name || 'Unknown Family'
       })) || []
       
       return transformedData

@@ -38,15 +38,20 @@ const JobApplications = ({ route, navigation }) => {
   const [selectedTab, setSelectedTab] = useState('all'); // 'all', 'new', 'reviewed'
 
   const handleViewApplicant = (caregiverId, startChat = false) => {
-    console.log('🔍 handleViewApplicant called with:', { caregiverId, startChat, currentUserId: user?.id });
+    console.log('🔍 handleViewApplicant called with:', { 
+      caregiverId, 
+      startChat, 
+      currentUserId: user?.id,
+      userUid: user?.uid 
+    });
     
     if (!caregiverId) {
       Alert.alert('Error', 'Caregiver information not available');
       return;
     }
     
-    if (caregiverId === user?.id) {
-      Alert.alert('Error', 'Cannot start conversation with yourself');
+    if (caregiverId === user?.id || caregiverId === user?.uid) {
+      Alert.alert('Error', 'Cannot view your own profile');
       return;
     }
     
@@ -56,6 +61,7 @@ const JobApplications = ({ route, navigation }) => {
         caregiverName: 'Caregiver' // Will be updated in chat screen
       });
     } else {
+      console.log('🚀 Navigating to CaregiverProfile with caregiverId:', caregiverId);
       navigation.navigate('CaregiverProfile', { caregiverId });
     }
   };
@@ -71,25 +77,34 @@ const JobApplications = ({ route, navigation }) => {
         const raw = res?.data || [];
         // Normalize shape to align with previous UI expectations
         const mapped = raw.map((a) => {
-          // Extract caregiver ID properly
-          const caregiverId = a.caregiverId?._id || a.caregiverId?.id || a.caregiverId || a.caregiver?.id || a.caregiver?._id;
-          const caregiverData = (typeof a.caregiverId === 'object' ? a.caregiverId : a.caregiver) || {};
+          // Extract caregiver ID and data from Supabase response
+          const caregiverId = a.caregiver_id || a.caregiverId;
+          const caregiverData = a.users || a.caregiver || {};
           
           console.log('🔍 Application mapping:', {
-            rawCaregiverId: a.caregiverId,
-            extractedCaregiverId: caregiverId,
-            caregiverData: caregiverData
+            applicationId: a.id,
+            caregiverId: caregiverId,
+            caregiverData: caregiverData,
+            hasUsers: !!a.users
           });
           
           return {
-            id: a._id || a.id,
-            jobId: a.jobId?._id || a.jobId,
+            id: a.id,
+            jobId: a.job_id || a.jobId,
             caregiverId: caregiverId,
-            caregiver: caregiverData,
+            caregiver: {
+              id: caregiverData.id,
+              name: caregiverData.name,
+              displayName: caregiverData.name,
+              email: caregiverData.email,
+              phone: caregiverData.phone,
+              profileImage: caregiverData.profile_image,
+              ...caregiverData
+            },
             message: a.message,
             status: a.status,
-            appliedAt: a.createdAt ? new Date(a.createdAt) : null,
-            createdAt: a.createdAt,
+            appliedAt: a.applied_at ? new Date(a.applied_at) : (a.created_at ? new Date(a.created_at) : null),
+            createdAt: a.created_at,
           };
         });
 
@@ -128,15 +143,19 @@ const JobApplications = ({ route, navigation }) => {
 
   const updateApplicationStatus = async (applicationId, status) => {
     try {
-      await applicationsAPI.updateStatus(applicationId, status);
+      console.log('🔄 Updating application status:', { applicationId, status });
+      
+      // Use the supabase service directly
+      const { applicationService } = await import('../../../services/supabase');
+      const result = await applicationService.updateApplicationStatus(applicationId, status);
+      
+      console.log('✅ Application status updated:', result);
+      
       // Refresh list after update
       setRefreshing(true);
-      // Trigger effect by toggling selectedTab to same value
-      // or simply refetch by setting selectedTab which is already a dep
-      // We'll just call the loader indirectly via state flip
       setSelectedTab((t) => t); 
     } catch (error) {
-      console.error('Error updating application status:', error);
+      console.error('❌ Error updating application status:', error);
       Alert.alert('Error', 'Failed to update application status. Please try again.');
     }
   };
