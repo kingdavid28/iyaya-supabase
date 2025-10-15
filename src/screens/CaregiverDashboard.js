@@ -97,14 +97,14 @@ function ApplicationCard({ application, onViewDetails, onMessage }) {
               color: '#FFFFFF',
               marginBottom: 4
             }} numberOfLines={1}>
-              {application.jobTitle}
+              {application.jobTitle || application.job?.title || 'Job Application'}
             </Text>
             <Text style={{
               fontSize: 14,
               color: 'rgba(255, 255, 255, 0.9)',
               fontWeight: '500'
             }}>
-              {application.family}
+              {application.family || application.job?.family || application.job?.parentName || 'Family'}
             </Text>
           </View>
           <View style={{
@@ -151,7 +151,7 @@ function ApplicationCard({ application, onViewDetails, onMessage }) {
               color: '#374151',
               fontWeight: '500'
             }} numberOfLines={1}>
-              {new Date(application.appliedDate).toLocaleDateString()}
+              {new Date(application.appliedDate || application.applied_at).toLocaleDateString()}
             </Text>
           </View>
 
@@ -172,18 +172,65 @@ function ApplicationCard({ application, onViewDetails, onMessage }) {
               color: '#059669',
               fontWeight: '600'
             }}>
-              ₱{application.hourlyRate}/hr
+              ₱{application.hourlyRate || application.job?.hourly_rate || application.job?.hourlyRate || 0}/hr
             </Text>
           </View>
+
+          {application.job?.location && (
+            <View style={{
+              flexDirection: 'row',
+              alignItems: 'center',
+              backgroundColor: '#FEF7FF',
+              paddingHorizontal: 12,
+              paddingVertical: 8,
+              borderRadius: 20,
+              marginRight: 8,
+              marginBottom: 8,
+              flex: 1,
+            }}>
+              <Ionicons name="location" size={16} color="#7C3AED" />
+              <Text style={{
+                marginLeft: 6,
+                fontSize: 13,
+                color: '#7C3AED',
+                fontWeight: '500'
+              }} numberOfLines={1}>
+                {application.job.location}
+              </Text>
+            </View>
+          )}
+
+          {application.job?.date && (
+            <View style={{
+              flexDirection: 'row',
+              alignItems: 'center',
+              backgroundColor: '#FFF7ED',
+              paddingHorizontal: 12,
+              paddingVertical: 8,
+              borderRadius: 20,
+              marginBottom: 8,
+              flex: 0.48,
+            }}>
+              <Ionicons name="time" size={16} color="#EA580C" />
+              <Text style={{
+                marginLeft: 6,
+                fontSize: 13,
+                color: '#EA580C',
+                fontWeight: '500'
+              }} numberOfLines={1}>
+                {new Date(application.job.date).toLocaleDateString()}
+              </Text>
+            </View>
+          )}
         </View>
 
-        {/* Cover Letter Preview */}
-        {application.coverLetter && (
+        {/* Job Details */}
+        {application.job?.description && (
           <View style={{
             backgroundColor: '#F9FAFB',
             padding: 12,
             borderRadius: 8,
-            marginBottom: 16,
+            marginBottom: 12,
           }}>
             <Text style={{
               fontSize: 12,
@@ -191,14 +238,40 @@ function ApplicationCard({ application, onViewDetails, onMessage }) {
               fontWeight: '600',
               marginBottom: 4,
             }}>
-              Cover Letter:
+              Job Description:
             </Text>
             <Text style={{
               fontSize: 14,
               color: '#374151',
               lineHeight: 20,
             }} numberOfLines={2}>
-              {application.coverLetter}
+              {application.job.description}
+            </Text>
+          </View>
+        )}
+
+        {/* Cover Letter Preview */}
+        {(application.coverLetter || application.message) && (
+          <View style={{
+            backgroundColor: '#F0F9FF',
+            padding: 12,
+            borderRadius: 8,
+            marginBottom: 16,
+          }}>
+            <Text style={{
+              fontSize: 12,
+              color: '#0369A1',
+              fontWeight: '600',
+              marginBottom: 4,
+            }}>
+              Your Message:
+            </Text>
+            <Text style={{
+              fontSize: 14,
+              color: '#0C4A6E',
+              lineHeight: 20,
+            }} numberOfLines={2}>
+              {application.coverLetter || application.message || 'No message provided'}
             </Text>
           </View>
         )}
@@ -718,12 +791,18 @@ function CaregiverDashboard({ onLogout, route }) {
   }, [route?.params?.refreshProfile]);
 
   const handleJobApplication = (job) => {
+    if (!job || (!job.id && !job._id)) {
+      showToast('Invalid job data. Please refresh and try again.', 'error');
+      return;
+    }
     setSelectedJob(job)
     setApplicationForm({ coverLetter: '', proposedRate: '' })
     setShowJobApplication(true)
   }
 
   const handleViewJob = (job) => {
+    console.log('📋 Viewing job:', job);
+    console.log('📋 Job data keys:', Object.keys(job || {}));
     setSelectedJob(job)
     setShowJobDetails(true)
   }
@@ -869,13 +948,23 @@ function CaregiverDashboard({ onLogout, route }) {
   };
 
   const handleApplicationSubmit = async ({ jobId, jobTitle, family, coverLetter, proposedRate }) => {
-    // Fix: Add missing apiService import or use applicationsAPI directly
-    if (applications.some(app => app.jobId === jobId)) {
+    // Validate job ID
+    if (!jobId) {
+      showToast('Invalid job ID. Please try again.', 'error');
+      return;
+    }
+
+    // Check for duplicate applications
+    const existingApplication = applications.find(app => 
+      (app.jobId || app.job_id || app.job?.id || app.job?._id) === jobId
+    );
+    
+    if (existingApplication) {
       showToast('You have already applied to this job', 'error');
       return;
     }
 
-    const matchedJob = jobs.find((j) => j.id === jobId)
+    const matchedJob = jobs.find((j) => (j.id || j._id) === jobId)
 
     try {
       setApplicationSubmitting(true)
@@ -904,12 +993,16 @@ function CaregiverDashboard({ onLogout, route }) {
 
         const newApplication = {
           id: response.id || Date.now(),
+          job_id: jobId,
           jobId,
           jobTitle,
           family,
           status: "pending",
           appliedDate: new Date().toISOString(),
-          hourlyRate: proposedRate || (matchedJob ? matchedJob.hourlyRate : undefined)
+          applied_at: new Date().toISOString(),
+          hourlyRate: proposedRate || (matchedJob ? matchedJob.hourlyRate : undefined),
+          coverLetter: coverLetter,
+          message: coverLetter
         }
 
         // Add to local state immediately for instant UI update
@@ -1540,9 +1633,36 @@ function CaregiverDashboard({ onLogout, route }) {
         )}
 
         {activeTab === "applications" && (
+          console.log('🔍 Applications tab is active') ||
           <ApplicationsTab
             applications={applications}
-            onViewJob={handleViewJob}
+            onViewJob={(job, application) => {
+              // Merge job data with application data for complete view
+              const completeJobData = {
+                // Ensure all job fields are properly set
+                id: job?.id || application?.job_id,
+                _id: job?._id || application?.job_id,
+                title: job?.title || application?.jobTitle || application?.job_title,
+                description: job?.description || application?.job?.description,
+                location: job?.location || application?.location,
+                date: job?.date || application?.job?.date,
+                start_time: job?.start_time || job?.startTime,
+                end_time: job?.end_time || job?.endTime,
+                hourly_rate: job?.hourly_rate || job?.hourlyRate || job?.rate,
+                family: job?.family || job?.familyName || application?.family,
+                children: job?.children || application?.job?.children,
+                ...job,
+                // Add application-specific data
+                applicationData: {
+                  proposedRate: application?.proposedRate || application?.proposed_rate,
+                  coverLetter: application?.coverLetter || application?.message,
+                  appliedDate: application?.applied_at || application?.appliedAt,
+                  applicationStatus: application?.status,
+                  applicationId: application?.id || application?._id
+                }
+              };
+              handleViewJob(completeJobData);
+            }}
             onWithdrawApplication={async (applicationId) => {
               try {
                 await supabaseService.applications.updateApplicationStatus(applicationId, 'withdrawn');
@@ -1717,9 +1837,9 @@ function CaregiverDashboard({ onLogout, route }) {
                   <Button
                     mode="contained"
                     onPress={() => handleApplicationSubmit({
-                      jobId: selectedJob.id,
+                      jobId: selectedJob.id || selectedJob._id,
                       jobTitle: selectedJob.title,
-                      family: selectedJob.family,
+                      family: selectedJob.family || selectedJob.familyName,
                       coverLetter: applicationForm.coverLetter,
                       proposedRate: applicationForm.proposedRate
                     })}
@@ -1828,7 +1948,8 @@ function CaregiverDashboard({ onLogout, route }) {
           animationType="slide"
         >
           <View style={styles.modalOverlay}>
-            <ScrollView style={styles.jobDetailsModal}>
+            <View style={[styles.jobDetailsModal, { height: '50%' }]}>
+            <ScrollView showsVerticalScrollIndicator={false}>
               <View style={styles.jobDetailsContent}>
                 <View style={styles.jobDetailsHeader}>
                   <Text style={styles.jobDetailsTitle}>{String(selectedJob.title || 'Childcare Position')}</Text>
@@ -1843,34 +1964,47 @@ function CaregiverDashboard({ onLogout, route }) {
                 <View style={styles.jobDetailsInfo}>
                   <View style={styles.jobDetailsRow}>
                     <Ionicons name="location" size={16} color="#6B7280" />
-                    <Text style={styles.jobDetailsText}>{String(selectedJob.address || selectedJob.location || 'Location not specified')}</Text>
+                    <Text style={styles.jobDetailsText}>{selectedJob.location || 'Location not specified'}</Text>
+                  </View>
+                  <View style={styles.jobDetailsRow}>
+                    <Ionicons name="calendar" size={16} color="#6B7280" />
+                    <Text style={styles.jobDetailsText}>{selectedJob.date ? new Date(selectedJob.date).toLocaleDateString() : 'Date not specified'}</Text>
                   </View>
                   <View style={styles.jobDetailsRow}>
                     <Ionicons name="time" size={16} color="#6B7280" />
                     <Text style={styles.jobDetailsText}>
-                      {String(selectedJob.schedule || selectedJob.time || selectedJob.workingHours || 'Flexible schedule')}
-                      {selectedJob.startTime && selectedJob.endTime ? ` (${String(selectedJob.startTime)} - ${String(selectedJob.endTime)})` : ''}
-                    </Text>
-                  </View>
-                  <View style={styles.jobDetailsRow}>
-                    <Ionicons name="calendar" size={16} color="#6B7280" />
-                    <Text style={styles.jobDetailsText}>{String(selectedJob.date ? new Date(selectedJob.date).toLocaleDateString() : 'Date flexible')}</Text>
-                  </View>
-                  <View style={styles.jobDetailsRow}>
-                    <Ionicons name="people" size={16} color="#6B7280" />
-                    <Text style={styles.jobDetailsText}>
-                      {String(selectedJob.childrenCount || selectedJob.children?.length || 1)} child{(selectedJob.childrenCount || selectedJob.children?.length || 1) > 1 ? 'ren' : ''}
-                      {selectedJob.childrenAges ? ` (${String(selectedJob.childrenAges)})` : ''}
+                      {selectedJob.start_time || selectedJob.startTime || 'Start time'} - {selectedJob.end_time || selectedJob.endTime || 'End time'}
                     </Text>
                   </View>
                   <View style={styles.jobDetailsRow}>
                     <Ionicons name="cash" size={16} color="#059669" />
-                    <Text style={[styles.jobDetailsText, { color: '#059669', fontWeight: '600' }]}>₱{String(selectedJob.hourlyRate || selectedJob.rate || 0)}/hr</Text>
+                    <Text style={[styles.jobDetailsText, { color: '#059669', fontWeight: '600' }]}>₱{selectedJob.hourly_rate || selectedJob.hourlyRate || 0}/hr (Job Rate)</Text>
                   </View>
-                  {selectedJob.distance && (
+                  {selectedJob.applicationData?.proposedRate && selectedJob.applicationData.proposedRate !== (selectedJob.hourly_rate || selectedJob.hourlyRate) && (
                     <View style={styles.jobDetailsRow}>
-                      <Ionicons name="navigate" size={16} color="#6B7280" />
-                      <Text style={styles.jobDetailsText}>{String(selectedJob.distance)}</Text>
+                      <Ionicons name="trending-up" size={16} color="#3B82F6" />
+                      <Text style={[styles.jobDetailsText, { color: '#3B82F6', fontWeight: '600' }]}>₱{selectedJob.applicationData.proposedRate}/hr (Your Proposed Rate)</Text>
+                    </View>
+                  )}
+                  {selectedJob.children?.length > 0 && (
+                    <View style={styles.jobDetailsRow}>
+                      <Ionicons name="people" size={16} color="#6B7280" />
+                      <Text style={styles.jobDetailsText}>
+                        {selectedJob.children.length} child{selectedJob.children.length > 1 ? 'ren' : ''}
+                        {selectedJob.children.map(child => ` ${child.name} (${child.age})`).join(', ')}
+                      </Text>
+                    </View>
+                  )}
+                  {selectedJob.users?.email && (
+                    <View style={styles.jobDetailsRow}>
+                      <Ionicons name="mail" size={16} color="#6B7280" />
+                      <Text style={styles.jobDetailsText}>{selectedJob.users.email}</Text>
+                    </View>
+                  )}
+                  {selectedJob.users?.phone && (
+                    <View style={styles.jobDetailsRow}>
+                      <Ionicons name="call" size={16} color="#6B7280" />
+                      <Text style={styles.jobDetailsText}>{selectedJob.users.phone}</Text>
                     </View>
                   )}
                 </View>
@@ -1879,6 +2013,23 @@ function CaregiverDashboard({ onLogout, route }) {
                   <View style={styles.jobDetailsSection}>
                     <Text style={styles.jobDetailsSectionTitle}>Job Description</Text>
                     <Text style={styles.jobDetailsDescription}>{String(selectedJob.description)}</Text>
+                  </View>
+                )}
+                
+                {selectedJob.children?.length > 0 && (
+                  <View style={styles.jobDetailsSection}>
+                    <Text style={styles.jobDetailsSectionTitle}>Children Information</Text>
+                    {selectedJob.children.map((child, index) => (
+                      <View key={index} style={styles.applicationStatusCard}>
+                        <Text style={styles.applicationStatusText}>{child.name} - Age {child.age}</Text>
+                        {child.allergies && (
+                          <Text style={styles.coverLetterText}>Allergies: {child.allergies}</Text>
+                        )}
+                        {child.preferences && (
+                          <Text style={styles.coverLetterText}>Notes: {child.preferences}</Text>
+                        )}
+                      </View>
+                    ))}
                   </View>
                 )}
                 
@@ -1894,38 +2045,65 @@ function CaregiverDashboard({ onLogout, route }) {
                   </View>
                 )}
                 
+                {/* Application Status */}
+                {(() => {
+                  // Check if this job view is from applications tab (has applicationData)
+                  const applicationData = selectedJob?.applicationData;
+                  
+                  // Fallback to finding application in applications array
+                  const application = applicationData || applications.find(app => 
+                    (app.jobId || app.job_id || app.job?.id || app.job?._id) === (selectedJob.id || selectedJob._id)
+                  );
+                  
+                  if (application || applicationData) {
+                    const appData = applicationData || application;
+                    return (
+                      <View style={styles.jobDetailsSection}>
+                        <Text style={styles.jobDetailsSectionTitle}>Your Application</Text>
+                        <View style={styles.applicationStatusCard}>
+                          <View style={styles.applicationStatusHeader}>
+                            <Ionicons name="checkmark-circle" size={20} color="#10B981" />
+                            <Text style={styles.applicationStatusText}>
+                              Applied on {new Date(appData.appliedDate || appData.applied_at || Date.now()).toLocaleDateString()}
+                            </Text>
+                          </View>
+                          <Text style={styles.applicationStatusLabel}>
+                            Status: {appData.applicationStatus || appData.status || 'Pending'}
+                          </Text>
+                          
+                          {appData.proposedRate && (
+                            <View style={styles.coverLetterPreview}>
+                              <Text style={styles.coverLetterLabel}>Your Proposed Rate:</Text>
+                              <Text style={styles.applicationStatusText}>₱{appData.proposedRate}/hr</Text>
+                            </View>
+                          )}
+                          
+                          {(appData.coverLetter || appData.message) && (
+                            <View style={styles.coverLetterPreview}>
+                              <Text style={styles.coverLetterLabel}>Your Message:</Text>
+                              <Text style={styles.coverLetterText}>{appData.coverLetter || appData.message}</Text>
+                            </View>
+                          )}
+                        </View>
+                      </View>
+                    );
+                  }
+                  return null;
+                })()}
+                
                 <View style={styles.jobDetailsActions}>
                   <Button 
-                    mode="text" 
+                    mode="contained" 
                     onPress={() => { setShowJobDetails(false); setSelectedJob(null) }}
                     style={styles.jobDetailsCloseButton}
                     labelStyle={{ fontSize: 14 }}
                   >
                     Close
                   </Button>
-                  {applications.some((a) => a.jobId === selectedJob.id) ? (
-                    <View style={[styles.appliedBadge, { flex: 1, alignItems: 'center' }]}>
-                      <View style={styles.appliedBadgeContent}>
-                        <Ionicons name="checkmark-circle" size={16} color="#4CAF50" style={{ marginRight: 6 }} />
-                        <Text style={styles.appliedBadgeText}>Applied</Text>
-                      </View>
-                    </View>
-                  ) : (
-                    <Button
-                      mode="contained"
-                      style={styles.jobDetailsApplyButton}
-                      labelStyle={{ fontSize: 14 }}
-                      onPress={() => {
-                        setShowJobDetails(false)
-                        handleJobApplication(selectedJob)
-                      }}
-                    >
-                      Apply
-                    </Button>
-                  )}
                 </View>
               </View>
             </ScrollView>
+            </View>
           </View>
         </Modal>
       )}
@@ -1952,6 +2130,162 @@ function CaregiverDashboard({ onLogout, route }) {
         targetUser={{ id: 'sample', name: 'Parent' }}
         colors={{ primary: '#3B82F6' }}
       />
+      
+      {/* Job Details Modal */}
+      {showJobDetails && selectedJob && (
+        <Modal
+          visible={showJobDetails}
+          onRequestClose={() => {
+            setShowJobDetails(false)
+            setSelectedJob(null)
+          }}
+          transparent
+          animationType="slide"
+        >
+          <View style={styles.modalOverlay}>
+            <View style={[styles.jobDetailsModal, { height: '50%' }]}>
+            <ScrollView showsVerticalScrollIndicator={false}>
+              <View style={styles.jobDetailsContent}>
+                <View style={styles.jobDetailsHeader}>
+                  <Text style={styles.jobDetailsTitle}>{selectedJob.title || 'Job Details'}</Text>
+                  <Text style={styles.jobDetailsFamily}>{selectedJob.family || selectedJob.familyName || 'Family'}</Text>
+                  {selectedJob.urgent && (
+                    <View style={styles.urgentBadge}>
+                      <Text style={styles.urgentText}>URGENT</Text>
+                    </View>
+                  )}
+                </View>
+                
+                <View style={styles.jobDetailsInfo}>
+                  <View style={styles.jobDetailsRow}>
+                    <Ionicons name="location" size={16} color="#6B7280" />
+                    <Text style={styles.jobDetailsText}>{selectedJob.location || 'Location not specified'}</Text>
+                  </View>
+                  <View style={styles.jobDetailsRow}>
+                    <Ionicons name="calendar" size={16} color="#6B7280" />
+                    <Text style={styles.jobDetailsText}>{selectedJob.date ? new Date(selectedJob.date).toLocaleDateString() : 'Date not specified'}</Text>
+                  </View>
+                  <View style={styles.jobDetailsRow}>
+                    <Ionicons name="time" size={16} color="#6B7280" />
+                    <Text style={styles.jobDetailsText}>
+                      {selectedJob.start_time || selectedJob.startTime || 'Start time'} - {selectedJob.end_time || selectedJob.endTime || 'End time'}
+                    </Text>
+                  </View>
+                  <View style={styles.jobDetailsRow}>
+                    <Ionicons name="cash" size={16} color="#059669" />
+                    <Text style={[styles.jobDetailsText, { color: '#059669', fontWeight: '600' }]}>₱{selectedJob.hourly_rate || selectedJob.hourlyRate || 0}/hr (Job Rate)</Text>
+                  </View>
+                  {selectedJob.applicationData?.proposedRate && selectedJob.applicationData.proposedRate !== (selectedJob.hourly_rate || selectedJob.hourlyRate) && (
+                    <View style={styles.jobDetailsRow}>
+                      <Ionicons name="trending-up" size={16} color="#3B82F6" />
+                      <Text style={[styles.jobDetailsText, { color: '#3B82F6', fontWeight: '600' }]}>₱{selectedJob.applicationData.proposedRate}/hr (Your Proposed Rate)</Text>
+                    </View>
+                  )}
+                  {selectedJob.children?.length > 0 && (
+                    <View style={styles.jobDetailsRow}>
+                      <Ionicons name="people" size={16} color="#6B7280" />
+                      <Text style={styles.jobDetailsText}>
+                        {selectedJob.children.length} child{selectedJob.children.length > 1 ? 'ren' : ''}
+                        {selectedJob.children.map(child => ` ${child.name} (${child.age})`).join(', ')}
+                      </Text>
+                    </View>
+                  )}
+                  {selectedJob.users?.email && (
+                    <View style={styles.jobDetailsRow}>
+                      <Ionicons name="mail" size={16} color="#6B7280" />
+                      <Text style={styles.jobDetailsText}>{selectedJob.users.email}</Text>
+                    </View>
+                  )}
+                  {selectedJob.users?.phone && (
+                    <View style={styles.jobDetailsRow}>
+                      <Ionicons name="call" size={16} color="#6B7280" />
+                      <Text style={styles.jobDetailsText}>{selectedJob.users.phone}</Text>
+                    </View>
+                  )}
+                </View>
+                
+                {selectedJob.description && (
+                  <View style={styles.jobDetailsSection}>
+                    <Text style={styles.jobDetailsSectionTitle}>Job Description</Text>
+                    <Text style={styles.jobDetailsDescription}>{String(selectedJob.description)}</Text>
+                  </View>
+                )}
+                
+                {selectedJob.children?.length > 0 && (
+                  <View style={styles.jobDetailsSection}>
+                    <Text style={styles.jobDetailsSectionTitle}>Children Information</Text>
+                    {selectedJob.children.map((child, index) => (
+                      <View key={index} style={styles.applicationStatusCard}>
+                        <Text style={styles.applicationStatusText}>{child.name} - Age {child.age}</Text>
+                        {child.allergies && (
+                          <Text style={styles.coverLetterText}>Allergies: {child.allergies}</Text>
+                        )}
+                        {child.preferences && (
+                          <Text style={styles.coverLetterText}>Notes: {child.preferences}</Text>
+                        )}
+                      </View>
+                    ))}
+                  </View>
+                )}
+                
+                {(() => {
+                  const applicationData = selectedJob?.applicationData;
+                  const application = applicationData || applications.find(app => 
+                    (app.jobId || app.job_id || app.job?.id || app.job?._id) === (selectedJob.id || selectedJob._id)
+                  );
+                  
+                  if (application || applicationData) {
+                    const appData = applicationData || application;
+                    return (
+                      <View style={styles.jobDetailsSection}>
+                        <Text style={styles.jobDetailsSectionTitle}>Your Application</Text>
+                        <View style={styles.applicationStatusCard}>
+                          <View style={styles.applicationStatusHeader}>
+                            <Ionicons name="checkmark-circle" size={20} color="#10B981" />
+                            <Text style={styles.applicationStatusText}>
+                              Applied on {new Date(appData.appliedDate || appData.applied_at || Date.now()).toLocaleDateString()}
+                            </Text>
+                          </View>
+                          <Text style={styles.applicationStatusLabel}>
+                            Status: {appData.applicationStatus || appData.status || 'Pending'}
+                          </Text>
+                          
+                          {appData.proposedRate && (
+                            <View style={styles.coverLetterPreview}>
+                              <Text style={styles.coverLetterLabel}>Your Proposed Rate:</Text>
+                              <Text style={styles.applicationStatusText}>₱{appData.proposedRate}/hr</Text>
+                            </View>
+                          )}
+                          
+                          {(appData.coverLetter || appData.message) && (
+                            <View style={styles.coverLetterPreview}>
+                              <Text style={styles.coverLetterLabel}>Your Message:</Text>
+                              <Text style={styles.coverLetterText}>{appData.coverLetter || appData.message}</Text>
+                            </View>
+                          )}
+                        </View>
+                      </View>
+                    );
+                  }
+                  return null;
+                })()}
+                
+                <View style={styles.jobDetailsActions}>
+                  <Button 
+                    mode="contained" 
+                    onPress={() => { setShowJobDetails(false); setSelectedJob(null) }}
+                    style={styles.jobDetailsCloseButton}
+                    labelStyle={{ fontSize: 14 }}
+                  >
+                    Close
+                  </Button>
+                </View>
+              </View>
+            </ScrollView>
+            </View>
+          </View>
+        </Modal>
+      )}
       </View>
   );
 }

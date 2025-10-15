@@ -33,10 +33,10 @@ const ApplicationCard = React.memo(({ application, onViewJob, onWithdraw }) => {
       <View style={applicationCardStyles.header}>
         <View style={applicationCardStyles.jobInfo}>
           <Text style={applicationCardStyles.jobTitle} numberOfLines={2}>
-            {job?.title || 'Job Position'}
+            {job?.title || application?.jobTitle || application?.job_title || 'Job Position'}
           </Text>
           <Text style={applicationCardStyles.familyName}>
-            {job?.family || job?.familyName || 'Family'} • {job?.location || 'Location'}
+            {job?.family || job?.familyName || application?.family || 'Family'} • {job?.location || application?.location || 'Location'}
           </Text>
         </View>
         <View style={[applicationCardStyles.statusBadge, { backgroundColor: getStatusColor(application.status) }]}>
@@ -48,7 +48,7 @@ const ApplicationCard = React.memo(({ application, onViewJob, onWithdraw }) => {
       <View style={applicationCardStyles.details}>
         <View style={applicationCardStyles.detailRow}>
           <Ionicons name="cash-outline" size={16} color="#6b7280" />
-          <Text style={applicationCardStyles.detailText}>₱{job?.hourlyRate || job?.rate || 0}/hr</Text>
+          <Text style={applicationCardStyles.detailText}>₱{application?.proposedRate || job?.hourly_rate || job?.hourlyRate || job?.rate || 0}/hr</Text>
         </View>
         
         <View style={applicationCardStyles.detailRow}>
@@ -78,7 +78,10 @@ const ApplicationCard = React.memo(({ application, onViewJob, onWithdraw }) => {
       <View style={applicationCardStyles.footer}>
         <TouchableOpacity 
           style={applicationCardStyles.viewButton}
-          onPress={() => onViewJob && onViewJob(job)}
+          onPress={() => {
+            console.log('🔍 View Job clicked:', { job, application });
+            onViewJob && onViewJob(job, application);
+          }}
         >
           <Ionicons name="eye-outline" size={16} color="#3B82F6" />
           <Text style={applicationCardStyles.viewButtonText}>View Job</Text>
@@ -277,6 +280,7 @@ export default function ApplicationsTab({
   onRefresh,
   loading = false
 }) {
+  console.log('🔍 ApplicationsTab received onViewJob:', typeof onViewJob);
   const [activeFilter, setActiveFilter] = useState('all');
 
   const filterMetrics = useMemo(() => computeFilterCounts(applications), [applications]);

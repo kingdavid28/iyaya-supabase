@@ -1611,4 +1611,52 @@ export const styles = StyleSheet.create({
     marginTop: 4,
     borderRadius: 12,
   },
+  // Application Status Styles
+  jobDetailsSection: {
+    marginBottom: 16,
+  },
+  jobDetailsSectionTitle: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#111827',
+    marginBottom: 8,
+  },
+  jobDetailsDescription: {
+    fontSize: 14,
+    color: '#374151',
+    lineHeight: 20,
+  },
+  applicationStatusCard: {
+    backgroundColor: '#F0FDF4',
+    borderRadius: 8,
+    padding: 12,
+    borderWidth: 1,
+    borderColor: '#BBF7D0',
+  },
+  applicationStatusHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  applicationStatusText: {
+    fontSize: 14,
+    color: '#059669',
+    fontWeight: '500',
+    marginLeft: 8,
+  },
+  applicationStatusLabel: {
+    fontSize: 12,
+    color: '#6B7280',
+    marginBottom: 8,
+    textTransform: 'capitalize',
+  },
+  coverLetterPreview: {
+    marginTop: 8,
+  },
+  coverLetterLabel: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#374151',
+    marginBottom: 4,
+  },
 });

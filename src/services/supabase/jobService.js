@@ -36,8 +36,8 @@ const normalizeJobRecord = (job) => {
   const parentProfile = job?.users || job?.parent || {}
   const parentName = job?.parent_name || parentProfile?.name || job?.client_name || 'Parent'
   const parentPhoto = job?.parent_photo || parentProfile?.profile_image || null
-  const contactEmail = job?.contact_email || parentProfile?.email || null
-  const contactPhone = job?.contact_phone || parentProfile?.phone || null
+  const contactEmail = parentProfile?.email || null
+  const contactPhone = parentProfile?.phone || null
   const requirements = ensureArray(job?.requirements)
   const children = ensureArray(job?.children)
   const emergencyContact = parseJSONSafe(job?.emergency_contact, null)
@@ -102,6 +102,7 @@ const normalizeJobRecord = (job) => {
     familyName: parentName,
     applications,
     applicationsCount: applications.length,
+    applications_count: applications.length,
     // Add derived fields for skills and experience if not in DB
     skills: job.skills || requirements, // Use requirements as skills if not separate
     experience: job.experience || (job.years_experience ? `${job.years_experience} years` : 'Experience not specified'),
@@ -115,7 +116,16 @@ export class JobService extends SupabaseBase {
     try {
       let query = supabase
         .from('jobs')
-        .select('*')
+        .select(`
+          *,
+          users!parent_id(
+            id,
+            name,
+            email,
+            phone,
+            profile_image
+          )
+        `)
 
       if (filters.status) {
         query = query.eq('status', filters.status)
@@ -134,7 +144,22 @@ export class JobService extends SupabaseBase {
       const { data, error } = await query
       if (error) throw error
 
-      return Array.isArray(data) ? data.map(normalizeJobRecord) : []
+      // Fetch children data for each job
+      const jobsWithChildren = await Promise.all(
+        (data || []).map(async (job) => {
+          try {
+            const { data: children } = await supabase
+              .from('children')
+              .select('*')
+              .eq('parent_id', job.parent_id)
+            return { ...job, children: children || [] }
+          } catch {
+            return { ...job, children: [] }
+          }
+        })
+      )
+
+      return jobsWithChildren.map(normalizeJobRecord)
     } catch (error) {
       return this._handleError('getJobs', error)
     }
@@ -146,13 +171,44 @@ export class JobService extends SupabaseBase {
 
       const { data, error } = await supabase
         .from('jobs')
-        .select('*')
+        .select(`
+          *,
+          users!parent_id(
+            id,
+            name,
+            email,
+            phone,
+            profile_image
+          ),
+          applications(
+            id,
+            caregiver_id,
+            status,
+            message,
+            applied_at,
+            created_at,
+            updated_at
+          )
+        `)
         .eq('parent_id', clientId)
         .order('created_at', { ascending: false })
 
       if (error) throw error
 
-      return Array.isArray(data) ? data.map(normalizeJobRecord) : []
+      // Fetch children data for user's jobs
+      const { data: children } = await supabase
+        .from('children')
+        .select('*')
+        .eq('parent_id', clientId)
+
+      const jobsWithChildren = (data || []).map(job => ({
+        ...job,
+        children: children || [],
+        applications: job.applications || [],
+        applications_count: job.applications?.length || 0
+      }))
+
+      return jobsWithChildren.map(normalizeJobRecord)
     } catch (error) {
       return this._handleError('getMyJobs', error)
     }
@@ -220,8 +276,6 @@ export class JobService extends SupabaseBase {
 
       const dbJobData = {
         parent_id: parentId,
-        parent_name: jobData.parent_name || jobData.parentName || jobData.client_name || jobData.clientName || null,
-        parent_photo: jobData.parent_photo || jobData.parentPhoto || null,
         title: jobData.title?.trim() || 'Childcare Position',
         description: jobData.description?.trim() || 'Childcare needed',
         location: jobData.location?.trim() || 'Location TBD',
@@ -229,19 +283,8 @@ export class JobService extends SupabaseBase {
         start_time: jobData.start_time || jobData.startTime || startTime,
         end_time: jobData.end_time || jobData.endTime || endTime,
         hourly_rate: Number(jobData.hourly_rate || jobData.hourlyRate || jobData.rate || jobData.salary || 300),
-        number_of_children: jobData.number_of_children || jobData.numberOfChildren || jobData.childrenCount || childrenArray.length || null,
-        children_ages: jobData.children_ages || jobData.childrenAges || jobData.ages || null,
         urgent: Boolean(jobData.urgent),
-        status: ['active', 'filled', 'cancelled', 'completed', 'pending'].includes(jobData.status) ? jobData.status : 'active',
-        special_instructions: jobData.special_instructions || jobData.specialInstructions || null,
-        contact_phone: jobData.contact_phone || jobData.contactPhone || null,
-        contact_email: jobData.contact_email || jobData.contactEmail || null,
-        children: childrenArray.length ? childrenArray : null,
-        requirements: requirementsArray.length ? requirementsArray : null,
-        working_hours: jobData.working_hours || jobData.workingHours || null,
-        emergency_contact: emergencyContact,
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString()
+        status: ['active', 'filled', 'cancelled', 'completed', 'pending'].includes(jobData.status) ? jobData.status : 'active'
       }
 
       const { data, error } = await supabase

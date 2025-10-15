@@ -181,7 +181,7 @@ const JobPostingModal = ({ visible, onClose, onJobPosted }) => {
         endDate: jobData.endDate || undefined,
         workingHours: jobData.workingHours,
         requirements: jobData.requirements || [],
-        children: jobData.children || [],
+
         parentId: user?.uid || user?.id,
         parentName: user?.displayName || user?.name || 'Parent',
         parentPhoto: user?.photoURL || user?.profileImage || user?.profile_image || null,
