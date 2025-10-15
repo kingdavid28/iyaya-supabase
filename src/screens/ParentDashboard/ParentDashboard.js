@@ -7,6 +7,7 @@ import { usePrivacy } from '../../components/features/privacy/PrivacyManager';
 // Core imports
 import { useAuth } from '../../contexts/AuthContext';
 import { useParentDashboard } from '../../hooks/useParentDashboard';
+import { useNotificationCounts } from '../../hooks/useNotificationCounts';
 
 // Supabase service import
 import { supabaseService } from '../../services/supabase';
@@ -65,7 +66,7 @@ const ParentDashboard = () => {
   const { signOut, user } = useAuth();
   
   // Get privacy-related data
-  const { pendingRequests, notifications } = usePrivacy();
+  const { pendingRequests } = usePrivacy();
   
   // Dashboard data
   const {
@@ -84,42 +85,24 @@ const ParentDashboard = () => {
     fetchChildren
   } = useParentDashboard();
   
-  // Calculate notification counts for each tab
+  // Get notification counts
+  const { counts: notificationCounts } = useNotificationCounts();
+  
+  // Calculate tab notification counts
   const tabNotificationCounts = useMemo(() => {
-    // Count unread messages
-    const unreadMessages = notifications?.filter(n => 
-      n.type === 'message' && !n.read
-    )?.length || 0;
-
-    // Count pending booking requests
+    // Count pending bookings from actual booking data
     const pendingBookings = bookings?.filter(b => 
       b.status === 'pending' || b.status === 'awaiting_payment'
     )?.length || 0;
 
-    // Count unread job applications
-    const unreadApplications = notifications?.filter(n => 
-      n.type === 'job_application' && !n.read
-    )?.length || 0;
-
-    // Count unread reviews
-    const unreadReviews = notifications?.filter(n => 
-      n.type === 'review' && !n.read
-    )?.length || 0;
-
-    // Count other unread notifications (excluding the ones we've already counted)
-    const otherNotifications = notifications?.filter(n => 
-      !n.read && 
-      !['message', 'job_application', 'review'].includes(n.type)
-    )?.length || 0;
-
     return {
-      messages: unreadMessages,
-      bookings: pendingBookings,
-      jobs: unreadApplications,
-      reviews: unreadReviews,
-      notifications: otherNotifications
+      messages: notificationCounts.messages,
+      bookings: Math.max(pendingBookings, notificationCounts.bookings),
+      jobs: notificationCounts.jobs,
+      reviews: notificationCounts.reviews,
+      notifications: notificationCounts.notifications
     };
-  }, [notifications, bookings]);
+  }, [notificationCounts, bookings]);
 
   // UI State
   const [refreshing, setRefreshing] = useState(false);

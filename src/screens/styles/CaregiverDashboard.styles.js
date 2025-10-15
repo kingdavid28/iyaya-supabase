@@ -1015,6 +1015,33 @@ export const styles = StyleSheet.create({
     color: '#2E7D32',
     fontWeight: '600',
   },
+  // Notification badge styles
+  notificationBadge: {
+    position: 'absolute',
+    top: -8,
+    right: -12,
+    backgroundColor: '#ef4444',
+    borderRadius: 12,
+    minWidth: 20,
+    height: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 2,
+    borderColor: '#fff',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.2,
+    shadowRadius: 2,
+    elevation: 3,
+    zIndex: 10,
+  },
+  notificationBadgeText: {
+    color: '#fff',
+    fontSize: 10,
+    fontWeight: '700',
+    textAlign: 'center',
+    lineHeight: 12,
+  },
   // Modal overlay
   modalOverlay: {
     flex: 1,

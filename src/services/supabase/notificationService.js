@@ -80,6 +80,57 @@ export class NotificationService extends SupabaseBase {
     }
   }
 
+  async getNotificationCountsByType(userId) {
+    try {
+      this._validateId(userId, 'User ID')
+      
+      const { data, error } = await supabase
+        .from('notifications')
+        .select('type')
+        .eq('user_id', userId)
+        .eq('read', false)
+      
+      if (error) throw error
+      
+      const counts = {
+        messages: 0,
+        bookings: 0,
+        jobs: 0,
+        reviews: 0,
+        notifications: 0,
+        total: 0
+      }
+      
+      data?.forEach(notification => {
+        const type = notification.type
+        if (type === 'message') {
+          counts.messages++
+        } else if (['booking_request', 'booking_confirmed', 'booking_cancelled'].includes(type)) {
+          counts.bookings++
+        } else if (type === 'job_application') {
+          counts.jobs++
+        } else if (type === 'review') {
+          counts.reviews++
+        } else {
+          counts.notifications++
+        }
+        counts.total++
+      })
+      
+      return counts
+    } catch (error) {
+      console.warn('Error getting notification counts by type:', error)
+      return {
+        messages: 0,
+        bookings: 0,
+        jobs: 0,
+        reviews: 0,
+        notifications: 0,
+        total: 0
+      }
+    }
+  }
+
   async markNotificationAsRead(notificationId) {
     try {
       this._validateId(notificationId, 'Notification ID')
@@ -127,6 +178,12 @@ export class NotificationService extends SupabaseBase {
       .channel(`notifications:${userId}`)
       .on('postgres_changes', {
         event: 'INSERT',
+        schema: 'public',
+        table: 'notifications',
+        filter: `user_id=eq.${userId}`
+      }, callback)
+      .on('postgres_changes', {
+        event: 'UPDATE',
         schema: 'public',
         table: 'notifications',
         filter: `user_id=eq.${userId}`

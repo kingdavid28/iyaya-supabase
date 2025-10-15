@@ -29,7 +29,7 @@ const TabButton = React.memo(({
         {showBadge && notificationCount > 0 && (
           <View style={styles.notificationBadge}>
             <Text style={styles.notificationBadgeText}>
-              {notificationCount > 9 ? '9+' : notificationCount}
+              {notificationCount > 99 ? '99+' : notificationCount}
             </Text>
           </View>
         )}
@@ -165,22 +165,29 @@ const styles = StyleSheet.create({
   },
   notificationBadge: {
     position: 'absolute',
-    top: -6,
-    right: -10,
+    top: -8,
+    right: -12,
     backgroundColor: '#ef4444',
-    borderRadius: 10,
-    minWidth: 18,
-    height: 18,
+    borderRadius: 12,
+    minWidth: 20,
+    height: 20,
     alignItems: 'center',
     justifyContent: 'center',
-    borderWidth: 1.5,
+    borderWidth: 2,
     borderColor: '#fff',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.2,
+    shadowRadius: 2,
+    elevation: 3,
+    zIndex: 10,
   },
   notificationBadgeText: {
     color: '#fff',
     fontSize: 10,
-    fontWeight: '600',
-    paddingHorizontal: 4,
+    fontWeight: '700',
+    textAlign: 'center',
+    lineHeight: 12,
   },
 });
 

@@ -10,6 +10,7 @@ import { getCurrentSocketURL } from '../config/api'
 import { useAuth } from "../contexts/AuthContext"
 import JobsTab, { CaregiverJobCard } from './CaregiverDashboard/JobsTab';
 import { usePrivacy } from '../components/features/privacy/PrivacyManager';
+import { useNotificationCounts } from '../hooks/useNotificationCounts';
 import { SettingsModal } from "../components/ui/modals/SettingsModal"
 import { RequestInfoModal } from "../components/ui/modals/RequestInfoModal"
 import BookingDetailsModal from '../components/BookingDetailsModal';
@@ -618,7 +619,8 @@ function CaregiverDashboard({ onLogout, route }) {
     jobsLoading,
     loadProfile, fetchJobs, fetchApplications, fetchBookings
   } = useCaregiverDashboard();
-  const { pendingRequests, notifications } = usePrivacy();
+  const { pendingRequests } = usePrivacy();
+  const { counts: notificationCounts } = useNotificationCounts();
   
   const [editProfileModalVisible, setEditProfileModalVisible] = useState(false)
   const [profileName, setProfileName] = useState("Ana Dela Cruz")
@@ -663,17 +665,16 @@ function CaregiverDashboard({ onLogout, route }) {
       ? reviews.filter(review => !review?.read).length
       : 0
 
-    const unreadNotifications = notifications?.filter?.(n => !n.read)?.length || 0
     const pendingRequestsCount = pendingRequests?.length || 0
 
     return {
-      bookings: pendingBookingsCount,
+      bookings: Math.max(pendingBookingsCount, notificationCounts.bookings),
       applications: pendingApplicationsCount,
-      messages: unreadMessagesCount,
-      reviews: unreadReviewsCount,
-      notifications: unreadNotifications + pendingRequestsCount
+      messages: Math.max(unreadMessagesCount, notificationCounts.messages),
+      reviews: Math.max(unreadReviewsCount, notificationCounts.reviews),
+      notifications: notificationCounts.notifications + pendingRequestsCount
     }
-  }, [applications, bookings, notifications, parents, pendingRequests, reviews])
+  }, [applications, bookings, notificationCounts, parents, pendingRequests, reviews])
   
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
@@ -1120,9 +1121,8 @@ function CaregiverDashboard({ onLogout, route }) {
   )
 
   const renderTopNav = () => {
-    const unreadNotifications = notifications?.filter(n => !n.read)?.length || 0;
     const pendingRequestsCount = pendingRequests?.length || 0;
-    const totalUnread = unreadNotifications + pendingRequestsCount;
+    const totalUnread = notificationCounts.notifications + pendingRequestsCount;
     
     const tabs = [
       { id: 'dashboard', label: 'Dashboard', icon: 'grid' },
@@ -1167,7 +1167,7 @@ function CaregiverDashboard({ onLogout, route }) {
                 {tab.badgeCount > 0 && tab.id === 'notifications' && (
                   <View style={styles.notificationBadge}>
                     <Text style={styles.notificationBadgeText}>
-                      {tab.badgeCount > 9 ? '9+' : tab.badgeCount}
+                      {tab.badgeCount > 99 ? '99+' : tab.badgeCount}
                     </Text>
                   </View>
                 )}
@@ -1296,9 +1296,8 @@ function CaregiverDashboard({ onLogout, route }) {
   );
 
   const renderHeader = () => {
-    const unreadNotifications = notifications?.filter(n => !n.read)?.length || 0;
     const pendingRequestsCount = pendingRequests?.length || 0;
-    const totalUnread = unreadNotifications + pendingRequestsCount;
+    const totalUnread = notificationCounts.notifications + pendingRequestsCount;
     
     return (
       <View style={styles.parentLikeHeaderContainer}>
