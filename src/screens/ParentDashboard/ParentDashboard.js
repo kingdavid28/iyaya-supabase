@@ -31,7 +31,7 @@ import JobsTab from './components/JobsTab';
 import MessagesTab from './components/MessagesTab'; // Added missing import
 import ReviewsTab from './components/ReviewsTab';
 import AlertsTab from './components/AlertsTab';
-import NotificationTester from '../../components/NotificationTester';
+
 
 // Modal imports
 import ProfileModal from './modals/ProfileModal';
@@ -946,16 +946,13 @@ const ParentDashboard = () => {
         );
       case 'alerts':
         return (
-          <View>
-            <AlertsTab
-              navigation={navigation}
-              refreshing={refreshing}
-              onRefresh={onRefresh}
-              loading={loading}
-              onNavigateTab={setActiveTab}
-            />
-            {__DEV__ && <NotificationTester />}
-          </View>
+          <AlertsTab
+            navigation={navigation}
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            loading={loading}
+            onNavigateTab={setActiveTab}
+          />
         );
       default:
         return null;

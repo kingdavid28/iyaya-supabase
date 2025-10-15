@@ -346,16 +346,19 @@ const JobsTab = ({
               ))
             ) : (
               <View style={styles.emptyState}>
-                <Briefcase size={48} color={colors.textTertiary} />
-                <Text style={styles.emptyStateTitle}>No jobs posted yet</Text>
+                <View style={styles.emptyIconContainer}>
+                  <Briefcase size={48} color={colors.primary} />
+                </View>
+                <Text style={styles.emptyStateTitle}>Post a New Job</Text>
                 <Text style={styles.emptyStateText}>
-                  Create your first job posting to find the perfect caregiver
+                  Find the perfect caregiver for your family by posting a detailed job listing
                 </Text>
                 <TouchableOpacity
                   style={styles.emptyStateButton}
                   onPress={() => setShowJobModal(true)}
                 >
-                  <Text style={styles.emptyStateButtonText}>Post Your First Job</Text>
+                  <Plus size={20} color="#FFFFFF" style={{ marginRight: 8 }} />
+                  <Text style={styles.emptyStateButtonText}>Create Job Posting</Text>
                 </TouchableOpacity>
               </View>
             )}

@@ -52,6 +52,15 @@ const ApplicationCard = React.memo(({ application, onViewJob, onWithdraw }) => {
         </View>
         
         <View style={applicationCardStyles.detailRow}>
+          <Ionicons name="people-outline" size={16} color="#6b7280" />
+          <Text style={applicationCardStyles.detailText}>
+            {job?.children?.length ? `${job.children.length} child${job.children.length > 1 ? 'ren' : ''}` : 
+             job?.childrenCount ? `${job.childrenCount} child${job.childrenCount > 1 ? 'ren' : ''}` : 
+             'Children info available'}
+          </Text>
+        </View>
+        
+        <View style={applicationCardStyles.detailRow}>
           <Ionicons name="calendar-outline" size={16} color="#6b7280" />
           <Text style={applicationCardStyles.detailText}>
             Applied {appliedDate ? new Date(appliedDate).toLocaleDateString() : 'recently'}

@@ -27,7 +27,7 @@ import jobService from '../../../services/jobService';
 import { useAuth } from '../../../contexts/AuthContext';
 import { getCurrentDeviceLocation } from '../../../utils/locationUtils';
 
-import CustomDateTimePicker from '../../../shared/ui/inputs/DateTimePicker';
+import SimpleDatePicker from '../../../shared/ui/inputs/SimpleDatePicker';
 
 const SUGGESTED_SKILLS = [
   'CPR Certified',
@@ -57,8 +57,8 @@ const JobPostingModal = ({ visible, onClose, onJobPosted }) => {
     description: '',
     location: '',
     rate: '',
-    startDate: '',
-    endDate: '',
+    startDate: null,
+    endDate: null,
     workingHours: '',
     requirements: [],
     children: [],
@@ -82,17 +82,72 @@ const JobPostingModal = ({ visible, onClose, onJobPosted }) => {
     }
   }, [user]);
 
+  // Reset form when modal closes
+  useEffect(() => {
+    if (!visible) {
+      setStep(1);
+      setJobData({
+        title: '',
+        description: '',
+        location: '',
+        rate: '',
+        startDate: null,
+        endDate: null,
+        workingHours: '',
+        requirements: [],
+        children: [],
+        status: 'open',
+        parentId: user?.uid || user?.id || '',
+        createdAt: null,
+        updatedAt: null,
+        applicants: [],
+      });
+      setErrors({});
+    }
+  }, [visible, user]);
+
   const formatDate = (date) => {
     if (!date) return '';
     try {
-      const d = new Date(date);
+      // Handle both string and Date object inputs
+      const d = typeof date === 'string' ? new Date(date) : date;
       if (Number.isNaN(d.getTime())) return '';
-      // YYYY-MM-DD
+      
+      // YYYY-MM-DD format for backend
       const yyyy = d.getFullYear();
       const mm = String(d.getMonth() + 1).padStart(2, '0');
       const dd = String(d.getDate()).padStart(2, '0');
       return `${yyyy}-${mm}-${dd}`;
-    } catch (_) {
+    } catch (error) {
+      console.error('Date formatting error:', error);
+      return '';
+    }
+  };
+
+  const parseDate = (dateString) => {
+    if (!dateString) return null;
+    try {
+      const date = new Date(dateString);
+      return Number.isNaN(date.getTime()) ? null : date;
+    } catch (error) {
+      console.error('Date parsing error:', error);
+      return null;
+    }
+  };
+
+  const formatDisplayDate = (dateString) => {
+    if (!dateString) return '';
+    try {
+      const date = new Date(dateString);
+      if (Number.isNaN(date.getTime())) return '';
+      
+      return date.toLocaleDateString('en-US', {
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric'
+      });
+    } catch (error) {
+      console.error('Display date formatting error:', error);
       return '';
     }
   };
@@ -110,6 +165,15 @@ const JobPostingModal = ({ visible, onClose, onJobPosted }) => {
     else if (step === 2) {
       if (!jobData.startDate) newErrors.startDate = 'Start date is required';
       if (!jobData.workingHours) newErrors.workingHours = 'Working hours are required';
+      
+      // Validate end date if provided
+      if (jobData.endDate && jobData.startDate) {
+        const start = new Date(jobData.startDate);
+        const end = new Date(jobData.endDate);
+        if (end < start) {
+          newErrors.endDate = 'End date cannot be before start date';
+        }
+      }
     }
     
     setErrors(newErrors);
@@ -157,7 +221,7 @@ const JobPostingModal = ({ visible, onClose, onJobPosted }) => {
       
       if (locationData && locationData.address) {
         const formattedAddress = `${locationData.address.street || ''} ${locationData.address.city || ''}, ${locationData.address.province || ''}`;
-        setJobData({ ...jobData, location: formattedAddress.trim() });
+        setJobData(prev => ({ ...prev, location: formattedAddress.trim() }));
       }
     } catch (error) {
       Alert.alert('Location Error', error.message || 'Failed to get current location.');
@@ -175,13 +239,12 @@ const JobPostingModal = ({ visible, onClose, onJobPosted }) => {
         title: jobData.title.trim(),
         description: jobData.description.trim(),
         location: jobData.location.trim(),
-        salary: Number(jobData.rate), // Backend expects 'salary' not 'rate'
-        rate: Number(jobData.rate), // Keep both for compatibility
+        salary: Number(jobData.rate),
+        rate: Number(jobData.rate),
         startDate: jobData.startDate,
         endDate: jobData.endDate || undefined,
         workingHours: jobData.workingHours,
         requirements: jobData.requirements || [],
-
         parentId: user?.uid || user?.id,
         parentName: user?.displayName || user?.name || 'Parent',
         parentPhoto: user?.photoURL || user?.profileImage || user?.profile_image || null,
@@ -190,7 +253,6 @@ const JobPostingModal = ({ visible, onClose, onJobPosted }) => {
       
       console.log('📱 [MOBILE] Job payload:', payload);
 
-      // Use jobService.createJobPost directly for reliability
       const response = await jobService.createJobPost(payload);
       console.log('📱 [MOBILE] Job creation response:', response);
 
@@ -200,7 +262,7 @@ const JobPostingModal = ({ visible, onClose, onJobPosted }) => {
       const createdJob = response?.data?.job || { ...payload, id: Date.now(), _id: Date.now() };
       if (onJobPosted) onJobPosted(createdJob);
       
-      // Reset form first
+      // Reset form and close modal
       setJobData({
         title: '',
         description: '',
@@ -215,12 +277,10 @@ const JobPostingModal = ({ visible, onClose, onJobPosted }) => {
       setStep(1);
       setErrors({});
       
-      // Close modal and notify parent
       if (onClose) {
         onClose();
       }
       
-      // Show success message after modal closes
       setTimeout(() => {
         Alert.alert('Success', 'Job posted successfully!');
       }, 300);
@@ -243,21 +303,6 @@ const JobPostingModal = ({ visible, onClose, onJobPosted }) => {
     return `₱${numeric.toLocaleString('en-PH', { minimumFractionDigits: 0 })} / hour`;
   };
 
-  const renderSummaryRow = ({ icon, label, value, multiline = false }) => (
-    <View key={label} style={styles.summaryRow}>
-      {icon && React.cloneElement(icon, { style: styles.summaryIcon })}
-      <View style={styles.summaryTextContainer}>
-        <Text style={styles.summaryLabel}>{label}</Text>
-        <Text
-          style={[styles.summaryValue, multiline && styles.summaryValueMultiline]}
-          numberOfLines={multiline ? undefined : 2}
-        >
-          {value || '—'}
-        </Text>
-      </View>
-    </View>
-  );
-
   const renderStep = () => {
     switch (step) {
       case 1:
@@ -271,7 +316,7 @@ const JobPostingModal = ({ visible, onClose, onJobPosted }) => {
                 style={[styles.input, errors.title && styles.inputError]}
                 placeholder="e.g., Full-time Nanny Needed"
                 value={jobData.title}
-                onChangeText={(text) => setJobData({ ...jobData, title: text })}
+                onChangeText={(text) => setJobData(prev => ({ ...prev, title: text }))}
               />
               {errors.title && <Text style={styles.errorText}>{errors.title}</Text>}
             </View>
@@ -284,7 +329,7 @@ const JobPostingModal = ({ visible, onClose, onJobPosted }) => {
                 multiline
                 numberOfLines={4}
                 value={jobData.description}
-                onChangeText={(text) => setJobData({ ...jobData, description: text })}
+                onChangeText={(text) => setJobData(prev => ({ ...prev, description: text }))}
               />
               {errors.description && <Text style={styles.errorText}>{errors.description}</Text>}
             </View>
@@ -310,7 +355,7 @@ const JobPostingModal = ({ visible, onClose, onJobPosted }) => {
                   style={[styles.input, styles.inputWithIcon]}
                   placeholder="e.g., 123 Main St, City"
                   value={jobData.location}
-                  onChangeText={(text) => setJobData({ ...jobData, location: text })}
+                  onChangeText={(text) => setJobData(prev => ({ ...prev, location: text }))}
                 />
               </View>
               {errors.location && <Text style={styles.errorText}>{errors.location}</Text>}
@@ -325,7 +370,7 @@ const JobPostingModal = ({ visible, onClose, onJobPosted }) => {
                   placeholder="e.g., 150"
                   keyboardType="numeric"
                   value={jobData.rate}
-                  onChangeText={(text) => setJobData({ ...jobData, rate: text.replace(/[^0-9]/g, '') })}
+                  onChangeText={(text) => setJobData(prev => ({ ...prev, rate: text.replace(/[^0-9]/g, '') }))}
                 />
               </View>
               {errors.rate && <Text style={styles.errorText}>{errors.rate}</Text>}
@@ -370,7 +415,7 @@ const JobPostingModal = ({ visible, onClose, onJobPosted }) => {
                   style={[styles.input, styles.requirementInput]}
                   placeholder="e.g., Tutoring Experience"
                   value={jobData.requirementsInput || ''}
-                  onChangeText={(text) => setJobData({ ...jobData, requirementsInput: text })}
+                  onChangeText={(text) => setJobData(prev => ({ ...prev, requirementsInput: text }))}
                   onSubmitEditing={handleAddRequirement}
                 />
                 <TouchableOpacity
@@ -413,21 +458,60 @@ const JobPostingModal = ({ visible, onClose, onJobPosted }) => {
           <View style={styles.stepContainer}>
             <Text style={styles.stepTitle}>Schedule</Text>
 
-            <CustomDateTimePicker
+            <SimpleDatePicker
+              id="startDate"
               label="Start Date *"
-              value={jobData.startDate ? new Date(jobData.startDate) : new Date()}
-              onDateChange={(date) => setJobData({ ...jobData, startDate: date.toISOString().split('T')[0] })}
-              minimumDate={new Date()}
-              format="long"
+              value={parseDate(jobData.startDate)}
+              onDateChange={(date) => {
+                console.log('Start date selected:', date);
+                if (date) {
+                  const formattedDate = formatDate(date);
+                  setJobData(prev => ({ 
+                    ...prev, 
+                    startDate: formattedDate 
+                  }));
+                  
+                  // Clear end date error if start date changes
+                  if (errors.endDate) {
+                    setErrors(prev => ({ ...prev, endDate: undefined }));
+                  }
+                  
+                  // If end date exists and is now before the new start date, clear it
+                  if (jobData.endDate) {
+                    const endDate = new Date(jobData.endDate);
+                    if (date > endDate) {
+                      setJobData(prev => ({ ...prev, endDate: '' }));
+                    }
+                  }
+                }
+              }}
               error={errors.startDate}
+              minimumDate={new Date()} // Can't select past dates
             />
 
-            <CustomDateTimePicker
+            <SimpleDatePicker
+              id="endDate"
               label="End Date (Optional)"
-              value={jobData.endDate ? new Date(jobData.endDate) : new Date()}
-              onDateChange={(date) => setJobData({ ...jobData, endDate: date.toISOString().split('T')[0] })}
+              value={parseDate(jobData.endDate)}
+              onDateChange={(date) => {
+                console.log('End date selected:', date);
+                if (date) {
+                  const formattedDate = formatDate(date);
+                  setJobData(prev => ({ 
+                    ...prev, 
+                    endDate: formattedDate 
+                  }));
+                  
+                  // Clear end date error when new date is selected
+                  if (errors.endDate) {
+                    setErrors(prev => ({ ...prev, endDate: undefined }));
+                  }
+                } else {
+                  setJobData(prev => ({ ...prev, endDate: '' }));
+                }
+              }}
+              error={errors.endDate}
               minimumDate={jobData.startDate ? new Date(jobData.startDate) : new Date()}
-              format="long"
             />
 
             <View>
@@ -438,7 +522,7 @@ const JobPostingModal = ({ visible, onClose, onJobPosted }) => {
                   style={[styles.input, styles.inputWithIcon]}
                   placeholder="e.g., 9:00 AM - 5:00 PM, Monday to Friday"
                   value={jobData.workingHours}
-                  onChangeText={(text) => setJobData({ ...jobData, workingHours: text })}
+                  onChangeText={(text) => setJobData(prev => ({ ...prev, workingHours: text }))}
                 />
               </View>
               {errors.workingHours && <Text style={styles.errorText}>{errors.workingHours}</Text>}
@@ -446,161 +530,161 @@ const JobPostingModal = ({ visible, onClose, onJobPosted }) => {
           </View>
         );
         
-              case 3:
-                return (
-                  <View style={styles.stepContainer}>
-                    <Text style={styles.stepTitle}>Review & Post</Text>
-                    <Text style={styles.reviewDescription}>
-                      Please review your job posting below. Your job will be visible to qualified caregivers in your area.
-                    </Text>
-        
-                    {/* Job Details Card */}
-                    <View style={styles.summaryCard}>
-                      <View style={styles.summaryCardHeader}>
-                        <Text style={styles.summarySectionTitle}>Job Details</Text>
-                        <TouchableOpacity 
-                          style={styles.editButton}
-                          onPress={() => setStep(1)}
-                        >
-                          <Text style={styles.editButtonText}>Edit</Text>
-                        </TouchableOpacity>
-                      </View>
-                      
-                      <View style={styles.summaryGrid}>
-                        <View style={styles.summaryItem}>
-                          <View style={styles.summaryIconContainer}>
-                            <MapPin size={16} color="#4F46E5" />
-                          </View>
-                          <View style={styles.summaryContent}>
-                            <Text style={styles.summaryLabel}>Location</Text>
-                            <Text style={styles.summaryValue} numberOfLines={2}>
-                              {jobData.location?.trim() || 'Not specified'}
-                            </Text>
-                          </View>
-                        </View>
-        
-                        <View style={styles.summaryItem}>
-                          <View style={styles.summaryIconContainer}>
-                            <DollarSign size={16} color="#10B981" />
-                          </View>
-                          <View style={styles.summaryContent}>
-                            <Text style={styles.summaryLabel}>Hourly Rate</Text>
-                            <Text style={styles.summaryValue}>
-                              {formatCurrency(jobData.rate)}
-                            </Text>
-                          </View>
-                        </View>
-                      </View>
-        
-                      <View style={styles.summaryItemFull}>
-                        <Text style={styles.summaryLabel}>Job Title</Text>
-                        <Text style={styles.summaryTitle}>{jobData.title || '—'}</Text>
-                      </View>
-        
-                      <View style={styles.summaryItemFull}>
-                        <Text style={styles.summaryLabel}>Description</Text>
-                        <Text style={styles.summaryDescription} numberOfLines={4}>
-                          {jobData.description?.trim() || 'No description provided'}
-                        </Text>
-                      </View>
-                    </View>
-        
-                    {/* Schedule Card */}
-                    <View style={styles.summaryCard}>
-                      <View style={styles.summaryCardHeader}>
-                        <Text style={styles.summarySectionTitle}>Schedule</Text>
-                        <TouchableOpacity 
-                          style={styles.editButton}
-                          onPress={() => setStep(2)}
-                        >
-                          <Text style={styles.editButtonText}>Edit</Text>
-                        </TouchableOpacity>
-                      </View>
-        
-                      <View style={styles.summaryGrid}>
-                        <View style={styles.summaryItem}>
-                          <View style={styles.summaryIconContainer}>
-                            <Calendar size={16} color="#8B5CF6" />
-                          </View>
-                          <View style={styles.summaryContent}>
-                            <Text style={styles.summaryLabel}>Start Date</Text>
-                            <Text style={styles.summaryValue}>
-                              {formatDate(jobData.startDate) || 'Not specified'}
-                            </Text>
-                          </View>
-                        </View>
-        
-                        <View style={styles.summaryItem}>
-                          <View style={styles.summaryIconContainer}>
-                            <Calendar size={16} color="#F59E0B" />
-                          </View>
-                          <View style={styles.summaryContent}>
-                            <Text style={styles.summaryLabel}>End Date</Text>
-                            <Text style={styles.summaryValue}>
-                              {jobData.endDate ? formatDate(jobData.endDate) : 'Not specified'}
-                            </Text>
-                          </View>
-                        </View>
-                      </View>
-        
-                      <View style={styles.summaryItemFull}>
-                        <View style={styles.summaryIconContainer}>
-                          <Clock size={16} color="#EF4444" />
-                        </View>
-                        <View style={styles.summaryContent}>
-                          <Text style={styles.summaryLabel}>Working Hours</Text>
-                          <Text style={styles.summaryValue}>
-                            {jobData.workingHours?.trim() || 'Not specified'}
-                          </Text>
-                        </View>
-                      </View>
-                    </View>
-        
-                    {/* Requirements Card */}
-                    <View style={styles.summaryCard}>
-                      <View style={styles.summaryCardHeader}>
-                        <Text style={styles.summarySectionTitle}>Skills & Requirements</Text>
-                        <TouchableOpacity 
-                          style={styles.editButton}
-                          onPress={() => setStep(1)}
-                        >
-                          <Text style={styles.editButtonText}>Edit</Text>
-                        </TouchableOpacity>
-                      </View>
-        
-                      {jobData.requirements.length > 0 ? (
-                        <View style={styles.requirementsGrid}>
-                          {jobData.requirements.map((req, index) => (
-                            <View key={`${req}-${index}`} style={styles.requirementChip}>
-                              <Check size={14} color="#10B981" style={styles.chipIcon} />
-                              <Text style={styles.requirementChipText}>{req}</Text>
-                            </View>
-                          ))}
-                        </View>
-                      ) : (
-                        <View style={styles.emptyState}>
-                          <AlertCircle size={24} color="#9CA3AF" />
-                          <Text style={styles.emptyStateText}>
-                            No skills or requirements added
-                          </Text>
-                        </View>
-                      )}
-                    </View>
-        
-                    {/* Final Note */}
-                    <View style={styles.finalNote}>
-                      <AlertCircle size={16} color="#6B7280" />
-                      <Text style={styles.finalNoteText}>
-                        Once posted, your job will be visible to caregivers. You can edit or close it anytime from your job listings.
-                      </Text>
-                    </View>
+      case 3:
+        return (
+          <View style={styles.stepContainer}>
+            <Text style={styles.stepTitle}>Review & Post</Text>
+            <Text style={styles.reviewDescription}>
+              Please review your job posting below. Your job will be visible to qualified caregivers in your area.
+            </Text>
+
+            {/* Job Details Card */}
+            <View style={styles.summaryCard}>
+              <View style={styles.summaryCardHeader}>
+                <Text style={styles.summarySectionTitle}>Job Details</Text>
+                <TouchableOpacity 
+                  style={styles.editButton}
+                  onPress={() => setStep(1)}
+                >
+                  <Text style={styles.editButtonText}>Edit</Text>
+                </TouchableOpacity>
+              </View>
+              
+              <View style={styles.summaryGrid}>
+                <View style={styles.summaryItem}>
+                  <View style={styles.summaryIconContainer}>
+                    <MapPin size={16} color="#4F46E5" />
                   </View>
-                );
+                  <View style={styles.summaryContent}>
+                    <Text style={styles.summaryLabel}>Location</Text>
+                    <Text style={styles.summaryValue} numberOfLines={2}>
+                      {jobData.location?.trim() || 'Not specified'}
+                    </Text>
+                  </View>
+                </View>
+
+                <View style={styles.summaryItem}>
+                  <View style={styles.summaryIconContainer}>
+                    <DollarSign size={16} color="#10B981" />
+                  </View>
+                  <View style={styles.summaryContent}>
+                    <Text style={styles.summaryLabel}>Hourly Rate</Text>
+                    <Text style={styles.summaryValue}>
+                      {formatCurrency(jobData.rate)}
+                    </Text>
+                  </View>
+                </View>
+              </View>
+
+              <View style={styles.summaryItemFull}>
+                <Text style={styles.summaryLabel}>Job Title</Text>
+                <Text style={styles.summaryTitle}>{jobData.title || '—'}</Text>
+              </View>
+
+              <View style={styles.summaryItemFull}>
+                <Text style={styles.summaryLabel}>Description</Text>
+                <Text style={styles.summaryDescription} numberOfLines={4}>
+                  {jobData.description?.trim() || 'No description provided'}
+                </Text>
+              </View>
+            </View>
+
+            {/* Schedule Card */}
+            <View style={styles.summaryCard}>
+              <View style={styles.summaryCardHeader}>
+                <Text style={styles.summarySectionTitle}>Schedule</Text>
+                <TouchableOpacity 
+                  style={styles.editButton}
+                  onPress={() => setStep(2)}
+                >
+                  <Text style={styles.editButtonText}>Edit</Text>
+                </TouchableOpacity>
+              </View>
+
+              <View style={styles.summaryGrid}>
+                <View style={styles.summaryItem}>
+                  <View style={styles.summaryIconContainer}>
+                    <Calendar size={16} color="#8B5CF6" />
+                  </View>
+                  <View style={styles.summaryContent}>
+                    <Text style={styles.summaryLabel}>Start Date</Text>
+                    <Text style={styles.summaryValue}>
+                      {formatDisplayDate(jobData.startDate) || 'Not specified'}
+                    </Text>
+                  </View>
+                </View>
+
+                <View style={styles.summaryItem}>
+                  <View style={styles.summaryIconContainer}>
+                    <Calendar size={16} color="#F59E0B" />
+                  </View>
+                  <View style={styles.summaryContent}>
+                    <Text style={styles.summaryLabel}>End Date</Text>
+                    <Text style={styles.summaryValue}>
+                      {jobData.endDate ? formatDisplayDate(jobData.endDate) : 'Not specified'}
+                    </Text>
+                  </View>
+                </View>
+              </View>
+
+              <View style={styles.summaryItemFull}>
+                <View style={styles.summaryIconContainer}>
+                  <Clock size={16} color="#EF4444" />
+                </View>
+                <View style={styles.summaryContent}>
+                  <Text style={styles.summaryLabel}>Working Hours</Text>
+                  <Text style={styles.summaryValue}>
+                    {jobData.workingHours?.trim() || 'Not specified'}
+                  </Text>
+                </View>
+              </View>
+            </View>
+
+            {/* Requirements Card */}
+            <View style={styles.summaryCard}>
+              <View style={styles.summaryCardHeader}>
+                <Text style={styles.summarySectionTitle}>Skills & Requirements</Text>
+                <TouchableOpacity 
+                  style={styles.editButton}
+                  onPress={() => setStep(1)}
+                >
+                  <Text style={styles.editButtonText}>Edit</Text>
+                </TouchableOpacity>
+              </View>
+
+              {jobData.requirements.length > 0 ? (
+                <View style={styles.requirementsGrid}>
+                  {jobData.requirements.map((req, index) => (
+                    <View key={`${req}-${index}`} style={styles.requirementChip}>
+                      <Check size={14} color="#10B981" style={styles.chipIcon} />
+                      <Text style={styles.requirementChipText}>{req}</Text>
+                    </View>
+                  ))}
+                </View>
+              ) : (
+                <View style={styles.emptyState}>
+                  <AlertCircle size={24} color="#9CA3AF" />
+                  <Text style={styles.emptyStateText}>
+                    No skills or requirements added
+                  </Text>
+                </View>
+              )}
+            </View>
+
+            {/* Final Note */}
+            <View style={styles.finalNote}>
+              <AlertCircle size={16} color="#6B7280" />
+              <Text style={styles.finalNoteText}>
+                Once posted, your job will be visible to caregivers. You can edit or close it anytime from your job listings.
+              </Text>
+            </View>
+          </View>
+        );
                 
-              default:
-                return null;
-            }
-          };
+      default:
+        return null;
+    }
+  };
 
   return (
     <Modal

@@ -1,7 +1,26 @@
 import { supabase } from '../../config/supabase'
 
 export class SupabaseBase {
+  _withTimeout(promise, timeoutMs = 10000) {
+    return Promise.race([
+      promise,
+      new Promise((_, reject) => 
+        setTimeout(() => reject(new Error('Network request timed out')), timeoutMs)
+      )
+    ])
+  }
+
   _handleError(method, error, throwError = true) {
+    const isNetworkError = error?.message?.includes('Network request timed out') || 
+                          error?.message?.includes('fetch') ||
+                          error?.code === 'NETWORK_ERROR'
+    
+    if (isNetworkError) {
+      console.warn(`⚠️ Network error in ${method}:`, error.message)
+      if (throwError) throw new Error('Connection timeout. Please check your internet connection.')
+      return null
+    }
+    
     console.error(`❌ Error in ${method}:`, {
       message: error?.message,
       code: error?.code,

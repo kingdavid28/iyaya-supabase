@@ -13,7 +13,7 @@ import { styles } from './styles';
 
 const CustomDateTimePicker = ({
   value,
-  mode = 'date', // 'date', 'time', 'datetime'
+  mode = 'date',
   onDateChange,
   minimumDate,
   maximumDate,
@@ -23,10 +23,10 @@ const CustomDateTimePicker = ({
   disabled = false,
   style,
   textStyle,
-  format = 'default', // 'default', 'short', 'long'
+  format = 'default',
 }) => {
   const [showPicker, setShowPicker] = useState(false);
-  const [tempDate, setTempDate] = useState(value || new Date());
+  const currentDate = value || new Date();
 
   const formatDate = (date) => {
     if (!date) return placeholder || 'Select date';
@@ -78,27 +78,28 @@ const CustomDateTimePicker = ({
     }
   };
 
+  const handleCancel = () => {
+    setShowPicker(false);
+  };
+
   const handleDateChange = (event, selectedDate) => {
     if (Platform.OS === 'android') {
-      setShowPicker(false);
-    }
-    
-    if (selectedDate) {
-      setTempDate(selectedDate);
-      if (Platform.OS === 'android') {
+      if (event?.type === 'dismissed') {
+        setShowPicker(false);
+        return;
+      }
+
+      if (selectedDate && onDateChange) {
+        setShowPicker(false);
         onDateChange(selectedDate);
       }
+      return;
     }
-  };
 
-  const handleConfirm = () => {
-    onDateChange(tempDate);
-    setShowPicker(false);
-  };
-
-  const handleCancel = () => {
-    setTempDate(value || new Date());
-    setShowPicker(false);
+    if (selectedDate && onDateChange) {
+      setShowPicker(false);
+      onDateChange(selectedDate);
+    }
   };
 
   const getWebInputType = () => {
@@ -173,13 +174,13 @@ const CustomDateTimePicker = ({
                mode === 'time' ? 'Select Time' : 
                'Select Date & Time'}
             </Text>
-            <TouchableOpacity onPress={handleConfirm}>
+            <TouchableOpacity onPress={handleCancel}>
               <Text style={styles.modalConfirmText}>Done</Text>
             </TouchableOpacity>
           </View>
           
           <DateTimePicker
-            value={tempDate}
+            value={currentDate}
             mode={mode}
             display="spinner"
             onChange={handleDateChange}
@@ -280,7 +281,7 @@ const CustomDateTimePicker = ({
       ) : (
         showPicker && (
           <DateTimePicker
-            value={tempDate}
+            value={currentDate}
             mode={mode}
             display="default"
             onChange={handleDateChange}

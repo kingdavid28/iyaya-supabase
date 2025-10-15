@@ -16,11 +16,13 @@ export class UserService extends SupabaseBase {
       
       this._validateId(targetUserId, 'User ID')
       
-      const { data, error } = await supabase
-        .from('users')
-        .select('*')
-        .eq('id', targetUserId)
-        .maybeSingle()
+      const { data, error } = await this._withTimeout(
+        supabase
+          .from('users')
+          .select('*')
+          .eq('id', targetUserId)
+          .maybeSingle()
+      )
       
       if (error) {
         console.warn('Error getting profile:', error)
@@ -42,8 +44,7 @@ export class UserService extends SupabaseBase {
         displayName: data.name || `${data.first_name || ''} ${data.last_name || ''}`.trim() || data.email?.split('@')[0] || 'User'
       }
     } catch (error) {
-      console.warn('⚠️ getProfile error:', error.message)
-      return null
+      return this._handleError('getProfile', error, false)
     }
   }
 

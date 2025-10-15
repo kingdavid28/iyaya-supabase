@@ -55,7 +55,7 @@ const localStyles = StyleSheet.create({
   jobCard: {
     backgroundColor: '#FFFFFF',
     borderRadius: 16,
-    padding: 18,
+    padding: 16,
     marginBottom: 16,
     borderWidth: 1,
     borderColor: '#F3F4F6',
@@ -65,10 +65,28 @@ const localStyles = StyleSheet.create({
     shadowRadius: 6,
     elevation: 2,
   },
-  jobHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12, gap: 12 },
-  jobTitleWrapper: { flex: 1 },
-  jobTitle: { fontSize: 18, fontWeight: '700', color: '#1F2937', lineHeight: 24 },
-  jobMetaText: { marginTop: 4, fontSize: 13, color: '#6B7280' },
+  jobHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    marginBottom: 10,
+    gap: 10,
+  },
+  jobTitleWrapper: { flex: 1, minWidth: 0 },
+  jobTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#1F2937',
+    lineHeight: 22,
+    flexShrink: 1,
+  },
+  jobMetaText: {
+    marginTop: 4,
+    fontSize: 12,
+    color: '#6B7280',
+    flexShrink: 1,
+    lineHeight: 18,
+  },
   statusPill: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -84,21 +102,36 @@ const localStyles = StyleSheet.create({
   },
   urgentBadge: { backgroundColor: '#FEE2E2', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 999, marginLeft: 8 },
   urgentText: { color: '#DC2626', fontSize: 11, fontWeight: '700', letterSpacing: 0.3 },
-  jobDetails: { marginBottom: 16, gap: 10 },
-  jobDetailRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
-  jobDetailText: { flex: 1, fontSize: 14, color: '#4B5563' },
+  jobDetails: { marginBottom: 16, gap: 8 },
+  jobDetailRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 8,
+  },
+  jobDetailText: {
+    flex: 1,
+    fontSize: 13,
+    color: '#4B5563',
+    lineHeight: 18,
+    flexWrap: 'wrap',
+  },
   tagContainer: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginBottom: 12 },
   tagPill: {
     backgroundColor: '#F0F9FF',
     borderRadius: 12,
-    paddingHorizontal: 10,
+    paddingHorizontal: 8,
     paddingVertical: 4,
     borderWidth: 1,
     borderColor: '#BAE6FD',
-    maxWidth: 120
+    maxWidth: '100%',
   },
   tagText: { color: '#0369A1', fontSize: 11, fontWeight: '500', textAlign: 'center' },
-  jobDescription: { fontSize: 14, color: '#374151', lineHeight: 20, marginBottom: 16 },
+  jobDescription: {
+    fontSize: 13,
+    color: '#374151',
+    lineHeight: 20,
+    marginBottom: 14,
+  },
   jobActions: { flexDirection: 'row', gap: 12 },
   viewButton: { flex: 1, paddingVertical: 12, borderRadius: 12, borderWidth: 1, borderColor: '#CBD5F5', alignItems: 'center', backgroundColor: '#F8FAFC' },
   viewButtonText: { color: '#1D4ED8', fontSize: 14, fontWeight: '600' },
@@ -202,11 +235,10 @@ export const CaregiverJobCard = ({ job, onApply, onView, hasApplied, style }) =>
 
   const allTags = useMemo(() => {
     const tags = [];
-    if (job?.childrenCount) tags.push(`${job.childrenCount} child${job.childrenCount > 1 ? 'ren' : ''}`);
     if (job?.urgent) tags.push('Urgent');
     if (job?.careType) tags.push(String(job.careType));
     if (Array.isArray(job?.requirements)) {
-      tags.push(...job.requirements.filter(Boolean).map(String).slice(0, 3));
+      tags.push(...job.requirements.filter(Boolean).map(String).slice(0, 4));
     }
     return [...new Set(tags)].filter(Boolean).slice(0, 5);
   }, [job]);
@@ -226,7 +258,18 @@ export const CaregiverJobCard = ({ job, onApply, onView, hasApplied, style }) =>
   }, [job]);
 
   return (
-    <View style={[styles.jobCard, style]}>
+    <View
+      style={[
+        styles.jobCard,
+        {
+          width: '100%',
+          maxWidth: 320,
+          alignSelf: 'stretch',
+          marginRight: 16,
+        },
+        style,
+      ]}
+    >
       <View style={styles.jobHeader}>
         <View style={styles.jobTitleWrapper}>
           <Text style={styles.jobTitle} numberOfLines={2}>{String(job?.title || 'Childcare Position')}</Text>
@@ -254,10 +297,8 @@ export const CaregiverJobCard = ({ job, onApply, onView, hasApplied, style }) =>
 
       <View style={styles.jobDetails}>
         <View style={styles.jobDetailRow}>
-          <MapPin size={16} color="#6B7280" />
-          <Text style={styles.jobDetailText}>
-            {String(job?.address || job?.location || 'Location not specified')}
-          </Text>
+          <Users size={16} color="#6B7280" />
+          <Text style={styles.jobDetailText}>{String(childrenSummary)}</Text>
         </View>
         <View style={styles.jobDetailRow}>
           <Clock size={16} color="#6B7280" />
@@ -265,10 +306,6 @@ export const CaregiverJobCard = ({ job, onApply, onView, hasApplied, style }) =>
             {String(job?.schedule || job?.time || job?.workingHours || 'Flexible schedule')}
             {job?.startTime && job?.endTime ? ` (${String(job.startTime)} - ${String(job.endTime)})` : ''}
           </Text>
-        </View>
-        <View style={styles.jobDetailRow}>
-          <Users size={16} color="#6B7280" />
-          <Text style={styles.jobDetailText}>{String(childrenSummary)}</Text>
         </View>
         {job?.date && (
           <View style={styles.jobDetailRow}>
