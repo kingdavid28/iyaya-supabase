@@ -83,6 +83,7 @@ export class SupabaseServiceFacade {
   async markNotificationAsRead(notificationId) { return this.notifications.markNotificationAsRead(notificationId) }
   async markAllNotificationsAsRead(userId) { return this.notifications.markAllNotificationsAsRead(userId) }
   async getUnreadNotificationCount(userId) { return this.notifications.getUnreadNotificationCount(userId) }
+  async getNotificationCountsByType(userId) { return this.notifications.getNotificationCountsByType(userId) }
   subscribeToNotifications(userId, callback) { return this.notifications.subscribeToNotifications(userId, callback) }
 
   // === NOTIFICATION HELPERS ===
