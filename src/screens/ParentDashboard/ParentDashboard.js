@@ -986,6 +986,7 @@ const ParentDashboard = () => {
             onProfileEdit={() => toggleModal('profile', true)}
             profileName={profileForm.name}
             profileImage={profileForm.image}
+            setActiveTab={setActiveTab}
           />
           
           <NavigationTabs
