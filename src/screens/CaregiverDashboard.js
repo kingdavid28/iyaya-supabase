@@ -22,6 +22,7 @@ import MessagesTab from './CaregiverDashboard/components/MessagesTab';
 import NotificationsTab from './CaregiverDashboard/components/NotificationsTab';
 import BookingsTab from './CaregiverDashboard/BookingsTab';
 import ApplicationsTab from './CaregiverDashboard/ApplicationsTab';
+import NotificationTester from '../components/NotificationTester';
 
 import { 
   EmptyState, 
@@ -1702,10 +1703,13 @@ function CaregiverDashboard({ onLogout, route }) {
         )}
 
         {activeTab === 'notifications' && (
-          <NotificationsTab
-            navigation={navigation}
-            onNavigateTab={(tabId) => setActiveTab(tabId)}
-          />
+          <View>
+            <NotificationsTab
+              navigation={navigation}
+              onNavigateTab={(tabId) => setActiveTab(tabId)}
+            />
+            {__DEV__ && <NotificationTester />}
+          </View>
         )}
 
       </View>

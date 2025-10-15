@@ -11,6 +11,7 @@ import { useNotificationCounts } from '../../hooks/useNotificationCounts';
 
 // Supabase service import
 import { supabaseService } from '../../services/supabase';
+import { __DEV__ } from '../../config/constants';
 
 // Utility imports
 import { applyFilters, countActiveFilters } from '../../utils/caregiverUtils';
@@ -30,6 +31,7 @@ import JobsTab from './components/JobsTab';
 import MessagesTab from './components/MessagesTab'; // Added missing import
 import ReviewsTab from './components/ReviewsTab';
 import AlertsTab from './components/AlertsTab';
+import NotificationTester from '../../components/NotificationTester';
 
 // Modal imports
 import ProfileModal from './modals/ProfileModal';
@@ -944,13 +946,16 @@ const ParentDashboard = () => {
         );
       case 'alerts':
         return (
-          <AlertsTab
-            navigation={navigation}
-            refreshing={refreshing}
-            onRefresh={onRefresh}
-            loading={loading}
-            onNavigateTab={setActiveTab}
-          />
+          <View>
+            <AlertsTab
+              navigation={navigation}
+              refreshing={refreshing}
+              onRefresh={onRefresh}
+              loading={loading}
+              onNavigateTab={setActiveTab}
+            />
+            {__DEV__ && <NotificationTester />}
+          </View>
         );
       default:
         return null;
