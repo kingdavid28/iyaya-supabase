@@ -17,6 +17,7 @@ export const useParentDashboard = () => {
   const [jobs, setJobs] = useState([]);
   const [caregivers, setCaregivers] = useState([]);
   const [bookings, setBookings] = useState([]);
+  const [applications, setApplications] = useState([]);
   const [children, setChildren] = useState([]);
   const [loading, setLoading] = useState(false);
   const [dataLoaded, setDataLoaded] = useState(false);
@@ -61,9 +62,23 @@ export const useParentDashboard = () => {
 
       console.log('📋 Jobs list (normalized):', jobsList);
       setJobs(jobsList);
+
+      const applicationsFromJobs = (jobsList || []).flatMap(job => {
+        if (!Array.isArray(job?.applications)) return [];
+        return job.applications.map(application => ({
+          ...application,
+          jobId: job.id || job._id,
+          jobTitle: job.title,
+          jobLocation: job.location,
+          jobStatus: job.status
+        }));
+      });
+
+      setApplications(applicationsFromJobs);
     } catch (error) {
       console.error('❌ Error fetching jobs:', error);
       setJobs([]);
+      setApplications([]);
     } finally {
       setLoading(false);
     }

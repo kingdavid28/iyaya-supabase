@@ -839,33 +839,50 @@ function CaregiverDashboard({ onLogout, route }) {
       // Navigate to messages tab first
       setActiveTab('messages');
 
-      // Extract parent/family name from booking
-      const parentName = booking.family || booking.parentName;
+      const parentId = booking?.parentId
+        || booking?.clientId?.id
+        || booking?.clientId?._id
+        || booking?.clientId;
 
-      if (!parentName) {
-        showToast('Unable to identify parent for this booking', 'error');
+      const parentName = booking?.family
+        || booking?.parentName
+        || booking?.clientId?.name
+        || 'Parent';
+
+      if (!parentId) {
+        showToast('Unable to identify parent account for this booking', 'error');
         return;
       }
 
-      // Look for existing conversation with this parent
-      const existingParent = parents.find(parent =>
-        parent.name?.toLowerCase() === parentName.toLowerCase()
-      );
+      let parentRecord = parents.find(parent => parent.id === parentId);
 
-      if (existingParent) {
-        // Found existing conversation - set as selected and open chat
-        setSelectedParent(existingParent);
-        setChatActive(true);
-        // Mark messages as read when opening chat
-        const conversation = await supabaseService.getOrCreateConversation(user.id, existingParent.id);
-        await supabaseService.markMessagesAsRead(conversation.id, user.id);
-        setParents(prev => prev.map(parent => parent.id === existingParent.id ? { ...parent, unreadCount: 0 } : parent));
-        showToast(`Opened conversation with ${existingParent.name}`, 'success');
-      } else {
-        // No existing conversation found
-        showToast(`No conversation found with ${parentName}. Please ensure they have contacted you first.`, 'info');
-        // Still navigate to messages tab so user can see available conversations
+      if (!parentRecord && parentName) {
+        parentRecord = parents.find(parent => parent.name?.toLowerCase() === parentName.toLowerCase());
       }
+
+      if (!parentRecord) {
+        parentRecord = {
+          id: parentId,
+          name: parentName,
+          profileImage: booking?.clientId?.profileImage || booking?.parentAvatar || null,
+          unreadCount: 0
+        };
+        setParents(prev => {
+          const filtered = prev.filter(parent => parent.id !== parentId);
+          return [...filtered, parentRecord];
+        });
+      }
+
+      setSelectedParent(parentRecord);
+      setChatActive(true);
+
+      const conversation = await supabaseService.getOrCreateConversation(user.id, parentRecord.id);
+      if (conversation?.id) {
+        await supabaseService.markMessagesAsRead(conversation.id, user.id);
+      }
+
+      setParents(prev => prev.map(parent => parent.id === parentRecord.id ? { ...parent, unreadCount: 0, name: parentName || parent.name } : parent));
+      showToast(`Opened conversation with ${parentRecord.name}`, 'success');
 
     } catch (error) {
       console.error('Error opening booking message:', error);
@@ -1753,7 +1770,10 @@ function CaregiverDashboard({ onLogout, route }) {
           visible={showBookingDetails}
           booking={selectedBooking}
           onClose={() => setShowBookingDetails(false)}
-          onMessage={() => handleBookingMessage(selectedBooking)}
+          onMessage={() => {
+            setShowBookingDetails(false);
+            handleBookingMessage(selectedBooking);
+          }}
           onCompleteBooking={() => handleCompleteBooking(selectedBooking)}
           onCancelBooking={() => handleCancelBooking(selectedBooking)}
           onGetDirections={() => handleGetDirections(selectedBooking)}

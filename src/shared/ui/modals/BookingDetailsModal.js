@@ -200,6 +200,23 @@ export const BookingDetailsModal = ({
 
       // If it's a string, try to parse it
       if (typeof contact === 'string') {
+        const trimmedContact = contact.trim();
+
+        if ((trimmedContact.startsWith('{') && trimmedContact.endsWith('}')) || (trimmedContact.startsWith('[') && trimmedContact.endsWith(']'))) {
+          try {
+            const parsed = JSON.parse(trimmedContact);
+            if (parsed && typeof parsed === 'object') {
+              return {
+                name: parsed.name || 'Not specified',
+                phone: parsed.phone || parsed.phoneNumber || null,
+                relation: parsed.relation || parsed.relationship || 'Emergency Contact'
+              };
+            }
+          } catch (error) {
+            console.warn('Failed to parse emergency contact JSON string:', error);
+          }
+        }
+
         try {
           const nameMatch = contact.match(/(?:Name:?\s*)([^,]+)/i);
           const phoneMatch = contact.match(/(?:Phone:?\s*)([^,]+)/i);
