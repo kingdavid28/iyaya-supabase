@@ -48,9 +48,9 @@ const localStyles = StyleSheet.create({
   summaryValue: { fontSize: 22, fontWeight: '700', color: '#111827' },
   summaryLabel: { fontSize: 13, color: '#6B7280' },
   filterSection: { marginBottom: 20 },
-  filterHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 },
+  filterHeader: { flexDirection: 'column', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 },
   filterHeaderTitle: { fontSize: 18, fontWeight: '600', color: '#111827' },
-  filterAction: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  filterAction: { flexDirection: 'row', alignItems: 'flex-end', marginVertical: 6, gap: 6 },
   filterActionText: { color: '#2563EB', fontSize: 14, fontWeight: '500' },
   jobCard: {
     backgroundColor: '#FFFFFF',

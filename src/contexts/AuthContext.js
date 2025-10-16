@@ -1,6 +1,10 @@
 import React, { createContext, useContext, useEffect, useState } from 'react'
-import { ActivityIndicator, View } from 'react-native'
+import { ActivityIndicator, View, Platform } from 'react-native'
+import * as AuthSession from 'expo-auth-session'
+import * as WebBrowser from 'expo-web-browser'
 import { supabase } from '../config/supabase'
+
+WebBrowser.maybeCompleteAuthSession()
 
 export const AuthContext = createContext()
 
@@ -257,19 +261,61 @@ export const AuthProvider = ({ children }) => {
   }
 
   const signInWithOAuth = async (provider) => {
+    const redirectTo = AuthSession.makeRedirectUri({
+      scheme: 'com.iyaya.app',
+      path: 'auth/callback',
+      preferLocalhost: false,
+    })
+
+    const shouldUseAuthSession = Platform.OS !== 'web'
+
     try {
       setError(null)
+      setLoading(true)
+
       const { data, error } = await supabase.auth.signInWithOAuth({
         provider,
         options: {
-          redirectTo: 'https://myiyrmiiywwgismcpith.supabase.co/auth/v1/callback'
+          redirectTo,
+          skipBrowserRedirect: shouldUseAuthSession,
         }
       })
+
       if (error) throw error
-      return data
+
+      if (!shouldUseAuthSession) {
+        return data
+      }
+
+      if (!data?.url) {
+        throw new Error('Unable to start authentication flow. Please try again.')
+      }
+
+      const authResult = await AuthSession.startAsync({
+        authUrl: data.url,
+        returnUrl: redirectTo,
+      })
+
+      if (authResult.type !== 'success') {
+        if (authResult.type === 'cancel' || authResult.type === 'dismiss') {
+          throw new Error('Authentication cancelled.')
+        }
+        throw new Error('Authentication failed. Please try again.')
+      }
+
+      const { data: sessionData } = await supabase.auth.getSession()
+      if (!sessionData.session?.user) {
+        throw new Error('No active session found after authentication.')
+      }
+
+      const userWithProfile = await fetchUserWithProfile(sessionData.session.user)
+      setUser(userWithProfile)
+      return userWithProfile
     } catch (err) {
       setError(err.message)
       throw err
+    } finally {
+      setLoading(false)
     }
   }
 

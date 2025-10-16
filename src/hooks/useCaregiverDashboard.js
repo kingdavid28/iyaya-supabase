@@ -42,8 +42,15 @@ export const useCaregiverDashboard = () => {
       loadingRef.current = true;
       console.log('🔄 Loading profile data from Supabase...');
 
+      const targetUserId = user?.id;
+      if (!targetUserId) {
+        console.warn('⚠️ Auth context not ready. Delaying profile fetch.');
+        loadingRef.current = false;
+        return;
+      }
+
       // Get user profile from users table
-      const userProfile = await supabaseService.getProfile(user.id);
+      const userProfile = await supabaseService.getProfile(targetUserId);
       
       // Get caregiver-specific profile from caregiver_profiles table
       let caregiverProfile = null;
@@ -51,7 +58,7 @@ export const useCaregiverDashboard = () => {
         const { data } = await supabase
           .from('caregiver_profiles')
           .select('*')
-          .eq('user_id', user.id)
+          .eq('user_id', targetUserId)
           .single();
         caregiverProfile = data;
       } catch (error) {
@@ -174,25 +181,100 @@ export const useCaregiverDashboard = () => {
       const bookingsList = await supabaseService.getMyBookings(user.id, 'caregiver');
       console.log('📅 Bookings from Supabase:', bookingsList);
 
-      const normalized = bookingsList.map((b, idx) => ({
-        id: b.id || idx + 1,
-        _id: b.id,
-        family: b.parent?.name || b.family || 'Family',
-        caregiver: b.caregiver?.name || user?.name || 'Caregiver',
-        clientId: b.parent,
-        parentId: b.parent_id,
-        date: b.date,
-        time: b.time || (b.start_time && b.end_time ? `${b.start_time} - ${b.end_time}` : ''),
-        status: b.status || 'pending',
-        children: Array.isArray(b.selected_children) ? b.selected_children.length : 1,
-        location: b.address || 'Location TBD',
-        address: b.address,
-        contactPhone: b.contact_phone,
-        specialInstructions: b.special_instructions,
-        emergencyContact: b.emergency_contact,
-        totalAmount: b.total_amount,
-        hourlyRate: b.hourly_rate
-      }));
+      const normalized = bookingsList.map((b, idx) => {
+        const rawChildren =
+          (Array.isArray(b.selected_children) && b.selected_children) ||
+          (Array.isArray(b.selectedChildren) && b.selectedChildren) ||
+          (Array.isArray(b.childrenDetails) && b.childrenDetails) ||
+          (Array.isArray(b.children) && b.children) ||
+          [];
+
+        const childrenDetails = rawChildren;
+        const childrenCount = childrenDetails.length ||
+          (typeof b.children === 'number' ? b.children : (Array.isArray(b.selected_children) ? b.selected_children.length : 0));
+
+        const rawCaregiver =
+          (b.caregiverId && typeof b.caregiverId === 'object') ? b.caregiverId :
+          (b.caregiver && typeof b.caregiver === 'object') ? b.caregiver :
+          null;
+
+        const caregiverDetails = rawCaregiver || {
+          _id: b.caregiver_id,
+          id: b.caregiver_id,
+          name: b.caregiver_name || user?.name || 'Caregiver',
+          email: b.caregiver_email || null,
+          profileImage: b.caregiver_avatar || null,
+          avatar: b.caregiver_avatar || null
+        };
+
+        const rawParent =
+          (b.clientId && typeof b.clientId === 'object') ? b.clientId :
+          (b.parent && typeof b.parent === 'object') ? b.parent :
+          null;
+
+        const parentDetails = rawParent || {
+          _id: b.parent_id,
+          id: b.parent_id,
+          name: b.parent?.name || b.family || 'Parent',
+          email: b.parent?.email || null,
+          phone: b.parent?.phone || b.contact_phone || null,
+          address: b.parent?.address || null,
+          location: b.parent?.location || null
+        };
+
+        const requirements = Array.isArray(b.requirements)
+          ? b.requirements
+          : Array.isArray(b.skills)
+            ? b.skills
+            : [];
+
+        const contactPhone = b.contact_phone || b.contactPhone || parentDetails?.phone || null;
+        const contactEmail = b.contact_email || b.contactEmail || parentDetails?.email || null;
+
+        const specialInstructions = b.special_instructions || b.specialInstructions || null;
+        const emergencyContact = b.emergency_contact || b.emergencyContact || null;
+        const notes = b.notes || null;
+
+        const timeRange = b.time || (b.start_time && b.end_time
+          ? `${b.start_time} - ${b.end_time}`
+          : (b.startTime && b.endTime ? `${b.startTime} - ${b.endTime}` : ''));
+
+        const totalAmount = b.total_amount ?? b.totalAmount ?? 0;
+        const hourlyRate = b.hourly_rate ?? b.hourlyRate ?? 0;
+        const totalHours = b.total_hours ?? b.totalHours ?? null;
+
+        return {
+          id: b.id || idx + 1,
+          _id: b.id,
+          ...b,
+          family: parentDetails?.name || b.family || 'Family',
+          caregiver: caregiverDetails?.name || 'Caregiver',
+          caregiverName: caregiverDetails?.name || 'Caregiver',
+          caregiverDetails,
+          caregiverId: caregiverDetails,
+          clientId: parentDetails,
+          parent: parentDetails,
+          parentId: parentDetails?._id || parentDetails?.id || b.parent_id,
+          parentName: parentDetails?.name || 'Parent',
+          date: b.date,
+          time: timeRange,
+          status: b.status || 'pending',
+          children: childrenCount > 0 ? childrenCount : 1,
+          childrenDetails,
+          selectedChildren: childrenDetails,
+          location: b.location || b.address || parentDetails?.location || 'Location TBD',
+          address: b.address || parentDetails?.address || null,
+          contactPhone,
+          contactEmail,
+          specialInstructions,
+          emergencyContact,
+          requirements,
+          notes,
+          totalAmount,
+          hourlyRate,
+          totalHours
+        };
+      });
 
       console.log('📅 Normalized bookings:', normalized);
       setBookings(normalized);

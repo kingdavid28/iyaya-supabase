@@ -16,14 +16,16 @@
     ],
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.iyaya.app"
+      "bundleIdentifier": "com.iyaya.app",
+      "jsEngine": "hermes"
     },
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#FFFFFF"
       },
-      "package": "com.iyaya.app"
+      "package": "com.iyaya.app",
+      "jsEngine": "hermes"
     },
     "web": {
       "favicon": "./assets/favicon.png"

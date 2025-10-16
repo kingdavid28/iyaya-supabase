@@ -6,7 +6,9 @@
     "paths": {
       "@/*": ["./src/*"]
     },
-    "skipLibCheck": true
+    "skipLibCheck": true,
+    "allowJs": true
   },
+  "include": ["src"],
   "exclude": ["node_modules"]
 }

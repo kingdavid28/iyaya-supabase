@@ -13,7 +13,7 @@ import { usePrivacy } from '../components/features/privacy/PrivacyManager';
 import { useNotificationCounts } from '../hooks/useNotificationCounts';
 import { SettingsModal } from "../components/ui/modals/SettingsModal"
 import { RequestInfoModal } from "../components/ui/modals/RequestInfoModal"
-import BookingDetailsModal from '../components/BookingDetailsModal';
+import BookingDetailsModal from '../shared/ui/modals/BookingDetailsModal';
 
 import { formatAddress } from "../utils/addressUtils"
 import { calculateAge } from "../utils/dateUtils"

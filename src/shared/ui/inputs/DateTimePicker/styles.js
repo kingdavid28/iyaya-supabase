@@ -111,8 +111,9 @@ export const styles = StyleSheet.create({
     color: '#333',
     backgroundColor: 'transparent',
     ...(Platform.OS === 'web' && {
-      border: 'none',
-      outline: 'none',
+      borderWidth: 0,
+      outlineStyle: 'none',
+      outlineWidth: 0,
       fontFamily: 'inherit',
     }),
     paddingRight: 10,

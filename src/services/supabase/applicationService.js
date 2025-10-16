@@ -105,25 +105,39 @@ export class ApplicationService extends SupabaseBase {
         throw new Error('Application not found')
       }
       
-      const { data, error } = await supabase
+      const { error: updateError } = await supabase
         .from('applications')
         .update({ 
           status, 
           updated_at: new Date().toISOString() 
         })
         .eq('id', applicationId)
-        .select()
       
-      if (error) {
-        console.error('❌ Supabase update error:', error)
-        throw error
+      if (updateError) {
+        console.error('❌ Supabase update error:', updateError)
+        throw updateError
       }
-      if (!data || data.length === 0) {
-        console.error('❌ No data returned after update')
-        throw new Error('Failed to update application')
+
+      // Attempt to fetch the updated record. Some RLS policies allow UPDATE but not SELECT,
+      // so treat fetch failure gracefully and return a minimal payload instead.
+      const { data: updatedRows, error: fetchError } = await supabase
+        .from('applications')
+        .select('*')
+        .eq('id', applicationId)
+        .maybeSingle()
+
+      if (fetchError) {
+        console.warn('⚠️ Unable to fetch updated application after update:', fetchError.message)
+        return { id: applicationId, status }
       }
-      console.log('✅ Application updated successfully:', data[0])
-      return data[0]
+
+      if (!updatedRows) {
+        console.warn('⚠️ Update succeeded but no representation returned – falling back to minimal payload')
+        return { id: applicationId, status }
+      }
+
+      console.log('✅ Application updated successfully:', updatedRows)
+      return updatedRows
     } catch (error) {
       return this._handleError('updateApplicationStatus', error)
     }

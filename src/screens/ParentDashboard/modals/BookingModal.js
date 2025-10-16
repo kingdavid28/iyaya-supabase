@@ -33,7 +33,7 @@ import {
   CheckCircle, 
   User 
 } from 'lucide-react-native';
-import CustomDateTimePicker from '../../../shared/ui/inputs/DateTimePicker';
+import SimpleDatePicker from '../../../shared/ui/inputs/SimpleDatePicker';
 import TimePicker from '../../../shared/ui/inputs/TimePicker';
 import { formatAddress } from '../../../utils/addressUtils';
 import { getCurrentDeviceLocation } from '../../../utils/locationUtils';
@@ -198,14 +198,14 @@ const BookingModal = ({ caregiver, childrenList = [], onConfirm, onClose, visibl
       <Text style={styles.sectionTitle}>Schedule Details</Text>
       
       <View style={styles.inputContainer}>
-        <CustomDateTimePicker
-          value={bookingData.date}
-          mode="date"
-          onDateChange={(date) => setBookingData({ ...bookingData, date })}
+        <SimpleDatePicker
           label="Date"
-          placeholder="Select date"
+          value={bookingData.date}
+          onDateChange={(date) => setBookingData({ ...bookingData, date })}
           minimumDate={new Date()}
-          format="short"
+          placeholder="Select date"
+          error={null}
+          id="booking-date-picker"
         />
       </View>
 
@@ -676,289 +676,6 @@ const BookingModal = ({ caregiver, childrenList = [], onConfirm, onClose, visibl
         </View>
       </KeyboardAvoidingView>
     </ModalWrapper>
-  );
-};
-
-const BookingDetailsModal = ({ 
-  booking, 
-  onClose, 
-  onMessage, 
-  onGetDirections, 
-  onCompleteBooking,
-  onCancelBooking,
-  visible
-}) => {
-  
-  // Enhanced booking data with defaults
-  const enhancedBooking = booking;
-
-  const getStatusColor = (status) => {
-    switch (status.toLowerCase()) {
-      case 'confirmed':
-        return { bg: '#e8f5e9', border: '#c8e6c9', text: '#2e7d32' };
-      case 'pending':
-        return { bg: '#fff8e1', border: '#ffecb3', text: '#ff8f00' };
-      case 'completed':
-        return { bg: '#e3f2fd', border: '#bbdefb', text: '#1976d2' };
-      case 'cancelled':
-        return { bg: '#ffebee', border: '#ffcdd2', text: '#d32f2f' };
-      default:
-        return { bg: '#f5f5f5', border: '#e0e0e0', text: '#616161' };
-    }
-  };
-
-  const statusColors = getStatusColor(enhancedBooking.status);
-
-  return (
-    <Modal
-      visible={visible}
-      transparent
-      animationType="fade"
-      onRequestClose={onClose}
-    >
-      <View style={styles.modalOverlay}>
-        <View style={[styles.modalContainer, styles.detailsModalContainer]}>
-          {/* Header */}
-          <View style={[styles.modalHeader, styles.detailsHeader]}>
-            <View style={styles.detailsHeaderContent}>
-              <View style={styles.calendarIcon}>
-                <Calendar size={24} color="#3b82f6" />
-              </View>
-              <View>
-                <Text style={styles.modalTitle}>Booking Details</Text>
-                <Text style={styles.stepIndicator}>{enhancedBooking.family}</Text>
-              </View>
-            </View>
-            
-            <View style={styles.headerRight}>
-              <View 
-                style={[
-                  styles.statusBadge,
-                  { 
-                    backgroundColor: statusColors.bg,
-                    borderColor: statusColors.border
-                  }
-                ]}
-              >
-                <Text style={[styles.statusText, { color: statusColors.text }]}>
-                  {enhancedBooking.status.charAt(0).toUpperCase() + enhancedBooking.status.slice(1)}
-                </Text>
-              </View>
-              
-              <TouchableOpacity onPress={onClose}>
-                <X size={24} color="#6b7280" />
-              </TouchableOpacity>
-            </View>
-          </View>
-
-          <ScrollView style={styles.detailsContent}>
-            {/* Booking Overview */}
-            <View style={styles.sectionCard}>
-              <Text style={styles.sectionTitle}>Booking Overview</Text>
-              <View style={styles.overviewGrid}>
-                <View style={styles.overviewItem}>
-                  <Calendar size={20} color="#6b7280" />
-                  <View>
-                    <Text style={styles.overviewLabel}>Date</Text>
-                    <Text style={styles.overviewValue}>{enhancedBooking.date}</Text>
-                  </View>
-                </View>
-                <View style={styles.overviewItem}>
-                  <Clock size={20} color="#6b7280" />
-                  <View>
-                    <Text style={styles.overviewLabel}>Time</Text>
-                    <Text style={styles.overviewValue}>{enhancedBooking.time}</Text>
-                  </View>
-                </View>
-                <View style={styles.overviewItem}>
-                  <DollarSign size={20} color="#6b7280" />
-                  <View>
-                    <Text style={styles.overviewLabel}>Rate</Text>
-                    <Text style={[styles.overviewValue, styles.rateValue]}>₱{enhancedBooking.hourlyRate}/hr</Text>
-                  </View>
-                </View>
-                <View style={styles.overviewItem}>
-                  <Star size={20} color="#6b7280" />
-                  <View>
-                    <Text style={styles.overviewLabel}>Total</Text>
-                    <Text style={[styles.overviewValue, styles.totalValue]}>₱{enhancedBooking.totalAmount}</Text>
-                  </View>
-                </View>
-              </View>
-            </View>
-
-            {/* Location & Contact */}
-            <View style={styles.sectionCard}>
-              <Text style={styles.sectionTitle}>Location & Contact</Text>
-              <View style={styles.contactSection}>
-                <View style={styles.contactItem}>
-                  <MapPin size={20} color="#6b7280" />
-                  <View>
-                    <Text style={styles.contactTitle}>{formatAddress(enhancedBooking.location)}</Text>
-                    <Text style={styles.contactDetail}>{formatAddress(enhancedBooking.address)}</Text>
-                  </View>
-                </View>
-                <View style={styles.contactItem}>
-                  <Phone size={20} color="#6b7280" />
-                  <View>
-                    <Text style={styles.contactLabel}>Phone</Text>
-                    <Text style={styles.contactValue}>{enhancedBooking.contactPhone}</Text>
-                  </View>
-                </View>
-                <View style={styles.contactItem}>
-                  <Mail size={20} color="#6b7280" />
-                  <View>
-                    <Text style={styles.contactLabel}>Email</Text>
-                    <Text style={styles.contactValue}>{enhancedBooking.contactEmail}</Text>
-                  </View>
-                </View>
-              </View>
-            </View>
-
-            {/* Children Details */}
-            <View style={styles.sectionCard}>
-              <View style={styles.sectionHeader}>
-                <Baby size={20} color="#10b981" />
-                <Text style={styles.sectionTitle}>Children Details</Text>
-              </View>
-              <View style={styles.childrenSection}>
-                {(booking?.selected_children || booking?.selectedChildren || enhancedBooking.childrenDetails)?.map((child, index) => {
-                  const childData = typeof child === 'string' 
-                    ? { name: child, age: 'Unknown', preferences: '', allergies: 'None' }
-                    : child;
-                  return (
-                    <View key={index} style={styles.childCard}>
-                      <View style={styles.childHeader}>
-                        <Baby size={16} color="#10b981" />
-                        <Text style={styles.childName}>{childData.name}</Text>
-                        {childData.age && childData.age !== 'Unknown' && (
-                          <Text style={styles.childAge}>Age {childData.age}</Text>
-                        )}
-                      </View>
-                      
-                      <View style={styles.childDetails}>
-                        {childData.preferences && (
-                          <Text style={styles.childDetail}>
-                            <Text style={styles.detailLabel}>Preferences: </Text>
-                            {childData.preferences}
-                          </Text>
-                        )}
-                        {childData.specialInstructions && (
-                          <Text style={styles.childDetail}>
-                            <Text style={styles.detailLabel}>Special Instructions: </Text>
-                            {childData.specialInstructions}
-                          </Text>
-                        )}
-                        {childData.allergies && childData.allergies !== 'None' && (
-                          <View style={styles.allergyContainer}>
-                            <AlertCircle size={16} color="#ef4444" />
-                            <Text style={styles.allergyText}>
-                              <Text style={styles.allergyLabel}>Allergies: </Text>
-                              {childData.allergies}
-                            </Text>
-                          </View>
-                        )}
-                      </View>
-                    </View>
-                  );
-                })}
-              </View>
-              
-              {/* Special Instructions */}
-              {(booking?.special_instructions || booking?.specialInstructions) && (
-                <View style={styles.specialInstructionsSection}>
-                  <Text style={styles.instructionsLabel}>Special Instructions:</Text>
-                  <Text style={styles.instructionsText}>
-                    {booking.special_instructions || booking.specialInstructions}
-                  </Text>
-                </View>
-              )}
-            </View>
-
-            {/* Requirements */}
-            <View style={styles.sectionCard}>
-              <Text style={styles.sectionTitle}>Requirements</Text>
-              <View style={styles.requirementsContainer}>
-                {enhancedBooking.requirements.map((req, index) => (
-                  <View key={index} style={styles.requirementTag}>
-                    <CheckCircle size={12} color="#10b981" />
-                    <Text style={styles.requirementText}>{req}</Text>
-                  </View>
-                ))}
-              </View>
-            </View>
-
-            {/* Special Notes */}
-            {enhancedBooking.notes && (
-              <View style={styles.notesCard}>
-                <Text style={styles.sectionTitle}>Special Notes</Text>
-                <Text style={styles.notesText}>{enhancedBooking.notes}</Text>
-              </View>
-            )}
-
-            {/* Emergency Contact */}
-            <View style={styles.emergencyDetailsCard}>
-              <View style={styles.sectionHeader}>
-                <AlertCircle size={20} color="#ef4444" />
-                <Text style={styles.sectionTitle}>Emergency Contact</Text>
-              </View>
-              <View style={styles.emergencyDetails}>
-                <Text style={styles.emergencyDetail}>
-                  <Text style={styles.detailLabel}>Name: </Text>
-                  {enhancedBooking.emergencyContact.name}
-                </Text>
-                <Text style={styles.emergencyDetail}>
-                  <Text style={styles.detailLabel}>Relation: </Text>
-                  {enhancedBooking.emergencyContact.relation}
-                </Text>
-                <Text style={styles.emergencyDetailText}>
-                <Text style={styles.detailLabel}>Phone: </Text>
-                {enhancedBooking.emergencyContact.phone}
-              </Text>
-              </View>
-            </View>
-          </ScrollView>
-
-          {/* Footer Actions */}
-          <View style={styles.detailsFooter}>
-            <TouchableOpacity
-              onPress={onMessage}
-              style={[styles.actionButton, styles.messageButton]}
-            >
-              <MessageCircle size={16} color="#3b82f6" />
-              <Text style={styles.actionButtonText}>Message Family</Text>
-            </TouchableOpacity>
-            
-            <TouchableOpacity
-              onPress={onGetDirections}
-              style={[styles.actionButton, styles.directionsButton]}
-            >
-              <Navigation size={16} color="#10b981" />
-              <Text style={styles.actionButtonText}>Get Directions</Text>
-            </TouchableOpacity>
-
-            {enhancedBooking.status === 'confirmed' && (
-              <TouchableOpacity
-                onPress={onCompleteBooking}
-                style={[styles.actionButton, styles.completeButton]}
-              >
-                <CheckCircle size={16} color="#ffffff" />
-                <Text style={[styles.actionButtonText, styles.completeButtonText]}>Mark Complete</Text>
-              </TouchableOpacity>
-            )}
-
-            {(enhancedBooking.status === 'pending' || enhancedBooking.status === 'confirmed') && (
-              <TouchableOpacity
-                onPress={onCancelBooking}
-                style={[styles.actionButton, styles.cancelButton]}
-              >
-                <Text style={styles.cancelButtonText}>Cancel Booking</Text>
-              </TouchableOpacity>
-            )}
-          </View>
-        </View>
-      </View>
-    </Modal>
   );
 };
 
@@ -1509,10 +1226,8 @@ emergencyDetailText: {
     
     primaryButtonText: {
       color: 'white',
-      fontSize: 16,
       fontWeight: '600',
     },
 });
 
 export default BookingModal;
-export { BookingDetailsModal };

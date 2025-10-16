@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { View, Alert } from 'react-native';
+import { View, Alert, Linking } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import * as FileSystem from 'expo-file-system/legacy';
 import { usePrivacy } from '../../components/features/privacy/PrivacyManager';
@@ -40,8 +40,8 @@ import JobPostingModal from './modals/JobPostingModal';
 import BookingModal from './modals/BookingModal';
 import PaymentModal from './modals/PaymentModal';
 import ChildModal from './modals/ChildModal';
-import BookingDetailsModal from '../../components/BookingDetailsModal';
-
+import BookingDetailsModal from '../../shared/ui/modals/BookingDetailsModal';
+import { BOOKING_STATUSES } from '../../constants/bookingStatuses';
 // Constants
 const DEFAULT_FILTERS = {
   availability: { availableNow: false, days: [] },
@@ -569,7 +569,36 @@ const ParentDashboard = () => {
     }
   };
 
-  const handleCancelBooking = useCallback(async (bookingId) => {
+  const handleGetDirections = useCallback((booking) => {
+    if (!booking) {
+      Alert.alert('No booking selected', 'Please select a booking first.');
+      return;
+    }
+
+    const destination = booking.address || booking.location;
+
+    if (!destination) {
+      Alert.alert('Location unavailable', 'No address was provided for this booking.');
+      return;
+    }
+
+    const encoded = encodeURIComponent(destination);
+    const url = `https://www.google.com/maps/search/?api=1&query=${encoded}`;
+
+    Linking.openURL(url).catch((error) => {
+      console.error('Failed to open maps link:', error);
+      Alert.alert('Error', 'Unable to open maps. Please try again later.');
+    });
+  }, []);
+
+  const handleCancelBooking = useCallback(async (bookingOrId) => {
+    const bookingId = typeof bookingOrId === 'object' ? (bookingOrId.id || bookingOrId._id) : bookingOrId;
+
+    if (!bookingId) {
+      Alert.alert('Unable to cancel', 'Missing booking information.');
+      return;
+    }
+
     try {
       setRefreshing(true);
       await supabaseService.cancelBooking(bookingId);
@@ -577,6 +606,27 @@ const ParentDashboard = () => {
       console.warn('Failed to cancel booking:', error?.message || error);
     } finally {
       await fetchBookings();
+      setRefreshing(false);
+    }
+  }, [fetchBookings]);
+
+  const handleCompleteBooking = useCallback(async (booking) => {
+    const bookingId = booking?.id || booking?._id;
+
+    if (!bookingId) {
+      Alert.alert('Unable to mark complete', 'Missing booking information.');
+      return;
+    }
+
+    try {
+      setRefreshing(true);
+      await supabaseService.updateBookingStatus(bookingId, BOOKING_STATUSES.COMPLETED);
+      await fetchBookings();
+      Alert.alert('Success', 'Booking marked as completed.');
+    } catch (error) {
+      console.error('Failed to complete booking:', error);
+      Alert.alert('Error', 'Unable to mark booking as completed. Please try again.');
+    } finally {
       setRefreshing(false);
     }
   }, [fetchBookings]);
@@ -1049,12 +1099,41 @@ const ParentDashboard = () => {
             onConfirm={handleBookingConfirm}
           />
 
-          <BookingDetailsModal
-            visible={modals.bookingDetails}
-            booking={selectedBooking}
-            onClose={() => toggleModal('bookingDetails', false)}
-            colors={['#ebc5dd', '#ccc8e8']}
-          />
+          {modals.bookingDetails && selectedBooking && (
+            <BookingDetailsModal
+              visible={modals.bookingDetails}
+              booking={selectedBooking}
+              onClose={() => {
+                toggleModal('bookingDetails', false);
+                setSelectedBooking(null);
+              }}
+              onMessage={() => {
+                if (!selectedBooking?.caregiver) {
+                  Alert.alert('No caregiver information', 'Unable to message caregiver because details are missing.');
+                  return;
+                }
+
+                const caregiverTarget =
+                  selectedBooking.caregiver ||
+                  selectedBooking.caregiverId ||
+                  selectedBooking.assignedCaregiver ||
+                  selectedBooking.caregiverProfile ||
+                  null;
+
+                if (!caregiverTarget) {
+                  Alert.alert('No caregiver information', 'Unable to message caregiver because details are missing.');
+                  return;
+                }
+
+                toggleModal('bookingDetails', false);
+                handleMessageCaregiver(caregiverTarget);
+                setSelectedBooking(null);
+              }}
+              onGetDirections={() => handleGetDirections(selectedBooking)}
+              onCompleteBooking={() => handleCompleteBooking(selectedBooking)}
+              onCancelBooking={() => handleCancelBooking(selectedBooking)}
+            />
+          )}
         </View>
       </ProfileDataProvider>
     </PrivacyProvider>

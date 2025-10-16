@@ -73,22 +73,17 @@ export const caregiversAPI = supabaseClient.caregivers;
 export const messagingService = supabaseService.messaging;
 export const realtimeService = supabaseService.realtime;
 export const imageUploadService = supabaseService.storage;
-export const notificationService = supabaseService.notifications;
 export const reviewService = supabaseService.reviews;
 
 // Migrated services
 export { childService } from './childService';
 export { caregiverProfileService } from './caregiverProfileService';
 export { settingsService } from './settingsService';
-export { default as ratingService } from './ratingService';
-export { default as connectionService } from './connectionService';
-export { imageUploadService as imageService } from './imageUploadService';
 
 // Legacy compatibility
 export const messagingAPI = supabaseService.messaging;
 export const ratingsAPI = supabaseService.reviews;
 export const settingsAPI = supabaseService.user;
-export const connectionsAPI = supabaseService.messaging;
 
 // Supabase utilities
 export const getCurrentAPIURL = () => {

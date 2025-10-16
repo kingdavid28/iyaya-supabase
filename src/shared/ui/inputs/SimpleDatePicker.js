@@ -32,7 +32,7 @@ const SimpleDatePicker = ({
 
   const handleDateChange = (event, selectedDate) => {
     if (Platform.OS === 'android') {
-      setShowPicker(false);
+      setShowPicker(true);
       
       // Handle dismissal or cancellation
       if (event?.type === 'dismissed' || !selectedDate) {
@@ -50,7 +50,7 @@ const SimpleDatePicker = ({
     if (selectedDate && !Number.isNaN(selectedDate.getTime())) {
       onDateChange(selectedDate);
     }
-    setShowPicker(false);
+    setShowPicker(true);
   };
 
   const handleOpenPicker = () => {

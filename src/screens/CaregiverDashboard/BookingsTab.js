@@ -31,8 +31,54 @@ const BookingCard = React.memo(({ booking, onMessageFamily, onConfirmBooking, on
   const startTime = formatTime(booking?.start_time || booking?.startTime);
   const endTime = formatTime(booking?.end_time || booking?.endTime);
   const timeDisplay = booking?.time || (startTime && endTime ? `${startTime} - ${endTime}` : 'Time TBD');
-  const childrenCount = booking?.selected_children?.length || booking?.numberOfChildren || 1;
+  const childrenCount = Array.isArray(booking?.childrenDetails)
+    ? booking.childrenDetails.length
+    : Array.isArray(booking?.selectedChildren)
+      ? booking.selectedChildren.length
+      : Array.isArray(booking?.selected_children)
+        ? booking.selected_children.length
+        : booking?.numberOfChildren || booking?.children || 1;
+
   const location = booking?.address || booking?.location;
+
+  const specialInstructions = booking?.specialInstructions || booking?.special_instructions || booking?.notes;
+
+  const totalAmount = booking?.totalAmount ?? booking?.total_amount ?? 0;
+  const hourlyRate = booking?.hourlyRate ?? booking?.hourly_rate ?? 0;
+
+  const contactPhone = booking?.contactPhone || booking?.contact_phone;
+  const contactEmail = booking?.contactEmail || booking?.contact_email;
+
+  const detailChips = [
+    {
+      key: 'date',
+      icon: 'calendar-outline',
+      text: booking?.date || 'Date TBD'
+    },
+    {
+      key: 'time',
+      icon: 'time-outline',
+      text: timeDisplay
+    },
+    {
+      key: 'children',
+      icon: 'people-outline',
+      text: `${childrenCount} ${childrenCount === 1 ? 'child' : 'children'}`
+    }
+  ];
+
+  if (location) {
+    detailChips.push({
+      key: 'location',
+      icon: 'location-outline',
+      text: location
+    });
+  }
+
+  const contactChips = [
+    contactPhone ? { key: 'phone', icon: 'call-outline', text: contactPhone } : null,
+    contactEmail ? { key: 'email', icon: 'mail-outline', text: contactEmail } : null,
+  ].filter(Boolean);
 
   return (
     <View style={bookingCardStyles.card}>
@@ -44,71 +90,75 @@ const BookingCard = React.memo(({ booking, onMessageFamily, onConfirmBooking, on
       </View>
       
       <View style={bookingCardStyles.details}>
-        <View style={bookingCardStyles.detailRow}>
-          <Ionicons name="calendar-outline" size={16} color="#6b7280" />
-          <Text style={bookingCardStyles.detailText}>{booking.date || 'Date TBD'}</Text>
-        </View>
-        
-        <View style={bookingCardStyles.detailRow}>
-          <Ionicons name="time-outline" size={16} color="#6b7280" />
-          <Text style={bookingCardStyles.detailText}>{timeDisplay}</Text>
-        </View>
-        
-        <View style={bookingCardStyles.detailRow}>
-          <Ionicons name="people-outline" size={16} color="#6b7280" />
-          <Text style={bookingCardStyles.detailText}>
-            {childrenCount} {childrenCount === 1 ? 'child' : 'children'}
-          </Text>
-        </View>
-        
-        {location && (
-          <View style={bookingCardStyles.detailRow}>
-            <Ionicons name="location-outline" size={16} color="#6b7280" />
-            <Text style={bookingCardStyles.detailText} numberOfLines={1}>{location}</Text>
+        {detailChips.map(({ key, icon, text }) => (
+          <View key={key} style={bookingCardStyles.detailChip}>
+            <Ionicons name={icon} size={14} color="#2563EB" />
+            <Text style={bookingCardStyles.detailChipText} numberOfLines={1}>
+              {text}
+            </Text>
           </View>
-        )}
+        ))}
       </View>
-      
-      {booking?.special_instructions && (
+
+      {specialInstructions && (
         <View style={bookingCardStyles.instructionsContainer}>
-          <Text style={bookingCardStyles.instructionsText} numberOfLines={2}>
-            {booking.special_instructions}
+          <Text style={bookingCardStyles.sectionLabel}>Special Instructions</Text>
+          <Text style={bookingCardStyles.instructionsText} numberOfLines={3}>
+            {specialInstructions}
           </Text>
+        </View>
+      )}
+
+      {contactChips.length > 0 && (
+        <View style={bookingCardStyles.contactContainer}>
+          <Text style={bookingCardStyles.sectionLabel}>Contact</Text>
+          <View style={bookingCardStyles.contactChips}>
+            {contactChips.map(({ key, icon, text }) => (
+              <View key={key} style={bookingCardStyles.contactChip}>
+                <Ionicons name={icon} size={14} color="#10B981" />
+                <Text style={bookingCardStyles.contactChipText} numberOfLines={1}>{text}</Text>
+              </View>
+            ))}
+          </View>
         </View>
       )}
       
       <View style={bookingCardStyles.footer}>
         <View style={bookingCardStyles.amountContainer}>
-          <Text style={bookingCardStyles.amount}>₱{booking.totalAmount || booking.total_amount || 0}</Text>
-          <Text style={bookingCardStyles.hourlyRate}>₱{booking.hourlyRate || booking.hourly_rate || 300}/hr</Text>
+          <Text style={bookingCardStyles.amount}>₱{totalAmount}</Text>
+          <Text style={bookingCardStyles.hourlyRate}>₱{hourlyRate || 300}/hr</Text>
         </View>
         
         <View style={bookingCardStyles.actionButtons}>
-          {booking.status === 'pending' && (
+          <View style={bookingCardStyles.actionRow}>
+            {booking.status === 'pending' && (
+              <TouchableOpacity 
+                style={bookingCardStyles.confirmButton}
+                onPress={() => onConfirmBooking && onConfirmBooking(booking)}
+              >
+                <Ionicons name="checkmark" size={16} color="#FFFFFF" />
+                <Text style={bookingCardStyles.buttonText}>Confirm</Text>
+              </TouchableOpacity>
+            )}
+
             <TouchableOpacity 
-              style={bookingCardStyles.confirmButton}
-              onPress={() => onConfirmBooking && onConfirmBooking(booking.id || booking._id)}
+              style={bookingCardStyles.detailsButton}
+              onPress={() => onViewDetails && onViewDetails(booking)}
             >
-              <Ionicons name="checkmark" size={16} color="#FFFFFF" />
-              <Text style={bookingCardStyles.buttonText}>Confirm</Text>
+              <Ionicons name="eye-outline" size={16} color="#FFFFFF" />
+              <Text style={bookingCardStyles.buttonText}>Details</Text>
             </TouchableOpacity>
-          )}
-          
-          <TouchableOpacity 
-            style={bookingCardStyles.detailsButton}
-            onPress={() => onViewDetails && onViewDetails(booking)}
-          >
-            <Ionicons name="eye-outline" size={16} color="#FFFFFF" />
-            <Text style={bookingCardStyles.buttonText}>Details</Text>
-          </TouchableOpacity>
-          
-          <TouchableOpacity 
-            style={bookingCardStyles.messageButton}
-            onPress={() => onMessageFamily && onMessageFamily(booking)}
-          >
-            <Ionicons name="chatbubble-outline" size={16} color="#FFFFFF" />
-            <Text style={bookingCardStyles.buttonText}>Message</Text>
-          </TouchableOpacity>
+          </View>
+
+          <View style={bookingCardStyles.actionRow}>
+            <TouchableOpacity 
+              style={bookingCardStyles.messageButton}
+              onPress={() => onMessageFamily && onMessageFamily(booking)}
+            >
+              <Ionicons name="chatbubble-outline" size={16} color="#FFFFFF" />
+              <Text style={bookingCardStyles.buttonText}>Message</Text>
+            </TouchableOpacity>
+          </View>
         </View>
       </View>
     </View>
@@ -152,31 +202,67 @@ const bookingCardStyles = {
   },
   details: {
     marginBottom: 12,
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
   },
-  detailRow: {
+  detailChip: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 6,
+    backgroundColor: '#EEF2FF',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 999,
+    maxWidth: '100%',
+    gap: 6,
   },
-  detailText: {
-    fontSize: 14,
-    color: '#6b7280',
-    marginLeft: 8,
-    flex: 1,
+  detailChipText: {
+    fontSize: 13,
+    color: '#1f2937',
+    flexShrink: 1,
   },
   instructionsContainer: {
     backgroundColor: '#f9fafb',
-    padding: 10,
+    padding: 12,
     borderRadius: 8,
     marginBottom: 12,
     borderLeftWidth: 3,
     borderLeftColor: '#3b82f6',
   },
+  sectionLabel: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#1f2937',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+    marginBottom: 6,
+  },
   instructionsText: {
     fontSize: 13,
     color: '#374151',
-    fontStyle: 'italic',
     lineHeight: 18,
+  },
+  contactContainer: {
+    marginBottom: 16,
+  },
+  contactChips: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  contactChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#ECFDF5',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 999,
+    gap: 6,
+  },
+  contactChipText: {
+    fontSize: 13,
+    color: '#047857',
+    flexShrink: 1,
   },
   footer: {
     flexDirection: 'row',
@@ -197,6 +283,10 @@ const bookingCardStyles = {
     fontWeight: '500',
   },
   actionButtons: {
+    flexDirection: 'column',
+    gap: 8,
+  },
+  actionRow: {
     flexDirection: 'row',
     gap: 8,
   },
@@ -262,7 +352,6 @@ const isUpcomingBooking = (booking) => {
 const computeFilterCounts = (bookings) => {
   const counts = {
     all: Array.isArray(bookings) ? bookings.length : 0,
-    upcoming: 0,
     pending: 0,
     confirmed: 0,
     completed: 0
@@ -272,7 +361,6 @@ const computeFilterCounts = (bookings) => {
 
   bookings.forEach((booking) => {
     const status = normalizeStatus(booking?.status);
-    if (isUpcomingBooking(booking)) counts.upcoming += 1;
     if (status === 'pending') counts.pending += 1;
     if (status === 'confirmed' || status === 'in-progress' || status === 'in_progress') counts.confirmed += 1;
     if (status === 'completed' || status === 'done' || status === 'paid') counts.completed += 1;
@@ -288,8 +376,6 @@ const getFilteredBookings = (bookings, activeFilter) => {
     const status = normalizeStatus(booking?.status);
 
     switch (activeFilter) {
-      case 'upcoming':
-        return isUpcomingBooking(booking);
       case 'pending':
         return status === 'pending';
       case 'confirmed':
@@ -304,7 +390,6 @@ const getFilteredBookings = (bookings, activeFilter) => {
 
 const buildFilterOptions = (metrics) => ([
   { key: 'all', label: 'All', count: metrics.all },
-  { key: 'upcoming', label: 'Upcoming', count: metrics.upcoming },
   { key: 'pending', label: 'Pending', count: metrics.pending },
   { key: 'confirmed', label: 'Active', count: metrics.confirmed },
   { key: 'completed', label: 'Done', count: metrics.completed }
