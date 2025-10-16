@@ -28,6 +28,7 @@ import HomeTab from './components/HomeTab';
 import SearchTab from './components/SearchTab';
 import BookingsTab from './components/BookingsTab';
 import JobsTab from './components/JobsTab';
+import JobApplicationsTab from './components/JobApplicationsTab';
 import MessagesTab from './components/MessagesTab'; // Added missing import
 import ReviewsTab from './components/ReviewsTab';
 import AlertsTab from './components/AlertsTab';
@@ -78,12 +79,15 @@ const ParentDashboard = () => {
     jobs, 
     caregivers, 
     bookings, 
+    applications,
+    applicationsLoading,
     children,
     loading,
     loadProfile, 
     fetchJobs, 
     fetchCaregivers, 
     fetchBookings, 
+    fetchApplications,
     fetchChildren
   } = useParentDashboard();
   
@@ -101,10 +105,11 @@ const ParentDashboard = () => {
       messages: notificationCounts.messages,
       bookings: Math.max(pendingBookings, notificationCounts.bookings),
       jobs: notificationCounts.jobs,
+      applications: applications?.filter(app => app.status === 'pending')?.length || 0,
       reviews: notificationCounts.reviews,
       notifications: notificationCounts.notifications
     };
-  }, [notificationCounts, bookings]);
+  }, [notificationCounts, bookings, applications]);
 
   // UI State
   const [refreshing, setRefreshing] = useState(false);
@@ -984,6 +989,27 @@ const ParentDashboard = () => {
             onCompleteJob={handleCompleteJob}
             onJobPosted={handleJobPosted}
             loading={loading}
+          />
+        );
+      case 'applications':
+        return (
+          <JobApplicationsTab
+            applications={applications}
+            loading={applicationsLoading}
+            refreshing={refreshing}
+            onRefresh={async () => {
+              await fetchApplications();
+            }}
+            onViewCaregiver={(caregiver) => handleViewCaregiver(caregiver)}
+            onMessageCaregiver={(caregiver) => handleMessageCaregiver(caregiver)}
+            onUpdateStatus={async (applicationId, status) => {
+              try {
+                await supabaseService.applications.updateApplicationStatus(applicationId, status);
+                await fetchApplications();
+              } catch (error) {
+                Alert.alert('Error', 'Failed to update application status.');
+              }
+            }}
           />
         );
       case 'reviews':

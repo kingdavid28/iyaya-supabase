@@ -53,6 +53,7 @@ const NavigationTabs = React.memo(({
     messages: messagesCount = 0,
     bookings: bookingsCount = 0,
     jobs: jobsCount = 0,
+    applications: applicationsCount = 0,
     reviews: reviewsCount = 0,
     notifications: otherNotifications = 0
   } = tabNotificationCounts;
@@ -104,6 +105,15 @@ const NavigationTabs = React.memo(({
           iconName="briefcase-outline"
           label="Jobs"
           notificationCount={jobsCount}
+          setActiveTab={setActiveTab}
+        />
+
+        <TabButton
+          activeTab={activeTab}
+          tabName="applications"
+          iconName="people-outline"
+          label="Applications"
+          notificationCount={applicationsCount}
           setActiveTab={setActiveTab}
         />
 

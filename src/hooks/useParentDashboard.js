@@ -18,6 +18,7 @@ export const useParentDashboard = () => {
   const [caregivers, setCaregivers] = useState([]);
   const [bookings, setBookings] = useState([]);
   const [applications, setApplications] = useState([]);
+  const [applicationsLoading, setApplicationsLoading] = useState(false);
   const [children, setChildren] = useState([]);
   const [loading, setLoading] = useState(false);
   const [dataLoaded, setDataLoaded] = useState(false);
@@ -62,25 +63,26 @@ export const useParentDashboard = () => {
 
       console.log('📋 Jobs list (normalized):', jobsList);
       setJobs(jobsList);
-
-      const applicationsFromJobs = (jobsList || []).flatMap(job => {
-        if (!Array.isArray(job?.applications)) return [];
-        return job.applications.map(application => ({
-          ...application,
-          jobId: job.id || job._id,
-          jobTitle: job.title,
-          jobLocation: job.location,
-          jobStatus: job.status
-        }));
-      });
-
-      setApplications(applicationsFromJobs);
     } catch (error) {
       console.error('❌ Error fetching jobs:', error);
       setJobs([]);
-      setApplications([]);
     } finally {
       setLoading(false);
+    }
+  }, [user?.id]);
+
+  const fetchApplications = useCallback(async () => {
+    if (!user?.id) return;
+    setApplicationsLoading(true);
+    try {
+      const { supabaseService } = await import('../services/supabase');
+      const list = await supabaseService.applications.getParentApplications(user.id);
+      setApplications(Array.isArray(list) ? list : []);
+    } catch (error) {
+      console.error('❌ Error fetching applications:', error);
+      setApplications([]);
+    } finally {
+      setApplicationsLoading(false);
     }
   }, [user?.id]);
 
@@ -218,22 +220,26 @@ export const useParentDashboard = () => {
       Promise.all([
         loadProfile(),
         fetchJobs(),
+        fetchApplications(),
         fetchCaregivers(),
         fetchBookings(),
         fetchChildren()
       ]).finally(() => setDataLoaded(true));
     }
-  }, [user?.id, dataLoaded]);
+  }, [user?.id, dataLoaded, fetchApplications]);
 
   // Refresh data when tabs become active
   useEffect(() => {
     if (activeTab === 'jobs' && user?.id) {
       fetchJobs();
     }
+    if (activeTab === 'applications' && user?.id) {
+      fetchApplications();
+    }
     if (activeTab === 'bookings' && user?.id) {
       fetchBookings();
     }
-  }, [activeTab, fetchJobs, fetchBookings, user?.id]);
+  }, [activeTab, fetchJobs, fetchApplications, fetchBookings, user?.id]);
 
   return {
     activeTab,
@@ -247,6 +253,9 @@ export const useParentDashboard = () => {
     loading,
     loadProfile,
     fetchJobs,
+    applications,
+    applicationsLoading,
+    fetchApplications,
     fetchCaregivers,
     fetchBookings,
     fetchChildren,
