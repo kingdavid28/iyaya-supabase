@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { 
   View, 
   Text, 
@@ -19,7 +19,7 @@ import {
   TrendingUp,
   MessageCircle
 } from 'lucide-react-native';
-import { reviewService } from '../../../services/supabase';
+import { reviewService, bookingService } from '../../../services/supabase';
 import { useAuth } from '../../../contexts/AuthContext';
 
 const ReviewsTab = ({ navigation }) => {
@@ -31,10 +31,39 @@ const ReviewsTab = ({ navigation }) => {
   const [selectedReview, setSelectedReview] = useState(null);
   const [editRating, setEditRating] = useState(5);
   const [editComment, setEditComment] = useState('');
+  const [writeModalVisible, setWriteModalVisible] = useState(false);
+  const [newReviewRating, setNewReviewRating] = useState(5);
+  const [newReviewComment, setNewReviewComment] = useState('');
+  const [completedBookings, setCompletedBookings] = useState([]);
+  const [selectedBookingId, setSelectedBookingId] = useState(null);
+  const [submittingReview, setSubmittingReview] = useState(false);
+  const [bookingsLoading, setBookingsLoading] = useState(false);
+
+  const hasBookings = useMemo(() => completedBookings.length > 0, [completedBookings]);
+
+  const loadCompletedBookings = async () => {
+    if (!user?.id) return;
+
+    try {
+      setBookingsLoading(true);
+      const bookings = await bookingService.getMyBookings(user.id, 'parent');
+      const completed = (bookings || []).filter((booking) => (booking.status || '').toLowerCase() === 'completed');
+      setCompletedBookings(completed);
+      if (completed.length > 0) {
+        setSelectedBookingId((current) => current || completed[0].id);
+      }
+    } catch (error) {
+      console.error('Error loading completed bookings:', error);
+    } finally {
+      setBookingsLoading(false);
+    }
+  };
 
   useEffect(() => {
+    if (!user?.id) return;
     loadReviews();
-  }, []);
+    loadCompletedBookings();
+  }, [user?.id]);
 
   const loadReviews = async () => {
     try {
@@ -59,6 +88,53 @@ const ReviewsTab = ({ navigation }) => {
     setEditRating(review.rating);
     setEditComment(review.comment || '');
     setEditModalVisible(true);
+  };
+
+  const handleCreateReview = async () => {
+    try {
+      if (!selectedBookingId) {
+        Alert.alert('Select a caregiver', 'Please choose a completed booking to review.');
+        return;
+      }
+
+      if (!newReviewComment.trim()) {
+        Alert.alert('Missing information', 'Please share a short comment about your experience.');
+        return;
+      }
+
+      const bookingToReview = completedBookings.find(booking => booking.id === selectedBookingId);
+
+      const caregiverInfo = bookingToReview?.caregiverId || bookingToReview?.caregiver || null;
+      const caregiverId = caregiverInfo?.id || caregiverInfo?._id || bookingToReview?.caregiver_id;
+
+      if (!caregiverId) {
+        Alert.alert('Missing caregiver information', 'Unable to determine caregiver for the selected booking.');
+        return;
+      }
+
+      setSubmittingReview(true);
+
+      await reviewService.createReview({
+        booking_id: bookingToReview.id,
+        reviewer_id: user.id,
+        reviewee_id: caregiverId,
+        rating: newReviewRating,
+        comment: newReviewComment.trim(),
+        reviewer_type: 'parent'
+      });
+
+      setWriteModalVisible(false);
+      setNewReviewRating(5);
+      setNewReviewComment('');
+      setSelectedBookingId(null);
+      await loadReviews();
+      Alert.alert('Success', 'Review submitted successfully');
+    } catch (error) {
+      console.error('Error creating review:', error);
+      Alert.alert('Error', error?.message || 'Failed to submit review');
+    } finally {
+      setSubmittingReview(false);
+    }
   };
 
   const handleUpdateReview = async () => {
@@ -231,6 +307,15 @@ const ReviewsTab = ({ navigation }) => {
         </Text>
       </View>
 
+      <View style={styles.actionsContainer}>
+        <TouchableOpacity
+          style={styles.writeReviewButton}
+          onPress={() => setWriteModalVisible(true)}
+        >
+          <Text style={styles.writeReviewButtonText}>Write a Review</Text>
+        </TouchableOpacity>
+      </View>
+
       {reviews.length > 0 && renderSummaryStats()}
 
       {reviews.length === 0 ? (
@@ -289,6 +374,96 @@ const ReviewsTab = ({ navigation }) => {
           </View>
         </View>
       </Modal>
+
+      <Modal
+        visible={writeModalVisible}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setWriteModalVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <Text style={styles.modalTitle}>Write a Review</Text>
+
+            <View style={styles.editSection}>
+              <Text style={styles.editLabel}>Booking</Text>
+              {bookingsLoading ? (
+                <ActivityIndicator size="small" color="#3b82f6" />
+              ) : hasBookings ? (
+                <View style={styles.bookingOptions}>
+                  {completedBookings.map((booking) => {
+                    const isSelected = booking.id === selectedBookingId;
+                    const caregiverName =
+                      booking.caregiver?.name ||
+                      booking.caregiver_name ||
+                      booking.caregiverId?.name ||
+                      'Caregiver';
+                    const bookingDate = booking.date ? new Date(booking.date).toLocaleDateString() : 'No date';
+
+                    return (
+                      <TouchableOpacity
+                        key={booking.id}
+                        style={[styles.bookingOption, isSelected && styles.bookingOptionSelected]}
+                        onPress={() => setSelectedBookingId(booking.id)}
+                      >
+                        <Text style={styles.bookingOptionTitle}>{caregiverName}</Text>
+                        <Text style={styles.bookingOptionSubtext}>{bookingDate}</Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+              ) : (
+                <Text style={styles.bookingEmptyText}>
+                  Complete a booking before writing a review. Once a caregiver completes a job, they will appear here.
+                </Text>
+              )}
+            </View>
+
+            <View style={styles.editSection}>
+              <Text style={styles.editLabel}>Rating</Text>
+              <View style={styles.editStars}>
+                {renderEditStars(newReviewRating, setNewReviewRating)}
+              </View>
+            </View>
+
+            <View style={styles.editSection}>
+              <Text style={styles.editLabel}>Comment</Text>
+              <TextInput
+                style={styles.commentInput}
+                value={newReviewComment}
+                onChangeText={setNewReviewComment}
+                placeholder="Share your experience..."
+                multiline
+                numberOfLines={4}
+                textAlignVertical="top"
+              />
+            </View>
+
+            <View style={styles.modalActions}>
+              <TouchableOpacity
+                style={styles.cancelButton}
+                onPress={() => {
+                  setWriteModalVisible(false);
+                  setNewReviewRating(5);
+                  setNewReviewComment('');
+                }}
+              >
+                <Text style={styles.cancelButtonText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[
+                  styles.saveButton,
+                  (submittingReview || !hasBookings || !selectedBookingId) && styles.saveButtonDisabled
+                ]}
+                onPress={handleCreateReview}
+                disabled={submittingReview || !hasBookings || !selectedBookingId}
+              >
+                <Text style={styles.saveButtonText}>Submit</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </ScrollView>
   );
 };
@@ -312,6 +487,49 @@ const styles = StyleSheet.create({
   },
   headerSubtitle: {
     fontSize: 16,
+    color: '#6b7280',
+  },
+  actionsContainer: {
+    paddingHorizontal: 20,
+    paddingBottom: 12,
+  },
+  writeReviewButton: {
+    backgroundColor: '#3b82f6',
+    paddingVertical: 12,
+    borderRadius: 10,
+    alignItems: 'center',
+  },
+  writeReviewButtonText: {
+    color: '#fff',
+    fontWeight: '600',
+    fontSize: 16,
+  },
+  bookingOptions: {
+    gap: 12,
+  },
+  bookingOption: {
+    borderWidth: 1,
+    borderColor: '#d1d5db',
+    borderRadius: 10,
+    padding: 12,
+    backgroundColor: '#fff',
+  },
+  bookingOptionSelected: {
+    borderColor: '#3b82f6',
+    backgroundColor: '#e0ecff',
+  },
+  bookingOptionTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#111827',
+  },
+  bookingOptionSubtext: {
+    fontSize: 13,
+    color: '#6b7280',
+    marginTop: 4,
+  },
+  bookingEmptyText: {
+    fontSize: 14,
     color: '#6b7280',
   },
   loadingContainer: {
