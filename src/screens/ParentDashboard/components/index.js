@@ -4,7 +4,6 @@ export { default as BookingsTab } from './BookingsTab';
 export { default as CaregiverCard } from './CaregiverCard';
 export { default as Header } from './Header';
 export { default as HomeTab } from './HomeTab';
-export { default as JobApplications } from './JobApplications';
 export { default as JobCard } from './JobCard';
 export { default as MobileProfileSection } from './MobileProfileSection';
 export { default as MyJobsTab } from './MyJobsTab';

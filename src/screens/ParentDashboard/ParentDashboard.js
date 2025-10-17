@@ -989,6 +989,7 @@ const ParentDashboard = () => {
             onCompleteJob={handleCompleteJob}
             onJobPosted={handleJobPosted}
             loading={loading}
+            setActiveTab={setActiveTab}
           />
         );
       case 'applications':

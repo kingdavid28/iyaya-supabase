@@ -3,8 +3,6 @@ import { View, Text, TouchableOpacity, StyleSheet, Alert } from 'react-native';
 import { Calendar, MapPin, Clock, DollarSign, Users, Edit2, Trash2, Check, Eye, MessageCircle } from 'lucide-react-native';
 import { StatusBadge } from '../../../shared/ui';
 import { supabaseService } from '../../../services/supabase';
-import { useNavigation } from '@react-navigation/native';
-import ProfileImage from '../../../components/ui/feedback/ProfileImage';
 
 // Design tokens matching dashboard
 const colors = {
@@ -24,8 +22,7 @@ const colors = {
   borderLight: '#F3F4F6',
 };
 
-const JobCard = ({ job, onPress, onUpdate, onEdit }) => {
-  const navigation = useNavigation();
+const JobCard = ({ job, onPress, onUpdate, onEdit, setActiveTab }) => {
   
   const handleEdit = () => {
     if (onEdit) {
@@ -69,18 +66,11 @@ const JobCard = ({ job, onPress, onUpdate, onEdit }) => {
     }
   };
 
-  const handleViewApplicants = async () => {
-    try {
-      const applications = await supabaseService.applications.getForJob(job.id);
-      navigation.navigate('JobApplications', { 
-        jobId: job.id, 
-        jobTitle: job.title,
-        applications: applications || []
-      });
-    } catch (error) {
-      console.error('Error fetching applications:', error);
-      Alert.alert('Error', 'Failed to load applications. Please try again.');
+  const handleViewApplicants = () => {
+    if (typeof setActiveTab === 'function') {
+      setActiveTab('applications');
     }
+    // Parent dashboard will handle loading applications when tab becomes active
   };
 
   const handleConfirmJob = async () => {

@@ -42,7 +42,6 @@ import ProfileScreen from "../../screens/profile/ProfileScreen";
 import EmailVerificationPendingScreen from "../../screens/EmailVerificationPendingScreen";
 
 import CaregiverChat from "../../screens/CaregiverChat";
-import JobApplications from "../../screens/ParentDashboard/components/JobApplications";
 
 // Utils
 import { hasSeenOnboarding } from "../../utils/onboarding";
@@ -134,7 +133,6 @@ const AppNavigatorWithAuth = () => {
         <Stack.Screen name="CaregiverChat" component={CaregiverChat} options={{ title: "Chat with Caregiver" }} />
         <Stack.Screen name="CaregiverReviews" component={CaregiverReviewsScreen} options={{ title: "Caregiver Reviews" }} />
         <Stack.Screen name="Notifications" component={NotificationsScreen} options={{ headerShown: false }} />
-        <Stack.Screen name="JobApplications" component={JobApplications} options={{ title: "Job Applications", headerBackTitle: "Back" }} />
         <Stack.Screen name="CaregiverProfile" component={CaregiverProfileComplete} options={{ title: "Caregiver Profile", headerBackTitle: "Back" }} />
       </Stack.Navigator>
     </NavigationContainer>
