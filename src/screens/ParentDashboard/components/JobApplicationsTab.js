@@ -1,5 +1,5 @@
-import React, { useMemo } from 'react';
-import { View, Text, FlatList, TouchableOpacity, StyleSheet, RefreshControl, ActivityIndicator, Image } from 'react-native';
+import React, { useMemo, useState } from 'react';
+import { View, Text, FlatList, TouchableOpacity, StyleSheet, RefreshControl, ActivityIndicator, Image, Alert, Linking } from 'react-native';
 import { formatDistanceToNow } from 'date-fns';
 import { User, Briefcase, MapPin, Clock, MessageCircle, CheckCircle, XCircle } from 'lucide-react-native';
 import { colors } from '../../styles/ParentDashboard.styles';
@@ -21,6 +21,8 @@ const JobApplicationsTab = ({
   onMessageCaregiver,
   onUpdateStatus
 }) => {
+  const [selectedFilter, setSelectedFilter] = useState('all');
+
   const sortedApplications = useMemo(() => {
     return [...applications].sort((a, b) => {
       const left = a.appliedAt || a.createdAt || a.updatedAt;
@@ -28,6 +30,18 @@ const JobApplicationsTab = ({
       return new Date(right || 0).getTime() - new Date(left || 0).getTime();
     });
   }, [applications]);
+
+  const filteredApplications = useMemo(() => {
+    if (selectedFilter === 'new') {
+      return sortedApplications.filter((app) => (app.status || '').toLowerCase() === 'pending');
+    }
+    if (selectedFilter === 'reviewed') {
+      return sortedApplications.filter((app) => ['accepted', 'rejected', 'shortlisted'].includes((app.status || '').toLowerCase()));
+    }
+    return sortedApplications;
+  }, [sortedApplications, selectedFilter]);
+
+  const pendingCount = useMemo(() => applications.filter((app) => (app.status || '').toLowerCase() === 'pending').length, [applications]);
 
   const renderStatusBadge = (status) => {
     const key = typeof status === 'string' ? status.toLowerCase() : 'pending';
@@ -41,6 +55,9 @@ const JobApplicationsTab = ({
 
   const renderApplication = ({ item }) => {
     const caregiverImage = getProfileImageUrl({ profileImage: item.caregiverProfileImage, name: item.caregiverName });
+    const status = (item.status || '').toLowerCase();
+    const applicationId = item.id || item._id;
+    const jobId = item.jobId || item.job?.id || item.job_id;
     let appliedAgo = 'Recently';
     if (item.appliedAt || item.createdAt || item.updatedAt) {
       const rawDate = item.appliedAt || item.createdAt || item.updatedAt;
@@ -49,6 +66,25 @@ const JobApplicationsTab = ({
         appliedAgo = formatDistanceToNow(parsedDate, { addSuffix: true });
       }
     }
+
+    const handleCallCaregiver = () => {
+      const phone = item.caregiverPhone || item.caregiver?.phone;
+      if (!phone) {
+        Alert.alert('No phone number', 'This caregiver has not provided a phone number.');
+        return;
+      }
+      Linking.openURL(`tel:${phone}`).catch(() => {
+        Alert.alert('Unable to place call', 'Please try again later.');
+      });
+    };
+
+    const safeUpdateStatus = (nextStatus) => {
+      if (!applicationId) {
+        Alert.alert('Error', 'Missing application identifier. Please refresh and try again.');
+        return;
+      }
+      onUpdateStatus?.(applicationId, nextStatus, jobId);
+    };
 
     return (
       <View style={styles.card}>
@@ -109,19 +145,19 @@ const JobApplicationsTab = ({
           </TouchableOpacity>
         </View>
 
-        {(item.status === 'pending' || item.status === 'shortlisted') && (
+        {(status === 'pending' || status === 'shortlisted') && (
           <View style={styles.decisionRow}>
             <TouchableOpacity
               style={[styles.decisionButton, styles.acceptButton]}
-              onPress={() => onUpdateStatus?.(item.id, 'accepted')}
+              onPress={() => safeUpdateStatus('accepted')}
             >
               <CheckCircle size={16} color={colors.surface} />
               <Text style={styles.decisionText}>Accept</Text>
             </TouchableOpacity>
-            {item.status === 'pending' && (
+            {status === 'pending' && (
               <TouchableOpacity
                 style={[styles.decisionButton, styles.shortlistButton]}
-                onPress={() => onUpdateStatus?.(item.id, 'shortlisted')}
+                onPress={() => safeUpdateStatus('shortlisted')}
               >
                 <Clock size={16} color={colors.secondary} />
                 <Text style={styles.decisionShortlistText}>Shortlist</Text>
@@ -129,10 +165,40 @@ const JobApplicationsTab = ({
             )}
             <TouchableOpacity
               style={[styles.decisionButton, styles.rejectButton]}
-              onPress={() => onUpdateStatus?.(item.id, 'rejected')}
+              onPress={() => safeUpdateStatus('rejected')}
             >
               <XCircle size={16} color={colors.error} />
               <Text style={styles.decisionRejectText}>Reject</Text>
+            </TouchableOpacity>
+          </View>
+        )}
+
+        {status === 'shortlisted' && (
+          <View style={styles.followUpActions}>
+            <TouchableOpacity
+              style={[styles.contactBtn, styles.messageContactBtn]}
+              onPress={() => onMessageCaregiver?.({ id: item.caregiverId, _id: item.caregiverId, name: item.caregiverName })}
+            >
+              <MessageCircle size={16} color={colors.info} />
+              <Text style={styles.contactBtnText}>Message</Text>
+            </TouchableOpacity>
+          </View>
+        )}
+
+        {['accepted', 'rejected'].includes(status) && (
+          <View style={styles.followUpActions}>
+            <TouchableOpacity
+              style={[styles.contactBtn, styles.messageContactBtn]}
+              onPress={() => onMessageCaregiver?.({ id: item.caregiverId, _id: item.caregiverId, name: item.caregiverName })}
+            >
+              <MessageCircle size={16} color={colors.info} />
+              <Text style={styles.contactBtnText}>Message</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.contactBtn, styles.callContactBtn]}
+              onPress={handleCallCaregiver}
+            >
+              <Text style={styles.contactBtnText}>Call</Text>
             </TouchableOpacity>
           </View>
         )}
@@ -150,24 +216,63 @@ const JobApplicationsTab = ({
   }
 
   return (
-    <FlatList
-      data={sortedApplications}
-      keyExtractor={(item, index) => String(item.id || `${item.jobId || 'job'}-${item.caregiverId || index}`)}
-      renderItem={renderApplication}
-      contentContainerStyle={sortedApplications.length === 0 ? styles.emptyContent : styles.listContent}
-      refreshControl={onRefresh ? <RefreshControl refreshing={refreshing} onRefresh={onRefresh} /> : undefined}
-      ListEmptyComponent={
-        <View style={styles.emptyState}>
-          <User size={40} color={colors.textTertiary} />
-          <Text style={styles.emptyTitle}>No job applications yet</Text>
-          <Text style={styles.emptySubtitle}>Caregiver applications will appear here once they apply to your jobs.</Text>
-        </View>
-      }
-    />
+    <View style={styles.wrapper}>
+      <View style={styles.tabsContainer}>
+        {['all', 'new', 'reviewed'].map((filterKey) => {
+          const isActive = selectedFilter === filterKey;
+          const label = filterKey === 'all' ? 'All Applications' : filterKey === 'new' ? 'New' : 'Reviewed';
+          return (
+            <TouchableOpacity
+              key={filterKey}
+              style={[styles.tab, isActive && styles.tabActive]}
+              onPress={() => setSelectedFilter(filterKey)}
+            >
+              <Text style={[styles.tabText, isActive && styles.tabTextActive]}>{label}</Text>
+              {filterKey === 'new' && !isActive && pendingCount > 0 && (
+                <View style={styles.badge}>
+                  <Text style={styles.badgeText}>{pendingCount}</Text>
+                </View>
+              )}
+              {isActive && <View style={styles.tabIndicator} />}
+            </TouchableOpacity>
+          );
+        })}
+      </View>
+
+      <FlatList
+        data={filteredApplications}
+        keyExtractor={(item, index) => String(item.id || `${item.jobId || 'job'}-${item.caregiverId || index}`)}
+        renderItem={renderApplication}
+        contentContainerStyle={filteredApplications.length === 0 ? styles.emptyContent : styles.listContent}
+        refreshControl={onRefresh ? <RefreshControl refreshing={refreshing} onRefresh={onRefresh} /> : undefined}
+        ListEmptyComponent={
+          <View style={styles.emptyState}>
+            <User size={40} color={colors.textTertiary} />
+            <Text style={styles.emptyTitle}>
+              {selectedFilter === 'new'
+                ? 'No new applications'
+                : selectedFilter === 'reviewed'
+                ? 'No reviewed applications'
+                : 'No job applications yet'}
+            </Text>
+            <Text style={styles.emptySubtitle}>
+              {selectedFilter === 'new'
+                ? 'Check back later for new caregiver applications.'
+                : selectedFilter === 'reviewed'
+                ? 'Applications you have reviewed will appear here.'
+                : 'Caregiver applications will appear here once they apply to your jobs.'}
+            </Text>
+          </View>
+        }
+      />
+    </View>
   );
 };
 
 const styles = StyleSheet.create({
+  wrapper: {
+    flex: 1
+  },
   loadingContainer: {
     flex: 1,
     alignItems: 'center',
@@ -182,6 +287,56 @@ const styles = StyleSheet.create({
   listContent: {
     paddingHorizontal: 20,
     paddingVertical: 16
+  },
+  tabsContainer: {
+    flexDirection: 'row',
+    paddingHorizontal: 20,
+    paddingBottom: 12,
+    gap: 12
+  },
+  tab: {
+    flex: 1,
+    paddingVertical: 10,
+    borderRadius: 12,
+    backgroundColor: '#F3F4F6',
+    alignItems: 'center',
+    position: 'relative'
+  },
+  tabActive: {
+    backgroundColor: '#EEF2FF',
+    borderWidth: 1,
+    borderColor: colors.info
+  },
+  tabText: {
+    fontWeight: '600',
+    color: colors.textSecondary
+  },
+  tabTextActive: {
+    color: colors.info
+  },
+  tabIndicator: {
+    position: 'absolute',
+    bottom: -6,
+    height: 4,
+    width: '30%',
+    borderRadius: 2,
+    backgroundColor: colors.info
+  },
+  badge: {
+    position: 'absolute',
+    top: -6,
+    right: -6,
+    minWidth: 20,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 10,
+    backgroundColor: colors.secondary
+  },
+  badgeText: {
+    color: colors.surface,
+    fontSize: 10,
+    fontWeight: '700',
+    textAlign: 'center'
   },
   emptyContent: {
     flexGrow: 1,
@@ -391,6 +546,33 @@ const styles = StyleSheet.create({
   decisionRejectText: {
     color: colors.error,
     fontWeight: '600'
+  },
+  followUpActions: {
+    flexDirection: 'row',
+    marginTop: 12,
+    gap: 12
+  },
+  contactBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    borderRadius: 12,
+    borderWidth: 1
+  },
+  messageContactBtn: {
+    borderColor: colors.info,
+    backgroundColor: '#EFF6FF'
+  },
+  callContactBtn: {
+    borderColor: colors.success,
+    backgroundColor: '#ECFDF5'
+  },
+  contactBtnText: {
+    marginLeft: 6,
+    fontWeight: '600',
+    color: colors.textSecondary
   }
 });
 

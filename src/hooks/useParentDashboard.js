@@ -254,6 +254,7 @@ export const useParentDashboard = () => {
     loadProfile,
     fetchJobs,
     applications,
+    setApplications,
     applicationsLoading,
     fetchApplications,
     fetchCaregivers,

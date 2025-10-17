@@ -80,6 +80,7 @@ const ParentDashboard = () => {
     caregivers, 
     bookings, 
     applications,
+    setApplications,
     applicationsLoading,
     children,
     loading,
@@ -1001,14 +1002,48 @@ const ParentDashboard = () => {
             onRefresh={async () => {
               await fetchApplications();
             }}
-            onViewCaregiver={(caregiver) => handleViewCaregiver(caregiver)}
-            onMessageCaregiver={(caregiver) => handleMessageCaregiver(caregiver)}
-            onUpdateStatus={async (applicationId, status) => {
+            onViewCaregiver={(caregiver) => {
+              if (!caregiver) {
+                Alert.alert('No caregiver information', 'Unable to view caregiver profile.');
+                return;
+              }
+              handleViewCaregiver(caregiver);
+            }}
+            onMessageCaregiver={(caregiver) => {
+              if (!caregiver) {
+                Alert.alert('No caregiver information', 'Unable to message caregiver.');
+                return;
+              }
+              handleMessageCaregiver(caregiver);
+            }}
+            onUpdateStatus={async (applicationId, status, jobId) => {
               try {
-                await supabaseService.applications.updateApplicationStatus(applicationId, status);
-                await fetchApplications();
+                const updated = await supabaseService.applications.updateApplicationStatus(applicationId, status, jobId);
+                setApplications((prev) => prev.map((application) => {
+                  const matches = String(application.id || application._id) === String(applicationId);
+                  if (!matches) return application;
+
+                  const merged = {
+                    ...application,
+                    status,
+                    updatedAt: new Date().toISOString()
+                  };
+
+                  if (updated && typeof updated === 'object') {
+                    merged.status = updated.status || status;
+                    merged.updatedAt = updated.updated_at || updated.updatedAt || merged.updatedAt;
+                  }
+
+                  return merged;
+                }));
+                await Promise.all([
+                  fetchJobs(),
+                  fetchBookings(),
+                  fetchApplications()
+                ]);
               } catch (error) {
-                Alert.alert('Error', 'Failed to update application status.');
+                console.error('❌ Failed to update application status:', error);
+                Alert.alert('Error', error?.message || 'Failed to update application status.');
               }
             }}
           />

@@ -143,10 +143,13 @@ export class ApplicationService extends SupabaseBase {
     return await this.getJobApplications(jobId)
   }
 
-  async updateApplicationStatus(applicationId, status) {
+  async updateApplicationStatus(applicationId, status, jobId = null) {
     try {
       this._validateId(applicationId, 'Application ID')
-      
+      if (jobId) {
+        this._validateId(jobId, 'Job ID')
+      }
+
       const validStatuses = ['pending', 'accepted', 'rejected', 'withdrawn', 'shortlisted']
       if (!validStatuses.includes(status)) {
         throw new Error(`Invalid status: ${status}. Must be one of: ${validStatuses.join(', ')}`)
@@ -164,14 +167,20 @@ export class ApplicationService extends SupabaseBase {
         throw new Error('Application not found')
       }
       
-      const { error: updateError } = await supabase
+      const query = supabase
         .from('applications')
         .update({ 
           status, 
           updated_at: new Date().toISOString() 
         })
         .eq('id', applicationId)
-      
+
+      if (jobId) {
+        query.eq('job_id', jobId)
+      }
+
+      const { error: updateError } = await query
+
       if (updateError) {
         console.error('❌ Supabase update error:', updateError)
         throw updateError

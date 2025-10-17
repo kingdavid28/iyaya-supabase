@@ -1,7 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { notificationService } from '../services/supabase/notificationService';
-import { supabaseService } from '../services/supabase';
 
 export const useNotificationCounts = () => {
   const { user } = useAuth();
@@ -23,12 +22,41 @@ export const useNotificationCounts = () => {
       
       // Use the more efficient method to get counts by type
       const newCounts = await notificationService.getNotificationCountsByType(user.id);
-      
+
+      // Ensure we always have a valid counts object
+      if (!newCounts || typeof newCounts !== 'object') {
+        setCounts({
+          messages: 0,
+          bookings: 0,
+          jobs: 0,
+          reviews: 0,
+          notifications: 0,
+          total: 0
+        });
+        return {
+          messages: 0,
+          bookings: 0,
+          jobs: 0,
+          reviews: 0,
+          notifications: 0,
+          total: 0
+        };
+      }
+
       setCounts(newCounts);
       return newCounts;
     } catch (error) {
-      console.error('Error fetching notification counts:', error);
-      return counts;
+      console.warn('Error fetching notification counts:', error);
+      const fallbackCounts = {
+        messages: 0,
+        bookings: 0,
+        jobs: 0,
+        reviews: 0,
+        notifications: 0,
+        total: 0
+      };
+      setCounts(fallbackCounts);
+      return fallbackCounts;
     } finally {
       setLoading(false);
     }
