@@ -1,4 +1,5 @@
 import { SupabaseBase, supabase } from './base'
+import { getCachedOrFetch, invalidateCache } from './cache'
 
 const parseJSONSafe = (value, fallback = null) => {
   if (value === undefined || value === null) return fallback
@@ -141,25 +142,36 @@ export class JobService extends SupabaseBase {
 
       query = query.order('created_at', { ascending: false })
 
-      const { data, error } = await query
-      if (error) throw error
+      const cacheKey = `jobs:list:${JSON.stringify(filters || {})}`
+      return await getCachedOrFetch(cacheKey, async () => {
+        const { data, error } = await query
+        if (error) throw error
 
-      // Fetch children data for each job
-      const jobsWithChildren = await Promise.all(
-        (data || []).map(async (job) => {
-          try {
-            const { data: children } = await supabase
-              .from('children')
-              .select('*')
-              .eq('parent_id', job.parent_id)
-            return { ...job, children: children || [] }
-          } catch {
-            return { ...job, children: [] }
+        const parentIds = Array.from(new Set((data || []).map(job => job.parent_id).filter(Boolean)))
+        let childrenLookup = {}
+
+        if (parentIds.length) {
+          const { data: childrenRows, error: childrenError } = await supabase
+            .from('children')
+            .select('id,parent_id,name,age,allergies,notes,preferences,created_at,updated_at')
+            .in('parent_id', parentIds)
+
+          if (!childrenError && Array.isArray(childrenRows)) {
+            childrenLookup = childrenRows.reduce((acc, child) => {
+              acc[child.parent_id] = acc[child.parent_id] || []
+              acc[child.parent_id].push(child)
+              return acc
+            }, {})
           }
-        })
-      )
+        }
 
-      return jobsWithChildren.map(normalizeJobRecord)
+        const jobsWithChildren = (data || []).map(job => ({
+          ...job,
+          children: childrenLookup[job.parent_id] || []
+        }))
+
+        return jobsWithChildren.map(normalizeJobRecord)
+      }, 60 * 1000)
     } catch (error) {
       return this._handleError('getJobs', error)
     }
@@ -169,46 +181,50 @@ export class JobService extends SupabaseBase {
     try {
       this._validateId(clientId, 'Client ID')
 
-      const { data, error } = await supabase
-        .from('jobs')
-        .select(`
-          *,
-          users!parent_id(
-            id,
-            name,
-            email,
-            phone,
-            profile_image
-          ),
-          applications(
-            id,
-            caregiver_id,
-            status,
-            message,
-            applied_at,
-            created_at,
-            updated_at
-          )
-        `)
-        .eq('parent_id', clientId)
-        .order('created_at', { ascending: false })
+      const cacheKey = `jobs:mine:${clientId}`
+      return await getCachedOrFetch(cacheKey, async () => {
+        const { data, error } = await supabase
+          .from('jobs')
+          .select(`
+            *,
+            users!parent_id(
+              id,
+              name,
+              email,
+              phone,
+              profile_image
+            ),
+            applications(
+              id,
+              caregiver_id,
+              status,
+              message,
+              applied_at,
+              created_at,
+              updated_at
+            )
+          `)
+          .eq('parent_id', clientId)
+          .order('created_at', { ascending: false })
 
-      if (error) throw error
+        if (error) throw error
 
-      // Fetch children data for user's jobs
-      const { data: children } = await supabase
-        .from('children')
-        .select('*')
-        .eq('parent_id', clientId)
+        const { data: childrenRows, error: childrenError } = await supabase
+          .from('children')
+          .select('id,parent_id,name,age,allergies,notes,preferences,created_at,updated_at')
+          .eq('parent_id', clientId)
 
-      const jobsWithChildren = (data || []).map(job => ({
-        ...job,
-        children: children || [],
-        applications: job.applications || [],
-        applications_count: job.applications?.length || 0
-      }))
+        const children = !childrenError && Array.isArray(childrenRows) ? childrenRows : []
 
-      return jobsWithChildren.map(normalizeJobRecord)
+        const jobsWithChildren = (data || []).map(job => ({
+          ...job,
+          children,
+          applications: job.applications || [],
+          applications_count: job.applications?.length || 0
+        }))
+
+        return jobsWithChildren.map(normalizeJobRecord)
+      }, 60 * 1000)
     } catch (error) {
       return this._handleError('getMyJobs', error)
     }
@@ -294,6 +310,7 @@ export class JobService extends SupabaseBase {
         .single()
       
       if (error) throw error
+      invalidateCache('jobs:')
       return data
     } catch (error) {
       return this._handleError('createJob', error)
@@ -319,6 +336,7 @@ export class JobService extends SupabaseBase {
         .single()
       
       if (error) throw error
+      invalidateCache('jobs:')
       return data
     } catch (error) {
       return this._handleError('updateJob', error)
@@ -335,6 +353,7 @@ export class JobService extends SupabaseBase {
         .eq('id', jobId)
       
       if (error) throw error
+      invalidateCache('jobs:')
       return { success: true }
     } catch (error) {
       return this._handleError('deleteJob', error)

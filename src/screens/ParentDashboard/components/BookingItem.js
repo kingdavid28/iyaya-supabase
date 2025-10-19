@@ -66,6 +66,9 @@ const BookingItem = ({
     }
   };
 
+  const caregiverData = user || booking?.caregiver || booking?.caregiverId || booking?.assignedCaregiver || null;
+  const caregiverIdValue = caregiverData?._id || caregiverData?.id || caregiverData?.caregiver_id || booking?.caregiver_id;
+
   const handleLocationPress = () => {
     const address = booking?.address || booking?.location;
     if (!address) {
@@ -108,8 +111,6 @@ const BookingItem = ({
     }
     
     // Extract caregiver info from user prop or booking data
-    const caregiverData = user || booking?.caregiver || booking?.caregiverId || booking?.assignedCaregiver;
-    
     if (!caregiverData) {
       console.warn('⚠️ BookingItem - No caregiver data available');
       Alert.alert('Error', 'Caregiver information not available');
@@ -137,8 +138,8 @@ const BookingItem = ({
 
 
 
-  const caregiverName = user?.name || booking?.caregiver_name || 'Unknown Caregiver';
-  const caregiverImage = user?.profileImage || user?.avatar || user?.profile_image;
+  const caregiverName = caregiverData?.name || caregiverData?.caregiver_name || booking?.caregiver_name || 'Unknown Caregiver';
+  const caregiverImage = caregiverData?.profileImage || caregiverData?.avatar || caregiverData?.profile_image;
   const bookingDate = formatDate(booking?.date);
   const startTime = formatTime(booking?.start_time || booking?.startTime);
   const endTime = formatTime(booking?.end_time || booking?.endTime);
@@ -276,6 +277,20 @@ const BookingItem = ({
             >
               <Ionicons name="close-outline" size={18} color="#FFFFFF" />
               <Text style={styles.buttonText}>Cancel</Text>
+            </TouchableOpacity>
+          )}
+          {typeof onWriteReview === 'function' && caregiverIdValue && (booking?.status || '').toLowerCase() === 'completed' && (
+            <TouchableOpacity
+              style={styles.reviewButton}
+              onPress={() => onWriteReview({
+                bookingId: booking?.id || booking?._id,
+                caregiverId: caregiverIdValue,
+                caregiverName,
+                booking
+              })}
+            >
+              <Ionicons name="star-outline" size={18} color="#FFFFFF" />
+              <Text style={styles.buttonText}>Review</Text>
             </TouchableOpacity>
           )}
         </View>
@@ -515,6 +530,21 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     flex: 1,
     shadowColor: '#EF4444',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  reviewButton: {
+    backgroundColor: '#F59E0B',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 12,
+    flex: 1,
+    shadowColor: '#F59E0B',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.2,
     shadowRadius: 4,

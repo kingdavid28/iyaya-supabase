@@ -17,6 +17,7 @@ import {
 import { MessageCircle, Clock } from 'lucide-react-native';
 import { useAuth } from '../../contexts/AuthContext';
 import { messagingService } from '../../services';
+import { ConversationListSkeleton } from './MessagingSkeletons';
 
 const ConversationList = ({ onSelectConversation, selectedConversation, navigation }) => {
   const { user } = useAuth();
@@ -161,14 +162,7 @@ const ConversationList = ({ onSelectConversation, selectedConversation, navigati
   );
 
   if (loading) {
-    return (
-      <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" />
-        <Text variant="bodyMedium" style={styles.loadingText}>
-          Loading conversations...
-        </Text>
-      </View>
-    );
+    return <ConversationListSkeleton />;
   }
 
   return (

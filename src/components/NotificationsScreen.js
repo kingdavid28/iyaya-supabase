@@ -12,6 +12,12 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { supabaseService } from '../services/supabase';
 import { useAuth } from '../contexts/AuthContext';
+import {
+  SkeletonCard,
+  SkeletonBlock,
+  SkeletonCircle,
+  SkeletonPill
+} from '../components/common/SkeletonPlaceholder';
 
 const NotificationsScreen = ({ navigation }) => {
   const { user } = useAuth();
@@ -215,6 +221,54 @@ const NotificationsScreen = ({ navigation }) => {
 
   const unreadCount = notifications.filter(n => !n.read).length;
 
+  if (loading) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <View style={styles.header}>
+          <TouchableOpacity onPress={() => {
+            if (navigation.canGoBack()) {
+              navigation.goBack();
+            }
+          }}>
+            <Ionicons name="arrow-back" size={24} color="#1F2937" />
+          </TouchableOpacity>
+          <Text style={styles.headerTitle}>Notifications</Text>
+          <View style={{ width: 60 }} />
+        </View>
+
+        <View style={styles.skeletonList}>
+          <SkeletonCard style={styles.summarySkeleton}>
+            <View style={styles.summarySkeletonContent}>
+              <SkeletonBlock width="40%" height={18} />
+              <View style={styles.summarySkeletonRow}>
+                {['messages', 'bookings', 'other'].map((key) => (
+                  <View key={key} style={styles.summarySkeletonItem}>
+                    <SkeletonCircle size={32} />
+                    <SkeletonBlock width="50%" height={16} />
+                    <SkeletonPill width="70%" height={14} />
+                  </View>
+                ))}
+              </View>
+            </View>
+          </SkeletonCard>
+
+          {Array.from({ length: 6 }).map((_, index) => (
+            <SkeletonCard key={`notif-skeleton-${index}`} style={styles.notificationSkeletonCard}>
+              <View style={styles.notificationSkeletonHeader}>
+                <SkeletonCircle size={40} style={styles.notificationSkeletonIcon} />
+                <View style={styles.notificationSkeletonContent}>
+                  <SkeletonBlock width="70%" height={16} />
+                  <SkeletonBlock width="90%" height={14} style={styles.notificationSkeletonLine} />
+                  <SkeletonBlock width="40%" height={12} />
+                </View>
+              </View>
+            </SkeletonCard>
+          ))}
+        </View>
+      </SafeAreaView>
+    );
+  }
+
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
@@ -355,6 +409,43 @@ const styles = StyleSheet.create({
   },
   emptyList: {
     flex: 1,
+  },
+  skeletonList: {
+    padding: 16,
+    rowGap: 16,
+  },
+  summarySkeleton: {
+    padding: 16,
+  },
+  summarySkeletonContent: {
+    gap: 16,
+  },
+  summarySkeletonRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+  },
+  summarySkeletonItem: {
+    flex: 1,
+    alignItems: 'center',
+    gap: 8,
+  },
+  notificationSkeletonCard: {
+    padding: 16,
+  },
+  notificationSkeletonHeader: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 12,
+  },
+  notificationSkeletonIcon: {
+    marginTop: 4,
+  },
+  notificationSkeletonContent: {
+    flex: 1,
+    gap: 8,
+  },
+  notificationSkeletonLine: {
+    marginTop: 4,
   },
 });
 

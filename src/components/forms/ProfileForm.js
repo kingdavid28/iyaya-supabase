@@ -19,7 +19,7 @@ import { validator } from '../../utils/validation';
 import ValidatedInput from '../ui/inputs/ValidatedInput';
 import DocumentUpload from './DocumentUpload';
 import { Rating } from 'react-native-ratings';
-import { searchLocation, formatLocation } from '../../utils/locationUtils';
+import { formatLocationForDisplay } from '../../utils/locationUtils';
 
 const ProfileForm = ({ onSubmit, initialValues = {}, isCaregiver = false }) => {
   const theme = useTheme();
@@ -28,7 +28,7 @@ const ProfileForm = ({ onSubmit, initialValues = {}, isCaregiver = false }) => {
     lastName: initialValues.lastName || '',
     email: initialValues.email || '',
     phone: initialValues.phone || '',
-    location: initialValues.location || null,
+    location: initialValues.location || '',
     documents: initialValues.documents || {
       id: '',
       policeClearance: '',
@@ -42,16 +42,13 @@ const ProfileForm = ({ onSubmit, initialValues = {}, isCaregiver = false }) => {
   
   const [editingRating, setEditingRating] = useState(false);
   const [tempRating, setTempRating] = useState(formData.rating);
-  const [locationSearch, setLocationSearch] = useState(
-    initialValues.location ? formatLocation(initialValues.location) : ''
+  const [formattedLocation, setFormattedLocation] = useState(
+    initialValues.location ? formatLocationForDisplay(initialValues.location) : ''
   );
-  const [searchTimeout, setSearchTimeout] = useState(null);
-  const [isSearchingLocation, setIsSearchingLocation] = useState(false);
 
   useEffect(() => {
-    // Initialize location search text if location exists
     if (initialValues.location) {
-      setLocationSearch(formatLocation(initialValues.location));
+      setFormattedLocation(formatLocationForDisplay(initialValues.location));
     }
   }, [initialValues.location]);
 
@@ -67,7 +64,7 @@ const ProfileForm = ({ onSubmit, initialValues = {}, isCaregiver = false }) => {
         validator.validateBio(formData.bio);
         
         // Validate location for caregivers
-        if (!formData.location) {
+        if (!formData.location || !formData.location.trim()) {
           throw new Error('Please enter your location');
         }
         
@@ -126,37 +123,6 @@ const ProfileForm = ({ onSubmit, initialValues = {}, isCaregiver = false }) => {
     }));
   };
 
-  const handleLocationSearch = async (searchText) => {
-    setLocationSearch(searchText);
-    
-    if (searchTimeout) {
-      clearTimeout(searchTimeout);
-    }
-    
-    if (!searchText.trim()) {
-      setFormData(prev => ({ ...prev, location: null }));
-      return;
-    }
-    
-    const timeout = setTimeout(async () => {
-      try {
-        setIsSearchingLocation(true);
-        const locationData = await searchLocation(searchText);
-        setFormData(prev => ({
-          ...prev,
-          location: locationData
-        }));
-      } catch (error) {
-        console.error('Location search failed:', error);
-        Alert.alert('Location Error', 'Failed to find location. Please try again.');
-      } finally {
-        setIsSearchingLocation(false);
-      }
-    }, 1000);
-    
-    setSearchTimeout(timeout);
-  };
-
   const updateField = (field) => (value) => {
     setFormData(prev => ({ ...prev, [field]: value }));
   };
@@ -212,26 +178,15 @@ const ProfileForm = ({ onSubmit, initialValues = {}, isCaregiver = false }) => {
               <Text style={styles.label}>Location</Text>
               <ValidatedInput
                 label="Address"
-                value={locationSearch}
-                onChangeText={handleLocationSearch}
-                placeholder="Enter your address"
-                loading={isSearchingLocation}
+                value={formData.location}
+                onChangeText={updateField('location')}
+                placeholder="City, Province"
               />
-              {formData.location && (
-                <View style={styles.locationDisplay}>
-                  <Text style={styles.locationText}>
-                    {formatLocation(formData.location)}
-                  </Text>
-                  <IconButton 
-                    icon="close" 
-                    size={16} 
-                    onPress={() => {
-                      setFormData(prev => ({ ...prev, location: null }));
-                      setLocationSearch('');
-                    }}
-                  />
-                </View>
-              )}
+              {formattedLocation ? (
+                <Text style={styles.locationHint}>
+                  Current: {formattedLocation}
+                </Text>
+              ) : null}
             </View>
             
             <ValidatedInput

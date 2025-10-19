@@ -1,4 +1,5 @@
 import { SupabaseBase, supabase } from './base'
+import { getCachedOrFetch, invalidateCache } from './cache'
 
 export class UserService extends SupabaseBase {
   async getProfile(userId) {
@@ -16,18 +17,39 @@ export class UserService extends SupabaseBase {
       
       this._validateId(targetUserId, 'User ID')
       
-      const { data, error } = await this._withTimeout(
-        supabase
-          .from('users')
-          .select('*')
-          .eq('id', targetUserId)
-          .maybeSingle()
-      )
-      
-      if (error) {
-        console.warn('Error getting profile:', error)
-        return null
-      }
+      const cacheKey = `profile:${targetUserId}`
+      const data = await getCachedOrFetch(cacheKey, async () => {
+        const { data, error } = await this._withTimeout(
+          supabase
+            .from('users')
+            .select(`
+              id,
+              name,
+              email,
+              profile_image,
+              first_name,
+              last_name,
+              phone,
+              address,
+              location,
+              role,
+              hourly_rate,
+              email_verified,
+              auth_provider,
+              created_at,
+              updated_at
+            `)
+            .eq('id', targetUserId)
+            .maybeSingle()
+        )
+        
+        if (error) {
+          console.warn('Error getting profile:', error)
+          return null
+        }
+
+        return data || null
+      }, 5 * 60 * 1000)
       
       if (!data) return null
       
@@ -105,6 +127,7 @@ export class UserService extends SupabaseBase {
           }
           throw error
         }
+        invalidateCache(`profile:${userId}`)
         return data
       }
       
@@ -119,6 +142,7 @@ export class UserService extends SupabaseBase {
         .single()
       
       if (error) throw error
+      invalidateCache(`profile:${userId}`)
       return data
     } catch (error) {
       return this._handleError('updateProfile', error)
@@ -127,22 +151,39 @@ export class UserService extends SupabaseBase {
 
   async getCaregivers(filters = {}) {
     try {
-      let query = supabase
-        .from('users')
-        .select('*')
-        .eq('role', 'caregiver')
-        .eq('status', 'active')
-        .order('created_at', { ascending: false })
+      const cacheKey = `caregivers:${JSON.stringify(filters || {})}`
+      return await getCachedOrFetch(cacheKey, async () => {
+        let query = supabase
+          .from('users')
+          .select(`
+            id,
+            name,
+            email,
+            phone,
+            address,
+            profile_image,
+            rating,
+            hourly_rate,
+            experience,
+            skills,
+            bio,
+            created_at,
+            updated_at
+          `)
+          .eq('role', 'caregiver')
+          .eq('status', 'active')
+          .order('created_at', { ascending: false })
 
-      if (filters.location) {
-        query = query.ilike('address', `%${filters.location}%`)
-      }
+        if (filters.location) {
+          query = query.ilike('address', `%${filters.location}%`)
+        }
 
-      const { data, error } = await query
-      if (error) throw error
-      
-      console.log('✅ Fetched caregivers from Supabase:', data?.length || 0)
-      return data || []
+        const { data, error } = await query
+        if (error) throw error
+        
+        console.log('✅ Fetched caregivers from Supabase:', data?.length || 0)
+        return data || []
+      }, 60 * 1000)
     } catch (error) {
       return this._handleError('getCaregivers', error)
     }

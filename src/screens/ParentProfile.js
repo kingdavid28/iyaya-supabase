@@ -1,12 +1,14 @@
-import React, { useState, useEffect, useCallback } from 'react';
-import { View, ScrollView, StyleSheet, Alert, Modal, TouchableOpacity, Image } from 'react-native';
-import { Text, Card, Avatar, Button, Divider, ActivityIndicator, TextInput } from 'react-native-paper';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { View, ScrollView, StyleSheet, Image, TouchableOpacity, Alert, ActivityIndicator, Animated, Dimensions, Text, KeyboardAvoidingView, Platform, Modal } from 'react-native';
+import { Card, Button, TextInput } from 'react-native-paper';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
-import { supabaseService, getCurrentAPIURL } from '../services';
+import { supabaseService } from '../services/supabase';
+import { processImageForUpload } from '../utils/imageUtils';
 import { useAuth } from '../contexts/AuthContext';
 import ProfileImage from '../components/ui/feedback/ProfileImage';
 import { getCurrentDeviceLocation } from '../utils/locationUtils';
+import { getCurrentAPIURL } from '../config/api';
 
 const ParentProfile = ({ navigation }) => {
   const { user } = useAuth();
@@ -116,14 +118,24 @@ const ParentProfile = ({ navigation }) => {
         setUploading(true);
         const asset = result.assets[0];
         
-        if (!asset.base64) {
-          console.error('No base64 data in asset:', asset);
-          throw new Error('Image data not available');
+        let uploadPayload;
+        try {
+          const processed = await processImageForUpload(asset.uri, {
+            maxWidth: 1024,
+            maxHeight: 1024,
+            compress: 0.8,
+          });
+          uploadPayload = processed.base64;
+        } catch (processingError) {
+          console.warn('Failed to process image before upload, falling back to original asset.', processingError);
+          if (asset.base64) {
+            uploadPayload = `data:${asset.mimeType || 'image/jpeg'};base64,${asset.base64}`;
+          } else {
+            throw new Error('Image data not available');
+          }
         }
-        
-        const dataUrl = `data:image/jpeg;base64,${asset.base64}`;
-        
-        const response = await supabaseService.uploadProfileImage(user?.id || user?.uid, dataUrl);
+
+        const response = await supabaseService.uploadProfileImage(user?.id || user?.uid, uploadPayload);
         console.log('Upload response:', response);
         
         // Handle different response structures

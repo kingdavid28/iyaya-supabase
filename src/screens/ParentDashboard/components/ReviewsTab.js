@@ -1,45 +1,55 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { 
-  View, 
-  Text, 
-  ScrollView, 
-  TouchableOpacity, 
-  RefreshControl,
-  ActivityIndicator,
-  StyleSheet,
-  Alert,
-  Modal,
-  TextInput
-} from 'react-native';
-import { 
-  Star, 
-  Edit3, 
-  Calendar, 
-  User,
-  TrendingUp,
-  MessageCircle
-} from 'lucide-react-native';
+import { View, Text, ScrollView, TouchableOpacity, RefreshControl, StyleSheet, Alert, Modal, ActivityIndicator } from 'react-native';
+import { Star, TrendingUp, MessageCircle } from 'lucide-react-native';
 import { reviewService, bookingService } from '../../../services/supabase';
 import { useAuth } from '../../../contexts/AuthContext';
+import {
+  SkeletonCard,
+  SkeletonBlock,
+  SkeletonCircle,
+  SkeletonPill,
+  SkeletonButton
+} from '../../../components/common/SkeletonPlaceholder';
+import ReviewList from '../../../components/features/profile/ReviewList';
+import ReviewForm from '../../../components/forms/ReviewForm';
+import { normalizeCaregiverReviewsForList } from '../../../utils/reviews';
 
 const ReviewsTab = ({ navigation }) => {
+  // TODO: Replace bespoke review rendering with shared `ReviewList` and `ReviewForm`
+  // components for consistency once summary analytics are extracted.
   const { user } = useAuth();
   const [reviews, setReviews] = useState([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [editModalVisible, setEditModalVisible] = useState(false);
+  const [modalMode, setModalMode] = useState(null); // 'create' | 'edit' | null
   const [selectedReview, setSelectedReview] = useState(null);
-  const [editRating, setEditRating] = useState(5);
-  const [editComment, setEditComment] = useState('');
-  const [writeModalVisible, setWriteModalVisible] = useState(false);
-  const [newReviewRating, setNewReviewRating] = useState(5);
-  const [newReviewComment, setNewReviewComment] = useState('');
   const [completedBookings, setCompletedBookings] = useState([]);
   const [selectedBookingId, setSelectedBookingId] = useState(null);
-  const [submittingReview, setSubmittingReview] = useState(false);
   const [bookingsLoading, setBookingsLoading] = useState(false);
 
+  const formModalVisible = Boolean(modalMode);
+  const isCreateMode = modalMode === 'create';
   const hasBookings = useMemo(() => completedBookings.length > 0, [completedBookings]);
+
+  const normalizedReviews = useMemo(() => {
+    const normalized = normalizeCaregiverReviewsForList(reviews);
+    return normalized.map((review) => {
+      const createdAtDate = review.createdAt ? new Date(review.createdAt) : null;
+      const canEdit = createdAtDate
+        ? (Date.now() - createdAtDate.getTime()) / (1000 * 60 * 60 * 24) <= 30
+        : false;
+
+      const bookingSubtitle = review.bookingDate
+        ? `Booking on ${new Date(review.bookingDate).toLocaleDateString()}`
+        : review.subjectSubtitle;
+
+      return {
+        ...review,
+        canEdit,
+        subjectSubtitle: bookingSubtitle,
+      };
+    });
+  }, [reviews]);
 
   const loadCompletedBookings = async () => {
     if (!user?.id) return;
@@ -54,9 +64,8 @@ const ReviewsTab = ({ navigation }) => {
       }
     } catch (error) {
       console.error('Error loading completed bookings:', error);
-    } finally {
-      setBookingsLoading(false);
     }
+    setBookingsLoading(false);
   };
 
   useEffect(() => {
@@ -83,111 +92,86 @@ const ReviewsTab = ({ navigation }) => {
     setRefreshing(false);
   };
 
-  const handleEditReview = (review) => {
-    setSelectedReview(review);
-    setEditRating(review.rating);
-    setEditComment(review.comment || '');
-    setEditModalVisible(true);
+  const handleOpenCreateReview = () => {
+    if (!hasBookings) {
+      Alert.alert(
+        'No completed bookings',
+        'Complete a booking before writing a review. Once a caregiver completes a job, they will appear here.'
+      );
+      return;
+    }
+
+    setSelectedBookingId((current) => current || completedBookings[0]?.id || null);
+    setSelectedReview(null);
+    setModalMode('create');
   };
 
-  const handleCreateReview = async () => {
+  const handleEditReview = (reviewItem) => {
+    const original = reviews.find((review) => review.id === reviewItem.id);
+    if (!original) {
+      return;
+    }
+    setSelectedReview(original);
+    setModalMode('edit');
+  };
+
+  const handleCloseModal = () => {
+    setModalMode(null);
+    setSelectedReview(null);
+    setSelectedBookingId(null);
+  };
+
+  const handleSubmitReview = async ({ rating, comment }) => {
     try {
-      if (!selectedBookingId) {
-        Alert.alert('Select a caregiver', 'Please choose a completed booking to review.');
+      if (rating === 0) {
+        Alert.alert('Rating required', 'Please provide a rating before submitting.');
         return;
       }
 
-      if (!newReviewComment.trim()) {
-        Alert.alert('Missing information', 'Please share a short comment about your experience.');
-        return;
+      if (isCreateMode) {
+        if (!selectedBookingId) {
+          Alert.alert('Select a caregiver', 'Please choose a completed booking to review.');
+          return;
+        }
+
+        const bookingToReview = completedBookings.find((booking) => booking.id === selectedBookingId);
+        if (!bookingToReview) {
+          Alert.alert('Invalid booking', 'The selected booking could not be found.');
+          return;
+        }
+
+        const caregiverInfo = bookingToReview?.caregiverId || bookingToReview?.caregiver || null;
+        const caregiverId = caregiverInfo?.id || caregiverInfo?._id || bookingToReview?.caregiver_id;
+
+        if (!caregiverId) {
+          Alert.alert('Missing caregiver information', 'Unable to determine caregiver for the selected booking.');
+          return;
+        }
+
+        await reviewService.createReview({
+          booking_id: bookingToReview.id,
+          reviewer_id: user.id,
+          reviewee_id: caregiverId,
+          rating,
+          comment: comment?.trim() || '',
+        });
+
+        Alert.alert('Success', 'Review submitted successfully');
+      } else if (selectedReview) {
+        await reviewService.updateReview(selectedReview.id, {
+          rating,
+          comment: comment?.trim() || '',
+        });
+
+        Alert.alert('Success', 'Review updated successfully');
       }
 
-      const bookingToReview = completedBookings.find(booking => booking.id === selectedBookingId);
-
-      const caregiverInfo = bookingToReview?.caregiverId || bookingToReview?.caregiver || null;
-      const caregiverId = caregiverInfo?.id || caregiverInfo?._id || bookingToReview?.caregiver_id;
-
-      if (!caregiverId) {
-        Alert.alert('Missing caregiver information', 'Unable to determine caregiver for the selected booking.');
-        return;
-      }
-
-      setSubmittingReview(true);
-
-      await reviewService.createReview({
-        booking_id: bookingToReview.id,
-        reviewer_id: user.id,
-        reviewee_id: caregiverId,
-        rating: newReviewRating,
-        comment: newReviewComment.trim(),
-        reviewer_type: 'parent'
-      });
-
-      setWriteModalVisible(false);
-      setNewReviewRating(5);
-      setNewReviewComment('');
-      setSelectedBookingId(null);
       await loadReviews();
-      Alert.alert('Success', 'Review submitted successfully');
+      handleCloseModal();
     } catch (error) {
-      console.error('Error creating review:', error);
-      Alert.alert('Error', error?.message || 'Failed to submit review');
-    } finally {
-      setSubmittingReview(false);
+      console.error('Error saving review:', error);
+      Alert.alert('Error', error?.message || 'Failed to save review');
     }
-  };
-
-  const handleUpdateReview = async () => {
-    try {
-      await reviewService.updateReview(selectedReview.id, {
-        rating: editRating,
-        comment: editComment.trim()
-      });
-      
-      setReviews(prev => prev.map(review => 
-        review.id === selectedReview.id 
-          ? { ...review, rating: editRating, comment: editComment.trim() }
-          : review
-      ));
-      
-      setEditModalVisible(false);
-      Alert.alert('Success', 'Review updated successfully');
-    } catch (error) {
-      console.error('Error updating review:', error);
-      Alert.alert('Error', 'Failed to update review');
-    }
-  };
-
-  const renderStars = (rating, size = 16) => {
-    return Array.from({ length: 5 }, (_, i) => (
-      <Star
-        key={i}
-        size={size}
-        color={i < rating ? '#fbbf24' : '#d1d5db'}
-        fill={i < rating ? '#fbbf24' : 'transparent'}
-      />
-    ));
-  };
-
-  const renderEditStars = (rating, onPress) => {
-    return Array.from({ length: 5 }, (_, i) => (
-      <TouchableOpacity key={i} onPress={() => onPress(i + 1)}>
-        <Star
-          size={24}
-          color={i < rating ? '#fbbf24' : '#d1d5db'}
-          fill={i < rating ? '#fbbf24' : 'transparent'}
-        />
-      </TouchableOpacity>
-    ));
-  };
-
-  const formatDate = (dateString) => {
-    return new Date(dateString).toLocaleDateString();
-  };
-
-  const canEditReview = (reviewDate) => {
-    const daysSinceReview = (new Date() - new Date(reviewDate)) / (1000 * 60 * 60 * 24);
-    return daysSinceReview <= 30; // Allow editing within 30 days
   };
 
   const getAverageRating = () => {
@@ -195,54 +179,6 @@ const ReviewsTab = ({ navigation }) => {
     const sum = reviews.reduce((acc, review) => acc + review.rating, 0);
     return (sum / reviews.length).toFixed(1);
   };
-
-  const renderReview = (review) => (
-    <View key={review.id} style={styles.reviewCard}>
-      <View style={styles.reviewHeader}>
-        <View style={styles.caregiverInfo}>
-          <View style={styles.caregiverIcon}>
-            <User size={20} color="#3b82f6" />
-          </View>
-          <View style={styles.caregiverDetails}>
-            <Text style={styles.caregiverName}>
-              {review.caregiver_name || 'Caregiver'}
-            </Text>
-            <Text style={styles.reviewDate}>
-              {formatDate(review.created_at)}
-            </Text>
-          </View>
-        </View>
-        {canEditReview(review.created_at) && (
-          <TouchableOpacity
-            style={styles.editButton}
-            onPress={() => handleEditReview(review)}
-          >
-            <Edit3 size={16} color="#6b7280" />
-          </TouchableOpacity>
-        )}
-      </View>
-
-      <View style={styles.ratingContainer}>
-        <View style={styles.stars}>
-          {renderStars(review.rating)}
-        </View>
-        <Text style={styles.ratingText}>{review.rating}/5</Text>
-      </View>
-
-      {review.comment && (
-        <Text style={styles.reviewComment}>{review.comment}</Text>
-      )}
-
-      <View style={styles.reviewFooter}>
-        <View style={styles.bookingInfo}>
-          <Calendar size={14} color="#6b7280" />
-          <Text style={styles.bookingText}>
-            Booking: {formatDate(review.booking_date || review.created_at)}
-          </Text>
-        </View>
-      </View>
-    </View>
-  );
 
   const renderSummaryStats = () => (
     <View style={styles.summaryCard}>
@@ -257,13 +193,6 @@ const ReviewsTab = ({ navigation }) => {
           <MessageCircle size={20} color="#3b82f6" />
           <Text style={styles.statValue}>{reviews.length}</Text>
           <Text style={styles.statLabel}>Total Reviews</Text>
-        </View>
-        <View style={styles.statItem}>
-          <User size={20} color="#8b5cf6" />
-          <Text style={styles.statValue}>
-            {new Set(reviews.map(r => r.caregiver_id)).size}
-          </Text>
-          <Text style={styles.statLabel}>Caregivers</Text>
         </View>
       </View>
     </View>
@@ -281,10 +210,43 @@ const ReviewsTab = ({ navigation }) => {
 
   if (loading) {
     return (
-      <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#3b82f6" />
-        <Text style={styles.loadingText}>Loading reviews...</Text>
-      </View>
+      <ScrollView contentContainerStyle={styles.skeletonContainer}>
+        <SkeletonCard style={styles.summarySkeleton}>
+          <View style={styles.summarySkeletonContent}>
+            <SkeletonBlock width="50%" height={20} style={styles.summarySkeletonTitle} />
+            <View style={styles.summarySkeletonGrid}>
+              {[0, 1, 2].map((index) => (
+                <View key={`stat-skeleton-${index}`} style={styles.summarySkeletonItem}>
+                  <SkeletonCircle size={32} style={styles.summarySkeletonIcon} />
+                  <SkeletonBlock width="40%" height={16} style={styles.summarySkeletonStat} />
+                  <SkeletonPill width="60%" height={14} />
+                </View>
+              ))}
+            </View>
+          </View>
+        </SkeletonCard>
+
+        {Array.from({ length: 3 }).map((_, index) => (
+          <SkeletonCard key={`review-skeleton-${index}`} style={styles.reviewSkeletonCard}>
+            <View style={styles.reviewSkeletonHeader}>
+              <SkeletonCircle size={40} style={styles.reviewSkeletonAvatar} />
+              <View style={styles.reviewSkeletonInfo}>
+                <SkeletonBlock width="55%" height={16} />
+                <SkeletonBlock width="35%" height={14} style={styles.reviewSkeletonDate} />
+              </View>
+              <SkeletonButton style={styles.reviewSkeletonAction} />
+            </View>
+            <View style={styles.reviewSkeletonStars}>
+              {Array.from({ length: 5 }).map((__, starIndex) => (
+                <SkeletonCircle key={starIndex} size={20} style={styles.reviewSkeletonStar} />
+              ))}
+            </View>
+            <SkeletonBlock width="90%" height={14} style={styles.reviewSkeletonLine} />
+            <SkeletonBlock width="80%" height={14} style={styles.reviewSkeletonLine} />
+            <SkeletonPill width="50%" height={16} style={styles.reviewSkeletonFooter} />
+          </SkeletonCard>
+        ))}
+      </ScrollView>
     );
   }
 
@@ -310,7 +272,7 @@ const ReviewsTab = ({ navigation }) => {
       <View style={styles.actionsContainer}>
         <TouchableOpacity
           style={styles.writeReviewButton}
-          onPress={() => setWriteModalVisible(true)}
+          onPress={handleOpenCreateReview}
         >
           <Text style={styles.writeReviewButtonText}>Write a Review</Text>
         </TouchableOpacity>
@@ -321,146 +283,72 @@ const ReviewsTab = ({ navigation }) => {
       {reviews.length === 0 ? (
         <EmptyState />
       ) : (
-        <View style={styles.reviewsList}>
-          {reviews.map(renderReview)}
-        </View>
+        <ReviewList
+          reviews={normalizedReviews}
+          currentUserId={user?.id}
+          onEditReview={handleEditReview}
+          ListEmptyComponent={<EmptyState />}
+        />
       )}
 
-      {/* Edit Review Modal */}
       <Modal
-        visible={editModalVisible}
+        visible={formModalVisible}
         transparent
         animationType="slide"
-        onRequestClose={() => setEditModalVisible(false)}
+        onRequestClose={handleCloseModal}
       >
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>Edit Review</Text>
-            
-            <View style={styles.editSection}>
-              <Text style={styles.editLabel}>Rating</Text>
-              <View style={styles.editStars}>
-                {renderEditStars(editRating, setEditRating)}
+            <Text style={styles.modalTitle}>
+              {isCreateMode ? 'Write a Review' : 'Edit Review'}
+            </Text>
+
+            {isCreateMode && (
+              <View style={styles.bookingSelector}>
+                <Text style={styles.editLabel}>Booking</Text>
+                {bookingsLoading ? (
+                  <ActivityIndicator size="small" color="#3b82f6" />
+                ) : hasBookings ? (
+                  <View style={styles.bookingOptions}>
+                    {completedBookings.map((booking) => {
+                      const isSelected = booking.id === selectedBookingId;
+                      const caregiverName =
+                        booking.caregiver?.name ||
+                        booking.caregiver_name ||
+                        booking.caregiverId?.name ||
+                        'Caregiver';
+                      const bookingDate = booking.date
+                        ? new Date(booking.date).toLocaleDateString()
+                        : 'No date';
+
+                      return (
+                        <TouchableOpacity
+                          key={booking.id}
+                          style={[styles.bookingOption, isSelected && styles.bookingOptionSelected]}
+                          onPress={() => setSelectedBookingId(booking.id)}
+                        >
+                          <Text style={styles.bookingOptionTitle}>{caregiverName}</Text>
+                          <Text style={styles.bookingOptionSubtext}>{bookingDate}</Text>
+                        </TouchableOpacity>
+                      );
+                    })}
+                  </View>
+                ) : (
+                  <Text style={styles.bookingEmptyText}>
+                    Complete a booking before writing a review. Once a caregiver completes a job, they will appear here.
+                  </Text>
+                )}
               </View>
-            </View>
+            )}
 
-            <View style={styles.editSection}>
-              <Text style={styles.editLabel}>Comment</Text>
-              <TextInput
-                style={styles.commentInput}
-                value={editComment}
-                onChangeText={setEditComment}
-                placeholder="Share your experience..."
-                multiline
-                numberOfLines={4}
-                textAlignVertical="top"
-              />
-            </View>
-
-            <View style={styles.modalActions}>
-              <TouchableOpacity
-                style={styles.cancelButton}
-                onPress={() => setEditModalVisible(false)}
-              >
-                <Text style={styles.cancelButtonText}>Cancel</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={styles.saveButton}
-                onPress={handleUpdateReview}
-              >
-                <Text style={styles.saveButtonText}>Save</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </View>
-      </Modal>
-
-      <Modal
-        visible={writeModalVisible}
-        transparent
-        animationType="slide"
-        onRequestClose={() => setWriteModalVisible(false)}
-      >
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>Write a Review</Text>
-
-            <View style={styles.editSection}>
-              <Text style={styles.editLabel}>Booking</Text>
-              {bookingsLoading ? (
-                <ActivityIndicator size="small" color="#3b82f6" />
-              ) : hasBookings ? (
-                <View style={styles.bookingOptions}>
-                  {completedBookings.map((booking) => {
-                    const isSelected = booking.id === selectedBookingId;
-                    const caregiverName =
-                      booking.caregiver?.name ||
-                      booking.caregiver_name ||
-                      booking.caregiverId?.name ||
-                      'Caregiver';
-                    const bookingDate = booking.date ? new Date(booking.date).toLocaleDateString() : 'No date';
-
-                    return (
-                      <TouchableOpacity
-                        key={booking.id}
-                        style={[styles.bookingOption, isSelected && styles.bookingOptionSelected]}
-                        onPress={() => setSelectedBookingId(booking.id)}
-                      >
-                        <Text style={styles.bookingOptionTitle}>{caregiverName}</Text>
-                        <Text style={styles.bookingOptionSubtext}>{bookingDate}</Text>
-                      </TouchableOpacity>
-                    );
-                  })}
-                </View>
-              ) : (
-                <Text style={styles.bookingEmptyText}>
-                  Complete a booking before writing a review. Once a caregiver completes a job, they will appear here.
-                </Text>
-              )}
-            </View>
-
-            <View style={styles.editSection}>
-              <Text style={styles.editLabel}>Rating</Text>
-              <View style={styles.editStars}>
-                {renderEditStars(newReviewRating, setNewReviewRating)}
-              </View>
-            </View>
-
-            <View style={styles.editSection}>
-              <Text style={styles.editLabel}>Comment</Text>
-              <TextInput
-                style={styles.commentInput}
-                value={newReviewComment}
-                onChangeText={setNewReviewComment}
-                placeholder="Share your experience..."
-                multiline
-                numberOfLines={4}
-                textAlignVertical="top"
-              />
-            </View>
-
-            <View style={styles.modalActions}>
-              <TouchableOpacity
-                style={styles.cancelButton}
-                onPress={() => {
-                  setWriteModalVisible(false);
-                  setNewReviewRating(5);
-                  setNewReviewComment('');
-                }}
-              >
-                <Text style={styles.cancelButtonText}>Cancel</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[
-                  styles.saveButton,
-                  (submittingReview || !hasBookings || !selectedBookingId) && styles.saveButtonDisabled
-                ]}
-                onPress={handleCreateReview}
-                disabled={submittingReview || !hasBookings || !selectedBookingId}
-              >
-                <Text style={styles.saveButtonText}>Submit</Text>
-              </TouchableOpacity>
-            </View>
+            <ReviewForm
+              onSubmit={handleSubmitReview}
+              onCancel={handleCloseModal}
+              initialRating={selectedReview?.rating || 0}
+              initialComment={selectedReview?.comment || ''}
+              heading={isCreateMode ? 'Your Review' : 'Update Your Review'}
+              submitLabel={isCreateMode ? 'Submit Review' : 'Save Changes'}
+            />
           </View>
         </View>
       </Modal>
@@ -752,6 +640,73 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
     color: '#fff',
+  },
+  skeletonContainer: {
+    padding: 16,
+  },
+  summarySkeleton: {
+    padding: 16,
+    marginBottom: 16,
+  },
+  summarySkeletonContent: {
+    gap: 16,
+  },
+  summarySkeletonTitle: {
+    marginBottom: 8,
+  },
+  summarySkeletonGrid: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+  },
+  summarySkeletonItem: {
+    flex: 1,
+    alignItems: 'center',
+    paddingHorizontal: 8,
+    gap: 8,
+  },
+  summarySkeletonIcon: {
+    marginBottom: 4,
+  },
+  summarySkeletonStat: {
+    marginBottom: 6,
+  },
+  reviewSkeletonCard: {
+    padding: 16,
+    marginBottom: 16,
+  },
+  reviewSkeletonHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  reviewSkeletonAvatar: {
+    marginRight: 12,
+  },
+  reviewSkeletonInfo: {
+    flex: 1,
+    gap: 6,
+  },
+  reviewSkeletonDate: {
+    marginTop: 2,
+  },
+  reviewSkeletonAction: {
+    width: 72,
+    alignSelf: 'flex-start',
+  },
+  reviewSkeletonStars: {
+    flexDirection: 'row',
+    gap: 8,
+    marginBottom: 12,
+  },
+  reviewSkeletonStar: {
+    width: 20,
+    height: 20,
+  },
+  reviewSkeletonLine: {
+    marginBottom: 8,
+  },
+  reviewSkeletonFooter: {
+    marginTop: 8,
   },
 });
 

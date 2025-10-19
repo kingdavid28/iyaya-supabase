@@ -157,25 +157,41 @@ class BookingService {
   }
 
   // Upload payment proof
-  async uploadPaymentProof(bookingId, paymentData) {
+  async uploadPaymentProof(bookingId, imageData, mimeType = 'image/jpeg') {
     try {
+      if (!bookingId) {
+        throw new Error('Booking ID is required');
+      }
+
+      if (!imageData) {
+        throw new Error('Payment proof image data is required');
+      }
+
       // Import supabaseService dynamically to avoid circular imports
       const { supabaseService } = await import('./supabase');
-      
+
       console.log('📝 Uploading payment proof for booking:', bookingId);
-      
-      let paymentProofUrl;
-      if (paymentData.imageBase64) {
-        // Upload image to storage first
-        paymentProofUrl = await supabaseService.storage.uploadPaymentProofImage(bookingId, paymentData.imageBase64);
-      } else {
-        // Direct payment proof data
-        const result = await supabaseService.bookings.uploadPaymentProof(bookingId, paymentData);
-        paymentProofUrl = result.payment_proof;
+
+      const uploadResult = await supabaseService.storage.uploadPaymentProofImage(bookingId, {
+        base64: imageData,
+        mimeType
+      });
+
+      const paymentProofUrl = uploadResult?.url;
+
+      if (!paymentProofUrl) {
+        throw new Error('Payment proof upload returned no URL');
       }
-      
+
+      const updatedBooking = await supabaseService.bookings.uploadPaymentProof(bookingId, paymentProofUrl);
+
       console.log('✅ Payment proof uploaded successfully:', paymentProofUrl);
-      return { url: paymentProofUrl };
+
+      return {
+        url: paymentProofUrl,
+        storage: uploadResult,
+        booking: updatedBooking
+      };
     } catch (error) {
       logger.error('Upload payment proof failed:', error);
       console.error('❌ Upload payment proof error details:', error.message);

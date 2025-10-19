@@ -13,6 +13,10 @@ import { TextInput, Button } from 'react-native-paper';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { authAPI } from '../config/api';
+import {
+  AuthStatusSkeleton,
+  AuthActionSkeleton
+} from '../components/auth/AuthSkeletons';
 
 const ResetPasswordScreen = ({ navigation, route }) => {
   const [newPassword, setNewPassword] = useState('');
@@ -109,7 +113,7 @@ const ResetPasswordScreen = ({ navigation, route }) => {
     >
       <LinearGradient 
         colors={["#fce8f4", "#f3e8ff"]}
-        style={styles.container}
+        style={[styles.container, styles.gradient]}
       >
         <ScrollView contentContainerStyle={styles.scrollContent}>
           <View style={styles.header}>
@@ -183,7 +187,6 @@ const ResetPasswordScreen = ({ navigation, route }) => {
               <Button 
                 mode="contained" 
                 onPress={handleSubmit}
-                loading={loading}
                 disabled={loading || !newPassword || !confirmPassword}
                 style={styles.submitButton}
                 labelStyle={styles.submitButtonLabel}
@@ -193,6 +196,12 @@ const ResetPasswordScreen = ({ navigation, route }) => {
             </View>
           </View>
         </ScrollView>
+        {loading && (
+          <View style={styles.skeletonOverlay}>
+            <AuthStatusSkeleton />
+            <AuthActionSkeleton />
+          </View>
+        )}
       </LinearGradient>
     </KeyboardAvoidingView>
   );
@@ -200,6 +209,7 @@ const ResetPasswordScreen = ({ navigation, route }) => {
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
+  gradient: { position: 'relative' },
   scrollContent: { flexGrow: 1, padding: 20 },
   header: {
     flexDirection: 'row',
@@ -280,6 +290,18 @@ const styles = StyleSheet.create({
   submitButtonLabel: {
     color: 'white',
     fontWeight: 'bold',
+  },
+  skeletonOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    padding: 24,
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: 16,
+    backgroundColor: 'rgba(243, 232, 255, 0.88)'
   },
 });
 

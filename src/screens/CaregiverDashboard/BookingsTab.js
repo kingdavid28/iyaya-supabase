@@ -1,8 +1,14 @@
 import React, { useMemo, useState } from 'react';
-import { ScrollView, View, Text, RefreshControl, ActivityIndicator, TouchableOpacity } from 'react-native';
+import { ScrollView, View, Text, RefreshControl, TouchableOpacity } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { EmptyState } from '../../shared/ui';
 import { styles } from '../styles/CaregiverDashboard.styles';
+import {
+  SkeletonCard,
+  SkeletonBlock,
+  SkeletonCircle,
+  SkeletonPill
+} from '../../components/common/SkeletonPlaceholder';
 
 const BookingCard = React.memo(({ booking, onMessageFamily, onConfirmBooking, onViewDetails }) => {
   const formatTime = (timeString) => {
@@ -412,10 +418,33 @@ export default function BookingsTab({
 
   if (loading) {
     return (
-      <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#3B82F6" />
-        <Text style={styles.loadingText}>Loading bookings...</Text>
-      </View>
+      <ScrollView contentContainerStyle={styles.bookingsSkeletonContainer}>
+        {Array.from({ length: 4 }).map((_, index) => (
+          <SkeletonCard key={`booking-skeleton-${index}`} style={styles.bookingsSkeletonCard}>
+            <View style={styles.bookingsSkeletonHeader}>
+              <SkeletonBlock width="55%" height={18} />
+              <SkeletonPill width="28%" height={18} />
+            </View>
+
+            <View style={styles.bookingsSkeletonChipRow}>
+              <SkeletonPill width="32%" height={14} />
+              <SkeletonPill width="28%" height={14} />
+              <SkeletonPill width="26%" height={14} />
+            </View>
+
+            <View style={styles.bookingsSkeletonBody}>
+              <SkeletonBlock width="90%" height={14} />
+              <SkeletonBlock width="85%" height={14} />
+              <SkeletonBlock width="70%" height={14} />
+            </View>
+
+            <View style={styles.bookingsSkeletonFooter}>
+              <SkeletonBlock width="35%" height={18} />
+              <SkeletonPill width="28%" height={14} />
+            </View>
+          </SkeletonCard>
+        ))}
+      </ScrollView>
     );
   }
 

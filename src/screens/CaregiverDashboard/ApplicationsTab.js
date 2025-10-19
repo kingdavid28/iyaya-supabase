@@ -1,8 +1,14 @@
 import React, { useMemo, useState } from 'react';
-import { ScrollView, View, Text, RefreshControl, ActivityIndicator, TouchableOpacity } from 'react-native';
+import { ScrollView, View, Text, RefreshControl, TouchableOpacity } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { EmptyState } from '../../shared/ui';
 import { styles } from '../styles/CaregiverDashboard.styles';
+import {
+  SkeletonCard,
+  SkeletonBlock,
+  SkeletonCircle,
+  SkeletonPill
+} from '../../components/common/SkeletonPlaceholder';
 
 const ApplicationCard = React.memo(({ application, onViewJob, onWithdraw }) => {
   const getStatusColor = (status) => {
@@ -298,10 +304,33 @@ export default function ApplicationsTab({
 
   if (loading) {
     return (
-      <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#3B82F6" />
-        <Text style={styles.loadingText}>Loading applications...</Text>
-      </View>
+      <ScrollView contentContainerStyle={styles.applicationsSkeletonContainer}>
+        {Array.from({ length: 4 }).map((_, index) => (
+          <SkeletonCard key={`application-skeleton-${index}`} style={styles.applicationsSkeletonCard}>
+            <View style={styles.applicationsSkeletonHeader}>
+              <SkeletonCircle size={40} />
+              <View style={styles.applicationsSkeletonJobInfo}>
+                <SkeletonBlock width="70%" height={18} />
+                <SkeletonBlock width="45%" height={14} />
+              </View>
+              <SkeletonPill width="24%" height={20} />
+            </View>
+
+            <SkeletonBlock width="85%" height={14} />
+            <SkeletonBlock width="65%" height={14} style={{ marginTop: 6 }} />
+
+            <View style={styles.applicationsSkeletonMessage}>
+              <SkeletonBlock width="90%" height={12} />
+              <SkeletonBlock width="75%" height={12} />
+            </View>
+
+            <View style={styles.applicationsSkeletonActions}>
+              <SkeletonPill width="40%" height={32} />
+              <SkeletonPill width="32%" height={32} />
+            </View>
+          </SkeletonCard>
+        ))}
+      </ScrollView>
     );
   }
 

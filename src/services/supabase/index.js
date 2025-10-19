@@ -93,7 +93,7 @@ export class SupabaseServiceFacade {
   async notifyNewMessage(senderId, recipientId, content) { return this.notifications.notifyNewMessage(senderId, recipientId, content) }
 
   // === REVIEW METHODS ===
-  async getReviews(userId, limit) { return this.reviews.getReviews(userId, limit) }
+  async getReviews(userId, limit, offset) { return this.reviews.getReviews(userId, limit, offset) }
   async getReviewsByParent(parentId) { return this.reviews.getReviewsByParent(parentId) }
   async createReview(reviewData) { return this.reviews.createReview(reviewData) }
   async updateReview(reviewId, data) { return this.reviews.updateReview(reviewId, data) }

@@ -8,7 +8,6 @@ import {
   Modal,
   ScrollView,
   Alert,
-  ActivityIndicator,
   KeyboardAvoidingView,
   Platform
 } from 'react-native';
@@ -28,6 +27,12 @@ import { useAuth } from '../../../contexts/AuthContext';
 import { getCurrentDeviceLocation } from '../../../utils/locationUtils';
 
 import SimpleDatePicker from '../../../shared/ui/inputs/SimpleDatePicker';
+import {
+  SkeletonCard,
+  SkeletonBlock,
+  SkeletonCircle,
+  SkeletonPill
+} from '../../../components/common/SkeletonPlaceholder';
 
 const SUGGESTED_SKILLS = [
   'CPR Certified',
@@ -302,6 +307,42 @@ const JobPostingModal = ({ visible, onClose, onJobPosted }) => {
 
     return `₱${numeric.toLocaleString('en-PH', { minimumFractionDigits: 0 })} / hour`;
   };
+
+  const renderSkeleton = () => (
+    <ScrollView contentContainerStyle={styles.modalSkeletonContainer}>
+      <SkeletonCard style={styles.modalSkeletonCard}>
+        <SkeletonBlock width="60%" height={22} style={styles.modalSkeletonHeading} />
+        <View style={styles.modalSkeletonField}>
+          <SkeletonBlock width="35%" height={14} />
+          <SkeletonBlock width="100%" height={44} />
+        </View>
+        <View style={styles.modalSkeletonField}>
+          <SkeletonBlock width="40%" height={14} />
+          <SkeletonBlock width="100%" height={90} />
+        </View>
+        <View style={styles.modalSkeletonField}>
+          <SkeletonBlock width="40%" height={14} />
+          <SkeletonBlock width="100%" height={44} />
+        </View>
+      </SkeletonCard>
+
+      <SkeletonCard style={styles.modalSkeletonCard}>
+        <SkeletonBlock width="55%" height={18} style={styles.modalSkeletonHeading} />
+        <View style={styles.modalSkeletonRow}>
+          <SkeletonCircle size={48} />
+          <SkeletonCircle size={48} />
+          <SkeletonCircle size={48} />
+        </View>
+        <SkeletonBlock width="65%" height={14} />
+        <SkeletonBlock width="75%" height={14} />
+      </SkeletonCard>
+
+      <SkeletonCard style={styles.modalSkeletonActions}>
+        <SkeletonPill width="45%" height={44} />
+        <SkeletonPill width="45%" height={44} />
+      </SkeletonCard>
+    </ScrollView>
+  );
 
   const renderStep = () => {
     switch (step) {
@@ -689,104 +730,55 @@ const JobPostingModal = ({ visible, onClose, onJobPosted }) => {
   return (
     <Modal
       visible={visible}
-      animationType="slide"
       transparent
-      onRequestClose={() => {
-        if (!loading) {
-          onClose();
-        }
-      }}
+      animationType="slide"
+      onRequestClose={onClose}
     >
-      <View style={styles.modalOverlay}>
-        <KeyboardAvoidingView
-          style={{ flex: 1 }}
-          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-          keyboardVerticalOffset={keyboardOffset}
-        >
-          <View style={styles.modalContainer}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>
-                {step === 1 ? 'Job Details' : step === 2 ? 'Schedule' : 'Review & Post'}
-              </Text>
-              <TouchableOpacity 
-                onPress={() => {
-                  if (!loading) {
-                    onClose();
-                  }
-                }} 
-                style={[styles.closeButton, loading && { opacity: 0.5 }]}
-                disabled={loading}
-              >
-                <X size={24} color="#6B7280" />
-              </TouchableOpacity>
-            </View>
+      <KeyboardAvoidingView
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        keyboardVerticalOffset={keyboardOffset}
+        style={styles.modalOverlay}
+      >
+        <View style={styles.modalContainer}>
+          <View style={styles.modalHeader}>
+            <Text style={styles.modalTitle}>Post a New Job</Text>
+            <TouchableOpacity onPress={onClose} style={styles.closeButton}>
+              <X size={22} color="#111827" />
+            </TouchableOpacity>
+          </View>
 
-            <ScrollView 
-              style={styles.modalContent}
-              keyboardShouldPersistTaps="handled"
+          {loading ? (
+            renderSkeleton()
+          ) : (
+            <ScrollView
+              style={styles.content}
+              contentContainerStyle={styles.contentContainer}
               showsVerticalScrollIndicator={false}
             >
-              <View style={styles.stepIndicatorContainer}>
-                {[1, 2, 3].map((stepNum) => (
-                  <React.Fragment key={stepNum}>
-                    <View
-                      style={[
-                        styles.stepIndicator,
-                        step === stepNum && styles.stepIndicatorActive,
-                        step > stepNum && styles.stepIndicatorCompleted,
-                      ]}
-                    >
-                      {step > stepNum ? (
-                        <Check size={16} color="#fff" />
-                      ) : (
-                        <Text
-                          style={[
-                            styles.stepText,
-                            (step === stepNum || step < stepNum) && styles.stepTextActive,
-                          ]}
-                        >
-                          {stepNum}
-                        </Text>
-                      )}
-                    </View>
-                    {stepNum < 3 && <View style={styles.stepLine} />}
-                  </React.Fragment>
-                ))}
-              </View>
-
               {renderStep()}
             </ScrollView>
+          )}
 
-            <View style={styles.modalFooter}>
-              <View style={styles.footerContent}>
-                {step > 1 && (
-                  <TouchableOpacity
-                    style={[styles.button, styles.secondaryButton]}
-                    onPress={handleBack}
-                    disabled={loading}
-                  >
-                    <Text style={styles.secondaryButtonText}>Back</Text>
-                  </TouchableOpacity>
-                )}
-
-                <TouchableOpacity
-                  style={[styles.button, styles.primaryButton, loading && styles.buttonDisabled]}
-                  onPress={handleNext}
-                  disabled={loading}
-                >
-                  {loading ? (
-                    <ActivityIndicator color="#fff" />
-                  ) : (
-                    <Text style={styles.primaryButtonText}>
-                      {step === 3 ? 'Post Job' : 'Continue'}
-                    </Text>
-                  )}
-                </TouchableOpacity>
-              </View>
-            </View>
+          <View style={styles.footerActions}>
+            <TouchableOpacity
+              style={[styles.footerButton, styles.secondaryButton]}
+              onPress={onClose}
+              disabled={loading}
+            >
+              <Text style={styles.secondaryButtonText}>Cancel</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.footerButton, styles.primaryButton, loading && styles.primaryButtonDisabled]}
+              onPress={handleNext}
+              disabled={loading}
+            >
+              <Text style={styles.primaryButtonText}>
+                {step === 3 ? 'Post Job' : 'Continue'}
+              </Text>
+            </TouchableOpacity>
           </View>
-        </KeyboardAvoidingView>
-      </View>
+        </View>
+      </KeyboardAvoidingView>
     </Modal>
   );
 };
@@ -795,21 +787,23 @@ const styles = StyleSheet.create({
   modalOverlay: {
     flex: 1,
     backgroundColor: 'rgba(0, 0, 0, 0.5)',
-    justifyContent: 'flex-end',
   },
   modalContainer: {
+    flex: 1,
     backgroundColor: '#fff',
+    marginTop: 60,
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
-    maxHeight: '90%',
+    overflow: 'hidden',
   },
   modalHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    padding: 16,
+    paddingHorizontal: 20,
+    paddingVertical: 16,
     borderBottomWidth: 1,
-    borderBottomColor: '#F3F4F6',
+    borderBottomColor: '#E5E7EB',
   },
   modalTitle: {
     fontSize: 18,
@@ -819,111 +813,42 @@ const styles = StyleSheet.create({
   closeButton: {
     padding: 4,
   },
-  modalContent: {
-    padding: 16,
+  content: {
+    flex: 1,
   },
-  modalFooter: {
-    padding: 16,
-    borderTopWidth: 1,
-    borderTopColor: '#F3F4F6',
-  },
-  footerContent: {
-    flexDirection: 'row',
-    justifyContent: 'flex-end',
-  },
-  button: {
-    paddingVertical: 12,
-    paddingHorizontal: 20,
-    borderRadius: 8,
-    alignItems: 'center',
-    justifyContent: 'center',
-    minWidth: 120,
-  },
-  primaryButton: {
-    backgroundColor: '#4F46E5',
-  },
-  secondaryButton: {
-    backgroundColor: '#F3F4F6',
-    marginRight: 12,
-  },
-  buttonDisabled: {
-    opacity: 0.6,
-  },
-  primaryButtonText: {
-    color: '#fff',
-    fontWeight: '600',
-    fontSize: 16,
-  },
-  secondaryButtonText: {
-    color: '#374151',
-    fontWeight: '600',
-    fontSize: 16,
-  },
-  stepIndicatorContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 24,
-  },
-  stepIndicator: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: '#E5E7EB',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  stepIndicatorActive: {
-    backgroundColor: '#4F46E5',
-  },
-  stepIndicatorCompleted: {
-    backgroundColor: '#10B981',
-  },
-  stepText: {
-    color: '#6B7280',
-    fontWeight: '600',
-  },
-  stepTextActive: {
-    color: '#fff',
-  },
-  stepLine: {
-    width: 40,
-    height: 2,
-    backgroundColor: '#E5E7EB',
+  contentContainer: {
+    padding: 20,
   },
   stepContainer: {
-    marginBottom: 16,
+    gap: 20,
   },
   stepTitle: {
-    fontSize: 18,
+    fontSize: 20,
     fontWeight: '600',
     color: '#111827',
-    marginBottom: 16,
-  },
-  sectionDivider: {
-    height: 1,
-    backgroundColor: '#E5E7EB',
-    marginVertical: 16,
+    marginBottom: 8,
   },
   label: {
     fontSize: 14,
-    fontWeight: '500',
+    fontWeight: '600',
     color: '#374151',
-    marginBottom: 6,
+    marginBottom: 8,
   },
   labelHint: {
     fontSize: 12,
     color: '#6B7280',
-    marginBottom: 8,
+    marginBottom: 12,
   },
   input: {
     backgroundColor: '#F9FAFB',
     borderRadius: 8,
-    padding: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 12,
     fontSize: 14,
     color: '#111827',
     borderWidth: 1,
     borderColor: '#E5E7EB',
+    marginBottom: 16,
   },
   inputError: {
     borderColor: '#EF4444',
@@ -1061,10 +986,13 @@ const styles = StyleSheet.create({
   },
   gpsButtonText: {
     fontWeight: '500',
+    color: '#4F46E5',
+    marginLeft: 4,
   },
-  summaryPlaceholder: {
-    fontSize: 13,
-    color: '#6B7280',
+  sectionDivider: {
+    height: 1,
+    backgroundColor: '#E5E7EB',
+    marginVertical: 8,
   },
   reviewDescription: {
     fontSize: 14,
@@ -1213,6 +1141,62 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: '#4B5563',
     lineHeight: 18,
+  },
+  footerActions: {
+    flexDirection: 'row',
+    padding: 20,
+    gap: 12,
+    borderTopWidth: 1,
+    borderTopColor: '#E5E7EB',
+  },
+  footerButton: {
+    flex: 1,
+    paddingVertical: 12,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  secondaryButton: {
+    backgroundColor: '#F3F4F6',
+  },
+  secondaryButtonText: {
+    color: '#374151',
+    fontWeight: '600',
+  },
+  primaryButton: {
+    backgroundColor: '#4F46E5',
+  },
+  primaryButtonDisabled: {
+    backgroundColor: '#9CA3AF',
+  },
+  primaryButtonText: {
+    color: '#fff',
+    fontWeight: '600',
+  },
+  // Skeleton styles
+  modalSkeletonContainer: {
+    padding: 20,
+  },
+  modalSkeletonCard: {
+    marginBottom: 16,
+    padding: 16,
+  },
+  modalSkeletonHeading: {
+    marginBottom: 16,
+  },
+  modalSkeletonField: {
+    marginBottom: 16,
+    gap: 8,
+  },
+  modalSkeletonRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    marginBottom: 16,
+  },
+  modalSkeletonActions: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    padding: 16,
   },
 });
 

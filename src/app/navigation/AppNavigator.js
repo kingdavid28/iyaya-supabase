@@ -28,7 +28,6 @@ import CaregiverReviewsScreen from "../../screens/CaregiverReviewsScreen";
 
 // New Supabase screens
 import NotificationsScreen from "../../components/NotificationsScreen";
-import ReviewsSection from "../../components/ReviewsSection";
 
 // Legacy screen imports (to be migrated)
 import AvailabilityManagementScreen from "../../screens/AvailabilityManagementScreen";

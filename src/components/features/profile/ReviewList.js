@@ -1,15 +1,33 @@
 import React from 'react';
-import { View, StyleSheet, FlatList, Image } from 'react-native';
-import { Text, Avatar, Divider, useTheme } from 'react-native-paper';
+import { View, StyleSheet, FlatList, Image, ScrollView, RefreshControl } from 'react-native';
+import { Text, Avatar, Divider, useTheme, IconButton } from 'react-native-paper';
 import { Rating } from 'react-native-ratings';
 import { format } from 'date-fns';
 
-const ReviewList = ({ reviews, currentUserId }) => {
+const ReviewList = ({
+  reviews = [],
+  currentUserId,
+  onEditReview,
+  onDeleteReview,
+  contentContainerStyle,
+  ListEmptyComponent,
+  useVirtualizedList = true,
+  ...flatListProps
+}) => {
   const theme = useTheme();
 
   const renderReview = ({ item }) => {
     const isCurrentUser = item.reviewerId === currentUserId;
-    
+    const canEdit = Boolean(
+      onEditReview &&
+        (item.canEdit !== false) &&
+        (!currentUserId || item.reviewerId === currentUserId)
+    );
+    const canDelete = Boolean(
+      onDeleteReview &&
+        (item.canDelete !== false)
+    );
+
     return (
       <View style={styles.reviewContainer}>
         <View style={styles.reviewHeader}>
@@ -25,6 +43,12 @@ const ReviewList = ({ reviews, currentUserId }) => {
             <Text style={styles.reviewDate}>
               {format(new Date(item.createdAt), 'MMM d, yyyy')}
             </Text>
+            {item.subjectName && (
+              <Text style={styles.subjectName}>{item.subjectName}</Text>
+            )}
+            {item.subjectSubtitle && (
+              <Text style={styles.subjectSubtitle}>{item.subjectSubtitle}</Text>
+            )}
           </View>
           <View style={styles.ratingContainer}>
             <Rating
@@ -36,6 +60,26 @@ const ReviewList = ({ reviews, currentUserId }) => {
               style={styles.ratingStars}
             />
           </View>
+          {(canEdit || canDelete) && (
+            <View style={styles.actions}>
+              {canEdit && (
+                <IconButton
+                  icon="pencil"
+                  size={18}
+                  onPress={() => onEditReview?.(item)}
+                  accessibilityLabel="Edit review"
+                />
+              )}
+              {canDelete && (
+                <IconButton
+                  icon="delete"
+                  size={18}
+                  onPress={() => onDeleteReview?.(item)}
+                  accessibilityLabel="Delete review"
+                />
+              )}
+            </View>
+          )}
         </View>
         
         {item.comment && (
@@ -64,17 +108,79 @@ const ReviewList = ({ reviews, currentUserId }) => {
     );
   };
 
+  const mergedContentStyle = [
+    styles.container,
+    contentContainerStyle,
+    reviews.length === 0 && styles.emptyContainerPadding
+  ];
+
+  const defaultEmptyComponent = (
+    <View style={styles.emptyContainer}>
+      <Text style={styles.emptyText}>No reviews yet</Text>
+    </View>
+  );
+
+  const renderNode = (Component) => {
+    if (!Component) return null;
+    if (React.isValidElement(Component)) {
+      return Component;
+    }
+    if (typeof Component === 'function') {
+      return <Component />;
+    }
+    return null;
+  };
+
+  if (!useVirtualizedList) {
+    const {
+      ListHeaderComponent,
+      ListFooterComponent,
+      onRefresh,
+      refreshing,
+      ...restProps
+    } = flatListProps;
+
+    const refreshControl = onRefresh
+      ? (
+          <RefreshControl
+            refreshing={Boolean(refreshing)}
+            onRefresh={onRefresh}
+            colors={['#3B82F6']}
+            tintColor="#3B82F6"
+          />
+        )
+      : undefined;
+
+    const hasReviews = reviews.length > 0;
+
+    return (
+      <ScrollView
+        contentContainerStyle={mergedContentStyle}
+        refreshControl={refreshControl}
+        showsVerticalScrollIndicator={false}
+        {...restProps}
+      >
+        {renderNode(ListHeaderComponent)}
+        {hasReviews
+          ? reviews.map((review) => (
+              <React.Fragment key={review.id}>
+                {renderReview({ item: review })}
+              </React.Fragment>
+            ))
+          : (ListEmptyComponent ?? defaultEmptyComponent)}
+        {renderNode(ListFooterComponent)}
+      </ScrollView>
+    );
+  }
+
   return (
     <FlatList
       data={reviews}
       renderItem={renderReview}
       keyExtractor={(item) => item.id}
-      contentContainerStyle={styles.container}
-      ListEmptyComponent={
-        <View style={styles.emptyContainer}>
-          <Text style={styles.emptyText}>No reviews yet</Text>
-        </View>
-      }
+      contentContainerStyle={mergedContentStyle}
+      ListEmptyComponent={ListEmptyComponent ?? defaultEmptyComponent}
+      {...flatListProps}
     />
   );
 };
@@ -108,11 +214,27 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#666',
   },
+  subjectName: {
+    fontSize: 13,
+    fontWeight: '500',
+    color: '#374151',
+    marginTop: 2,
+  },
+  subjectSubtitle: {
+    fontSize: 12,
+    color: '#6b7280',
+    marginTop: 2,
+  },
   ratingContainer: {
     alignItems: 'flex-end',
   },
   ratingStars: {
     alignSelf: 'flex-start',
+  },
+  actions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginLeft: 8,
   },
   comment: {
     fontSize: 14,
@@ -143,6 +265,10 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#888',
     textAlign: 'center',
+  },
+  emptyContainerPadding: {
+    flexGrow: 1,
+    justifyContent: 'center',
   },
 });
 

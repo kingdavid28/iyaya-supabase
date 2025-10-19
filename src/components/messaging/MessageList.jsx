@@ -1,10 +1,11 @@
 // MessageList.jsx - React Native Paper message list component
 import React, { useState, useEffect } from 'react';
 import { View, FlatList, StyleSheet } from 'react-native';
-import { Text, ActivityIndicator } from 'react-native-paper';
+import { Text } from 'react-native-paper';
 import { useAuth } from '../../contexts/AuthContext';
 import { messagingService, realtimeService } from '../../services';
 import MessageCard from './MessageCard';
+import { MessageThreadSkeleton } from './MessagingSkeletons';
 
 const MessageList = ({ conversation }) => {
   const { user } = useAuth();
@@ -61,14 +62,7 @@ const MessageList = ({ conversation }) => {
     </View>
   );
 
-  const renderLoading = () => (
-    <View style={styles.loadingContainer}>
-      <ActivityIndicator size="small" />
-      <Text variant="bodyMedium" style={styles.loadingText}>
-        Loading messages...
-      </Text>
-    </View>
-  );
+  const renderLoading = () => <MessageThreadSkeleton />;
 
   if (loading) {
     return renderLoading();

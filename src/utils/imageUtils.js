@@ -1,6 +1,7 @@
 // src/utils/imageUtils.js
 import { Image } from 'react-native';
 import * as FileSystem from 'expo-file-system';
+import * as ImageManipulator from 'expo-image-manipulator';
 
 /**
  * Get profile image URL with fallback and validation
@@ -98,6 +99,54 @@ export const preloadImages = async (imageUris) => {
 };
 
 /**
+ * Resize and compress an image prior to upload
+ * @param {string} uri - Image URI to process
+ * @param {Object} options - Processing options
+ * @param {number} [options.maxWidth=1024]
+ * @param {number} [options.maxHeight=1024]
+ * @param {number} [options.compress=0.8]
+ * @returns {Promise<{ uri: string, base64: string }>} Processed image data
+ */
+export const processImageForUpload = async (uri, options = {}) => {
+  if (!uri) {
+    throw new Error('Image URI is required for processing');
+  }
+
+  const {
+    maxWidth = 1024,
+    maxHeight = 1024,
+    compress = 0.8,
+    format = ImageManipulator.SaveFormat.JPEG
+  } = options;
+
+  const manipResult = await ImageManipulator.manipulateAsync(
+    uri,
+    [
+      {
+        resize: {
+          width: maxWidth,
+          height: maxHeight,
+        },
+      },
+    ],
+    {
+      compress,
+      format,
+      base64: true,
+    }
+  );
+
+  if (!manipResult.base64) {
+    throw new Error('Failed to process image for upload');
+  }
+
+  return {
+    uri: manipResult.uri,
+    base64: `data:image/jpeg;base64,${manipResult.base64}`,
+  };
+};
+
+/**
  * Get image dimensions
  * @param {string} uri - Image URI
  * @returns {Promise<{width: number, height: number}>} Image dimensions
@@ -191,6 +240,7 @@ export default {
   getProfileImageUrl,
   cacheImage,
   preloadImages,
+  processImageForUpload,
   getImageDimensions,
   getPlaceholderImage,
   getImageSource,

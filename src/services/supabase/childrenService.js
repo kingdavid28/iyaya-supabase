@@ -1,4 +1,5 @@
 import { SupabaseBase, supabase } from './base'
+import { getCachedOrFetch, invalidateCache } from './cache'
 
 export class ChildrenService extends SupabaseBase {
   async getChildren(parentId) {
@@ -16,14 +17,27 @@ export class ChildrenService extends SupabaseBase {
       
       this._validateId(targetParentId, 'Parent ID')
       
-      const { data, error } = await supabase
-        .from('children')
-        .select('*')
-        .eq('parent_id', targetParentId)
-        .order('created_at', { ascending: true })
-      
-      if (error) throw error
-      return data || []
+      const cacheKey = `children:${targetParentId}`
+      return await getCachedOrFetch(cacheKey, async () => {
+        const { data, error } = await supabase
+          .from('children')
+          .select(`
+            id,
+            parent_id,
+            name,
+            age,
+            allergies,
+            notes,
+            preferences,
+            created_at,
+            updated_at
+          `)
+          .eq('parent_id', targetParentId)
+          .order('created_at', { ascending: true })
+        
+        if (error) throw error
+        return data || []
+      }, 60 * 1000)
     } catch (error) {
       console.warn('⚠️ getChildren error:', error.message)
       return []
@@ -63,7 +77,7 @@ export class ChildrenService extends SupabaseBase {
         .single()
       
       if (error) throw error
-      
+      invalidateCache(`children:${parentId}`)
       console.log('✅ Child added successfully:', data)
       return data
     } catch (error) {
@@ -114,6 +128,9 @@ export class ChildrenService extends SupabaseBase {
         .single()
       
       if (error) throw error
+      if (data?.parent_id) {
+        invalidateCache(`children:${data.parent_id}`)
+      }
       return data
     } catch (error) {
       return this._handleError('updateChild', error)
@@ -130,6 +147,7 @@ export class ChildrenService extends SupabaseBase {
         .eq('id', childId)
       
       if (error) throw error
+      invalidateCache('children:')
       return { success: true }
     } catch (error) {
       return this._handleError('deleteChild', error)

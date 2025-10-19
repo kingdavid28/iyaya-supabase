@@ -6,6 +6,7 @@ import { ActivityIndicator, Alert, Dimensions, Image, Linking, Modal, Platform, 
 import { Button, Card, Chip } from "react-native-paper"
 import Toast from "../components/ui/feedback/Toast"
 import { supabaseService } from '../services/supabase'
+import { reviewService } from '../services/supabase/reviewService'
 import { getCurrentSocketURL } from '../config/api'
 import { useAuth } from "../contexts/AuthContext"
 import JobsTab, { CaregiverJobCard } from './CaregiverDashboard/JobsTab';
@@ -14,7 +15,6 @@ import { useNotificationCounts } from '../hooks/useNotificationCounts';
 import { SettingsModal } from "../components/ui/modals/SettingsModal"
 import { RequestInfoModal } from "../components/ui/modals/RequestInfoModal"
 import BookingDetailsModal from '../shared/ui/modals/BookingDetailsModal';
-
 import { formatAddress } from "../utils/addressUtils"
 import { calculateAge } from "../utils/dateUtils"
 import { __DEV__ } from "../config/constants"
@@ -22,7 +22,8 @@ import MessagesTab from './CaregiverDashboard/components/MessagesTab';
 import NotificationsTab from './CaregiverDashboard/components/NotificationsTab';
 import BookingsTab from './CaregiverDashboard/BookingsTab';
 import ApplicationsTab from './CaregiverDashboard/ApplicationsTab';
-
+import ReviewList from '../components/features/profile/ReviewList';
+import ReviewForm from '../components/forms/ReviewForm';
 
 import { 
   EmptyState, 
@@ -42,9 +43,7 @@ import CaregiverProfileSection from './CaregiverDashboard/components/CaregiverPr
 import { PrivacyNotificationModal } from '../components/ui/modals/PrivacyNotificationModal';
 
 import MessageItemLocal from '../components/messaging/MessageItemLocal';
-import ReviewItemLocal from '../components/messaging/ReviewItemLocal';
-
-
+import { normalizeCaregiverReviewsForList } from '../utils/reviews';
 
 function ApplicationCard({ application, onViewDetails, onMessage }) {
   const job = application.job || {};
@@ -658,6 +657,13 @@ function CaregiverDashboard({ onLogout, route }) {
   const [messages, setMessages] = useState([]);
   const [newMessage, setNewMessage] = useState('');
   const [reviews, setReviews] = useState([]);
+  const [reviewsLoading, setReviewsLoading] = useState(true);
+  const [refreshingReviews, setRefreshingReviews] = useState(false);
+  const [reviewsFilter, setReviewsFilter] = useState('all');
+  const [showReviewForm, setShowReviewForm] = useState(false);
+  const [selectedReview, setSelectedReview] = useState(null);
+  const [reviewSubmitting, setReviewSubmitting] = useState(false);
+  const [highlightRequestSending, setHighlightRequestSending] = useState(false);
   const [chatActive, setChatActive] = useState(false);
 
   const [toast, setToast] = useState({ visible: false, message: '', type: 'success' })
@@ -756,30 +762,53 @@ function CaregiverDashboard({ onLogout, route }) {
     loadMessages();
   }, [selectedParent, user?.id]);
 
-  // Fetch reviews using Supabase
+  const fetchCaregiverReviews = useCallback(async ({ showSkeleton = true } = {}) => {
+    if (!user?.id) return;
+
+    if (showSkeleton) {
+      setReviewsLoading(true);
+    }
+
+    try {
+      const data = await reviewService.getReviews(user.id, 50, 0);
+      setReviews(normalizeCaregiverReviewsForList(data || []));
+    } catch (error) {
+      console.warn('Failed to fetch caregiver reviews:', error);
+      setReviews([]);
+    } finally {
+      if (showSkeleton) {
+        setReviewsLoading(false);
+      }
+    }
+  }, [user?.id]);
+
   useEffect(() => {
     if (!user?.id) return;
 
-    const fetchReviews = async () => {
-      try {
-        const { supabase } = await import('../config/supabase');
-        const { data, error } = await supabase
-          .from('reviews')
-          .select('*')
-          .eq('caregiver_id', user.id)
-          .order('created_at', { ascending: false });
-
-        if (error) throw error;
-        setReviews(data || []);
-      } catch (error) {
-        console.warn('Failed to fetch reviews:', error);
-        setReviews([]);
-      }
+    let cancelled = false;
+    const run = async () => {
+      await fetchCaregiverReviews({ showSkeleton: true });
     };
 
-    fetchReviews();
-  }, [user?.id]);
-  
+    run();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [fetchCaregiverReviews, user?.id]);
+
+  const refreshCaregiverReviews = useCallback(async () => {
+    if (!user?.id || refreshingReviews) return;
+    setRefreshingReviews(true);
+    try {
+      await fetchCaregiverReviews({ showSkeleton: false });
+    } catch (error) {
+      console.warn('Caregiver review refresh failed:', error);
+    } finally {
+      setRefreshingReviews(false);
+    }
+  }, [fetchCaregiverReviews, refreshingReviews, user?.id]);
+
   const [showNotifications, setShowNotifications] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [showRequestModal, setShowRequestModal] = useState(false);
@@ -797,15 +826,16 @@ function CaregiverDashboard({ onLogout, route }) {
   }
 
   useEffect(() => {
-    if (route?.params?.refreshProfile) {
-      console.log('🔄 CaregiverDashboard - Force refresh triggered by route params');
-      loadProfile();
-      // Clear the param without causing re-render
-      setTimeout(() => {
-        navigation.setParams({ refreshProfile: undefined });
-      }, 100);
+    const refreshProfileParam = route?.params?.refreshProfile;
+    if (!refreshProfileParam) return;
+
+    console.log('🔄 CaregiverDashboard - Force refresh triggered by route params');
+    loadProfile();
+
+    if (navigation?.setParams) {
+      navigation.setParams({ refreshProfile: undefined });
     }
-  }, [route?.params?.refreshProfile]);
+  }, [route?.params?.refreshProfile, loadProfile]);
 
   const handleJobApplication = (job) => {
     if (!job || (!job.id && !job._id)) {
@@ -830,9 +860,59 @@ function CaregiverDashboard({ onLogout, route }) {
   }
 
   const handleMessageFamily = async (application) => {
-    Alert.alert('Feature Unavailable', 'Messaging feature has been removed.');
-    setShowApplicationDetails(false);
-  }
+    try {
+      if (!application) {
+        showToast('Unable to load application details.', 'error');
+        return;
+      }
+
+      const parent = application.family || application.parent || application.parentInfo || {};
+      const parentId = parent.id || application.parent_id || application.parentId;
+
+      if (!parentId) {
+        showToast('Missing family contact. Try opening the booking instead.', 'error');
+        return;
+      }
+
+      setShowApplicationDetails(false);
+      setActiveTab('messages');
+
+      const conversation = await supabaseService.messaging.getOrCreateConversation(user.id, parentId);
+      if (!conversation?.id) {
+        throw new Error('Conversation unavailable.');
+      }
+
+      const parentRecord = {
+        id: parentId,
+        name: parent.name || application.familyName || 'Family',
+        profileImage: parent.profileImage || parent.avatar || application.familyAvatar || null,
+        unreadCount: 0,
+      };
+
+      setParents(prev => {
+        const next = [...prev];
+        const existingIndex = next.findIndex(item => item.id === parentRecord.id);
+        if (existingIndex >= 0) {
+          next[existingIndex] = { ...next[existingIndex], ...parentRecord };
+          return next;
+        }
+        next.push(parentRecord);
+        return next;
+      });
+
+      setSelectedParent(parentRecord);
+      setChatActive(true);
+
+      const messagesData = await supabaseService.messaging.getMessages(conversation.id);
+      setMessages(messagesData);
+      await supabaseService.messaging.markMessagesAsRead(conversation.id, user.id);
+
+      showToast(`Messaging ${parentRecord.name}`, 'success');
+    } catch (error) {
+      console.error('Message family failed:', error);
+      showToast('Could not open chat. Please try again later.', 'error');
+    }
+  };
 
   const handleBookingMessage = async (booking) => {
     try {
@@ -980,6 +1060,95 @@ function CaregiverDashboard({ onLogout, route }) {
       showToast('Failed to send message: ' + error.message, 'error');
     }
   };
+
+  const handleRequestHighlight = useCallback(async () => {
+    if (!user?.id) {
+      showToast('Please sign in to request a highlight.', 'error');
+      return;
+    }
+
+    if (highlightRequestSending) {
+      return;
+    }
+
+    const eligibleReviews = sortedReviews.filter(review => review?.reviewerId);
+    if (!eligibleReviews.length) {
+      showToast('Invite families to leave feedback to request a highlight.', 'info');
+      return;
+    }
+
+    const positiveReviews = eligibleReviews.filter(review => (review?.rating || 0) >= 4);
+    const targetReview = positiveReviews[0] || eligibleReviews[0];
+    const parentId = targetReview?.reviewerId;
+
+    if (!parentId) {
+      showToast('Unable to identify a family to message.', 'error');
+      return;
+    }
+
+    try {
+      setHighlightRequestSending(true);
+
+      const parentName = targetReview?.reviewerName || '';
+      const greetingName = parentName?.split?.(' ')?.[0]?.trim() || 'there';
+      const ratingLabel = targetReview?.rating ? `${targetReview.rating}-star feedback` : 'kind feedback';
+
+      const messageParts = [
+        `Hi ${greetingName}! Thank you again for the ${ratingLabel}.`
+      ];
+
+      if (targetReview?.bookingDate) {
+        const formattedDate = formatDate(targetReview.bookingDate);
+        if (formattedDate) {
+          messageParts.push(`I loved working with your family on ${formattedDate}.`);
+        }
+      }
+
+      messageParts.push('Would you mind sharing a short story I can feature on my caregiver profile?');
+      messageParts.push('Your highlights help other families feel confident booking with me.');
+
+      const trimmedComment = targetReview?.comment?.trim();
+      if (trimmedComment) {
+        const summary = trimmedComment.length > 140 ? `${trimmedComment.slice(0, 140).trim()}…` : trimmedComment;
+        messageParts.push(`Your note "${summary}" truly made my week—thank you!`);
+      }
+
+      messageParts.push('Feel free to reply here whenever it’s convenient. 😊');
+
+      const highlightMessage = messageParts.join(' ');
+
+      const conversation = await supabaseService.messaging.getOrCreateConversation(user.id, parentId);
+      if (!conversation?.id) {
+        throw new Error('Could not start chat with the family.');
+      }
+
+      await supabaseService.messaging.sendMessage(conversation.id, user.id, highlightMessage);
+
+      setParents(prev => {
+        const updated = [...prev];
+        const nextRecord = {
+          id: parentId,
+          name: targetReview?.reviewerName || 'Parent',
+          profileImage: targetReview?.reviewerAvatar || null,
+          unreadCount: 0
+        };
+        const existingIndex = updated.findIndex(parent => parent.id === parentId);
+        if (existingIndex >= 0) {
+          updated[existingIndex] = { ...updated[existingIndex], ...nextRecord };
+          return updated;
+        }
+        updated.push(nextRecord);
+        return updated;
+      });
+
+      showToast(`Highlight request sent to ${targetReview?.reviewerName || 'the family'}.`, 'success');
+    } catch (error) {
+      console.error('Error sending highlight request:', error);
+      showToast('Could not send highlight request. Please try again later.', 'error');
+    } finally {
+      setHighlightRequestSending(false);
+    }
+  }, [user?.id, highlightRequestSending, sortedReviews, showToast]);
 
   const handleApplicationSubmit = async ({ jobId, jobTitle, family, coverLetter, proposedRate }) => {
     // Validate job ID
@@ -1316,26 +1485,305 @@ function CaregiverDashboard({ onLogout, route }) {
     </View>
   );
 
-  const renderReviewsTab = () => (
-    <View style={styles.reviewsContainer}>
-      <Text style={styles.sectionTitle}>Your Reviews</Text>
-      {reviews.length > 0 ? (
-        <FlatList
-          data={reviews}
-          renderItem={({ item }) => <ReviewItemLocal review={item} />}
-          keyExtractor={(item) => item.id}
-          style={styles.reviewsList}
-          contentContainerStyle={styles.reviewsContent}
-        />
-      ) : (
-        <EmptyState 
-          icon="star-outline" 
-          title="No reviews yet"
-          subtitle="Reviews from families will appear here"
-        />
-      )}
+  const sortedReviews = useMemo(() => {
+    if (!Array.isArray(reviews)) {
+      return [];
+    }
+    return [...reviews].sort((a, b) => {
+      const dateA = a?.createdAt ? new Date(a.createdAt).getTime() : 0;
+      const dateB = b?.createdAt ? new Date(b.createdAt).getTime() : 0;
+      return dateB - dateA;
+    });
+  }, [reviews]);
+
+  const averageRating = useMemo(() => {
+    if (!sortedReviews.length) return '—';
+    const total = sortedReviews.reduce((sum, review) => sum + (review.rating || 0), 0);
+    return (total / sortedReviews.length).toFixed(1);
+  }, [sortedReviews]);
+
+  const ratingDistribution = useMemo(() => {
+    const buckets = [5, 4, 3, 2, 1].map(rating => ({ rating, count: 0 }));
+    const bucketMap = buckets.reduce((acc, item) => {
+      acc[item.rating] = item;
+      return acc;
+    }, {});
+
+    sortedReviews.forEach(review => {
+      const bucket = bucketMap[Math.round(review?.rating || 0)];
+      if (bucket) {
+        bucket.count += 1;
+      }
+    });
+
+    return buckets;
+  }, [sortedReviews]);
+
+  const totalReviews = sortedReviews.length;
+
+  const fiveStarShare = useMemo(() => {
+    if (!totalReviews) return 0;
+    const fiveStarBucket = ratingDistribution.find(bucket => bucket.rating === 5);
+    return Math.round(((fiveStarBucket?.count || 0) / totalReviews) * 100);
+  }, [ratingDistribution, totalReviews]);
+
+  const commentShare = useMemo(() => {
+    if (!totalReviews) return 0;
+    const withComments = sortedReviews.filter(review => review?.comment?.trim()).length;
+    return Math.round((withComments / totalReviews) * 100);
+  }, [sortedReviews, totalReviews]);
+
+  const reviewFilters = useMemo(() => ([
+    { id: 'all', label: 'All highlights' },
+    { id: 'recent', label: 'Latest' },
+    { id: 'positive', label: '4★ & up' },
+    { id: 'with-notes', label: 'With stories' },
+    { id: 'needs-attention', label: 'Needs follow-up' },
+  ]), []);
+
+  const filteredReviews = useMemo(() => {
+    switch (reviewsFilter) {
+      case 'recent':
+        return sortedReviews.slice(0, 6);
+      case 'positive':
+        return sortedReviews.filter(review => (review?.rating || 0) >= 4);
+      case 'with-notes':
+        return sortedReviews.filter(review => review?.comment?.trim());
+      case 'needs-attention':
+        return sortedReviews.filter(review => (review?.rating || 0) > 0 && (review?.rating || 0) <= 3);
+      default:
+        return sortedReviews;
+    }
+  }, [sortedReviews, reviewsFilter]);
+
+  const reviewSummaryItems = useMemo(() => ([
+    {
+      id: 'total',
+      label: 'Highlights collected',
+      value: String(totalReviews || 0),
+      icon: 'people-circle-outline',
+      accent: '#1D4ED8',
+    },
+    {
+      id: 'five-star',
+      label: '5★ share',
+      value: totalReviews ? `${fiveStarShare}%` : '—',
+      icon: 'star-outline',
+      accent: '#F59E0B',
+    },
+    {
+      id: 'stories',
+      label: 'Reviews with notes',
+      value: totalReviews ? `${commentShare}%` : '—',
+      icon: 'chatbubble-ellipses-outline',
+      accent: '#10B981',
+    },
+  ]), [commentShare, fiveStarShare, totalReviews]);
+
+  const reviewsEmptyComponent = useMemo(() => {
+    if (reviewsLoading) {
+      return (
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="small" color="#3B82F6" />
+          <Text style={styles.loadingText}>Loading highlights...</Text>
+        </View>
+      );
+    }
+
+    const hasReviews = !!totalReviews;
+
+    return (
+      <View style={styles.reviewsEmptyCard}>
+        <Ionicons name={hasReviews ? 'search-outline' : 'sparkles-outline'} size={32} color="#3B82F6" />
+        <Text style={styles.reviewsEmptyTitle}>
+          {hasReviews ? 'No highlights match this view' : 'No highlights yet'}
+        </Text>
+        <Text style={styles.reviewsEmptySubtitle}>
+          {hasReviews
+            ? 'Try a different filter or invite families to leave feedback.'
+            : 'Once families share their experiences after bookings, their testimonials will appear here.'}
+        </Text>
+      </View>
+    );
+  }, [reviewsLoading, totalReviews]);
+
+  const reviewsFooterComponent = useMemo(() => (
+    <View style={styles.reviewsFooterCard}>
+      <View style={styles.reviewsFooterContent}>
+        <Ionicons name="sparkles-outline" size={24} color="#1D4ED8" />
+        <View style={styles.reviewsFooterTextWrapper}>
+          <Text style={styles.reviewsFooterTitle}>Keep the stories coming</Text>
+          <Text style={styles.reviewsFooterSubtitle}>
+            Follow up with recent families to capture their experience while it's still fresh.
+          </Text>
+        </View>
+      </View>
+      <Pressable
+        style={[styles.reviewsFooterButton, highlightRequestSending && { opacity: 0.6 }]}
+        onPress={handleRequestHighlight}
+        disabled={highlightRequestSending}
+      >
+        <Ionicons name="mail-unread-outline" size={16} color="#FFFFFF" />
+        <Text style={styles.reviewsFooterButtonText}>Request highlight</Text>
+      </Pressable>
+    </View>
+  ), [handleRequestHighlight, highlightRequestSending]);
+
+  const handleSelectReviewFilter = useCallback((filterId) => {
+    setReviewsFilter(current => (current === filterId ? current : filterId));
+  }, []);
+
+  const reviewsHeaderComponent = (
+    <View>
+      <LinearGradient
+        colors={["#1d4ed8", "#1e40af"]}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={styles.reviewsHeroCard}
+      >
+        <View style={styles.reviewsHeroHeader}>
+          <View style={styles.reviewsHeroMetric}>
+            <Text style={styles.reviewsHeroLabel}>Average rating</Text>
+            <View style={styles.reviewsHeroValueRow}>
+              <Text style={styles.reviewsHeroValue}>{averageRating}</Text>
+              <Ionicons name="star" size={22} color="#FACC15" />
+            </View>
+            <Text style={styles.reviewsHeroHint}>Based on family-submitted highlights</Text>
+          </View>
+          <Pressable
+            onPress={handleRequestHighlight}
+            style={[styles.reviewsHeroButton, highlightRequestSending && { opacity: 0.6 }]}
+            disabled={highlightRequestSending}
+          >
+            <Ionicons name="sparkles-outline" size={8} color="#1D4ED8" />
+            <Text style={styles.reviewsHeroButtonText}>Request highlight</Text>
+          </Pressable>
+        </View>
+
+        <View style={styles.reviewsFilterRow}>
+          {reviewFilters.map(filter => {
+            const active = reviewsFilter === filter.id;
+            return (
+              <Pressable
+                key={filter.id}
+                style={[styles.reviewsFilterPill, active && styles.reviewsFilterPillActive]}
+                onPress={() => handleSelectReviewFilter(filter.id)}
+              >
+                <Text style={[styles.reviewsFilterPillText, active && styles.reviewsFilterPillTextActive]}>
+                  {filter.label}
+                </Text>
+              </Pressable>
+            );
+          })}
+        </View>
+      </LinearGradient>
+
+      <View style={styles.reviewsSummaryGrid}>
+        {reviewSummaryItems.map(item => (
+          <View key={item.id} style={styles.reviewsSummaryCard}>
+            <View style={[styles.reviewsSummaryIconWrap, { backgroundColor: `${item.accent}1A` }] }>
+              <Ionicons name={item.icon} size={18} color={item.accent} />
+            </View>
+            <Text style={styles.reviewsSummaryLabel}>{item.label}</Text>
+            <Text style={styles.reviewsSummaryMetric}>{item.value}</Text>
+          </View>
+        ))}
+      </View>
+
+      <View style={styles.reviewsBreakdownCard}>
+        <Text style={styles.reviewsBreakdownTitle}>Rating distribution</Text>
+        {ratingDistribution.map(bucket => {
+          const percentage = totalReviews ? Math.round((bucket.count / totalReviews) * 100) : 0;
+          return (
+            <View key={bucket.rating} style={styles.reviewsBreakdownRow}>
+              <Text style={styles.reviewsBreakdownLabel}>{`${bucket.rating}★`}</Text>
+              <View style={styles.reviewsBreakdownBar}>
+                <View
+                  style={[
+                    styles.reviewsBreakdownFill,
+                    { width: `${Math.min(100, Math.max(bucket.count > 0 ? 12 : 0, percentage))}%` }
+                  ]}
+                />
+              </View>
+              <Text style={styles.reviewsBreakdownValue}>{bucket.count}</Text>
+            </View>
+          );
+        })}
+      </View>
+
+      <View style={styles.reviewsContextBanner}>
+        <Ionicons name="information-circle" size={18} color="#2563eb" />
+        <Text style={styles.reviewsContextText}>
+          Highlights are generated from verified family feedback. Reach out to families after successful bookings to grow your reputation.
+        </Text>
+      </View>
     </View>
   );
+
+  const renderReviewsTab = () => (
+    <View style={styles.reviewsContainer}>
+      <View style={styles.reviewsCard}>
+        <ReviewList
+          reviews={filteredReviews}
+          currentUserId={user?.id}
+          refreshing={refreshingReviews}
+          onRefresh={() => refreshCaregiverReviews()}
+          onEditReview={(review) => {
+            setSelectedReview(review);
+            setShowReviewForm(true);
+          }}
+          ListHeaderComponent={reviewsHeaderComponent}
+          ListFooterComponent={reviewsFooterComponent}
+          ListEmptyComponent={reviewsEmptyComponent}
+          contentContainerStyle={styles.reviewsListContent}
+          useVirtualizedList={false}
+        />
+      </View>
+    </View>
+  );
+
+  const handleCloseReviewModal = useCallback(() => {
+    setShowReviewForm(false);
+    setSelectedReview(null);
+  }, []);
+
+  const handleSubmitReview = useCallback(async ({ rating, comment }) => {
+    if (!user?.id) {
+      Alert.alert('Not signed in', 'Please sign in to submit a review.');
+      return;
+    }
+
+    if (!selectedReview) {
+      showToast('Reviews are added by families after bookings. You cannot post your own review.', 'info');
+      return;
+    }
+
+    try {
+      setReviewSubmitting(true);
+      if (selectedReview) {
+        await reviewService.updateReview(selectedReview.id, {
+          rating,
+          comment: comment?.trim() || ''
+        });
+      } else {
+        await reviewService.createReview({
+          reviewer_id: user.id,
+          reviewee_id: user.id,
+          rating,
+          comment: comment?.trim() || ''
+        });
+      }
+
+      await refreshCaregiverReviews();
+      handleCloseReviewModal();
+      showToast(selectedReview ? 'Review updated successfully' : 'Review submitted successfully', 'success');
+    } catch (error) {
+      console.error('Caregiver review submit failed:', error);
+      showToast(error?.message || 'Failed to save review. Please try again.', 'error');
+    } finally {
+      setReviewSubmitting(false);
+    }
+  }, [handleCloseReviewModal, refreshCaregiverReviews, selectedReview, showToast, user?.id]);
 
   const renderHeader = () => {
     const pendingRequestsCount = pendingRequests?.length || 0;
@@ -1756,10 +2204,13 @@ function CaregiverDashboard({ onLogout, route }) {
           />
         )}
 
+        {activeTab === 'reviews' && renderReviewsTab()}
+
         {activeTab === 'notifications' && (
           <NotificationsTab
             navigation={navigation}
             onNavigateTab={(tabId) => setActiveTab(tabId)}
+            onRefresh={onRefresh}
           />
         )}
 
@@ -2226,6 +2677,33 @@ function CaregiverDashboard({ onLogout, route }) {
         colors={{ primary: '#3B82F6' }}
       />
       
+      <Modal
+        visible={showReviewForm}
+        animationType="slide"
+        onRequestClose={handleCloseReviewModal}
+        transparent
+      >
+        <View style={styles.modalOverlay}>
+          <View style={[styles.applicationModal, { maxHeight: '80%' }]}
+          >
+            <ReviewForm
+              onSubmit={handleSubmitReview}
+              onCancel={handleCloseReviewModal}
+              initialRating={selectedReview?.rating || 0}
+              initialComment={selectedReview?.comment || ''}
+              submitLabel={selectedReview ? 'Update Review' : 'Submit Review'}
+              heading={selectedReview ? 'Update Your Feedback' : 'Share Your Experience'}
+              enableImageUpload={false}
+            />
+            {reviewSubmitting && (
+              <View style={styles.loadingContainer}>
+                <ActivityIndicator size="small" color="#3B82F6" />
+                <Text style={styles.loadingText}>Saving review...</Text>
+              </View>
+            )}
+          </View>
+        </View>
+      </Modal>
 
       </View>
   );

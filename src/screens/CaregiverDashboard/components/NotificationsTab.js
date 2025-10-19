@@ -5,7 +5,6 @@ import {
   ScrollView, 
   TouchableOpacity, 
   RefreshControl,
-  ActivityIndicator,
   StyleSheet 
 } from 'react-native';
 import { 
@@ -20,6 +19,12 @@ import {
 } from 'lucide-react-native';
 import { notificationService } from '../../../services/supabase';
 import { useAuth } from '../../../contexts/AuthContext';
+import {
+  SkeletonCard,
+  SkeletonBlock,
+  SkeletonCircle,
+  SkeletonPill
+} from '../../../components/common/SkeletonPlaceholder';
 
 const NotificationsTab = ({ navigation, onNavigateTab }) => {
   const { user } = useAuth();
@@ -206,10 +211,27 @@ const NotificationsTab = ({ navigation, onNavigateTab }) => {
 
   if (loading) {
     return (
-      <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#3b82f6" />
-        <Text style={styles.loadingText}>Loading notifications...</Text>
-      </View>
+      <ScrollView contentContainerStyle={styles.skeletonContainer}>
+        <SkeletonCard style={styles.headerSkeleton}>
+          <View style={styles.headerSkeletonContent}>
+            <SkeletonBlock width="45%" height={24} />
+            <SkeletonBlock width="70%" height={16} />
+          </View>
+        </SkeletonCard>
+
+        {Array.from({ length: 5 }).map((_, index) => (
+          <SkeletonCard key={`notification-skeleton-${index}`} style={styles.notificationSkeletonCard}>
+            <View style={styles.notificationSkeletonRow}>
+              <SkeletonCircle size={40} style={styles.notificationSkeletonIcon} />
+              <View style={styles.notificationSkeletonBody}>
+                <SkeletonBlock width="65%" height={16} />
+                <SkeletonBlock width="90%" height={14} style={styles.notificationSkeletonLine} />
+                <SkeletonPill width="35%" height={12} />
+              </View>
+            </View>
+          </SkeletonCard>
+        ))}
+      </ScrollView>
     );
   }
 
@@ -264,16 +286,33 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#6b7280',
   },
-  loadingContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 40,
+  skeletonContainer: {
+    padding: 16,
+    gap: 16,
   },
-  loadingText: {
-    marginTop: 16,
-    fontSize: 16,
-    color: '#6b7280',
+  headerSkeleton: {
+    padding: 16,
+  },
+  headerSkeletonContent: {
+    gap: 12,
+  },
+  notificationSkeletonCard: {
+    padding: 16,
+  },
+  notificationSkeletonRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 12,
+  },
+  notificationSkeletonIcon: {
+    marginTop: 4,
+  },
+  notificationSkeletonBody: {
+    flex: 1,
+    gap: 8,
+  },
+  notificationSkeletonLine: {
+    marginTop: 4,
   },
   notificationsList: {
     padding: 16,

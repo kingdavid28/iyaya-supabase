@@ -1,110 +1,62 @@
-# App Cleanup & Organization Plan
 
-## 🎯 Objectives
-- Remove duplicate code and files
-- Consolidate similar functionality
-- Improve folder structure
-- Maintain 100% functionality
-- Zero breaking changes
 
-## 📁 Current Issues Identified
 
-### 1. **Duplicate Folders & Files**
-```
-❌ DUPLICATES TO CLEAN:
-- /app/ vs /core/ (similar structure)
-- /components/ vs /shared/ui/ (UI components)
-- /contexts/ vs /core/contexts/ (React contexts)
-- /services/ vs /services/backup/ (service files)
-- Multiple auth files across folders
-- Duplicate utility functions
-```
 
-### 2. **Inconsistent Structure**
-```
-❌ INCONSISTENT:
-- Mixed file extensions (.js, .jsx)
-- Inconsistent naming conventions
-- Scattered style files
-- Multiple config folders
-```
+# Summary
+The app feels slow primarily because every dashboard render eagerly loads large data sets and assets over an occasionally flaky network connection. You can gain significant speed by combining better Supabase usage (leaner queries, caching) with Expo/React Native performance practices (code-splitting, asset optimization, memoization).
 
-## 🔧 Cleanup Actions
+# Findings
+- **[src/screens/ParentDashboard/ParentDashboard.js](cci:7://file:///c:/Users/reycel/iYayaAll2/iyayabackupzip/iyayaparentredirect/09172025cleandatabase/iyayaSupa/src/screens/ParentDashboard/ParentDashboard.js:0:0-0:0)** fetches jobs, caregivers, bookings, children, and notifications simultaneously on mount and each refresh—even when tabs aren’t visited.  
+- **[src/services/supabase/index.js](cci:7://file:///c:/Users/reycel/iYayaAll2/iyayabackupzip/iyayaparentredirect/09172025cleandatabase/iyayaSupa/src/services/supabase/index.js:0:0-0:0)** routes all Supabase calls without client-side caching; repeated queries (e.g., notification counts, profile) hit the network anew.  
+- **`src/components/features/profile/ReviewList.js`** and other list components render large payloads with no virtualization or memoization.  
+- **Asset handling** (profile/caregiver images) still relies on full-size uploads; Expo isn’t optimizing them at build time.  
+- **Metro bundle** currently includes every screen/component (≈2700 modules) because there’s no lazy loading for infrequently used flows (e.g., legacy wizards, Auth screens).  
+- **Hermes/JS engine & updates**: ensure Hermes is active (default on RN 0.81+) and that the Expo SDK/bundle cache is slim (`expo start --clear` already used but can be optimized further).
 
-### Phase 1: Remove Obvious Duplicates (SAFE)
-1. **Delete backup folders**:
-   - `/services/backup/` → Keep main `/services/`
-   - Remove `.backup` files
-   
-2. **Consolidate contexts**:
-   - Keep `/contexts/` → Remove `/core/contexts/`
-   
-3. **Remove unused files**:
-   - Empty index.js files
-   - Test files not being used
+# Recommended Actions
+- **Data fetching & Supabase**
+  - Restrict columns in Supabase queries (`select('id,name,profile_image')`) and add `range` pagination where lists can grow ([reviewService.getReviews()](cci:1://file:///c:/Users/reycel/iYayaAll2/iyayabackupzip/iyayaparentredirect/09172025cleandatabase/iyayaSupa/src/services/supabase/index.js:94:2-95:83)).
+  - Cache common results in `integratedService` or adopt TanStack Query to deduplicate network calls and provide stale-while-revalidate behavior.
+  - Defer heavy fetches until needed. For example, load bookings only when `activeTab === 'bookings'` and notifications on a background interval.
+  - Batch related calls with Supabase’s stored procedures/RPC endpoints or `Promise.allSettled` wrappers to reduce serialized latency.
+  - Enable Supabase Edge Functions for expensive aggregations (e.g., notification counts) and schedule background sync to warm caches.
 
-### Phase 2: Consolidate Structure
-1. **Merge UI components**:
-   - `/components/ui/` → `/shared/ui/`
-   - `/components/common/` → `/shared/ui/`
-   
-2. **Standardize services**:
-   - Keep `/services/` structure
-   - Remove `/core/api/` (use main services)
-   
-3. **Organize utilities**:
-   - Merge `/utils/` and `/shared/utils/`
+- **UI rendering**
+  - Memoize list items using `React.memo` and introduce virtualization (`FlatList` with `getItemLayout` / `initialNumToRender`) for long feeds in [BookingsTab](cci:1://file:///c:/Users/reycel/iYayaAll2/iyayabackupzip/iyayaparentredirect/09172025cleandatabase/iyayaSupa/src/screens/ParentDashboard/components/BookingsTab.js:9:0-358:2), `ReviewsTab`, etc.
+  - Move rarely used flows (`EnhancedCaregiverProfileWizard`, `AvailabilityManagementScreen`) behind dynamic imports (`React.lazy`) so they don’t inflate the initial bundle.
+  - Use skeleton loaders for profile/images so the UI stays responsive while assets stream.
 
-### Phase 3: File Organization
-1. **Standardize extensions**: All React components → `.jsx`
-2. **Consistent naming**: camelCase for files, PascalCase for components
-3. **Group related files**: Move styles closer to components
+- **Assets & images**
+  - Run `npx expo-optimize` to generate multiple resolutions of local images; enforce max dimensions on uploaded profile photos using `expo-image-manipulator`.
+  - Serve Supabase Storage images via signed URLs with size params (`?width=256&quality=70`) when fetching avatars.
 
-## 🚀 Implementation Steps
+- **State & architecture**
+  - Introduce a lightweight global store (Zustand/TanStack Query) to centralize Supabase session and cached data, replacing repeated context calls.
+  - Schedule background tasks (e.g., via `expo-task-manager`) for periodic syncs instead of on-demand full reloads.
+  - Trim legacy code paths referenced in [SUPABASE_MIGRATION_COMPLETE.md](cci:7://file:///c:/Users/reycel/iYayaAll2/iyayabackupzip/iyayaparentredirect/09172025cleandatabase/iyayaSupa/SUPABASE_MIGRATION_COMPLETE.md:0:0-0:0)—unused modules still inflate the bundle; archive or delete them after confirming parity.
 
-### Step 1: Safe Deletions (No Risk)
-```bash
-# Remove backup folders
-rm -rf src/services/backup/
-rm -rf src/core/
-rm -f src/contexts/*.backup
-rm -f src/config/*.backup
-```
+- **Build & runtime**
+  - Ensure Hermes is enabled (`expo prebuild --clean` if needed) and monitor bundle size via `npm run analyze-bundle`.
+  - Leverage Expo’s EAS Build cache and consider splitting the project into feature-based Metro bundles with `expo-router` lazy routes.
+  - Audit dependencies in [package.json](cci:7://file:///c:/Users/reycel/iYayaAll2/iyayabackupzip/iyayaparentredirect/09172025cleandatabase/iyayaSupa/package.json:0:0-0:0); remove unused libraries left from the migration (e.g., legacy APIs).
 
-### Step 2: Consolidate Duplicates
-- Merge duplicate utility functions
-- Consolidate similar components
-- Remove unused imports
+- **Testing & monitoring**
+  - Add performance instrumentation (React Native Performance, Sentry Performance) to capture slow render traces.
+  - Profile Supabase queries with the dashboard (execution plan/latency) and add indexes on frequently filtered columns.
 
-### Step 3: Restructure
-- Move files to logical locations
-- Update import paths
-- Test functionality
+Implementing the above will align the app with the post-migration modular design while keeping runtime light and responsive. Let me know which areas you’d like to tackle first, and I can help draft the concrete changes.
 
-## 📋 Validation Checklist
-- [ ] All screens still render
-- [ ] Navigation works
-- [ ] API calls function
-- [ ] Authentication flows work
-- [ ] No console errors
-- [ ] Build succeeds
 
-## 🎯 Target Structure
-```
-src/
-├── components/          # Reusable UI components
-├── screens/            # Screen components
-├── services/           # API & business logic
-├── contexts/           # React contexts
-├── hooks/              # Custom hooks
-├── utils/              # Utility functions
-├── config/             # App configuration
-├── constants/          # App constants
-└── types/              # TypeScript types
-```
+Messaging skeleton set
+Build a chat-specific skeleton (conversation rows, message bubbles) and reuse across messaging components.
+Profile & auth flows
+Implement skeletons for profile headers/cards and leverage lightweight placeholders during auth/verification waits.
 
-## ⚠️ Safety Measures
-1. **Git branch**: Create cleanup branch
-2. **Incremental**: Small, testable changes
-3. **Validation**: Test after each phase
-4. **Rollback**: Keep original structure until verified
+# Review components inventory
+- **`src/components/features/profile/ReviewList.js`** – shared list renderer (avatars, ratings, images). Re-exported via `src/components/index.js` and `src/components/ReviewsSection.js`.
+- **`src/components/forms/ReviewForm.js`** – reusable form for create/update flows with optional photo upload.
+- **`src/components/messaging/ReviewItemLocal.js`** – legacy caregiver card; superseded by `ReviewList` but kept for bespoke layouts.
+- **`src/screens/ParentDashboard/components/ReviewsTab.js`** – parent dashboard tab that now depends on `reviewService` and should migrate toward the shared `ReviewForm`/`ReviewList` combo.
+- **`src/screens/CaregiverDashboard.js`** – “Best of Me” tab now normalizes with `normalizeCaregiverReviewsForList()` and renders the shared `ReviewList` with a CTA into `CaregiverReviewsScreen`.
+- **`src/utils/reviews.js`** – houses `normalizeCaregiverReviews()` utilities used by caregiver-facing screens to keep Supabase payloads consistent.
+- **Maintenance** – When adding or removing review-related modules, update this inventory so newcomers can locate the current components quickly.

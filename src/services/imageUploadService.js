@@ -1,5 +1,6 @@
 import * as ImagePicker from 'expo-image-picker';
 import { supabaseService } from './supabase';
+import { processImageForUpload } from '../utils/imageUtils';
 
 export const imageUploadService = {
   async pickAndUploadProfileImage(userId) {
@@ -28,13 +29,24 @@ export const imageUploadService = {
       }
 
       const asset = result.assets[0];
-      if (!asset.base64) {
-        throw new Error('Failed to get image data');
+      let uploadPayload;
+      try {
+        const processed = await processImageForUpload(asset.uri, {
+          maxWidth: 1024,
+          maxHeight: 1024,
+          compress: 0.8,
+        });
+        uploadPayload = processed.base64;
+      } catch (processingError) {
+        console.warn('Failed to process image before upload, falling back to original asset.', processingError);
+        if (asset.base64) {
+          uploadPayload = `data:${asset.mimeType || 'image/jpeg'};base64,${asset.base64}`;
+        } else {
+          throw new Error('Failed to process image for upload');
+        }
       }
 
-      // Upload to Supabase using new architecture
-      const base64WithPrefix = `data:image/jpeg;base64,${asset.base64}`;
-      const uploadResult = await supabaseService.uploadProfileImage(userId, base64WithPrefix);
+      const uploadResult = await supabaseService.uploadProfileImage(userId, uploadPayload);
       return uploadResult;
 
     } catch (error) {

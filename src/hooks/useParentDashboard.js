@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { apiService } from '../services';
 import { formatAddress } from '../utils/addressUtils';
@@ -214,7 +214,7 @@ export const useParentDashboard = () => {
     }
   }, [user?.id, user?.role]);
 
-  // Load data only once on mount
+  // Load essential data once on mount; defer bookings until tab visit
   useEffect(() => {
     if (!dataLoaded && user?.id) {
       Promise.all([
@@ -222,11 +222,10 @@ export const useParentDashboard = () => {
         fetchJobs(),
         fetchApplications(),
         fetchCaregivers(),
-        fetchBookings(),
         fetchChildren()
       ]).finally(() => setDataLoaded(true));
     }
-  }, [user?.id, dataLoaded, fetchApplications]);
+  }, [user?.id, dataLoaded, fetchApplications, fetchChildren, fetchCaregivers, fetchJobs, loadProfile]);
 
   // Refresh data when tabs become active
   useEffect(() => {
@@ -240,6 +239,17 @@ export const useParentDashboard = () => {
       fetchBookings();
     }
   }, [activeTab, fetchJobs, fetchApplications, fetchBookings, user?.id]);
+
+  // Prefetch bookings once after initial render when user is idle
+  useEffect(() => {
+    if (user?.id && dataLoaded && activeTab !== 'bookings' && bookings.length === 0) {
+      const timeout = setTimeout(() => {
+        fetchBookings().catch(() => {});
+      }, 3000);
+
+      return () => clearTimeout(timeout);
+    }
+  }, [user?.id, dataLoaded, activeTab, bookings.length, fetchBookings]);
 
   return {
     activeTab,
@@ -260,6 +270,7 @@ export const useParentDashboard = () => {
     fetchCaregivers,
     fetchBookings,
     fetchChildren,
-    dataLoaded
+    dataLoaded,
+    bookingsLoaded: useMemo(() => bookings.length > 0, [bookings])
   };
 };

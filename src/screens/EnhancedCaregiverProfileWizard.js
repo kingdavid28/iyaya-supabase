@@ -20,7 +20,6 @@ import {
   ProgressBar,
   Snackbar,
   Portal,
-  Dialog,
   Avatar,
   HelperText,
   Divider,
@@ -29,6 +28,7 @@ import {
   Switch,
   Menu,
 } from 'react-native-paper';
+
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import * as ImageManipulator from 'expo-image-manipulator';
@@ -40,7 +40,7 @@ import { DateTimePicker, TimePicker } from '../shared/ui/inputs';
 import { useAuth } from '../contexts/AuthContext';
 import { VALIDATION, CURRENCY, FEATURES } from '../config/constants';
 import { styles } from './styles/EnhancedCaregiverProfileWizard.styles';
-import { getCurrentDeviceLocation, searchLocation, validateLocation, formatLocationForDisplay } from '../utils/locationUtils';
+import { getCurrentDeviceLocation, validateLocation, formatLocationForDisplay } from '../utils/locationUtils';
 
 import { handleUploadError } from '../utils/imageUploadUtils';
 import { supabase } from '../config/supabase';
@@ -131,12 +131,6 @@ const EnhancedCaregiverProfileWizard = ({ navigation, route }) => {
   const [snackbarMessage, setSnackbarMessage] = useState('');
   const [errors, setErrors] = useState({});
   const [touched, setTouched] = useState({});
-  
-  // Location search state
-  const [locationSearchVisible, setLocationSearchVisible] = useState(false);
-  const [locationSearchText, setLocationSearchText] = useState('');
-  const [locationSearchResults, setLocationSearchResults] = useState([]);
-  const [locationSearchLoading, setLocationSearchLoading] = useState(false);
   
   // Additional state variables
   const [bioMenuVisible, setBioMenuVisible] = useState(false);
@@ -439,40 +433,6 @@ const handleProfileImageUpload = async () => {
       Alert.alert('Location Error', error.message || 'Failed to get current location. Please try again.');
     } finally {
       setLocationLoading(false);
-    }
-  };
-
-  // Location search functionality
-  const handleLocationSearch = async () => {
-    if (!locationSearchText.trim()) return;
-    
-    try {
-      setLocationSearchLoading(true);
-      const result = await searchLocation(locationSearchText);
-      setLocationSearchResults([result]); // Convert to array for consistency
-    } catch (error) {
-      console.error('Location search failed:', error);
-      Alert.alert('Search Failed', error.message || 'Failed to search location. Please try again.');
-    } finally {
-      setLocationSearchLoading(false);
-    }
-  };
-
-  const selectLocationFromSearch = (location) => {
-    if (location && location.address) {
-      updateFormData('address', {
-        ...formData.address,
-        street: location.address.street || '',
-        city: location.address.city || '',
-        province: location.address.province || '',
-        country: location.address.country || 'Philippines',
-        zipCode: location.address.postalCode || '',
-        coordinates: location.coordinates,
-      });
-      setLocationSearchVisible(false);
-      setLocationSearchText('');
-      setLocationSearchResults([]);
-      showSnackbar('Location selected successfully');
     }
   };
 
@@ -1325,7 +1285,7 @@ const handleProfileImageUpload = async () => {
             />
             <Menu.Item
               onPress={() => {
-                updateFormData('bio', "Professional childcare provider with CPR certification. I specialize in infant care, meal prep, and homework help. Your children's safety and happiness are my top priorities.");
+                updateFormData('bio', "Professional childcare provider with CPR certification. I specialize in infant care, meal prep, and homework help. I hold CPR certification and have excellent references from previous families.");
                 setBioMenuVisible(false);
               }}
               title="Professional Childcare Provider"
@@ -1655,68 +1615,7 @@ const handleProfileImageUpload = async () => {
         >
           {locationLoading ? 'Getting Location...' : 'Use Current Location (GPS)'}
         </Button>
-        
-        <Button
-          mode="outlined"
-          onPress={() => setLocationSearchVisible(true)}
-          style={styles.searchButton}
-          icon="magnify"
-        >
-          Search Location
-        </Button>
       </View>
-
-      {/* Location Search Dialog */}
-      <Portal>
-        <Dialog 
-          visible={locationSearchVisible} 
-          onDismiss={() => setLocationSearchVisible(false)}
-          style={styles.locationDialog}
-        >
-          <Dialog.Title>Search Location</Dialog.Title>
-          <Dialog.Content>
-            <TextInput
-              label="Enter address or location"
-              value={locationSearchText}
-              onChangeText={setLocationSearchText}
-              mode="outlined"
-              style={styles.input}
-              onSubmitEditing={handleLocationSearch}
-              returnKeyType="search"
-            />
-            
-            {locationSearchLoading && (
-              <View style={styles.searchLoading}>
-                <ActivityIndicator size="small" color="#6366f1" />
-                <Text style={styles.searchLoadingText}>Searching...</Text>
-              </View>
-            )}
-            
-            {locationSearchResults.length > 0 && (
-              <View style={styles.searchResults}>
-                {locationSearchResults.map((result, index) => (
-                  <TouchableOpacity
-                    key={index}
-                    style={styles.searchResultItem}
-                    onPress={() => selectLocationFromSearch(result)}
-                  >
-                    <Ionicons name="location-outline" size={20} color="#6366f1" />
-                    <Text style={styles.searchResultText}>
-                      {String(result.address?.formatted || 'Unknown location')}
-                    </Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
-            )}
-          </Dialog.Content>
-          <Dialog.Actions>
-            <Button onPress={() => setLocationSearchVisible(false)}>Cancel</Button>
-            <Button onPress={handleLocationSearch} loading={locationSearchLoading}>
-              Search
-            </Button>
-          </Dialog.Actions>
-        </Dialog>
-      </Portal>
 
       <TextInput
         label="Street Address"

@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { notificationService } from '../services/supabase/notificationService';
 
@@ -60,7 +60,7 @@ export const useNotificationCounts = () => {
     } finally {
       setLoading(false);
     }
-  }, [user?.id, counts]);
+  }, [user?.id]);
 
   const markAsRead = useCallback(async (notificationId) => {
     try {
@@ -90,16 +90,17 @@ export const useNotificationCounts = () => {
   }, [user?.id]);
 
   // Subscribe to real-time notification updates
+  const intervalRef = useRef(null);
+
   useEffect(() => {
     if (!user?.id) return;
 
     let subscription;
-    
+
     const setupSubscription = async () => {
       try {
         subscription = notificationService.subscribeToNotifications(user.id, (payload) => {
           console.log('📨 New notification received:', payload);
-          // Refresh counts when new notification arrives
           fetchNotificationCounts();
         });
       } catch (error) {
@@ -107,14 +108,27 @@ export const useNotificationCounts = () => {
       }
     };
 
+    const setupInterval = () => {
+      if (intervalRef.current) {
+        clearInterval(intervalRef.current);
+      }
+
+      intervalRef.current = setInterval(() => {
+        fetchNotificationCounts();
+      }, 60 * 1000);
+    };
+
     setupSubscription();
-    
-    // Initial fetch
     fetchNotificationCounts();
+    setupInterval();
 
     return () => {
       if (subscription) {
         subscription.unsubscribe();
+      }
+      if (intervalRef.current) {
+        clearInterval(intervalRef.current);
+        intervalRef.current = null;
       }
     };
   }, [user?.id, fetchNotificationCounts]);

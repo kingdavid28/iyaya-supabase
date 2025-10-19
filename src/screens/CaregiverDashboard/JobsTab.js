@@ -2,11 +2,11 @@ import React, { useCallback, useMemo, useState } from 'react';
 import {
   View,
   Text,
-  ActivityIndicator,
   TouchableOpacity,
   Alert,
   StyleSheet,
   FlatList,
+  ScrollView,
 } from 'react-native';
 import { Chip } from 'react-native-paper';
 import {
@@ -24,6 +24,12 @@ import {
 } from 'lucide-react-native';
 import { styles as dashboardStyles } from '../styles/CaregiverDashboard.styles';
 import SharedJobCard from '../../shared/ui/cards/JobCard';
+import {
+  SkeletonCard,
+  SkeletonBlock,
+  SkeletonCircle,
+  SkeletonPill
+} from '../../components/common/SkeletonPlaceholder';
 
 const localStyles = StyleSheet.create({
   screenContainer: { flex: 1 },
@@ -168,7 +174,7 @@ const SORT_OPTIONS = [
   { key: 'alphabetical', label: 'A-Z' },
 ];
 
-const JOB_SKELETON_COUNT = 3;
+const JOB_SKELETON_COUNT = 6;
 
 const formatCurrency = (value) => {
   if (!value && value !== 0) return '₱0/hr';
@@ -206,16 +212,6 @@ const resolveJobTags = (job) => {
   if (job?.experience) tags.push(job.experience);
   return tags.filter(Boolean).slice(0, 8); // Increased limit for more tags
 };
-
-const JobSkeleton = () => (
-  <View style={styles.skeletonCard}>
-    <View style={[styles.skeletonLine, styles.skeletonLineMedium]} />
-    <View style={[styles.skeletonLine, styles.skeletonLineShort]} />
-    <View style={[styles.skeletonLine, styles.skeletonLineLong]} />
-    <View style={[styles.skeletonLine, styles.skeletonLineMedium]} />
-    <View style={[styles.skeletonLine, styles.skeletonLineShort]} />
-  </View>
-);
 
 export const CaregiverJobCard = ({ job, onApply, onView, hasApplied, style }) => {
   const [applying, setApplying] = useState(false);
@@ -340,9 +336,9 @@ export const CaregiverJobCard = ({ job, onApply, onView, hasApplied, style }) =>
           onPress={handleApply}
           disabled={applying || hasApplied}
         >
-          {applying ? <ActivityIndicator size="small" color="#fff" /> : (
-            <Text style={styles.applyButtonText}>{hasApplied ? 'Applied' : 'Apply Now'}</Text>
-          )}
+          <Text style={styles.applyButtonText}>
+            {applying ? 'Applying…' : hasApplied ? 'Applied' : 'Apply Now'}
+          </Text>
         </TouchableOpacity>
       </View>
 
@@ -358,14 +354,6 @@ const EmptyState = ({ title, subtitle }) => (
     <Briefcase size={56} color="#E5E7EB" />
     <Text style={styles.emptyTitle}>{String(title || '')}</Text>
     <Text style={styles.emptySubtitle}>{String(subtitle || '')}</Text>
-  </View>
-);
-
-const renderSkeletons = () => (
-  <View>
-    {Array.from({ length: JOB_SKELETON_COUNT }).map((_, index) => (
-      <JobSkeleton key={`skeleton-${index}`} />
-    ))}
   </View>
 );
 
@@ -515,7 +503,43 @@ export default function JobsTab({
     </View>
   ), [activeFilter, activeSort, handleFilterChange, handleSortChange, summaryMetrics]);
 
-  const isLoading = jobsLoading || loading;
+  const hasJobs = Array.isArray(jobs) && jobs.length > 0;
+  const isLoading = loading && !hasJobs;
+
+  if (isLoading) {
+    return (
+      <ScrollView contentContainerStyle={styles.jobsSkeletonContainer}>
+        <View style={styles.jobsSkeletonSummaryRow}>
+          {Array.from({ length: 3 }).map((_, index) => (
+            <SkeletonCard key={`summary-skeleton-${index}`} style={styles.jobsSkeletonSummaryCard}>
+              <SkeletonCircle size={36} />
+              <SkeletonBlock width="60%" height={16} />
+              <SkeletonBlock width="40%" height={12} />
+            </SkeletonCard>
+          ))}
+        </View>
+
+        {Array.from({ length: JOB_SKELETON_COUNT }).map((_, index) => (
+          <SkeletonCard key={`job-skeleton-${index}`} style={styles.jobsSkeletonCard}>
+            <View style={styles.jobsSkeletonRow}>
+              <SkeletonCircle size={42} />
+              <View style={styles.jobsSkeletonInfo}>
+                <SkeletonBlock width="70%" height={16} />
+                <SkeletonBlock width="55%" height={14} />
+              </View>
+              <SkeletonPill width="26%" height={18} />
+            </View>
+            <SkeletonBlock width="92%" height={14} />
+            <SkeletonBlock width="85%" height={14} />
+            <View style={styles.jobsSkeletonFooter}>
+              <SkeletonPill width="38%" height={14} />
+              <SkeletonPill width="32%" height={14} />
+            </View>
+          </SkeletonCard>
+        ))}
+      </ScrollView>
+    );
+  }
 
   return (
     <View style={styles.screenContainer}>
@@ -525,9 +549,8 @@ export default function JobsTab({
         renderItem={renderJobItem}
         ListHeaderComponent={listHeader}
         ListEmptyComponent={
-          isLoading
-            ? renderSkeletons
-            : () => (
+          !isLoading
+            ? () => (
                 <EmptyState
                   title={activeFilter === 'all' ? 'No jobs available' : 'No jobs match your filters'}
                   subtitle={
@@ -537,6 +560,7 @@ export default function JobsTab({
                   }
                 />
               )
+            : undefined
         }
         contentContainerStyle={styles.listContent}
         refreshing={refreshing || isLoading}

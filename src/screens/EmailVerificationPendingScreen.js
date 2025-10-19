@@ -4,12 +4,17 @@ import { Button } from 'react-native-paper';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../config/supabase';
+import {
+  AuthStatusSkeleton,
+  AuthActionSkeleton
+} from '../components/auth/AuthSkeletons';
 
 const EmailVerificationPendingScreen = ({ navigation, route }) => {
   const [isResending, setIsResending] = useState(false);
   const [isChecking, setIsChecking] = useState(false);
   const { email } = route.params || {};
   const { user } = useAuth();
+  const isBusy = isChecking || isResending;
 
   const handleResendVerification = async () => {
     try {
@@ -63,8 +68,8 @@ const EmailVerificationPendingScreen = ({ navigation, route }) => {
         <Button
           mode="contained"
           onPress={handleCheckVerification}
-          loading={isChecking}
           style={styles.button}
+          disabled={isBusy}
         >
           I've Verified My Email
         </Button>
@@ -72,8 +77,8 @@ const EmailVerificationPendingScreen = ({ navigation, route }) => {
         <Button
           mode="outlined"
           onPress={handleResendVerification}
-          loading={isResending}
           style={styles.button}
+          disabled={isBusy}
         >
           Resend Verification Email
         </Button>
@@ -81,21 +86,41 @@ const EmailVerificationPendingScreen = ({ navigation, route }) => {
         <Button
           mode="text"
           onPress={() => navigation.navigate('Welcome')}
+          disabled={isBusy}
         >
           Back to Sign In
         </Button>
       </View>
+      {isBusy && (
+        <View style={styles.skeletonOverlay} pointerEvents="none">
+          <AuthStatusSkeleton />
+          <AuthActionSkeleton />
+          <AuthActionSkeleton />
+        </View>
+      )}
     </LinearGradient>
   );
 };
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  content: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 24 },
+  content: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 24, position: 'relative' },
   title: { fontSize: 24, fontWeight: 'bold', marginBottom: 16 },
   message: { fontSize: 16, textAlign: 'center', marginBottom: 8 },
   email: { fontSize: 16, fontWeight: '600', color: '#db2777', marginBottom: 32 },
-  button: { marginBottom: 12, width: '100%', maxWidth: 300 }
+  button: { marginBottom: 12, width: '100%', maxWidth: 300 },
+  skeletonOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    padding: 24,
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: 16,
+    backgroundColor: 'rgba(248, 250, 252, 0.85)'
+  }
 });
 
 export default EmailVerificationPendingScreen;

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { View, StyleSheet, Image, TouchableOpacity, ScrollView, Alert, Platform } from 'react-native';
 import { Text, TextInput, Button, useTheme, IconButton } from 'react-native-paper';
 import { Rating } from 'react-native-ratings';
@@ -8,19 +8,44 @@ import { uploadsAPI } from '../../config/api';
 // Platform-specific FileSystem import
 const FileSystem = Platform.OS === 'web' ? null : require('expo-file-system/legacy');
 
-const ReviewForm = ({ onSubmit, initialRating = 0, onCancel }) => {
+const ReviewForm = ({
+  onSubmit,
+  initialRating = 0,
+  initialComment = '',
+  initialImages = [],
+  onCancel,
+  heading = 'Write a Review',
+  submitLabel = 'Submit Review',
+  enableImageUpload = true
+}) => {
   const theme = useTheme();
   const [rating, setRating] = useState(initialRating);
-  const [comment, setComment] = useState('');
-  const [images, setImages] = useState([]);
+  const [comment, setComment] = useState(initialComment);
+  const [images, setImages] = useState(initialImages);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
+
+  useEffect(() => {
+    setRating(initialRating);
+  }, [initialRating]);
+
+  useEffect(() => {
+    setComment(initialComment);
+  }, [initialComment]);
+
+  useEffect(() => {
+    setImages(initialImages);
+  }, [initialImages]);
 
   const handleRatingChange = (newRating) => {
     setRating(newRating);
   };
 
   const pickImage = async () => {
+    if (!enableImageUpload) {
+      return;
+    }
+
     try {
       const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
       if (status !== 'granted') {
@@ -60,7 +85,7 @@ const ReviewForm = ({ onSubmit, initialRating = 0, onCancel }) => {
 
       // Upload images first if any via backend uploads API
       let uploadedImageUrls = [];
-      if (images.length > 0) {
+      if (enableImageUpload && images.length > 0) {
         if (Platform.OS === 'web' || !FileSystem) {
           console.warn('Image upload not supported on web platform');
           Alert.alert('Upload Error', 'Image upload is not supported on web platform');
@@ -91,9 +116,9 @@ const ReviewForm = ({ onSubmit, initialRating = 0, onCancel }) => {
       });
       
       // Reset form
-      setRating(0);
-      setComment('');
-      setImages([]);
+      setRating(initialRating);
+      setComment(initialComment);
+      setImages(initialImages);
       
     } catch (error) {
       console.error('Error submitting review:', error);
@@ -106,7 +131,7 @@ const ReviewForm = ({ onSubmit, initialRating = 0, onCancel }) => {
 
   return (
     <ScrollView style={styles.container}>
-      <Text style={styles.sectionTitle}>Write a Review</Text>
+      <Text style={styles.sectionTitle}>{heading}</Text>
       
       <View style={styles.ratingContainer}>
         <Text style={styles.label}>Your Rating</Text>
@@ -131,34 +156,36 @@ const ReviewForm = ({ onSubmit, initialRating = 0, onCancel }) => {
         placeholder="Share your experience..."
       />
       
-      <View style={styles.imageUploadContainer}>
-        <Text style={styles.label}>Add Photos (Optional)</Text>
-        <Text style={styles.hint}>Add up to 5 photos to your review</Text>
-        
-        <View style={styles.imagePreviews}>
-          {images.map((uri, index) => (
-            <View key={index} style={styles.imagePreviewContainer}>
-              <Image source={{ uri }} style={styles.imagePreview} />
-              <IconButton
-                icon="close"
-                size={16}
-                style={styles.removeImageButton}
-                onPress={() => removeImage(index)}
-              />
-            </View>
-          ))}
+      {enableImageUpload && (
+        <View style={styles.imageUploadContainer}>
+          <Text style={styles.label}>Add Photos (Optional)</Text>
+          <Text style={styles.hint}>Add up to 5 photos to your review</Text>
           
-          {images.length < 5 && (
-            <TouchableOpacity 
-              style={styles.addImageButton}
-              onPress={pickImage}
-              disabled={isSubmitting}
-            >
-              <Text style={styles.addImageText}>+</Text>
-            </TouchableOpacity>
-          )}
+          <View style={styles.imagePreviews}>
+            {images.map((uri, index) => (
+              <View key={index} style={styles.imagePreviewContainer}>
+                <Image source={{ uri }} style={styles.imagePreview} />
+                <IconButton
+                  icon="close"
+                  size={16}
+                  style={styles.removeImageButton}
+                  onPress={() => removeImage(index)}
+                />
+              </View>
+            ))}
+            
+            {images.length < 5 && (
+              <TouchableOpacity 
+                style={styles.addImageButton}
+                onPress={pickImage}
+                disabled={isSubmitting}
+              >
+                <Text style={styles.addImageText}>+</Text>
+              </TouchableOpacity>
+            )}
+          </View>
         </View>
-      </View>
+      )}
       
       <View style={styles.buttonContainer}>
         {onCancel && (
@@ -179,7 +206,7 @@ const ReviewForm = ({ onSubmit, initialRating = 0, onCancel }) => {
           disabled={isSubmitting || rating === 0}
           style={styles.button}
         >
-          Submit Review
+          {submitLabel}
         </Button>
       </View>
       

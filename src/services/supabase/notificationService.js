@@ -1,4 +1,5 @@
 import { SupabaseBase, supabase } from './base'
+import { getCachedOrFetch, invalidateCache } from './cache'
 
 export class NotificationService extends SupabaseBase {
   async createNotification(notificationData) {
@@ -38,6 +39,7 @@ export class NotificationService extends SupabaseBase {
       }
       
       console.log('✅ Notification created:', data)
+      invalidateCache(`notification-counts:${notificationData.user_id}`)
       return data
     } catch (error) {
       return this._handleError('createNotification', error)
@@ -84,40 +86,61 @@ export class NotificationService extends SupabaseBase {
     try {
       this._validateId(userId, 'User ID')
       
-      const { data, error } = await supabase
-        .from('notifications')
-        .select('type')
-        .eq('user_id', userId)
-        .eq('read', false)
-      
-      if (error) throw error
-      
-      const counts = {
-        messages: 0,
-        bookings: 0,
-        jobs: 0,
-        reviews: 0,
-        notifications: 0,
-        total: 0
-      }
-      
-      data?.forEach(notification => {
-        const type = notification.type
-        if (type === 'message') {
-          counts.messages++
-        } else if (['booking_request', 'booking_confirmed', 'booking_cancelled'].includes(type)) {
-          counts.bookings++
-        } else if (type === 'job_application') {
-          counts.jobs++
-        } else if (type === 'review') {
-          counts.reviews++
-        } else {
-          counts.notifications++
+      const cacheKey = `notification-counts:${userId}`
+      return await getCachedOrFetch(cacheKey, async () => {
+        try {
+          const { data, error } = await supabase
+            .rpc('notification_counts_by_type', { user_id_input: userId })
+
+          if (!error && data) {
+            return {
+              messages: data.messages ?? 0,
+              bookings: data.bookings ?? 0,
+              jobs: data.jobs ?? 0,
+              reviews: data.reviews ?? 0,
+              notifications: data.notifications ?? 0,
+              total: data.total ?? 0
+            }
+          }
+        } catch (rpcError) {
+          console.info('Notification counts RPC unavailable, falling back to client aggregation.', rpcError?.message)
         }
-        counts.total++
-      })
-      
-      return counts
+
+        const { data, error } = await supabase
+          .from('notifications')
+          .select('type')
+          .eq('user_id', userId)
+          .eq('read', false)
+
+        if (error) throw error
+
+        const counts = {
+          messages: 0,
+          bookings: 0,
+          jobs: 0,
+          reviews: 0,
+          notifications: 0,
+          total: 0
+        }
+
+        data?.forEach(notification => {
+          const type = notification.type
+          if (type === 'message') {
+            counts.messages++
+          } else if (['booking_request', 'booking_confirmed', 'booking_cancelled'].includes(type)) {
+            counts.bookings++
+          } else if (type === 'job_application') {
+            counts.jobs++
+          } else if (type === 'review') {
+            counts.reviews++
+          } else {
+            counts.notifications++
+          }
+          counts.total++
+        })
+
+        return counts
+      }, 30 * 1000)
     } catch (error) {
       console.warn('Error getting notification counts by type:', error)
       return {
@@ -145,6 +168,9 @@ export class NotificationService extends SupabaseBase {
         .single()
       
       if (error) throw error
+      if (data?.user_id) {
+        invalidateCache(`notification-counts:${data.user_id}`)
+      }
       return data
     } catch (error) {
       return this._handleError('markNotificationAsRead', error)
@@ -165,6 +191,7 @@ export class NotificationService extends SupabaseBase {
         .select()
       
       if (error) throw error
+      invalidateCache(`notification-counts:${userId}`)
       return data || []
     } catch (error) {
       return this._handleError('markAllNotificationsAsRead', error)
@@ -173,7 +200,6 @@ export class NotificationService extends SupabaseBase {
 
   subscribeToNotifications(userId, callback) {
     this._validateId(userId, 'User ID')
-    
     return supabase
       .channel(`notifications:${userId}`)
       .on('postgres_changes', {
@@ -219,7 +245,7 @@ export class NotificationService extends SupabaseBase {
       const senderProfile = await userService.getProfile(senderId)
       const senderName = senderProfile?.name || 'Someone'
       
-      return await this.createNotification({
+      const result = await this.createNotification({
         user_id: recipientId,
         type: 'message',
         title: 'New Message',
@@ -230,6 +256,8 @@ export class NotificationService extends SupabaseBase {
           messageContent
         }
       })
+      invalidateCache(`notification-counts:${recipientId}`)
+      return result
     } catch (error) {
       console.error('Error creating message notification:', error)
       return null
@@ -256,7 +284,7 @@ export class NotificationService extends SupabaseBase {
       
       const jobTitle = job?.title || 'your job'
       
-      return await this.createNotification({
+      const result = await this.createNotification({
         user_id: parentId,
         type: 'job_application',
         title: 'New Job Application',
@@ -268,6 +296,8 @@ export class NotificationService extends SupabaseBase {
           jobTitle
         }
       })
+      invalidateCache(`notification-counts:${parentId}`)
+      return result
     } catch (error) {
       console.error('Error creating job application notification:', error)
       return null
@@ -286,7 +316,7 @@ export class NotificationService extends SupabaseBase {
       const parentProfile = await userService.getProfile(parentId)
       const parentName = parentProfile?.name || 'A parent'
       
-      return await this.createNotification({
+      const result = await this.createNotification({
         user_id: caregiverId,
         type: 'booking_request',
         title: 'New Booking Request',
@@ -297,6 +327,8 @@ export class NotificationService extends SupabaseBase {
           parentName
         }
       })
+      invalidateCache(`notification-counts:${caregiverId}`)
+      return result
     } catch (error) {
       console.error('Error creating booking request notification:', error)
       return null
@@ -309,7 +341,7 @@ export class NotificationService extends SupabaseBase {
       const caregiverProfile = await userService.getProfile(caregiverId)
       const caregiverName = caregiverProfile?.name || 'Your caregiver'
       
-      return await this.createNotification({
+      const result = await this.createNotification({
         user_id: parentId,
         type: 'booking_confirmed',
         title: 'Booking Confirmed',
@@ -320,6 +352,8 @@ export class NotificationService extends SupabaseBase {
           caregiverName
         }
       })
+      invalidateCache(`notification-counts:${parentId}`)
+      return result
     } catch (error) {
       console.error('Error creating booking confirmation notification:', error)
       return null
@@ -332,7 +366,7 @@ export class NotificationService extends SupabaseBase {
       const caregiverProfile = await userService.getProfile(caregiverId)
       const caregiverName = caregiverProfile?.name || 'Your caregiver'
       
-      return await this.createNotification({
+      const result = await this.createNotification({
         user_id: parentId,
         type: 'booking_cancelled',
         title: 'Booking Cancelled',
@@ -343,6 +377,8 @@ export class NotificationService extends SupabaseBase {
           caregiverName
         }
       })
+      invalidateCache(`notification-counts:${parentId}`)
+      return result
     } catch (error) {
       console.error('Error creating booking cancellation notification:', error)
       return null
@@ -355,7 +391,7 @@ export class NotificationService extends SupabaseBase {
       const parentProfile = await userService.getProfile(parentId)
       const parentName = parentProfile?.name || 'A parent'
       
-      return await this.createNotification({
+      const result = await this.createNotification({
         user_id: caregiverId,
         type: 'review',
         title: 'New Review',
@@ -367,6 +403,8 @@ export class NotificationService extends SupabaseBase {
           rating
         }
       })
+      invalidateCache(`notification-counts:${caregiverId}`)
+      return result
     } catch (error) {
       console.error('Error creating review notification:', error)
       return null
@@ -375,13 +413,15 @@ export class NotificationService extends SupabaseBase {
 
   async notifySystemAlert(userId, title, message, data = {}) {
     try {
-      return await this.createNotification({
+      const result = await this.createNotification({
         user_id: userId,
         type: 'system',
         title,
         message,
         data
       })
+      invalidateCache(`notification-counts:${userId}`)
+      return result
     } catch (error) {
       console.error('Error creating system alert:', error)
       return null
@@ -390,7 +430,7 @@ export class NotificationService extends SupabaseBase {
 
   async notifyPaymentReminder(userId, amount, dueDate) {
     try {
-      return await this.createNotification({
+      const result = await this.createNotification({
         user_id: userId,
         type: 'payment',
         title: 'Payment Reminder',
@@ -400,6 +440,8 @@ export class NotificationService extends SupabaseBase {
           dueDate
         }
       })
+      invalidateCache(`notification-counts:${userId}`)
+      return result
     } catch (error) {
       console.error('Error creating payment reminder:', error)
       return null

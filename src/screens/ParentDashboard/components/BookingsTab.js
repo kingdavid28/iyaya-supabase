@@ -1,11 +1,162 @@
-import React, { useMemo } from 'react';
-import { View, Text, FlatList, RefreshControl, TouchableOpacity, Alert, Linking, ActivityIndicator, ScrollView } from 'react-native';
+import React, { useCallback, useEffect, useMemo, useRef } from 'react';
+import { View, Text, FlatList, RefreshControl, TouchableOpacity, Alert, Linking, ActivityIndicator, ScrollView, StyleSheet, Animated, Easing } from 'react-native';
 import { Calendar, Clock, DollarSign, Filter, Plus } from 'lucide-react-native';
 import { styles, colors } from '../../styles/ParentDashboard.styles';
 import BookingItem from './BookingItem';
 import { parseDate } from '../../../utils/dateUtils';
 import { formatAddress } from '../../../utils/addressUtils';
 import { BOOKING_STATUSES } from '../../../constants/bookingStatuses';
+
+const BOOKING_ITEM_HEIGHT = 320;
+const SKELETON_ITEMS = 5;
+
+const skeletonStyles = StyleSheet.create({
+  listContent: {
+    paddingVertical: 8
+  },
+  card: {
+    height: BOOKING_ITEM_HEIGHT,
+    marginHorizontal: 16,
+    marginVertical: 8,
+    borderRadius: 16,
+    backgroundColor: '#F4F4F8',
+    overflow: 'hidden'
+  },
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 20,
+    backgroundColor: '#EBECF5'
+  },
+  avatar: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: '#D7D9E6',
+    marginRight: 12
+  },
+  headerText: {
+    flex: 1,
+    gap: 8
+  },
+  lineLong: {
+    width: '70%',
+    height: 12,
+    borderRadius: 8,
+    backgroundColor: '#D7D9E6'
+  },
+  lineShort: {
+    width: '40%',
+    height: 10,
+    borderRadius: 8,
+    backgroundColor: '#D7D9E6'
+  },
+  badge: {
+    width: 60,
+    height: 20,
+    borderRadius: 12,
+    backgroundColor: '#D7D9E6'
+  },
+  body: {
+    flex: 1,
+    padding: 16,
+    gap: 12
+  },
+  row: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 8
+  },
+  pill: {
+    height: 18,
+    borderRadius: 10,
+    backgroundColor: '#E4E6F1'
+  },
+  buttonRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginTop: 16
+  },
+  button: {
+    flex: 1,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: '#E4E6F1',
+    marginHorizontal: 6
+  },
+  shimmer: {
+    position: 'absolute',
+    top: 0,
+    bottom: 0,
+    width: '40%',
+    backgroundColor: 'rgba(255, 255, 255, 0.25)',
+    opacity: 0.6
+  }
+});
+
+const MemoizedBookingItem = React.memo(BookingItem);
+
+const SkeletonBookingItem = React.memo(() => {
+  const shimmer = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    const loop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(shimmer, {
+          toValue: 1,
+          duration: 1200,
+          easing: Easing.linear,
+          useNativeDriver: true
+        }),
+        Animated.timing(shimmer, {
+          toValue: 0,
+          duration: 1200,
+          easing: Easing.linear,
+          useNativeDriver: true
+        })
+      ])
+    );
+
+    loop.start();
+    return () => loop.stop();
+  }, [shimmer]);
+
+  const translateX = shimmer.interpolate({
+    inputRange: [0, 1],
+    outputRange: [-150, 150]
+  });
+
+  return (
+    <View style={skeletonStyles.card}>
+      <View style={skeletonStyles.header}>
+        <View style={skeletonStyles.avatar} />
+        <View style={skeletonStyles.headerText}>
+          <View style={skeletonStyles.lineLong} />
+          <View style={skeletonStyles.lineShort} />
+        </View>
+        <View style={skeletonStyles.badge} />
+      </View>
+      <View style={skeletonStyles.body}>
+        <View style={skeletonStyles.row}>
+          <View style={[skeletonStyles.pill, { width: '55%' }]} />
+          <View style={[skeletonStyles.pill, { width: '35%' }]} />
+        </View>
+        <View style={[skeletonStyles.pill, { width: '80%' }]} />
+        <View style={[skeletonStyles.pill, { width: '60%' }]} />
+        <View style={skeletonStyles.buttonRow}>
+          <View style={skeletonStyles.button} />
+          <View style={skeletonStyles.button} />
+          <View style={skeletonStyles.button} />
+        </View>
+      </View>
+      <Animated.View
+        pointerEvents="none"
+        style={[skeletonStyles.shimmer, { transform: [{ translateX }] }]}
+      />
+    </View>
+  );
+});
 
 const BookingsTab = ({
   bookings,
@@ -159,7 +310,7 @@ const BookingsTab = ({
     }
   };
 
-  const renderStatsHeader = () => (
+  const renderStatsHeader = useCallback(() => (
     <View style={styles.bookingStatsContainer}>
       <View style={styles.statItem}>
         <Calendar size={20} color={colors.primary} />
@@ -182,9 +333,9 @@ const BookingsTab = ({
         <Text style={styles.statLabel}>Spent</Text>
       </View>
     </View>
-  );
+  ), [bookingStats.completed, bookingStats.confirmed, bookingStats.pending, bookingStats.total, bookingStats.totalSpent]);
 
-  const renderFilterTabs = () => {
+  const renderFilterTabs = useCallback(() => {
     const filterOptions = [
       { key: 'all', label: 'All', count: bookingStats.total },
       { key: 'upcoming', label: 'Upcoming', count: null },
@@ -205,10 +356,7 @@ const BookingsTab = ({
           return (
             <TouchableOpacity
               key={option.key}
-              style={[
-                styles.filterTab,
-                isActive && styles.activeFilterTab
-              ]}
+              style={[styles.filterTab, isActive && styles.activeFilterTab]}
               onPress={() => setBookingsFilter(option.key)}
               activeOpacity={0.7}
               accessibilityRole="button"
@@ -216,20 +364,14 @@ const BookingsTab = ({
               accessibilityState={{ selected: isActive }}
             >
               <Text
-                style={[
-                  styles.filterTabText,
-                  isActive && styles.activeFilterTabText
-                ]}
+                style={[styles.filterTabText, isActive && styles.activeFilterTabText]}
                 numberOfLines={1}
                 ellipsizeMode="tail"
               >
                 {option.label}
                 {option.count !== null && option.count > 0 && (
                   <Text
-                    style={[
-                      styles.filterTabCount,
-                      isActive && { color: colors.textInverse }
-                    ]}
+                    style={[styles.filterTabCount, isActive && { color: colors.textInverse }]}
                   >
                     {` (${option.count})`}
                   </Text>
@@ -240,9 +382,9 @@ const BookingsTab = ({
         })}
       </ScrollView>
     );
-  };
+  }, [bookingStats.completed, bookingStats.confirmed, bookingStats.pending, bookingStats.total, bookingsFilter, setBookingsFilter]);
 
-  const renderEmptyState = () => {
+  const renderEmptyState = useCallback(() => {
     const getEmptyMessage = () => {
       switch (bookingsFilter) {
         case 'upcoming':
@@ -265,10 +407,9 @@ const BookingsTab = ({
         <Calendar size={48} color={colors.textSecondary} style={styles.emptyIcon} />
         <Text style={styles.emptySectionTitle}>{getEmptyMessage()}</Text>
         <Text style={styles.emptySectionText}>
-          {bookingsFilter === 'all' 
+          {bookingsFilter === 'all'
             ? 'Start by booking a caregiver for your children'
-            : 'Check other tabs or create a new booking'
-          }
+            : 'Check other tabs or create a new booking'}
         </Text>
         {onCreateBooking && (
           <TouchableOpacity
@@ -281,13 +422,56 @@ const BookingsTab = ({
         )}
       </View>
     );
-  };
+  }, [bookingsFilter, onCreateBooking]);
+
+  const keyExtractor = useCallback((item, index) => item?._id || item?.id || `booking-${index}`, []);
+
+  const getItemLayout = useCallback((_, index) => ({
+    length: BOOKING_ITEM_HEIGHT,
+    offset: BOOKING_ITEM_HEIGHT * index,
+    index
+  }), []);
+
+  const renderBookingItem = useCallback(({ item }) => {
+    const caregiverData = item?.caregiverId || item?.caregiver || item?.caregiverProfile || item?.assignedCaregiver;
+
+    return (
+      <MemoizedBookingItem
+        booking={item}
+        user={caregiverData}
+        onCancelBooking={onCancelBooking}
+        onUploadPayment={onUploadPayment}
+        onViewBookingDetails={onViewBookingDetails}
+        onWriteReview={onWriteReview}
+        onMessageCaregiver={handleMessageCaregiver}
+        onCallCaregiver={handleCallCaregiver}
+      />
+    );
+  }, [handleCallCaregiver, handleMessageCaregiver, onCancelBooking, onUploadPayment, onViewBookingDetails, onWriteReview]);
+
+  const skeletonData = useMemo(
+    () => Array.from({ length: SKELETON_ITEMS }, (_, index) => `skeleton-${index}`),
+    []
+  );
 
   if (loading) {
     return (
-      <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color={colors.primary} />
-        <Text style={styles.loadingText}>Loading bookings...</Text>
+      <View style={[styles.bookingsContent, { flex: 1 }]}>
+        <View style={styles.bookingsHeader}>
+          <View style={styles.bookingsHeaderTop}>
+            <Text style={styles.bookingsTitle}>My Bookings</Text>
+          </View>
+          <ActivityIndicator size="small" color={colors.primary} style={{ marginTop: 12 }} />
+        </View>
+
+        <FlatList
+          data={skeletonData}
+          keyExtractor={(item) => item}
+          renderItem={() => <SkeletonBookingItem />}
+          contentContainerStyle={skeletonStyles.listContent}
+          showsVerticalScrollIndicator={false}
+          scrollEnabled={false}
+        />
       </View>
     );
   }
@@ -315,35 +499,13 @@ const BookingsTab = ({
       <FlatList
         style={{ flex: 1 }}
         data={filteredBookings}
-        keyExtractor={(item, index) => item._id || item.id || `booking-${index}`}
-        renderItem={({ item }) => {
-          // Extract caregiver data properly
-          const caregiverData = item?.caregiverId || item?.caregiver || item?.caregiverProfile || item?.assignedCaregiver;
-          
-          console.log('🔍 BookingsTab - Booking item:', {
-            bookingId: item?.id || item?._id,
-            caregiverData: caregiverData,
-            caregiverKeys: caregiverData ? Object.keys(caregiverData) : 'none'
-          });
-          
-          return (
-            <BookingItem
-              booking={item}
-              user={caregiverData}
-              onCancelBooking={onCancelBooking}
-              onUploadPayment={onUploadPayment}
-              onViewBookingDetails={onViewBookingDetails}
-              onWriteReview={onWriteReview}
-              onMessageCaregiver={handleMessageCaregiver}
-              onCallCaregiver={handleCallCaregiver}
-            />
-          );
-        }}
+        keyExtractor={keyExtractor}
+        renderItem={renderBookingItem}
         contentContainerStyle={[
           styles.bookingsList,
           filteredBookings.length === 0 && { flex: 1 }
         ]}
-        ListEmptyComponent={renderEmptyState()}
+        ListEmptyComponent={renderEmptyState}
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
@@ -352,7 +514,12 @@ const BookingsTab = ({
             tintColor={colors.primary}
           />
         }
-        showsVerticalScrollIndicator={false}
+        getItemLayout={getItemLayout}
+        initialNumToRender={6}
+        windowSize={10}
+        maxToRenderPerBatch={8}
+        updateCellsBatchingPeriod={120}
+        removeClippedSubviews
       />
     </View>
   );

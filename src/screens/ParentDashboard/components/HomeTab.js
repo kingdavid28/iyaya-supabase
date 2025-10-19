@@ -1,5 +1,5 @@
 import React, { useMemo, useState, useEffect } from 'react';
-import { View, Text, ScrollView, TouchableOpacity, RefreshControl, ActivityIndicator } from 'react-native';
+import { View, Text, ScrollView, TouchableOpacity, RefreshControl } from 'react-native';
 import { useTheme } from 'react-native-paper'; // Import useTheme
 import { styles } from '../../styles/ParentDashboard.styles';
 import QuickActions from './QuickActions';
@@ -7,6 +7,12 @@ import QuickActions from './QuickActions';
 
 import MobileProfileSection from './MobileProfileSection';
 import CaregiverCard from './CaregiverCard';
+import {
+  SkeletonCard,
+  SkeletonBlock,
+  SkeletonCircle,
+  SkeletonPill
+} from '../../../components/common/SkeletonPlaceholder';
 
 const HomeTab = ({ 
   bookings, 
@@ -47,10 +53,62 @@ const HomeTab = ({
 
   if (loading) {
     return (
-      <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#db2777" />
-        <Text style={styles.loadingText}>Loading...</Text>
-      </View>
+      <ScrollView contentContainerStyle={styles.homeSkeletonContainer}>
+        <SkeletonCard style={styles.homeSkeletonProfile}>
+          <View style={styles.homeSkeletonProfileContent}>
+            <SkeletonCircle size={64} />
+            <View style={styles.homeSkeletonProfileInfo}>
+              <SkeletonBlock width="60%" height={20} />
+              <SkeletonBlock width="40%" height={16} />
+              <SkeletonBlock width="50%" height={14} />
+            </View>
+          </View>
+        </SkeletonCard>
+
+        <SkeletonCard style={styles.homeSkeletonActions}>
+          <View style={styles.homeSkeletonActionRow}>
+            {Array.from({ length: 3 }).map((_, index) => (
+              <View key={`quick-skeleton-${index}`} style={styles.homeSkeletonActionItem}>
+                <SkeletonCircle size={48} />
+                <SkeletonBlock width="70%" height={12} />
+              </View>
+            ))}
+          </View>
+        </SkeletonCard>
+
+        <SkeletonCard style={styles.homeSkeletonSection}>
+          <SkeletonBlock width="50%" height={18} style={styles.homeSkeletonSectionTitle} />
+          <View style={styles.homeSkeletonChildrenList}>
+            {Array.from({ length: 3 }).map((_, index) => (
+              <View key={`child-skeleton-${index}`} style={styles.homeSkeletonChildCard}>
+                <SkeletonCircle size={40} />
+                <View style={styles.homeSkeletonChildInfo}>
+                  <SkeletonBlock width="60%" height={16} />
+                  <SkeletonBlock width="45%" height={14} />
+                  <SkeletonPill width="35%" height={12} />
+                </View>
+              </View>
+            ))}
+          </View>
+        </SkeletonCard>
+
+        <SkeletonCard style={styles.homeSkeletonSection}>
+          <SkeletonBlock width="60%" height={18} style={styles.homeSkeletonSectionTitle} />
+          <View style={styles.homeSkeletonCaregivers}>
+            {Array.from({ length: 2 }).map((_, index) => (
+              <View key={`caregiver-skeleton-${index}`} style={styles.homeSkeletonCaregiverCard}>
+                <SkeletonCircle size={48} />
+                <View style={styles.homeSkeletonCaregiverInfo}>
+                  <SkeletonBlock width="70%" height={16} />
+                  <SkeletonBlock width="50%" height={14} />
+                  <SkeletonPill width="45%" height={12} />
+                </View>
+                <SkeletonPill width="30%" height={14} />
+              </View>
+            ))}
+          </View>
+        </SkeletonCard>
+      </ScrollView>
     );
   }
 

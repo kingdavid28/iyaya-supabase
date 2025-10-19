@@ -1,4 +1,5 @@
 import { SupabaseBase, supabase } from './base'
+import { getCachedOrFetch, invalidateCache } from './cache'
 
 export class MessagingService extends SupabaseBase {
   async getOrCreateConversation(participant1, participant2) {
@@ -50,30 +51,36 @@ export class MessagingService extends SupabaseBase {
         throw new Error('Both participant IDs are required for conversation')
       }
       
-      let { data, error } = await supabase
-        .from('conversations')
-        .select('*')
-        .or(`and(participant_1.eq.${participant1},participant_2.eq.${participant2}),and(participant_1.eq.${participant2},participant_2.eq.${participant1})`)
+      const cacheKey = `conversations:${[participant1, participant2].sort().join('-')}`
+      const conversation = await getCachedOrFetch(cacheKey, async () => {
+        const { data, error } = await supabase
+          .from('conversations')
+          .select('*')
+          .or(`and(participant_1.eq.${participant1},participant_2.eq.${participant2}),and(participant_1.eq.${participant2},participant_2.eq.${participant1})`)
 
-      if (error) throw error
-      
-      if (data && data.length > 0) {
-        return data[0]
-      }
+        if (error) throw error
 
-      const { data: newConversation, error: createError } = await supabase
-        .from('conversations')
-        .insert([{
-          participant_1: participant1,
-          participant_2: participant2,
-          created_at: new Date().toISOString(),
-          last_message_at: new Date().toISOString()
-        }])
-        .select()
-        .single()
+        if (data && data.length > 0) {
+          return data[0]
+        }
 
-      if (createError) throw createError
-      return newConversation
+        const { data: newConversation, error: createError } = await supabase
+          .from('conversations')
+          .insert([{
+            participant_1: participant1,
+            participant_2: participant2,
+            created_at: new Date().toISOString(),
+            last_message_at: new Date().toISOString()
+          }])
+          .select()
+          .single()
+
+        if (createError) throw createError
+        invalidateCache('conversations:')
+        invalidateCache('messages:')
+        return newConversation
+      }, 30 * 1000)
+      return conversation
     } catch (error) {
       return this._handleError('getOrCreateConversation', error)
     }
@@ -82,33 +89,32 @@ export class MessagingService extends SupabaseBase {
   async getConversations(userId) {
     try {
       this._validateId(userId, 'User ID')
-      
-      const { data, error } = await supabase
-        .from('conversations')
-        .select('*')
-        .or(`participant_1.eq.${userId},participant_2.eq.${userId}`)
-        .order('last_message_at', { ascending: false })
+      const cacheKey = `conversations:${userId}`
+      return await getCachedOrFetch(cacheKey, async () => {
+        const { data, error } = await supabase
+          .from('conversations')
+          .select('*')
+          .or(`participant_1.eq.${userId},participant_2.eq.${userId}`)
+          .order('last_message_at', { ascending: false })
 
-      if (error) throw error
-      
-      // Get user details for other participants
-      const conversations = await Promise.all((data || []).map(async (conv) => {
-        const otherParticipantId = conv.participant_1 === userId ? conv.participant_2 : conv.participant_1
+        if (error) throw error
         
-        // Fetch other participant's profile
-        const { data: otherUser } = await supabase
-          .from('users')
-          .select('id, name, profile_image')
-          .eq('id', otherParticipantId)
-          .single()
+        const conversations = await Promise.all((data || []).map(async (conv) => {
+          const otherParticipantId = conv.participant_1 === userId ? conv.participant_2 : conv.participant_1
+          const { data: otherUser } = await supabase
+            .from('users')
+            .select('id, name, profile_image')
+            .eq('id', otherParticipantId)
+            .single()
+          
+          return {
+            ...conv,
+            otherParticipant: otherUser || { id: otherParticipantId, name: 'User', profile_image: null }
+          }
+        }))
         
-        return {
-          ...conv,
-          otherParticipant: otherUser || { id: otherParticipantId, name: 'User', profile_image: null }
-        }
-      }))
-      
-      return conversations
+        return conversations
+      }, 30 * 1000)
     } catch (error) {
       return this._handleError('getConversations', error)
     }
@@ -179,6 +185,8 @@ export class MessagingService extends SupabaseBase {
         .update({ last_message_at: new Date().toISOString() })
         .eq('id', conversationId)
 
+      invalidateCache('conversations:')
+      invalidateCache(`messages:${conversationId}`)
       return data
     } catch (error) {
       return this._handleError('sendMessage', error)
@@ -203,15 +211,18 @@ export class MessagingService extends SupabaseBase {
       
       this._validateId(conversationId, 'Conversation ID')
       
-      const { data, error } = await supabase
-        .from('messages')
-        .select('*')
-        .eq('conversation_id', conversationId)
-        .order('created_at', { ascending: true })
-        .limit(limit)
+      const cacheKey = `messages:${conversationId}:${limit}`
+      return await getCachedOrFetch(cacheKey, async () => {
+        const { data, error } = await supabase
+          .from('messages')
+          .select('*')
+          .eq('conversation_id', conversationId)
+          .order('created_at', { ascending: true })
+          .limit(limit)
 
-      if (error) throw error
-      return data || []
+        if (error) throw error
+        return data || []
+      }, 15 * 1000)
     } catch (error) {
       return this._handleError('getMessages', error)
     }
@@ -252,6 +263,7 @@ export class MessagingService extends SupabaseBase {
           if (error) console.warn('Error marking messages as read:', error)
         })
 
+      invalidateCache(`messages:${conversationId}`)
       return { success: true }
     } catch (error) {
       console.warn('markMessagesAsRead error:', error.message)

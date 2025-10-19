@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { View, Alert, Linking } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
-import * as FileSystem from 'expo-file-system/legacy';
+import * as FileSystem from 'expo-file-system';
+import { processImageForUpload } from '../../utils/imageUtils';
 import { usePrivacy } from '../../components/features/privacy/PrivacyManager';
 
 // Core imports
@@ -830,11 +831,23 @@ const ParentDashboard = () => {
       // Handle image upload if provided
       if (imageUri) {
         try {
-          const base64Image = await FileSystem.readAsStringAsync(imageUri, {
-            encoding: 'base64',
-          });
+          let uploadPayload;
+          try {
+            const processed = await processImageForUpload(imageUri, {
+              maxWidth: 1024,
+              maxHeight: 1024,
+              compress: 0.8,
+            });
+            uploadPayload = processed.base64;
+          } catch (processingError) {
+            console.warn('Failed to process profile image before upload, falling back to original.', processingError);
+            const base64Image = await FileSystem.readAsStringAsync(imageUri, {
+              encoding: 'base64',
+            });
+            uploadPayload = `data:image/jpeg;base64,${base64Image}`;
+          }
 
-          const imageResult = await supabaseService.uploadProfileImage(user.id, base64Image);
+          const imageResult = await supabaseService.uploadProfileImage(user.id, uploadPayload);
           const imageUrl = imageResult?.data?.url || imageResult?.url || imageResult?.data?.profileImageUrl;
 
           if (imageUrl) {
@@ -960,7 +973,19 @@ const ParentDashboard = () => {
                 console.warn('⚠️ ParentDashboard - Booking not found for ID:', bookingId);
               }
             }}
-            onWriteReview={(bookingId, caregiverId) => navigation.navigate('Review', { bookingId, caregiverId })}
+            onWriteReview={({ bookingId, caregiverId, caregiverName, booking }) => {
+              if (!caregiverId) {
+                Alert.alert('Missing caregiver information', 'We could not identify the caregiver for this booking.');
+                return;
+              }
+
+              navigation.navigate('CaregiverReviews', {
+                caregiverId,
+                bookingId,
+                caregiverName: caregiverName || 'Caregiver',
+                booking
+              });
+            }}
             onCreateBooking={() => {
               setSelectedCaregiver(createCaregiverObject());
               toggleModal('booking', true);

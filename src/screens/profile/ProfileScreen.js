@@ -7,6 +7,10 @@ import { authAPI } from '../../services';
 import ProfileForm from '../../components/forms/ProfileForm';
 import { useAuth } from '../../contexts/AuthContext';
 import { tokenManager } from '../../utils/tokenManager';
+import {
+  ProfileHeaderSkeleton,
+  ProfileCardSkeleton
+} from '../../components/profile/ProfileSkeletons';
 
 const ProfileScreen = () => {
   const theme = useTheme();
@@ -111,9 +115,15 @@ const ProfileScreen = () => {
 
   if (loading && !initialValues.firstName) {
     return (
-      <View style={[styles.loadingContainer, { backgroundColor: theme.colors.background }]}>
-        <ActivityIndicator size="large" color={theme.colors.primary} />
-      </View>
+      <ScrollView
+        style={styles.skeletonContainer}
+        contentContainerStyle={styles.skeletonContent}
+      >
+        <ProfileHeaderSkeleton />
+        <ProfileCardSkeleton lines={4} />
+        <ProfileCardSkeleton lines={5} />
+        <ProfileCardSkeleton lines={2} />
+      </ScrollView>
     );
   }
 

@@ -1,4 +1,5 @@
 import { SupabaseBase, supabase } from './base'
+import { getCachedOrFetch, invalidateCache } from './cache'
 
 export class BookingService extends SupabaseBase {
   async createBooking(bookingData) {
@@ -49,6 +50,7 @@ export class BookingService extends SupabaseBase {
       if (error) throw error
       
       console.log('✅ Booking created successfully:', data)
+      invalidateCache('bookings:')
       return data
     } catch (error) {
       return this._handleError('createBooking', error)
@@ -63,79 +65,82 @@ export class BookingService extends SupabaseBase {
         throw new Error('Role must be either "parent" or "caregiver"')
       }
 
-      let query = supabase
-        .from('bookings')
-        .select(`
-          *,
-          parent:users!parent_id(
-            id,
-            name,
-            email,
-            phone,
-            profile_image
-          ),
-          caregiver:users!caregiver_id(
-            id,
-            name,
-            email,
-            phone,
-            profile_image
-          )
-        `)
+      const cacheKey = `bookings:${role}:${userId}`
+      return await getCachedOrFetch(cacheKey, async () => {
+        let query = supabase
+          .from('bookings')
+          .select(`
+            *,
+            parent:users!parent_id(
+              id,
+              name,
+              email,
+              phone,
+              profile_image
+            ),
+            caregiver:users!caregiver_id(
+              id,
+              name,
+              email,
+              phone,
+              profile_image
+            )
+          `)
 
-      if (role === 'parent') {
-        query = query.eq('parent_id', userId)
-      } else {
-        query = query.eq('caregiver_id', userId)
-      }
+        if (role === 'parent') {
+          query = query.eq('parent_id', userId)
+        } else {
+          query = query.eq('caregiver_id', userId)
+        }
 
-      query = query.order('created_at', { ascending: false })
-      
-      const { data, error } = await query
-      if (error) throw error
-      
-      const transformedData = data?.map(booking => ({
-        ...booking,
-        caregiverId: booking.caregiver ? {
-          _id: booking.caregiver.id || booking.caregiver_id,
-          id: booking.caregiver.id || booking.caregiver_id,
-          name: booking.caregiver_name || booking.caregiver?.name || 'Unknown Caregiver',
-          email: booking.caregiver?.email,
-          profileImage: booking.caregiver?.profile_image,
-          avatar: booking.caregiver?.profile_image
-        } : {
-          _id: booking.caregiver_id,
-          id: booking.caregiver_id,
-          name: booking.caregiver_name || 'Unknown Caregiver',
-          email: null,
-          profileImage: null,
-          avatar: null
-        },
-        clientId: booking.parent ? {
-          _id: booking.parent.id || booking.parent_id,
-          id: booking.parent.id || booking.parent_id,
-          name: booking.parent?.name || 'Unknown Parent',
-          email: booking.parent?.email
-        } : {
-          _id: booking.parent_id,
-          id: booking.parent_id,
-          name: 'Unknown Parent',
-          email: null
-        },
-        parentId: booking.parent_id,
-        startTime: booking.start_time,
-        endTime: booking.end_time,
-        hourlyRate: booking.hourly_rate,
-        totalAmount: booking.total_amount,
-        contactPhone: booking.contact_phone,
-        selectedChildren: booking.selected_children,
-        specialInstructions: booking.special_instructions,
-        emergencyContact: booking.emergency_contact,
-        time: booking.start_time && booking.end_time ? `${booking.start_time} - ${booking.end_time}` : '',
-        family: booking.parent?.name || 'Unknown Family'
-      })) || []
-      
-      return transformedData
+        query = query.order('created_at', { ascending: false })
+        
+        const { data, error } = await query
+        if (error) throw error
+        
+        const transformedData = data?.map(booking => ({
+          ...booking,
+          caregiverId: booking.caregiver ? {
+            _id: booking.caregiver.id || booking.caregiver_id,
+            id: booking.caregiver.id || booking.caregiver_id,
+            name: booking.caregiver_name || booking.caregiver?.name || 'Unknown Caregiver',
+            email: booking.caregiver?.email,
+            profileImage: booking.caregiver?.profile_image,
+            avatar: booking.caregiver?.profile_image
+          } : {
+            _id: booking.caregiver_id,
+            id: booking.caregiver_id,
+            name: booking.caregiver_name || 'Unknown Caregiver',
+            email: null,
+            profileImage: null,
+            avatar: null
+          },
+          clientId: booking.parent ? {
+            _id: booking.parent.id || booking.parent_id,
+            id: booking.parent.id || booking.parent_id,
+            name: booking.parent?.name || 'Unknown Parent',
+            email: booking.parent?.email
+          } : {
+            _id: booking.parent_id,
+            id: booking.parent_id,
+            name: 'Unknown Parent',
+            email: null
+          },
+          parentId: booking.parent_id,
+          startTime: booking.start_time,
+          endTime: booking.end_time,
+          hourlyRate: booking.hourly_rate,
+          totalAmount: booking.total_amount,
+          contactPhone: booking.contact_phone,
+          selectedChildren: booking.selected_children,
+          specialInstructions: booking.special_instructions,
+          emergencyContact: booking.emergency_contact,
+          time: booking.start_time && booking.end_time ? `${booking.start_time} - ${booking.end_time}` : '',
+          family: booking.parent?.name || 'Unknown Family'
+        })) || []
+        
+        return transformedData
+      }, 30 * 1000)
     } catch (error) {
       return this._handleError('getMyBookings', error)
     }
@@ -220,6 +225,7 @@ export class BookingService extends SupabaseBase {
         .single()
       
       if (error) throw error
+      invalidateCache('bookings:')
       return data
     } catch (error) {
       return this._handleError('updateBookingStatus', error)

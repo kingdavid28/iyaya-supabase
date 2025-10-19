@@ -1,9 +1,15 @@
 import React, { useState, useMemo } from 'react';
-import { View, Text, TouchableOpacity, ScrollView, RefreshControl, ActivityIndicator, Alert } from 'react-native';
+import { View, Text, TouchableOpacity, ScrollView, RefreshControl, Alert } from 'react-native';
 import { Plus, Briefcase } from 'lucide-react-native';
 import { styles, colors } from '../../styles/ParentDashboard.styles';
 import JobPostingModal from '../modals/JobPostingModal';
 import JobCard from './JobCard';
+import {
+  SkeletonCard,
+  SkeletonBlock,
+  SkeletonCircle,
+  SkeletonPill
+} from '../../../components/common/SkeletonPlaceholder';
 
 const JobsTab = ({
   jobs = [],
@@ -49,10 +55,39 @@ const JobsTab = ({
 
   if (loading) {
     return (
-      <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#db2777" />
-        <Text style={styles.loadingText}>Loading jobs...</Text>
-      </View>
+      <ScrollView contentContainerStyle={styles.jobsSkeletonContainer}>
+        <SkeletonCard style={styles.jobsSkeletonHeader}>
+          <View style={styles.jobsSkeletonHeaderContent}>
+            <SkeletonBlock width="35%" height={20} />
+            <SkeletonPill width="28%" height={32} />
+          </View>
+        </SkeletonCard>
+
+        <SkeletonCard style={styles.jobsSkeletonFilters}>
+          <View style={styles.jobsSkeletonFilterRow}>
+            {Array.from({ length: 3 }).map((_, index) => (
+              <SkeletonPill key={`filter-skeleton-${index}`} width="30%" height={32} />
+            ))}
+          </View>
+        </SkeletonCard>
+
+        {Array.from({ length: 4 }).map((_, index) => (
+          <SkeletonCard key={`job-skeleton-${index}`} style={styles.jobsSkeletonCard}>
+            <View style={styles.jobsSkeletonRow}>
+              <SkeletonCircle size={44} style={styles.jobsSkeletonIcon} />
+              <View style={styles.jobsSkeletonBody}>
+                <SkeletonBlock width="60%" height={18} />
+                <SkeletonBlock width="75%" height={14} />
+                <SkeletonPill width="35%" height={12} />
+              </View>
+            </View>
+            <View style={styles.jobsSkeletonFooter}>
+              <SkeletonPill width="28%" height={14} />
+              <SkeletonPill width="22%" height={14} />
+            </View>
+          </SkeletonCard>
+        ))}
+      </ScrollView>
     );
   }
 

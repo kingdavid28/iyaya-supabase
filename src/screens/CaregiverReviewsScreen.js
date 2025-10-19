@@ -1,53 +1,47 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   View,
   Text,
   TextInput,
   TouchableOpacity,
-  FlatList,
   StyleSheet,
-  Alert
+  Alert,
+  ActivityIndicator
 } from 'react-native';
-import { supabase } from '../config/supabase';
-import { StarRatingInput, StarRatingDisplay } from 'react-native-star-rating-widget';
-
-const ReviewItem = ({ review }) => (
-  <View style={styles.reviewContainer}>
-    <StarRatingDisplay
-      rating={review.rating}
-      starSize={20}
-      color="#FFD700"
-    />
-    {review.comment && (
-      <Text style={styles.comment}>{review.comment}</Text>
-    )}
-    <Text style={styles.timestamp}>
-      {new Date(review.created_at).toLocaleDateString()}
-    </Text>
-  </View>
-);
+import StarRating, { StarRatingDisplay } from 'react-native-star-rating-widget';
+import { useAuth } from '../contexts/AuthContext';
+import { reviewService } from '../services';
+import ReviewList from '../components/features/profile/ReviewList';
+import { normalizeCaregiverReviews } from '../utils/reviews';
 
 const CaregiverReviewsScreen = ({ route }) => {
-  const { userId, caregiverId } = route.params;
+  const { caregiverId, bookingId, caregiverName: caregiverNameFromRoute } = route.params || {};
+  const { user } = useAuth();
   const [reviews, setReviews] = useState([]);
+  const [loading, setLoading] = useState(true);
   const [showReviewForm, setShowReviewForm] = useState(false);
   const [rating, setRating] = useState(0);
   const [comment, setComment] = useState('');
+  const [submitting, setSubmitting] = useState(false);
 
   // Fetch reviews
   useEffect(() => {
     const fetchReviews = async () => {
-      try {
-        const { data, error } = await supabase
-          .from('reviews')
-          .select('*')
-          .eq('caregiver_id', caregiverId)
-          .order('created_at', { ascending: false });
+      if (!caregiverId) {
+        setReviews([]);
+        setLoading(false);
+        return;
+      }
 
-        if (error) throw error;
-        setReviews(data || []);
+      try {
+        setLoading(true);
+        const data = await reviewService.getReviews(caregiverId, 50);
+        setReviews(normalizeCaregiverReviews(data));
       } catch (error) {
         console.error('Error fetching reviews:', error);
+        Alert.alert('Error', 'Failed to load reviews. Please try again.');
+      } finally {
+        setLoading(false);
       }
     };
 
@@ -61,90 +55,126 @@ const CaregiverReviewsScreen = ({ route }) => {
     }
 
     try {
-      const { error } = await supabase
-        .from('reviews')
-        .insert({
-          caregiver_id: caregiverId,
-          parent_id: userId,
-          rating: rating,
-          comment: comment
-        });
+      if (!user?.id) {
+        Alert.alert('Authentication required', 'Please sign in again to submit a review.');
+        return;
+      }
 
-      if (error) throw error;
+      if (!caregiverId) {
+        Alert.alert('Missing caregiver', 'Unable to identify the caregiver to review.');
+        return;
+      }
+
+      setSubmitting(true);
+
+      await reviewService.createReview({
+        reviewer_id: user.id,
+        reviewee_id: caregiverId,
+        booking_id: bookingId || null,
+        rating,
+        comment: comment.trim()
+      });
 
       setRating(0);
       setComment('');
       setShowReviewForm(false);
       Alert.alert('Success', 'Review submitted successfully');
-      
-      // Refresh reviews
-      const { data } = await supabase
-        .from('reviews')
-        .select('*')
-        .eq('caregiver_id', caregiverId)
-        .order('created_at', { ascending: false });
-      setReviews(data || []);
+
+      const data = await reviewService.getReviews(caregiverId, 50);
+      setReviews(normalizeCaregiverReviews(data));
     } catch (error) {
-      Alert.alert('Error', 'Failed to submit review');
       console.error('Error submitting review:', error);
+      Alert.alert('Error', error?.message || 'Failed to submit review');
+    } finally {
+      setSubmitting(false);
     }
   };
 
-  const renderReviewItem = ({ item }) => (
-    <ReviewItem review={item} />
-  );
+  const averageRating = useMemo(() => {
+    if (!reviews.length) return 0;
+    const total = reviews.reduce((sum, review) => sum + review.rating, 0);
+    return total / reviews.length;
+  }, [reviews]);
 
   return (
     <View style={styles.container}>
+      <View style={styles.headerSection}>
+        <Text style={styles.headerTitle}>{caregiverNameFromRoute || 'Caregiver Reviews'}</Text>
+        <View style={styles.ratingSummary}>
+          <StarRatingDisplay rating={averageRating} starSize={24} color="#FFD700" />
+          <Text style={styles.ratingText}>{averageRating.toFixed(1)} • {reviews.length} reviews</Text>
+        </View>
+      </View>
+
       {!showReviewForm ? (
-        <TouchableOpacity 
+        <TouchableOpacity
           style={styles.addReviewButton}
           onPress={() => setShowReviewForm(true)}
+          disabled={submitting}
         >
           <Text style={styles.addReviewButtonText}>Add Review</Text>
         </TouchableOpacity>
       ) : (
         <View style={styles.reviewForm}>
-          <StarRatingInput
+          <StarRating
             rating={rating}
             onChange={setRating}
             starSize={30}
+            color="#FFD700"
+            animationConfig={{ scale: 1.1 }}
           />
           <TextInput
             style={styles.commentInput}
             value={comment}
             onChangeText={setComment}
-            placeholder="Write your review..."
+            placeholder="Share your experience..."
             multiline
             numberOfLines={4}
           />
           <View style={styles.reviewButtons}>
-            <TouchableOpacity 
+            <TouchableOpacity
               style={styles.cancelButton}
-              onPress={() => setShowReviewForm(false)}
+              onPress={() => {
+                setShowReviewForm(false);
+                setComment('');
+                setRating(0);
+              }}
+              disabled={submitting}
             >
               <Text style={styles.cancelButtonText}>Cancel</Text>
             </TouchableOpacity>
-            <TouchableOpacity 
+            <TouchableOpacity
               style={styles.submitButton}
               onPress={submitReview}
+              disabled={submitting}
             >
-              <Text style={styles.submitButtonText}>Submit</Text>
+              {submitting ? (
+                <ActivityIndicator color="#FFFFFF" />
+              ) : (
+                <Text style={styles.submitButtonText}>Submit</Text>
+              )}
             </TouchableOpacity>
           </View>
         </View>
       )}
-      <FlatList
-        data={reviews}
-        renderItem={renderReviewItem}
-        keyExtractor={(item) => item.id}
-        style={styles.list}
-        ListEmptyComponent={
-          <View style={styles.emptyContainer}>
-            <Text style={styles.emptyText}>No reviews yet</Text>
-          </View>
-        }
-      />
+
+      {loading ? (
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color="#4CAF50" />
+        </View>
+      ) : (
+        <View style={styles.list}>
+          <ReviewList
+            reviews={reviews}
+            currentUserId={user?.id}
+            ListEmptyComponent={
+              <View style={styles.emptyContainer}>
+                <Text style={styles.emptyText}>No reviews yet</Text>
+              </View>
+            }
+          />
+        </View>
+      )}
     </View>
   );
 };
@@ -155,8 +185,23 @@ const styles = StyleSheet.create({
     backgroundColor: '#F5F5F5',
     padding: 16,
   },
-  list: {
-    flex: 1,
+  headerSection: {
+    marginBottom: 16,
+  },
+  headerTitle: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: '#111827',
+    marginBottom: 8,
+  },
+  ratingSummary: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  ratingText: {
+    fontSize: 16,
+    color: '#374151',
   },
   emptyContainer: {
     flex: 1,
@@ -222,23 +267,10 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontWeight: 'bold',
   },
-  reviewContainer: {
-    backgroundColor: '#FFFFFF',
-    padding: 16,
-    borderRadius: 8,
-    marginBottom: 12,
-    elevation: 1,
-  },
-  comment: {
-    fontSize: 14,
-    marginVertical: 8,
-    color: '#333',
-  },
-  timestamp: {
-    fontSize: 12,
-    color: '#888',
-    alignSelf: 'flex-end',
-    marginTop: 8,
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
 });
 

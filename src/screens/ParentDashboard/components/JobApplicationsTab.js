@@ -1,9 +1,15 @@
 import React, { useMemo, useState } from 'react';
-import { View, Text, FlatList, TouchableOpacity, StyleSheet, RefreshControl, ActivityIndicator, Image, Alert, Linking } from 'react-native';
+import { View, Text, FlatList, TouchableOpacity, StyleSheet, RefreshControl, Image, Alert, Linking, ScrollView } from 'react-native';
 import { formatDistanceToNow } from 'date-fns';
 import { User, Briefcase, MapPin, Clock, MessageCircle, CheckCircle, XCircle } from 'lucide-react-native';
 import { colors } from '../../styles/ParentDashboard.styles';
 import { getProfileImageUrl } from '../../../utils/imageUtils';
+import {
+  SkeletonCard,
+  SkeletonBlock,
+  SkeletonCircle,
+  SkeletonPill
+} from '../../../components/common/SkeletonPlaceholder';
 
 const statusMeta = {
   pending: { label: 'Pending', color: colors.info, background: '#EEF2FF' },
@@ -208,10 +214,47 @@ const JobApplicationsTab = ({
 
   if (loading && sortedApplications.length === 0) {
     return (
-      <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color={colors.primary} />
-        <Text style={styles.loadingText}>Loading applications...</Text>
-      </View>
+      <ScrollView contentContainerStyle={styles.skeletonContainer}>
+        <SkeletonCard style={styles.skeletonHeader}>
+          <View style={styles.skeletonHeaderContent}>
+            <SkeletonBlock width="45%" height={20} />
+            <View style={styles.skeletonBadgeRow}>
+              <SkeletonPill width="28%" height={32} />
+              <SkeletonPill width="28%" height={32} />
+              <SkeletonPill width="28%" height={32} />
+            </View>
+          </View>
+        </SkeletonCard>
+
+        {Array.from({ length: 4 }).map((_, index) => (
+          <SkeletonCard key={`application-skeleton-${index}`} style={styles.skeletonCard}>
+            <View style={styles.skeletonJobRow}>
+              <SkeletonCircle size={40} />
+              <View style={styles.skeletonJobInfo}>
+                <SkeletonBlock width="65%" height={18} />
+                <SkeletonBlock width="45%" height={14} />
+              </View>
+              <SkeletonPill width="22%" height={18} />
+            </View>
+
+            <View style={styles.skeletonCaregiverRow}>
+              <SkeletonCircle size={36} />
+              <View style={styles.skeletonCaregiverInfo}>
+                <SkeletonBlock width="55%" height={16} />
+                <SkeletonPill width="40%" height={12} />
+              </View>
+            </View>
+
+            <SkeletonBlock width="90%" height={14} style={styles.skeletonMessageLine} />
+            <SkeletonBlock width="80%" height={14} />
+
+            <View style={styles.skeletonActionsRow}>
+              <SkeletonPill width="40%" height={32} />
+              <SkeletonPill width="36%" height={32} />
+            </View>
+          </SkeletonCard>
+        ))}
+      </ScrollView>
     );
   }
 
@@ -273,16 +316,51 @@ const styles = StyleSheet.create({
   wrapper: {
     flex: 1
   },
-  loadingContainer: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 40
+  skeletonContainer: {
+    padding: 20,
+    gap: 16
   },
-  loadingText: {
-    marginTop: 12,
-    color: colors.textSecondary,
-    fontSize: 14
+  skeletonHeader: {
+    padding: 16
+  },
+  skeletonHeaderContent: {
+    gap: 16
+  },
+  skeletonBadgeRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between'
+  },
+  skeletonCard: {
+    padding: 20
+  },
+  skeletonJobRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 16
+  },
+  skeletonJobInfo: {
+    flex: 1,
+    marginLeft: 12,
+    gap: 8
+  },
+  skeletonCaregiverRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    marginBottom: 16
+  },
+  skeletonCaregiverInfo: {
+    flex: 1,
+    gap: 6
+  },
+  skeletonMessageLine: {
+    marginBottom: 8
+  },
+  skeletonActionsRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginTop: 16
   },
   listContent: {
     paddingHorizontal: 20,
