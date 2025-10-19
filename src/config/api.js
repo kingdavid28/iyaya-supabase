@@ -11,6 +11,7 @@ import {
   getCurrentAPIURL,
   getCurrentSocketURL
 } from '../services';
+import { supabase } from './supabase';
 import { tokenManager } from '../utils/tokenManager';
 
 // Export for backward compatibility
@@ -195,11 +196,23 @@ export const privacyAPI = {
 export const uploadUtility = {
   // Main upload method with fallbacks
   uploadWithFallbacks: async (data, options = {}) => {
-    const fallbacks = [
-      () => uploadsAPI.uploadProfileImage(data),
-      () => uploadsAPI.uploadImage(data),
-      () => directUploadAPI.uploadImage(data, options)
-    ];
+    const fallbacks = [];
+
+    if (typeof uploadsAPI.uploadProfileImage === 'function') {
+      fallbacks.push(() => uploadsAPI.uploadProfileImage(data));
+    }
+
+    if (typeof uploadsAPI.uploadImage === 'function') {
+      fallbacks.push(() => uploadsAPI.uploadImage(data));
+    }
+
+    if (typeof directUploadAPI.uploadImage === 'function') {
+      fallbacks.push(() => directUploadAPI.uploadImage(data, options));
+    }
+
+    if (fallbacks.length === 0) {
+      throw new Error('No available upload methods');
+    }
 
     for (let i = 0; i < fallbacks.length; i++) {
       try {

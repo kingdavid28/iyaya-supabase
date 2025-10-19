@@ -13,8 +13,10 @@ export class NotificationService extends SupabaseBase {
         return null
       }
       
+      const resolvedUserId = await this._ensureUserId(notificationData.user_id, 'Notification user ID')
+
       const dbNotificationData = {
-        user_id: notificationData.user_id,
+        user_id: resolvedUserId,
         type: notificationData.type,
         title: notificationData.title,
         message: notificationData.message,
@@ -39,7 +41,7 @@ export class NotificationService extends SupabaseBase {
       }
       
       console.log('✅ Notification created:', data)
-      invalidateCache(`notification-counts:${notificationData.user_id}`)
+      invalidateCache(`notification-counts:${resolvedUserId}`)
       return data
     } catch (error) {
       return this._handleError('createNotification', error)
@@ -48,12 +50,12 @@ export class NotificationService extends SupabaseBase {
 
   async getNotifications(userId, limit = 50) {
     try {
-      this._validateId(userId, 'User ID')
-      
+      const resolvedUserId = await this._ensureUserId(userId, 'User ID')
+
       const { data, error } = await supabase
         .from('notifications')
         .select('*')
-        .eq('user_id', userId)
+        .eq('user_id', resolvedUserId)
         .order('created_at', { ascending: false })
         .limit(limit)
       
@@ -66,12 +68,12 @@ export class NotificationService extends SupabaseBase {
 
   async getUnreadNotificationCount(userId) {
     try {
-      this._validateId(userId, 'User ID')
-      
+      const resolvedUserId = await this._ensureUserId(userId, 'User ID')
+
       const { count, error } = await supabase
         .from('notifications')
         .select('*', { count: 'exact', head: true })
-        .eq('user_id', userId)
+        .eq('user_id', resolvedUserId)
         .eq('read', false)
       
       if (error) throw error
@@ -84,13 +86,13 @@ export class NotificationService extends SupabaseBase {
 
   async getNotificationCountsByType(userId) {
     try {
-      this._validateId(userId, 'User ID')
-      
-      const cacheKey = `notification-counts:${userId}`
+      const resolvedUserId = await this._ensureUserId(userId, 'User ID')
+
+      const cacheKey = `notification-counts:${resolvedUserId}`
       return await getCachedOrFetch(cacheKey, async () => {
         try {
           const { data, error } = await supabase
-            .rpc('notification_counts_by_type', { user_id_input: userId })
+            .rpc('notification_counts_by_type', { user_id_input: resolvedUserId })
 
           if (!error && data) {
             return {
@@ -109,7 +111,7 @@ export class NotificationService extends SupabaseBase {
         const { data, error } = await supabase
           .from('notifications')
           .select('type')
-          .eq('user_id', userId)
+          .eq('user_id', resolvedUserId)
           .eq('read', false)
 
         if (error) throw error
@@ -157,7 +159,7 @@ export class NotificationService extends SupabaseBase {
   async markNotificationAsRead(notificationId) {
     try {
       this._validateId(notificationId, 'Notification ID')
-      
+
       const { data, error } = await supabase
         .from('notifications')
         .update({ 
@@ -179,19 +181,19 @@ export class NotificationService extends SupabaseBase {
 
   async markAllNotificationsAsRead(userId) {
     try {
-      this._validateId(userId, 'User ID')
-      
+      const resolvedUserId = await this._ensureUserId(userId, 'User ID')
+
       const { data, error } = await supabase
         .from('notifications')
         .update({ 
           read: true
         })
-        .eq('user_id', userId)
+        .eq('user_id', resolvedUserId)
         .eq('read', false)
         .select()
       
       if (error) throw error
-      invalidateCache(`notification-counts:${userId}`)
+      invalidateCache(`notification-counts:${resolvedUserId}`)
       return data || []
     } catch (error) {
       return this._handleError('markAllNotificationsAsRead', error)
@@ -199,20 +201,21 @@ export class NotificationService extends SupabaseBase {
   }
 
   subscribeToNotifications(userId, callback) {
-    this._validateId(userId, 'User ID')
+    const resolvedUserId = String(userId).trim()
+    this._validateId(resolvedUserId, 'User ID')
     return supabase
-      .channel(`notifications:${userId}`)
+      .channel(`notifications:${resolvedUserId}`)
       .on('postgres_changes', {
         event: 'INSERT',
         schema: 'public',
         table: 'notifications',
-        filter: `user_id=eq.${userId}`
+        filter: `user_id=eq.${resolvedUserId}`
       }, callback)
       .on('postgres_changes', {
         event: 'UPDATE',
         schema: 'public',
         table: 'notifications',
-        filter: `user_id=eq.${userId}`
+        filter: `user_id=eq.${resolvedUserId}`
       }, callback)
       .subscribe()
   }

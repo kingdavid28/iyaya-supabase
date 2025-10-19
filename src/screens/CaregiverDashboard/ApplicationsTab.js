@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import { ScrollView, View, Text, RefreshControl, TouchableOpacity } from 'react-native';
+import { FlatList, ScrollView, View, Text, TouchableOpacity } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { EmptyState } from '../../shared/ui';
 import { styles } from '../styles/CaregiverDashboard.styles';
@@ -302,109 +302,108 @@ export default function ApplicationsTab({
   const visibleApplications = useMemo(() => getFilteredApplications(applications, activeFilter), [applications, activeFilter]);
   const options = useMemo(() => buildFilterOptions(filterMetrics), [filterMetrics]);
 
-  if (loading) {
+  const skeletonItems = useMemo(() => (
+    loading ? Array.from({ length: 4 }).map((_, index) => `application-skeleton-${index}`) : []
+  ), [loading]);
+
+  const renderApplicationItem = ({ item, index }) => {
+    if (loading) {
+      return (
+        <SkeletonCard key={`application-skeleton-${index}`} style={styles.applicationsSkeletonCard}>
+          <View style={styles.applicationsSkeletonHeader}>
+            <SkeletonCircle size={40} />
+            <View style={styles.applicationsSkeletonJobInfo}>
+              <SkeletonBlock width="70%" height={18} />
+              <SkeletonBlock width="45%" height={14} />
+            </View>
+            <SkeletonPill width="24%" height={20} />
+          </View>
+
+          <SkeletonBlock width="85%" height={14} />
+          <SkeletonBlock width="65%" height={14} style={{ marginTop: 6 }} />
+
+          <View style={styles.applicationsSkeletonMessage}>
+            <SkeletonBlock width="90%" height={12} />
+            <SkeletonBlock width="75%" height={12} />
+          </View>
+
+          <View style={styles.applicationsSkeletonActions}>
+            <SkeletonPill width="40%" height={32} />
+            <SkeletonPill width="32%" height={32} />
+          </View>
+        </SkeletonCard>
+      );
+    }
+
     return (
-      <ScrollView contentContainerStyle={styles.applicationsSkeletonContainer}>
-        {Array.from({ length: 4 }).map((_, index) => (
-          <SkeletonCard key={`application-skeleton-${index}`} style={styles.applicationsSkeletonCard}>
-            <View style={styles.applicationsSkeletonHeader}>
-              <SkeletonCircle size={40} />
-              <View style={styles.applicationsSkeletonJobInfo}>
-                <SkeletonBlock width="70%" height={18} />
-                <SkeletonBlock width="45%" height={14} />
-              </View>
-              <SkeletonPill width="24%" height={20} />
-            </View>
-
-            <SkeletonBlock width="85%" height={14} />
-            <SkeletonBlock width="65%" height={14} style={{ marginTop: 6 }} />
-
-            <View style={styles.applicationsSkeletonMessage}>
-              <SkeletonBlock width="90%" height={12} />
-              <SkeletonBlock width="75%" height={12} />
-            </View>
-
-            <View style={styles.applicationsSkeletonActions}>
-              <SkeletonPill width="40%" height={32} />
-              <SkeletonPill width="32%" height={32} />
-            </View>
-          </SkeletonCard>
-        ))}
-      </ScrollView>
+      <ApplicationCard
+        application={item}
+        onViewJob={onViewJob}
+        onWithdraw={onWithdrawApplication}
+      />
     );
-  }
+  };
+
+  const listData = loading ? skeletonItems : visibleApplications;
 
   return (
-    <ScrollView
+    <FlatList
+      data={listData}
+      keyExtractor={(item, index) => (loading ? `application-skeleton-${index}` : String(item?.id || item?._id || index))}
+      renderItem={renderApplicationItem}
       style={styles.content}
-      refreshControl={
-        <RefreshControl
-          refreshing={refreshing}
-          onRefresh={onRefresh}
-          colors={['#3B82F6']}
-          tintColor="#3B82F6"
-        />
-      }
-    >
-      <View style={styles.section}>
-        <View style={styles.bookingFilterTabsContainer}>
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={styles.bookingFilterTabs}
-          >
-            {options.map((option) => {
-              const isActive = activeFilter === option.key;
-              return (
-                <TouchableOpacity
-                  key={option.key}
-                  style={[
-                    styles.bookingFilterTab,
-                    isActive && styles.activeBookingFilterTab
-                  ]}
-                  onPress={() => setActiveFilter(option.key)}
-                  activeOpacity={0.8}
-                >
-                  <Text
-                    style={[
-                      styles.bookingFilterTabText,
-                      isActive && styles.activeBookingFilterTabText
-                    ]}
-                    numberOfLines={1}
-                    ellipsizeMode="tail"
+      contentContainerStyle={{ paddingBottom: 24 }}
+      refreshing={refreshing}
+      onRefresh={onRefresh}
+      showsVerticalScrollIndicator={false}
+      ListHeaderComponent={(
+        <View style={styles.section}>
+          <View style={styles.bookingFilterTabsContainer}>
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.bookingFilterTabs}
+            >
+              {options.map((option) => {
+                const isActive = activeFilter === option.key;
+                return (
+                  <TouchableOpacity
+                    key={option.key}
+                    style={[styles.bookingFilterTab, isActive && styles.activeBookingFilterTab]}
+                    onPress={() => setActiveFilter(option.key)}
+                    activeOpacity={0.8}
                   >
-                    {option.label}
-                    {typeof option.count === 'number' && option.count > 0 && (
-                      <Text style={styles.bookingFilterTabCount}>{` (${option.count})`}</Text>
-                    )}
-                  </Text>
-                </TouchableOpacity>
-              );
-            })}
-          </ScrollView>
+                    <Text
+                      style={[styles.bookingFilterTabText, isActive && styles.activeBookingFilterTabText]}
+                      numberOfLines={1}
+                      ellipsizeMode="tail"
+                    >
+                      {option.label}
+                      {typeof option.count === 'number' && option.count > 0 && (
+                        <Text style={styles.bookingFilterTabCount}>{` (${option.count})`}</Text>
+                      )}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </ScrollView>
+          </View>
         </View>
-
-        {visibleApplications.length > 0 ? (
-          visibleApplications.map((application) => (
-            <ApplicationCard
-              key={application.id || application._id}
-              application={application}
-              onViewJob={onViewJob}
-              onWithdraw={onWithdrawApplication}
-            />
-          ))
-        ) : (
+      )}
+      ListEmptyComponent={!loading ? (
+        <View style={styles.section}>
           <EmptyState
             icon="document-text"
             title="No applications found"
             subtitle={
               activeFilter === 'all'
-                ? 'Your job applications will appear here'
+                ? 'Your applications will appear here once submitted'
                 : 'Try another tab to see more applications'
             }
           />
-        )}
-      </View>
-    </ScrollView>
+        </View>
+      ) : null}
+      ListFooterComponent={!loading && visibleApplications.length > 0 ? <View style={{ height: 8 }} /> : null}
+    />
   );
 }

@@ -90,7 +90,7 @@ export class ReviewService extends SupabaseBase {
         .from('reviews')
         .select(`
           *,
-          reviewee:users!reviews_reviewee_id_fkey(name)
+          reviewee:users!reviews_reviewee_id_fkey(name, profile_image)
         `)
         .eq('reviewer_id', parentId)
         .order('created_at', { ascending: false })
@@ -99,7 +99,8 @@ export class ReviewService extends SupabaseBase {
       
       return data?.map(review => ({
         ...review,
-        caregiver_name: review.reviewee?.name || 'Caregiver'
+        caregiver_name: review.reviewee?.name || 'Caregiver',
+        caregiver_avatar: review.reviewee?.profile_image || review.caregiver_avatar || null
       })) || []
     } catch (error) {
       return this._handleError('getReviewsByParent', error)

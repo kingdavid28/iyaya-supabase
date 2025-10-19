@@ -15,9 +15,9 @@ export class UserService extends SupabaseBase {
         targetUserId = user.id
       }
       
-      this._validateId(targetUserId, 'User ID')
+      const resolvedUserId = await this._ensureUserId(targetUserId, 'User ID')
       
-      const cacheKey = `profile:${targetUserId}`
+      const cacheKey = `profile:${resolvedUserId}`
       const data = await getCachedOrFetch(cacheKey, async () => {
         const { data, error } = await this._withTimeout(
           supabase
@@ -39,7 +39,7 @@ export class UserService extends SupabaseBase {
               created_at,
               updated_at
             `)
-            .eq('id', targetUserId)
+            .eq('id', resolvedUserId)
             .maybeSingle()
         )
         
@@ -72,22 +72,22 @@ export class UserService extends SupabaseBase {
 
   async updateProfile(userId, updates) {
     try {
-      this._validateId(userId, 'User ID')
+      const resolvedUserId = await this._ensureUserId(userId, 'User ID')
       
       if (!updates || typeof updates !== 'object') {
         throw new Error('Updates must be a valid object')
       }
 
       const { data: { user } } = await supabase.auth.getUser()
-      if (!user || user.id !== userId) {
+      if (!user || user.id !== resolvedUserId) {
         throw new Error('Unauthorized to update this profile')
       }
 
-      const existingUser = await this.getProfile(userId)
+      const existingUser = await this.getProfile(resolvedUserId)
       
       if (!existingUser) {
         const userData = {
-          id: user.id,
+          id: resolvedUserId,
           email: user.email,
           name: updates.name || user.user_metadata?.name || user.email?.split('@')[0] || 'User',
           role: updates.role || user.user_metadata?.role || 'parent',
@@ -127,7 +127,7 @@ export class UserService extends SupabaseBase {
           }
           throw error
         }
-        invalidateCache(`profile:${userId}`)
+        invalidateCache(`profile:${resolvedUserId}`)
         return data
       }
       
@@ -137,12 +137,12 @@ export class UserService extends SupabaseBase {
           ...updates, 
           updated_at: new Date().toISOString() 
         })
-        .eq('id', userId)
+        .eq('id', resolvedUserId)
         .select()
         .single()
       
       if (error) throw error
-      invalidateCache(`profile:${userId}`)
+      invalidateCache(`profile:${resolvedUserId}`)
       return data
     } catch (error) {
       return this._handleError('updateProfile', error)

@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import { ScrollView, View, Text, RefreshControl, TouchableOpacity } from 'react-native';
+import { FlatList, ScrollView, View, Text, TouchableOpacity } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { EmptyState } from '../../shared/ui';
 import { styles } from '../styles/CaregiverDashboard.styles';
@@ -416,99 +416,97 @@ export default function BookingsTab({
   const visibleBookings = useMemo(() => getFilteredBookings(bookings, activeFilter), [bookings, activeFilter]);
   const options = useMemo(() => buildFilterOptions(filterMetrics), [filterMetrics]);
 
-  if (loading) {
+  const skeletonItems = useMemo(() => (
+    loading ? Array.from({ length: 4 }).map((_, index) => `booking-skeleton-${index}`) : []
+  ), [loading]);
+
+  const renderBookingItem = ({ item, index }) => {
+    if (loading) {
+      return (
+        <SkeletonCard key={`booking-skeleton-${index}`} style={styles.bookingsSkeletonCard}>
+          <View style={styles.bookingsSkeletonHeader}>
+            <SkeletonBlock width="55%" height={18} />
+            <SkeletonPill width="28%" height={18} />
+          </View>
+
+          <View style={styles.bookingsSkeletonChipRow}>
+            <SkeletonPill width="32%" height={14} />
+            <SkeletonPill width="28%" height={14} />
+            <SkeletonPill width="26%" height={14} />
+          </View>
+
+          <View style={styles.bookingsSkeletonBody}>
+            <SkeletonBlock width="90%" height={14} />
+            <SkeletonBlock width="85%" height={14} />
+            <SkeletonBlock width="70%" height={14} />
+          </View>
+
+          <View style={styles.bookingsSkeletonFooter}>
+            <SkeletonBlock width="35%" height={18} />
+            <SkeletonPill width="28%" height={14} />
+          </View>
+        </SkeletonCard>
+      );
+    }
+
     return (
-      <ScrollView contentContainerStyle={styles.bookingsSkeletonContainer}>
-        {Array.from({ length: 4 }).map((_, index) => (
-          <SkeletonCard key={`booking-skeleton-${index}`} style={styles.bookingsSkeletonCard}>
-            <View style={styles.bookingsSkeletonHeader}>
-              <SkeletonBlock width="55%" height={18} />
-              <SkeletonPill width="28%" height={18} />
-            </View>
-
-            <View style={styles.bookingsSkeletonChipRow}>
-              <SkeletonPill width="32%" height={14} />
-              <SkeletonPill width="28%" height={14} />
-              <SkeletonPill width="26%" height={14} />
-            </View>
-
-            <View style={styles.bookingsSkeletonBody}>
-              <SkeletonBlock width="90%" height={14} />
-              <SkeletonBlock width="85%" height={14} />
-              <SkeletonBlock width="70%" height={14} />
-            </View>
-
-            <View style={styles.bookingsSkeletonFooter}>
-              <SkeletonBlock width="35%" height={18} />
-              <SkeletonPill width="28%" height={14} />
-            </View>
-          </SkeletonCard>
-        ))}
-      </ScrollView>
+      <BookingCard
+        booking={item}
+        onMessageFamily={onMessageFamily}
+        onConfirmBooking={onConfirmBooking}
+        onViewDetails={onViewDetails}
+      />
     );
-  }
+  };
+
+  const listData = loading ? skeletonItems : visibleBookings;
 
   return (
-    <ScrollView
+    <FlatList
+      data={listData}
+      keyExtractor={(item, index) => (loading ? `booking-skeleton-${index}` : String(item?.id || item?._id || index))}
+      renderItem={renderBookingItem}
       style={styles.content}
-      refreshControl={
-        <RefreshControl
-          refreshing={refreshing}
-          onRefresh={onRefresh}
-          colors={['#3B82F6']}
-          tintColor="#3B82F6"
-        />
-      }
-    >
-      <View style={styles.section}>
-        <View style={styles.bookingFilterTabsContainer}>
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={styles.bookingFilterTabs}
-          >
-            {options.map((option) => {
-              const isActive = activeFilter === option.key;
-              return (
-                <TouchableOpacity
-                  key={option.key}
-                  style={[
-                    styles.bookingFilterTab,
-                    isActive && styles.activeBookingFilterTab
-                  ]}
-                  onPress={() => setActiveFilter(option.key)}
-                  activeOpacity={0.8}
-                >
-                  <Text
-                    style={[
-                      styles.bookingFilterTabText,
-                      isActive && styles.activeBookingFilterTabText
-                    ]}
-                    numberOfLines={1}
-                    ellipsizeMode="tail"
+      contentContainerStyle={{ paddingBottom: 24 }}
+      refreshing={refreshing}
+      onRefresh={onRefresh}
+      showsVerticalScrollIndicator={false}
+      ListHeaderComponent={(
+        <View style={styles.section}>
+          <View style={styles.bookingFilterTabsContainer}>
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.bookingFilterTabs}
+            >
+              {options.map((option) => {
+                const isActive = activeFilter === option.key;
+                return (
+                  <TouchableOpacity
+                    key={option.key}
+                    style={[styles.bookingFilterTab, isActive && styles.activeBookingFilterTab]}
+                    onPress={() => setActiveFilter(option.key)}
+                    activeOpacity={0.8}
                   >
-                    {option.label}
-                    {typeof option.count === 'number' && option.count > 0 && (
-                      <Text style={styles.bookingFilterTabCount}>{` (${option.count})`}</Text>
-                    )}
-                  </Text>
-                </TouchableOpacity>
-              );
-            })}
-          </ScrollView>
+                    <Text
+                      style={[styles.bookingFilterTabText, isActive && styles.activeBookingFilterTabText]}
+                      numberOfLines={1}
+                      ellipsizeMode="tail"
+                    >
+                      {option.label}
+                      {typeof option.count === 'number' && option.count > 0 && (
+                        <Text style={styles.bookingFilterTabCount}>{` (${option.count})`}</Text>
+                      )}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </ScrollView>
+          </View>
         </View>
-
-        {visibleBookings.length > 0 ? (
-          visibleBookings.map((booking) => (
-            <BookingCard
-              key={booking.id || booking._id}
-              booking={booking}
-              onMessageFamily={onMessageFamily}
-              onConfirmBooking={onConfirmBooking}
-              onViewDetails={onViewDetails}
-            />
-          ))
-        ) : (
+      )}
+      ListEmptyComponent={!loading ? (
+        <View style={styles.section}>
           <EmptyState
             icon="calendar"
             title="No bookings found"
@@ -518,8 +516,9 @@ export default function BookingsTab({
                 : 'Try another tab to see more bookings'
             }
           />
-        )}
-      </View>
-    </ScrollView>
+        </View>
+      ) : null}
+      ListFooterComponent={!loading && visibleBookings.length > 0 ? <View style={{ height: 8 }} /> : null}
+    />
   );
 }

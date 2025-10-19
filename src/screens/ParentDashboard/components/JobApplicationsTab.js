@@ -37,17 +37,22 @@ const JobApplicationsTab = ({
     });
   }, [applications]);
 
+  const normalizeStatus = (status) => (status || '').toString().trim().toLowerCase();
+
   const filteredApplications = useMemo(() => {
     if (selectedFilter === 'new') {
-      return sortedApplications.filter((app) => (app.status || '').toLowerCase() === 'pending');
+      return sortedApplications.filter((app) => normalizeStatus(app.status) === 'pending');
     }
     if (selectedFilter === 'reviewed') {
-      return sortedApplications.filter((app) => ['accepted', 'rejected', 'shortlisted'].includes((app.status || '').toLowerCase()));
+      return sortedApplications.filter((app) => ['accepted', 'rejected', 'shortlisted'].includes(normalizeStatus(app.status)));
     }
     return sortedApplications;
-  }, [sortedApplications, selectedFilter]);
+  }, [normalizeStatus, sortedApplications, selectedFilter]);
 
-  const pendingCount = useMemo(() => applications.filter((app) => (app.status || '').toLowerCase() === 'pending').length, [applications]);
+  const pendingCount = useMemo(
+    () => applications.filter((app) => normalizeStatus(app.status) === 'pending').length,
+    [applications, normalizeStatus]
+  );
 
   const renderStatusBadge = (status) => {
     const key = typeof status === 'string' ? status.toLowerCase() : 'pending';
@@ -263,7 +268,7 @@ const JobApplicationsTab = ({
       <View style={styles.tabsContainer}>
         {['all', 'new', 'reviewed'].map((filterKey) => {
           const isActive = selectedFilter === filterKey;
-          const label = filterKey === 'all' ? 'All Applications' : filterKey === 'new' ? 'New' : 'Reviewed';
+          const label = filterKey === 'all' ? 'All' : filterKey === 'new' ? 'New' : 'Reviewed';
           return (
             <TouchableOpacity
               key={filterKey}

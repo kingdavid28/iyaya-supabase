@@ -651,11 +651,7 @@ function CaregiverDashboard({ onLogout, route }) {
   const [applicationSubmitting, setApplicationSubmitting] = useState(false)
   const [applicationForm, setApplicationForm] = useState({ coverLetter: '', proposedRate: '' })
   
-  // Add these new state variables for messaging and reviews
-  const [parents, setParents] = useState([]);
-  const [selectedParent, setSelectedParent] = useState(null);
-  const [messages, setMessages] = useState([]);
-  const [newMessage, setNewMessage] = useState('');
+  // Add these new state variables for reviews
   const [reviews, setReviews] = useState([]);
   const [reviewsLoading, setReviewsLoading] = useState(true);
   const [refreshingReviews, setRefreshingReviews] = useState(false);
@@ -664,40 +660,10 @@ function CaregiverDashboard({ onLogout, route }) {
   const [selectedReview, setSelectedReview] = useState(null);
   const [reviewSubmitting, setReviewSubmitting] = useState(false);
   const [highlightRequestSending, setHighlightRequestSending] = useState(false);
-  const [chatActive, setChatActive] = useState(false);
-
   const [toast, setToast] = useState({ visible: false, message: '', type: 'success' })
   const showToast = (message, type = 'success') => setToast({ visible: true, message, type })
   const [refreshing, setRefreshing] = useState(false)
 
-  const tabBadgeCounts = useMemo(() => {
-    const pendingBookingsCount = Array.isArray(bookings)
-      ? bookings.filter(booking => (booking?.status || '').toLowerCase() === 'pending').length
-      : 0
-
-    const pendingApplicationsCount = Array.isArray(applications)
-      ? applications.filter(application => (application?.status || '').toLowerCase() === 'pending').length
-      : 0
-
-    const unreadMessagesCount = Array.isArray(parents)
-      ? parents.reduce((sum, parent) => sum + (parent?.unreadCount || 0), 0)
-      : 0
-
-    const unreadReviewsCount = Array.isArray(reviews)
-      ? reviews.filter(review => !review?.read).length
-      : 0
-
-    const pendingRequestsCount = pendingRequests?.length || 0
-
-    return {
-      bookings: Math.max(pendingBookingsCount, notificationCounts.bookings),
-      applications: pendingApplicationsCount,
-      messages: Math.max(unreadMessagesCount, notificationCounts.messages),
-      reviews: Math.max(unreadReviewsCount, notificationCounts.reviews),
-      notifications: notificationCounts.notifications + pendingRequestsCount
-    }
-  }, [applications, bookings, notificationCounts, parents, pendingRequests, reviews])
-  
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
     try {
@@ -713,54 +679,6 @@ function CaregiverDashboard({ onLogout, route }) {
       setRefreshing(false);
     }
   }, [loadProfile, fetchJobs, fetchApplications, fetchBookings]);
-
-  // Fetch conversations using Supabase
-  useEffect(() => {
-    if (!user?.id) return;
-
-    const loadConversations = async () => {
-      try {
-        const conversations = await supabaseService.messaging.getConversations(user.id);
-        console.log('📨 Caregiver received conversations:', conversations.length);
-        setParents(conversations.map(conv => {
-          const otherUser = conv.otherParticipant;
-          return {
-            id: otherUser?.id,
-            name: otherUser?.name || 'Parent',
-            profileImage: otherUser?.profile_image || null,
-            unreadCount: conv?.unread_count ?? conv?.unreadCount ?? 0
-          };
-        }));
-      } catch (error) {
-        console.error('Error loading conversations:', error);
-        setParents([]);
-      }
-    };
-
-    loadConversations();
-  }, [user?.id]);
-
-  // Fetch messages for selected parent
-  useEffect(() => {
-    if (!selectedParent || !user?.id) return;
-
-    const loadMessages = async () => {
-      try {
-        const conversation = await supabaseService.messaging.getOrCreateConversation(user.id, selectedParent.id);
-        const messagesData = await supabaseService.messaging.getMessages(conversation.id);
-        console.log('📨 Received messages:', messagesData.length);
-        setMessages(messagesData);
-        if (selectedParent?.id) {
-          setParents(prev => prev.map(parent => parent.id === selectedParent.id ? { ...parent, unreadCount: 0 } : parent));
-        }
-      } catch (error) {
-        console.error('Error loading messages:', error);
-        setMessages([]);
-      }
-    };
-
-    loadMessages();
-  }, [selectedParent, user?.id]);
 
   const fetchCaregiverReviews = useCallback(async ({ showSkeleton = true } = {}) => {
     if (!user?.id) return;
@@ -859,116 +777,61 @@ function CaregiverDashboard({ onLogout, route }) {
     setShowApplicationDetails(true)
   }
 
-  const handleMessageFamily = async (application) => {
-    try {
-      if (!application) {
-        showToast('Unable to load application details.', 'error');
-        return;
-      }
+  const navigateToMessagesTab = useCallback((targetParent) => {
+    setActiveTab('messages');
 
-      const parent = application.family || application.parent || application.parentInfo || {};
-      const parentId = parent.id || application.parent_id || application.parentId;
-
-      if (!parentId) {
-        showToast('Missing family contact. Try opening the booking instead.', 'error');
-        return;
-      }
-
-      setShowApplicationDetails(false);
-      setActiveTab('messages');
-
-      const conversation = await supabaseService.messaging.getOrCreateConversation(user.id, parentId);
-      if (!conversation?.id) {
-        throw new Error('Conversation unavailable.');
-      }
-
-      const parentRecord = {
-        id: parentId,
-        name: parent.name || application.familyName || 'Family',
-        profileImage: parent.profileImage || parent.avatar || application.familyAvatar || null,
-        unreadCount: 0,
-      };
-
-      setParents(prev => {
-        const next = [...prev];
-        const existingIndex = next.findIndex(item => item.id === parentRecord.id);
-        if (existingIndex >= 0) {
-          next[existingIndex] = { ...next[existingIndex], ...parentRecord };
-          return next;
-        }
-        next.push(parentRecord);
-        return next;
-      });
-
-      setSelectedParent(parentRecord);
-      setChatActive(true);
-
-      const messagesData = await supabaseService.messaging.getMessages(conversation.id);
-      setMessages(messagesData);
-      await supabaseService.messaging.markMessagesAsRead(conversation.id, user.id);
-
-      showToast(`Messaging ${parentRecord.name}`, 'success');
-    } catch (error) {
-      console.error('Message family failed:', error);
-      showToast('Could not open chat. Please try again later.', 'error');
+    if (!targetParent?.id) {
+      console.warn('navigateToMessagesTab called without parent ID');
+      return;
     }
-  };
 
-  const handleBookingMessage = async (booking) => {
-    try {
-      // Navigate to messages tab first
-      setActiveTab('messages');
+    navigation.navigate('Chat', {
+      userId: user?.id,
+      userType: 'caregiver',
+      targetUserId: targetParent.id,
+      targetUserName: targetParent.name || targetParent.parentName || targetParent.family || 'Parent',
+      targetUserType: 'parent'
+    });
 
-      const parentId = booking?.parentId
-        || booking?.clientId?.id
-        || booking?.clientId?._id
-        || booking?.clientId;
+    showToast(`Opening messages with ${targetParent.name || 'the family'}…`, 'success');
+  }, [navigation, setActiveTab, showToast, user?.id]);
 
-      const parentName = booking?.family
-        || booking?.parentName
-        || booking?.clientId?.name
-        || 'Parent';
-
-      if (!parentId) {
-        showToast('Unable to identify parent account for this booking', 'error');
-        return;
-      }
-
-      let parentRecord = parents.find(parent => parent.id === parentId);
-
-      if (!parentRecord && parentName) {
-        parentRecord = parents.find(parent => parent.name?.toLowerCase() === parentName.toLowerCase());
-      }
-
-      if (!parentRecord) {
-        parentRecord = {
-          id: parentId,
-          name: parentName,
-          profileImage: booking?.clientId?.profileImage || booking?.parentAvatar || null,
-          unreadCount: 0
-        };
-        setParents(prev => {
-          const filtered = prev.filter(parent => parent.id !== parentId);
-          return [...filtered, parentRecord];
-        });
-      }
-
-      setSelectedParent(parentRecord);
-      setChatActive(true);
-
-      const conversation = await supabaseService.getOrCreateConversation(user.id, parentRecord.id);
-      if (conversation?.id) {
-        await supabaseService.markMessagesAsRead(conversation.id, user.id);
-      }
-
-      setParents(prev => prev.map(parent => parent.id === parentRecord.id ? { ...parent, unreadCount: 0, name: parentName || parent.name } : parent));
-      showToast(`Opened conversation with ${parentRecord.name}`, 'success');
-
-    } catch (error) {
-      console.error('Error opening booking message:', error);
-      showToast('Failed to open message', 'error');
+  const handleMessageFamily = useCallback((application) => {
+    if (!application) {
+      showToast('Unable to load application details.', 'error');
+      return;
     }
-  }
+
+    const parent = application.family || application.parent || application.parentInfo || {};
+    const parentId = parent.id || application.parent_id || application.parentId;
+
+    if (!parentId) {
+      showToast('Missing family contact. Try opening the booking instead.', 'error');
+      return;
+    }
+
+    setShowApplicationDetails(false);
+    navigateToMessagesTab({ id: parentId, name: parent.name || application.familyName || 'Parent' });
+  }, [navigateToMessagesTab, showToast]);
+
+  const handleBookingMessage = useCallback((booking) => {
+    const parentId = booking?.parentId
+      || booking?.clientId?.id
+      || booking?.clientId?._id
+      || booking?.clientId;
+
+    const parentName = booking?.family
+      || booking?.parentName
+      || booking?.clientId?.name
+      || 'Parent';
+
+    if (!parentId) {
+      showToast('Unable to identify parent account for this booking', 'error');
+      return;
+    }
+
+    navigateToMessagesTab({ id: parentId, name: parentName });
+  }, [navigateToMessagesTab, showToast]);
 
   const handleConfirmAttendance = async (booking) => {
     try {
@@ -1027,128 +890,23 @@ function CaregiverDashboard({ onLogout, route }) {
     }
   }
 
-  // Send messages using Supabase
-  const sendMessage = async () => {
-    if (!newMessage?.trim() || !selectedParent || !user?.id) {
-      console.warn('❌ Missing data:', {
-        hasMessage: !!newMessage?.trim(),
-        hasParent: !!selectedParent,
-        hasUserId: !!user?.id
-      });
-      return;
-    }
-
-    try {
-      const conversation = await supabaseService.messaging.getOrCreateConversation(user.id, selectedParent.id);
-      
-      console.log('📨 Caregiver sending message:', {
-        senderId: user.id,
-        receiverId: selectedParent.id,
-        conversationId: conversation.id,
-        message: newMessage.trim()
-      });
-
-      await supabaseService.messaging.sendMessage(conversation.id, user.id, newMessage.trim());
-      setNewMessage('');
-      console.log('✅ Caregiver message sent successfully');
-      
-      // Reload messages to show the new one
-      const messagesData = await supabaseService.messaging.getMessages(conversation.id);
-      setMessages(messagesData);
-    } catch (error) {
-      console.error('❌ Error sending caregiver message:', error);
-      showToast('Failed to send message: ' + error.message, 'error');
-    }
-  };
-
-  const handleRequestHighlight = useCallback(async () => {
-    if (!user?.id) {
-      showToast('Please sign in to request a highlight.', 'error');
-      return;
-    }
-
-    if (highlightRequestSending) {
-      return;
-    }
-
-    const eligibleReviews = sortedReviews.filter(review => review?.reviewerId);
-    if (!eligibleReviews.length) {
-      showToast('Invite families to leave feedback to request a highlight.', 'info');
-      return;
-    }
-
-    const positiveReviews = eligibleReviews.filter(review => (review?.rating || 0) >= 4);
-    const targetReview = positiveReviews[0] || eligibleReviews[0];
-    const parentId = targetReview?.reviewerId;
-
-    if (!parentId) {
-      showToast('Unable to identify a family to message.', 'error');
-      return;
-    }
-
-    try {
-      setHighlightRequestSending(true);
-
-      const parentName = targetReview?.reviewerName || '';
-      const greetingName = parentName?.split?.(' ')?.[0]?.trim() || 'there';
-      const ratingLabel = targetReview?.rating ? `${targetReview.rating}-star feedback` : 'kind feedback';
-
-      const messageParts = [
-        `Hi ${greetingName}! Thank you again for the ${ratingLabel}.`
-      ];
-
-      if (targetReview?.bookingDate) {
-        const formattedDate = formatDate(targetReview.bookingDate);
-        if (formattedDate) {
-          messageParts.push(`I loved working with your family on ${formattedDate}.`);
-        }
-      }
-
-      messageParts.push('Would you mind sharing a short story I can feature on my caregiver profile?');
-      messageParts.push('Your highlights help other families feel confident booking with me.');
-
-      const trimmedComment = targetReview?.comment?.trim();
-      if (trimmedComment) {
-        const summary = trimmedComment.length > 140 ? `${trimmedComment.slice(0, 140).trim()}…` : trimmedComment;
-        messageParts.push(`Your note "${summary}" truly made my week—thank you!`);
-      }
-
-      messageParts.push('Feel free to reply here whenever it’s convenient. 😊');
-
-      const highlightMessage = messageParts.join(' ');
-
-      const conversation = await supabaseService.messaging.getOrCreateConversation(user.id, parentId);
-      if (!conversation?.id) {
-        throw new Error('Could not start chat with the family.');
-      }
-
-      await supabaseService.messaging.sendMessage(conversation.id, user.id, highlightMessage);
-
-      setParents(prev => {
-        const updated = [...prev];
-        const nextRecord = {
-          id: parentId,
-          name: targetReview?.reviewerName || 'Parent',
-          profileImage: targetReview?.reviewerAvatar || null,
-          unreadCount: 0
-        };
-        const existingIndex = updated.findIndex(parent => parent.id === parentId);
-        if (existingIndex >= 0) {
-          updated[existingIndex] = { ...updated[existingIndex], ...nextRecord };
-          return updated;
-        }
-        updated.push(nextRecord);
-        return updated;
-      });
-
-      showToast(`Highlight request sent to ${targetReview?.reviewerName || 'the family'}.`, 'success');
-    } catch (error) {
-      console.error('Error sending highlight request:', error);
-      showToast('Could not send highlight request. Please try again later.', 'error');
-    } finally {
+  const handleRequestHighlight = useHighlightRequest({
+    userId: user?.id,
+    reviews: sortedReviews,
+    onStart: () => setHighlightRequestSending(true),
+    onComplete: ({ targetParentName, success }) => {
       setHighlightRequestSending(false);
-    }
-  }, [user?.id, highlightRequestSending, sortedReviews, showToast]);
+      if (success) {
+        showToast(`Highlight request sent to ${targetParentName || 'the family'}.`, 'success');
+      }
+    },
+    onError: (message) => {
+      setHighlightRequestSending(false);
+      showToast(message, 'error');
+    },
+    onInfo: (message) => showToast(message, 'info'),
+    onNavigateToChat: navigateToMessagesTab
+  });
 
   const handleApplicationSubmit = async ({ jobId, jobTitle, family, coverLetter, proposedRate }) => {
     // Validate job ID
@@ -1394,96 +1152,6 @@ function CaregiverDashboard({ onLogout, route }) {
     </View>
   );
 }
-
-  const renderMessagesTab = () => (
-    <View style={styles.messagesContainer}>
-      {!chatActive ? (
-        <>
-          <Text style={styles.sectionTitle}>Connected Families</Text>
-          {parents.length > 0 ? (
-            <FlatList
-              data={parents}
-              renderItem={({ item }) => (
-                <Pressable
-                  style={styles.parentItem}
-                  onPress={async () => {
-                    setSelectedParent(item);
-                    setChatActive(true);
-                    // Mark messages as read when opening chat
-                    const conversation = await supabaseService.messaging.getOrCreateConversation(user.id, item.id);
-                    await supabaseService.messaging.markMessagesAsRead(conversation.id, user.id);
-                  }}
-                >
-                  <Ionicons name="person-circle" size={40} color="#3B82F6" />
-                  <View style={styles.parentInfo}>
-                    <Text style={styles.parentName}>{item.name}</Text>
-                    <Text style={styles.parentStatus}>Last seen recently</Text>
-                  </View>
-                </Pressable>
-              )}
-              keyExtractor={(item) => item.id}
-              style={styles.parentsList}
-            />
-          ) : (
-            <EmptyState 
-              icon="people"
-              title="No conversations yet"
-              subtitle="Parents who contact you will appear here. You can start messaging once they reach out first."
-            />
-          )}
-        </>
-      ) : (
-        <View style={styles.chatContainer}>
-          <Card style={styles.chatHeaderCard}>
-            <View style={styles.chatHeader}>
-              <Text style={styles.chatTitle}>{selectedParent.name}</Text>
-            </View>
-          </Card>
-
-          <Card style={styles.messagesCard}>
-            <FlatList
-              data={messages}
-              renderItem={({ item }) => (
-                <MessageItemLocal
-                  message={item}
-                  isCurrentUser={item.senderId === user?.id}
-                />
-              )}
-              keyExtractor={(item) => item.id}
-              style={styles.messagesList}
-              contentContainerStyle={styles.messagesContent}
-              inverted
-              showsVerticalScrollIndicator={false}
-            />
-          </Card>
-
-          <Card style={styles.inputCard}>
-            <View style={styles.messageInputContainer}>
-              <TextInput
-                style={styles.messageInput}
-                value={newMessage}
-                onChangeText={setNewMessage}
-                placeholder="Type your message..."
-                multiline
-                maxLength={500}
-              />
-              <Pressable
-                style={[styles.sendButton, { opacity: newMessage?.trim() ? 1 : 0.5 }]}
-                onPress={sendMessage}
-                disabled={!newMessage?.trim()}
-              >
-                <Ionicons
-                  name="send"
-                  size={20}
-                  color="#FFFFFF"
-                />
-              </Pressable>
-            </View>
-          </Card>
-        </View>
-      )}
-    </View>
-  );
 
   const sortedReviews = useMemo(() => {
     if (!Array.isArray(reviews)) {

@@ -1,4 +1,6 @@
 import { supabase } from '../../config/supabase'
+import { isValidUUID } from '../../utils/id'
+import { resolveSupabaseUserId } from './utils/idResolver'
 
 export class SupabaseBase {
   _withTimeout(promise, timeoutMs = 10000) {
@@ -36,6 +38,32 @@ export class SupabaseBase {
     if (!id || (typeof id !== 'string' && typeof id !== 'number')) {
       throw new Error(`Invalid ${fieldName}: ${id}`)
     }
+  }
+
+  async _ensureUserId(rawId, fieldName = 'User ID') {
+    if (rawId && typeof rawId === 'object') {
+      rawId = rawId.id || rawId._id || rawId.user_id || rawId.userId || rawId.valueOf?.()
+    }
+
+    if (!rawId) {
+      throw new Error(`Invalid ${fieldName}: ${rawId}`)
+    }
+
+    const candidate = String(rawId).trim()
+    if (!candidate) {
+      throw new Error(`Invalid ${fieldName}: ${rawId}`)
+    }
+
+    if (isValidUUID(candidate)) {
+      return candidate
+    }
+
+    const resolved = await resolveSupabaseUserId(candidate)
+    if (resolved) {
+      return resolved
+    }
+
+    throw new Error(`Invalid ${fieldName}: ${rawId}`)
   }
 
   _validateRequiredFields(data, requiredFields, methodName) {

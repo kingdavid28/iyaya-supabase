@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { View, Text, ScrollView, TouchableOpacity, RefreshControl, StyleSheet, Alert, Modal, ActivityIndicator } from 'react-native';
+import { View, Text, ScrollView, TouchableOpacity, StyleSheet, Alert, Modal, ActivityIndicator } from 'react-native';
 import { Star, TrendingUp, MessageCircle } from 'lucide-react-native';
 import { reviewService, bookingService } from '../../../services/supabase';
 import { useAuth } from '../../../contexts/AuthContext';
@@ -12,7 +12,7 @@ import {
 } from '../../../components/common/SkeletonPlaceholder';
 import ReviewList from '../../../components/features/profile/ReviewList';
 import ReviewForm from '../../../components/forms/ReviewForm';
-import { normalizeCaregiverReviewsForList } from '../../../utils/reviews';
+import { normalizeCaregiverReviewsForList, normalizeCaregiverReviews } from '../../../utils/reviews';
 
 const ReviewsTab = ({ navigation }) => {
   // TODO: Replace bespoke review rendering with shared `ReviewList` and `ReviewForm`
@@ -30,6 +30,24 @@ const ReviewsTab = ({ navigation }) => {
   const formModalVisible = Boolean(modalMode);
   const isCreateMode = modalMode === 'create';
   const hasBookings = useMemo(() => completedBookings.length > 0, [completedBookings]);
+
+  const selectedReviewDetails = useMemo(() => {
+    if (!selectedReview) return null;
+    const [normalized] = normalizeCaregiverReviews([selectedReview]);
+    return normalized || null;
+  }, [selectedReview]);
+
+  const editInitialRating = selectedReviewDetails?.rating ?? selectedReview?.rating ?? 0;
+  const editInitialComment = selectedReviewDetails?.comment ?? selectedReview?.comment ?? '';
+  const editInitialImages = useMemo(() => {
+    if (Array.isArray(selectedReview?.images)) {
+      return selectedReview.images;
+    }
+    if (Array.isArray(selectedReviewDetails?.images)) {
+      return selectedReviewDetails.images;
+    }
+    return [];
+  }, [selectedReview?.images, selectedReviewDetails?.images]);
 
   const normalizedReviews = useMemo(() => {
     const normalized = normalizeCaregiverReviewsForList(reviews);
@@ -250,18 +268,8 @@ const ReviewsTab = ({ navigation }) => {
     );
   }
 
-  return (
-    <ScrollView
-      style={styles.container}
-      refreshControl={
-        <RefreshControl
-          refreshing={refreshing}
-          onRefresh={handleRefresh}
-          colors={['#3b82f6']}
-          tintColor="#3b82f6"
-        />
-      }
-    >
+  const renderReviewsHeader = () => (
+    <View>
       <View style={styles.header}>
         <Text style={styles.headerTitle}>My Reviews</Text>
         <Text style={styles.headerSubtitle}>
@@ -279,17 +287,21 @@ const ReviewsTab = ({ navigation }) => {
       </View>
 
       {reviews.length > 0 && renderSummaryStats()}
+    </View>
+  );
 
-      {reviews.length === 0 ? (
-        <EmptyState />
-      ) : (
-        <ReviewList
-          reviews={normalizedReviews}
-          currentUserId={user?.id}
-          onEditReview={handleEditReview}
-          ListEmptyComponent={<EmptyState />}
-        />
-      )}
+  return (
+    <View style={styles.container}>
+      <ReviewList
+        reviews={normalizedReviews}
+        currentUserId={user?.id}
+        onEditReview={handleEditReview}
+        ListEmptyComponent={<EmptyState />}
+        ListHeaderComponent={renderReviewsHeader}
+        contentContainerStyle={styles.listContent}
+        refreshing={refreshing}
+        onRefresh={handleRefresh}
+      />
 
       <Modal
         visible={formModalVisible}
@@ -299,60 +311,104 @@ const ReviewsTab = ({ navigation }) => {
       >
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>
-              {isCreateMode ? 'Write a Review' : 'Edit Review'}
-            </Text>
+            <ScrollView
+              contentContainerStyle={styles.modalScrollContent}
+              keyboardShouldPersistTaps="handled"
+              showsVerticalScrollIndicator={false}
+            >
+              <Text style={styles.modalTitle}>
+                {isCreateMode ? 'Write a Review' : 'Edit Review'}
+              </Text>
 
-            {isCreateMode && (
-              <View style={styles.bookingSelector}>
-                <Text style={styles.editLabel}>Booking</Text>
-                {bookingsLoading ? (
-                  <ActivityIndicator size="small" color="#3b82f6" />
-                ) : hasBookings ? (
-                  <View style={styles.bookingOptions}>
-                    {completedBookings.map((booking) => {
-                      const isSelected = booking.id === selectedBookingId;
-                      const caregiverName =
-                        booking.caregiver?.name ||
-                        booking.caregiver_name ||
-                        booking.caregiverId?.name ||
-                        'Caregiver';
-                      const bookingDate = booking.date
-                        ? new Date(booking.date).toLocaleDateString()
-                        : 'No date';
-
-                      return (
-                        <TouchableOpacity
-                          key={booking.id}
-                          style={[styles.bookingOption, isSelected && styles.bookingOptionSelected]}
-                          onPress={() => setSelectedBookingId(booking.id)}
-                        >
-                          <Text style={styles.bookingOptionTitle}>{caregiverName}</Text>
-                          <Text style={styles.bookingOptionSubtext}>{bookingDate}</Text>
-                        </TouchableOpacity>
-                      );
-                    })}
+              {!isCreateMode && selectedReviewDetails && (
+                <View style={styles.editContextCard}>
+                  <View style={styles.editContextHeader}>
+                    <Text style={styles.editContextTitle}>
+                      {selectedReviewDetails.caregiverName || 'Caregiver'}
+                    </Text>
+                    {selectedReviewDetails.createdAt && (
+                      <Text style={styles.editContextDate}>
+                        {new Date(selectedReviewDetails.createdAt).toLocaleDateString()}
+                      </Text>
+                    )}
                   </View>
-                ) : (
-                  <Text style={styles.bookingEmptyText}>
-                    Complete a booking before writing a review. Once a caregiver completes a job, they will appear here.
-                  </Text>
-                )}
-              </View>
-            )}
+                  {selectedReviewDetails.jobTitle ? (
+                    <Text style={styles.editContextSubtitle}>
+                      {selectedReviewDetails.jobTitle}
+                    </Text>
+                  ) : null}
+                  {selectedReviewDetails.bookingDate ? (
+                    <Text style={styles.editContextMeta}>
+                      {`Booking on ${new Date(selectedReviewDetails.bookingDate).toLocaleDateString()}`}
+                    </Text>
+                  ) : null}
+                  <View style={styles.editContextBadge}>
+                    <Text style={styles.editContextBadgeText}>
+                      {`Current rating: ${selectedReviewDetails.rating}`}
+                    </Text>
+                  </View>
+                </View>
+              )}
 
-            <ReviewForm
-              onSubmit={handleSubmitReview}
-              onCancel={handleCloseModal}
-              initialRating={selectedReview?.rating || 0}
-              initialComment={selectedReview?.comment || ''}
-              heading={isCreateMode ? 'Your Review' : 'Update Your Review'}
-              submitLabel={isCreateMode ? 'Submit Review' : 'Save Changes'}
-            />
+              {isCreateMode && (
+                <View style={styles.bookingSelector}>
+                  <Text style={styles.editLabel}>Booking</Text>
+                  {bookingsLoading ? (
+                    <ActivityIndicator size="small" color="#3b82f6" />
+                  ) : hasBookings ? (
+                    <ScrollView
+                      horizontal
+                      showsHorizontalScrollIndicator={false}
+                      contentContainerStyle={styles.bookingOptions}
+                    >
+                      {completedBookings.map((booking) => {
+                        const isSelected = booking.id === selectedBookingId;
+                        const caregiverName =
+                          booking.caregiver?.name ||
+                          booking.caregiver_name ||
+                          booking.caregiverId?.name ||
+                          'Caregiver';
+                        const bookingDate = booking.date
+                          ? new Date(booking.date).toLocaleDateString()
+                          : 'No date';
+
+                        return (
+                          <TouchableOpacity
+                            key={booking.id}
+                            style={[styles.bookingOption, isSelected && styles.bookingOptionSelected]}
+                            onPress={() => setSelectedBookingId(booking.id)}
+                          >
+                            <Text style={styles.bookingOptionTitle} numberOfLines={1} ellipsizeMode="tail">
+                              {caregiverName}
+                            </Text>
+                            <Text style={styles.bookingOptionSubtext}>{bookingDate}</Text>
+                          </TouchableOpacity>
+                        );
+                      })}
+                    </ScrollView>
+                  ) : (
+                    <Text style={styles.bookingEmptyText}>
+                      Complete a booking before writing a review. Once a caregiver completes a job, they will appear here.
+                    </Text>
+                  )}
+                </View>
+              )}
+
+              <ReviewForm
+                key={`${modalMode}-${selectedReview?.id || 'new'}`}
+                onSubmit={handleSubmitReview}
+                onCancel={handleCloseModal}
+                initialRating={isCreateMode ? 0 : editInitialRating}
+                initialComment={isCreateMode ? '' : editInitialComment}
+                initialImages={isCreateMode ? [] : editInitialImages}
+                heading={isCreateMode ? 'Your Review' : 'Update Your Review'}
+                submitLabel={isCreateMode ? 'Submit Review' : 'Save Changes'}
+              />
+            </ScrollView>
           </View>
         </View>
       </Modal>
-    </ScrollView>
+    </View>
   );
 };
 
@@ -360,6 +416,9 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#f9fafb',
+  },
+  listContent: {
+    paddingBottom: 40,
   },
   header: {
     padding: 20,
@@ -393,28 +452,38 @@ const styles = StyleSheet.create({
     fontSize: 16,
   },
   bookingOptions: {
+    paddingVertical: 4,
+    paddingHorizontal: 2,
     gap: 12,
   },
   bookingOption: {
     borderWidth: 1,
     borderColor: '#d1d5db',
     borderRadius: 10,
-    padding: 12,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
     backgroundColor: '#fff',
+    minWidth: 180,
   },
   bookingOptionSelected: {
     borderColor: '#3b82f6',
-    backgroundColor: '#e0ecff',
+    backgroundColor: '#eff6ff',
   },
   bookingOptionTitle: {
     fontSize: 16,
     fontWeight: '600',
     color: '#111827',
+    marginBottom: 4,
   },
   bookingOptionSubtext: {
     fontSize: 13,
     color: '#6b7280',
-    marginTop: 4,
+  },
+  bookingScrollHint: {
+    fontSize: 12,
+    color: '#6b7280',
+    marginTop: 8,
+    textAlign: 'center',
   },
   bookingEmptyText: {
     fontSize: 14,
@@ -582,13 +651,62 @@ const styles = StyleSheet.create({
     margin: 20,
     width: '90%',
     maxWidth: 400,
+    maxHeight: '85%',
+  },
+  modalScrollContent: {
+    paddingBottom: 16,
   },
   modalTitle: {
     fontSize: 20,
     fontWeight: '700',
     color: '#111827',
-    marginBottom: 20,
+    marginBottom: 16,
     textAlign: 'center',
+  },
+  editContextCard: {
+    backgroundColor: '#f3f4f6',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 20,
+    borderWidth: 1,
+    borderColor: '#e5e7eb',
+  },
+  editContextHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  editContextTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#111827',
+  },
+  editContextDate: {
+    fontSize: 13,
+    color: '#6b7280',
+  },
+  editContextSubtitle: {
+    fontSize: 14,
+    color: '#1f2937',
+    marginBottom: 4,
+  },
+  editContextMeta: {
+    fontSize: 13,
+    color: '#4b5563',
+    marginBottom: 12,
+  },
+  editContextBadge: {
+    alignSelf: 'flex-start',
+    backgroundColor: '#dbeafe',
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    borderRadius: 999,
+  },
+  editContextBadgeText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#1d4ed8',
   },
   editSection: {
     marginBottom: 20,

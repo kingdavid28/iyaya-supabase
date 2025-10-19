@@ -2,7 +2,7 @@
 import React, { useState } from 'react';
 import { TouchableOpacity, Text, View, StyleSheet, ActivityIndicator, Alert } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import simpleFacebookAuth from '../../services/simpleFacebookAuth';
+import facebookAuthService from '../../services/facebookAuthService';
 import { useAuth } from '../../contexts/AuthContext';
 
 const FacebookSignInButton = ({ 
@@ -27,8 +27,8 @@ const FacebookSignInButton = ({
     try {
       console.log('🔵 Facebook sign-in button pressed for role:', userRole);
       
-      // Use the simple Facebook auth service
-      const result = await simpleFacebookAuth.signIn(userRole);
+      // Attempt real Facebook authentication first
+      const result = await facebookAuthService.signInWithFacebook(userRole);
       console.log('✅ Facebook auth service result:', result);
       
       // Process the result through AuthContext

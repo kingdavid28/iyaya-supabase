@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useEffect, useState } from 'react'
+import React, { createContext, useContext, useEffect, useMemo, useState, useRef, useCallback } from 'react'
 import { ActivityIndicator, View, Platform } from 'react-native'
 import * as AuthSession from 'expo-auth-session'
 import * as WebBrowser from 'expo-web-browser'
@@ -12,10 +12,12 @@ export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
+  const sessionRef = useRef(null)
 
   useEffect(() => {
     // Get initial session and user profile
     supabase.auth.getSession().then(async ({ data: { session } }) => {
+      sessionRef.current = session || null
       if (session?.user) {
         const userWithProfile = await fetchUserWithProfile(session.user)
         setUser(userWithProfile)
@@ -29,6 +31,7 @@ export const AuthProvider = ({ children }) => {
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, session) => {
         console.log('Auth event:', event)
+        sessionRef.current = session || null
         if (session?.user) {
           const userWithProfile = await fetchUserWithProfile(session.user)
           setUser(userWithProfile)
@@ -389,7 +392,52 @@ export const AuthProvider = ({ children }) => {
     }
   }
 
-  const value = {
+  const requireAuthSession = useCallback(async () => {
+    if (sessionRef.current?.user) {
+      return sessionRef.current
+    }
+
+    const { data, error: sessionError } = await supabase.auth.getSession()
+    if (sessionError) {
+      console.warn('requireAuthSession error:', sessionError)
+      return null
+    }
+
+    sessionRef.current = data?.session || null
+    return sessionRef.current
+  }, [])
+
+  const ensureAuthenticated = useCallback(async () => {
+    const session = await requireAuthSession()
+    if (!session?.user?.id) {
+      return null
+    }
+    if (!user) {
+      const userWithProfile = await fetchUserWithProfile(session.user)
+      setUser(userWithProfile)
+      return userWithProfile
+    }
+    return user
+  }, [requireAuthSession, user])
+
+  const value = useMemo(() => ({
+    user,
+    loading,
+    error,
+    signUp,
+    signIn,
+    signOut,
+    resetPassword,
+    updatePassword,
+    resendVerification,
+    getCurrentUser,
+    getUserProfile,
+    signInWithFacebook,
+    signInWithGoogle,
+    loginWithFacebook,
+    requireAuthSession,
+    ensureAuthenticated
+  }), [
     user,
     loading,
     error,
@@ -402,9 +450,9 @@ export const AuthProvider = ({ children }) => {
     signInWithFacebook,
     signInWithGoogle,
     loginWithFacebook,
-    getCurrentUser,
-    getUserProfile
-  }
+    requireAuthSession,
+    ensureAuthenticated
+  ])
 
   return (
     <AuthContext.Provider value={value}>

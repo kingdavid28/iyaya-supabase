@@ -20,12 +20,12 @@ export class BookingService extends SupabaseBase {
         throw new Error(`Missing required IDs: parentId=${!!parentId}, caregiverId=${!!caregiverId}`)
       }
 
-      this._validateId(parentId, 'Parent ID')
-      this._validateId(caregiverId, 'Caregiver ID')
-      
+      const resolvedParentId = await this._ensureUserId(parentId, 'Parent ID')
+      const resolvedCaregiverId = await this._ensureUserId(caregiverId, 'Caregiver ID')
+
       const dbBookingData = {
-        parent_id: parentId,
-        caregiver_id: caregiverId,
+        parent_id: resolvedParentId,
+        caregiver_id: resolvedCaregiverId,
         job_id: bookingData.jobId || bookingData.job_id || null,
         date: bookingData.date || new Date().toISOString().split('T')[0],
         start_time: bookingData.startTime || bookingData.start_time || '08:00:00',
@@ -59,13 +59,13 @@ export class BookingService extends SupabaseBase {
 
   async getMyBookings(userId, role) {
     try {
-      this._validateId(userId, 'User ID')
+      const resolvedUserId = await this._ensureUserId(userId, 'User ID')
       
       if (!['parent', 'caregiver'].includes(role)) {
         throw new Error('Role must be either "parent" or "caregiver"')
       }
 
-      const cacheKey = `bookings:${role}:${userId}`
+      const cacheKey = `bookings:${role}:${resolvedUserId}`
       return await getCachedOrFetch(cacheKey, async () => {
         let query = supabase
           .from('bookings')
@@ -88,9 +88,9 @@ export class BookingService extends SupabaseBase {
           `)
 
         if (role === 'parent') {
-          query = query.eq('parent_id', userId)
+          query = query.eq('parent_id', resolvedUserId)
         } else {
-          query = query.eq('caregiver_id', userId)
+          query = query.eq('caregiver_id', resolvedUserId)
         }
 
         query = query.order('created_at', { ascending: false })
@@ -149,13 +149,13 @@ export class BookingService extends SupabaseBase {
   async getBookingById(bookingId, userId) {
     try {
       this._validateId(bookingId, 'Booking ID')
-      this._validateId(userId, 'User ID')
-      
+      const resolvedUserId = await this._ensureUserId(userId, 'User ID')
+
       const { data, error } = await supabase
         .from('bookings')
         .select('*')
         .eq('id', bookingId)
-        .or(`parent_id.eq.${userId},caregiver_id.eq.${userId}`)
+        .or(`parent_id.eq.${resolvedUserId},caregiver_id.eq.${resolvedUserId}`)
         .single()
       
       if (error) throw error

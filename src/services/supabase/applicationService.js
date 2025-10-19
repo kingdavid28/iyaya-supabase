@@ -4,13 +4,13 @@ export class ApplicationService extends SupabaseBase {
   async applyToJob(jobId, caregiverId, message = '') {
     try {
       this._validateId(jobId, 'Job ID')
-      this._validateId(caregiverId, 'Caregiver ID')
+      const resolvedCaregiverId = await this._ensureUserId(caregiverId, 'Caregiver ID')
       
       const { data, error } = await supabase
         .from('applications')
         .insert([{
           job_id: jobId,
-          caregiver_id: caregiverId,
+          caregiver_id: resolvedCaregiverId,
           message: message?.trim() || '',
           status: 'pending',
           applied_at: new Date().toISOString(),
@@ -28,7 +28,7 @@ export class ApplicationService extends SupabaseBase {
 
   async getMyApplications(caregiverId) {
     try {
-      this._validateId(caregiverId, 'Caregiver ID')
+      const resolvedCaregiverId = await this._ensureUserId(caregiverId, 'Caregiver ID')
       
       const { data, error } = await supabase
         .from('applications')
@@ -36,7 +36,7 @@ export class ApplicationService extends SupabaseBase {
           *,
           jobs(*)
         `)
-        .eq('caregiver_id', caregiverId)
+        .eq('caregiver_id', resolvedCaregiverId)
         .order('applied_at', { ascending: false })
       
       if (error) throw error
@@ -82,7 +82,7 @@ export class ApplicationService extends SupabaseBase {
 
   async getParentApplications(parentId) {
     try {
-      this._validateId(parentId, 'Parent ID')
+      const resolvedParentId = await this._ensureUserId(parentId, 'Parent ID')
 
       const { data, error } = await supabase
         .from('applications')
@@ -107,7 +107,7 @@ export class ApplicationService extends SupabaseBase {
             profile_image
           )
         `)
-        .eq('jobs.parent_id', parentId)
+        .eq('jobs.parent_id', resolvedParentId)
         .order('applied_at', { ascending: false })
 
       if (error) throw error
