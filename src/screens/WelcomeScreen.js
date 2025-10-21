@@ -246,8 +246,8 @@ export default function WelcomeScreen() {
         </ScrollView>
       </SafeAreaView>
     </LinearGradient>
-  );
-};
+  )
+}
 
 const styles = StyleSheet.create({
   container: {

@@ -72,14 +72,11 @@ const BookingItem = ({
       case 'awaiting_payment':
         return 'Pending';
       case 'confirmed':
-      case 'confirmed':
         return 'Confirmed';
       case 'in_progress':
         return 'In Progress';
       case 'completed':
-      case 'completed':
         return 'Completed';
-      case 'cancelled':
       case 'cancelled':
         return 'Cancelled';
       case 'paid':

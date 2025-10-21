@@ -341,7 +341,6 @@ export const styles = StyleSheet.create({
     marginBottom: 4,
     lineHeight: 28,
     textAlign: 'center',
-    lineHeight: 18,
   },
   statCard: {
     width: '31%',
