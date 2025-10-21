@@ -88,6 +88,13 @@ export class MessagingService extends SupabaseBase {
 
   async getConversations(userId) {
     try {
+      // Check authentication first
+      const currentUser = await this._getCurrentUser()
+      if (!currentUser) {
+        console.warn('⚠️ getConversations: No authenticated user')
+        return []
+      }
+
       this._validateId(userId, 'User ID')
       const cacheKey = `conversations:${userId}`
       return await getCachedOrFetch(cacheKey, async () => {
@@ -97,7 +104,14 @@ export class MessagingService extends SupabaseBase {
           .or(`participant_1.eq.${userId},participant_2.eq.${userId}`)
           .order('last_message_at', { ascending: false })
 
-        if (error) throw error
+        if (error) {
+          // Handle authentication errors gracefully
+          if (error.message?.includes('JWT') || error.code === '401') {
+            console.warn('⚠️ getConversations: Authentication required')
+            return []
+          }
+          throw error
+        }
         
         const conversations = await Promise.all((data || []).map(async (conv) => {
           const otherParticipantId = conv.participant_1 === userId ? conv.participant_2 : conv.participant_1
@@ -116,18 +130,22 @@ export class MessagingService extends SupabaseBase {
         return conversations
       }, 30 * 1000)
     } catch (error) {
-      return this._handleError('getConversations', error)
+      console.warn('getConversations error:', error.message)
+      return []
     }
   }
 
   async sendMessage(conversationId, senderId, content) {
     try {
+      // Check authentication first
+      const currentUser = await this._getCurrentUser()
+      if (!currentUser) {
+        console.warn('⚠️ sendMessage: No authenticated user')
+        throw new Error('Authentication required to send messages')
+      }
+
       // Get current user if senderId is missing
       if (!senderId || senderId === 'undefined' || senderId === 'null') {
-        const currentUser = await this._getCurrentUser()
-        if (!currentUser?.id) {
-          throw new Error('User must be authenticated to send messages')
-        }
         senderId = currentUser.id
         console.log('🔄 Using current auth user as sender:', senderId)
       }

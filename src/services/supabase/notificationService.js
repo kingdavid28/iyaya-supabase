@@ -90,23 +90,8 @@ export class NotificationService extends SupabaseBase {
 
       const cacheKey = `notification-counts:${resolvedUserId}`
       return await getCachedOrFetch(cacheKey, async () => {
-        try {
-          const { data, error } = await supabase
-            .rpc('notification_counts_by_type', { user_id_input: resolvedUserId })
-
-          if (!error && data) {
-            return {
-              messages: data.messages ?? 0,
-              bookings: data.bookings ?? 0,
-              jobs: data.jobs ?? 0,
-              reviews: data.reviews ?? 0,
-              notifications: data.notifications ?? 0,
-              total: data.total ?? 0
-            }
-          }
-        } catch (rpcError) {
-          console.info('Notification counts RPC unavailable, falling back to client aggregation.', rpcError?.message)
-        }
+        // Use client-side aggregation instead of RPC call
+        console.log('🔄 Getting notification counts by type for user:', resolvedUserId)
 
         const { data, error } = await supabase
           .from('notifications')
@@ -141,6 +126,7 @@ export class NotificationService extends SupabaseBase {
           counts.total++
         })
 
+        console.log('✅ Notification counts calculated:', counts)
         return counts
       }, 30 * 1000)
     } catch (error) {

@@ -26,7 +26,8 @@ import ParentProfile from "../../screens/ParentProfile";
 import ChatScreen from "../../screens/ChatScreen";
 import CaregiverReviewsScreen from "../../screens/CaregiverReviewsScreen";
 
-// New Supabase screens
+// Debug screen imports
+import FacebookAuthTest from "../../components/debug/FacebookAuthTest";
 import NotificationsScreen from "../../components/NotificationsScreen";
 
 // Legacy screen imports (to be migrated)
@@ -132,6 +133,7 @@ const AppNavigatorWithAuth = () => {
         <Stack.Screen name="CaregiverChat" component={CaregiverChat} options={{ title: "Chat with Caregiver" }} />
         <Stack.Screen name="CaregiverReviews" component={CaregiverReviewsScreen} options={{ title: "Caregiver Reviews" }} />
         <Stack.Screen name="Notifications" component={NotificationsScreen} options={{ headerShown: false }} />
+        <Stack.Screen name="FacebookAuthTest" component={FacebookAuthTest} options={{ title: "Facebook Auth Test", headerShown: false }} />
         <Stack.Screen name="CaregiverProfile" component={CaregiverProfileComplete} options={{ title: "Caregiver Profile", headerBackTitle: "Back" }} />
       </Stack.Navigator>
     </NavigationContainer>

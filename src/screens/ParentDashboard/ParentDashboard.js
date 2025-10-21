@@ -3,7 +3,6 @@ import { View, Alert, Linking } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import * as FileSystem from 'expo-file-system';
 import { processImageForUpload } from '../../utils/imageUtils';
-import { usePrivacy } from '../../components/features/privacy/PrivacyManager';
 
 // Core imports
 import { useAuth } from '../../contexts/AuthContext';
@@ -19,8 +18,8 @@ import { applyFilters, countActiveFilters } from '../../utils/caregiverUtils';
 import { styles } from '../styles/ParentDashboard.styles';
 
 // Privacy components
-import PrivacyProvider from '../../components/features/privacy/PrivacyManager';
-import ProfileDataProvider from '../../components/features/privacy/ProfileDataManager';
+import { usePrivacy } from '../../components/features/privacy/PrivacyManager';
+import { useProfileData } from '../../components/features/privacy/ProfileDataManager';
 
 // Component imports
 import Header from './components/Header';
@@ -69,8 +68,9 @@ const ParentDashboard = () => {
   const navigation = useNavigation();
   const { signOut, user } = useAuth();
   
-  // Get privacy-related data
+  // Get privacy-related data (context provided at app root)
   const { pendingRequests } = usePrivacy();
+  const profileDataContext = useProfileData?.() || {};
   
   // Dashboard data
   const {
@@ -189,6 +189,24 @@ const ParentDashboard = () => {
   const greetingName = useMemo(() => {
     return (profileForm.name && String(profileForm.name).trim()) || displayName;
   }, [profileForm.name, displayName]);
+
+  // Enhanced caregivers with review eligibility
+  const caregiversWithReviews = useMemo(() => {
+    if (!caregivers || !bookings) return caregivers || [];
+
+    return (caregivers || []).map(caregiver => {
+      // Check if this caregiver has any completed bookings
+      const hasCompletedJobs = bookings.some(booking => {
+        const caregiverId = booking?.caregiver_id || booking?.caregiverId || booking?.caregiver?.id;
+        return caregiverId === caregiver.id && booking.status === 'completed';
+      });
+
+      return {
+        ...caregiver,
+        hasCompletedJobs
+      };
+    });
+  }, [caregivers, bookings]);
 
   // Modal handlers
   const toggleModal = useCallback((modalName, isOpen = null) => {
@@ -601,17 +619,27 @@ const ParentDashboard = () => {
   const handleCancelBooking = useCallback(async (bookingOrId) => {
     const bookingId = typeof bookingOrId === 'object' ? (bookingOrId.id || bookingOrId._id) : bookingOrId;
 
+    console.log('🔍 handleCancelBooking called with:', bookingOrId, 'extracted ID:', bookingId);
+
     if (!bookingId) {
+      console.error('❌ handleCancelBooking: Missing booking ID');
       Alert.alert('Unable to cancel', 'Missing booking information.');
       return;
     }
 
     try {
+      console.log('🔄 handleCancelBooking: Starting cancellation for booking ID:', bookingId);
       setRefreshing(true);
-      await supabaseService.cancelBooking(bookingId);
+
+      const result = await supabaseService.cancelBooking(bookingId);
+      console.log('✅ handleCancelBooking: Cancellation successful:', result);
+
+      Alert.alert('Success', 'Booking cancelled successfully');
     } catch (error) {
-      console.warn('Failed to cancel booking:', error?.message || error);
+      console.error('❌ handleCancelBooking: Cancellation failed:', error?.message || error);
+      Alert.alert('Error', error?.message || 'Failed to cancel booking. Please try again.');
     } finally {
+      console.log('🔄 handleCancelBooking: Refreshing bookings...');
       await fetchBookings();
       setRefreshing(false);
     }
@@ -918,7 +946,7 @@ const ParentDashboard = () => {
             profileContact={profileForm.contact}
             profileLocation={profile?.location || profile?.address || profileForm.location}
             userData={profile}
-            caregivers={caregivers || []}
+            caregivers={caregiversWithReviews || []}
             onBookCaregiver={handleBookCaregiver}
             onMessageCaregiver={handleMessageCaregiver}
             onViewReviews={handleViewReviews}
@@ -932,7 +960,7 @@ const ParentDashboard = () => {
       case 'search':
         return (
           <SearchTab
-            caregivers={caregivers}
+            caregivers={caregiversWithReviews}
             filteredCaregivers={filteredCaregivers}
             onViewCaregiver={handleViewCaregiver}
             onMessageCaregiver={handleMessageCaregiver}
@@ -1097,8 +1125,6 @@ const ParentDashboard = () => {
   };
 
   return (
-    <PrivacyProvider>
-      <ProfileDataProvider>
         <View style={styles.container}>
           <Header
             navigation={navigation}
@@ -1222,8 +1248,6 @@ const ParentDashboard = () => {
             />
           )}
         </View>
-      </ProfileDataProvider>
-    </PrivacyProvider>
   );
 };
 

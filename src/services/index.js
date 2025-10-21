@@ -1,6 +1,6 @@
 // Modern Supabase Services - Main export
-export { supabaseService } from './supabase';
 import { supabaseService } from './supabase';
+export { supabaseService };
 
 // Service structure expected by hooks
 export const supabaseClient = {

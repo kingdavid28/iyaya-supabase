@@ -1,7 +1,8 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { supabaseService } from './supabase';
-import { API_BASE_URL } from '../config/api';
-import { STORAGE_KEYS } from '../config/constants';
+import { STORAGE_KEYS, API_CONFIG } from '../config/constants';
+
+const API_BASE_URL = API_CONFIG.BASE_URL;
 
 class SettingsService {
   async getAuthHeaders() {

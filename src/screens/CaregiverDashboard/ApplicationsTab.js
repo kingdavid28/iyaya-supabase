@@ -30,9 +30,20 @@ const ApplicationCard = React.memo(({ application, onViewJob, onWithdraw }) => {
       default: return 'help-circle-outline';
     }
   };
-
   const job = application?.job || {};
-  const appliedDate = application?.applied_at || application?.appliedAt || application?.created_at;
+  const appliedDate = application?.appliedDate || application?.applied_at || application?.appliedAt || application?.created_at;
+  const baseRateLabel = application?.hourlyRateLabel || (job?.hourly_rate ? `₱${Number(job.hourly_rate)}/hr` : null);
+  const proposedRateLabel = application?.proposedRateLabel || null;
+  const showProposedRate = Boolean(proposedRateLabel && proposedRateLabel !== baseRateLabel);
+  const jobRateLabel = baseRateLabel || 'Rate not specified';
+  const childrenSummary = application?.childrenSummary
+    || job?.childrenSummary
+    || (job?.children?.length ? `${job.children.length} child${job.children.length > 1 ? 'ren' : ''}` : null)
+    || (job?.childrenCount ? `${job.childrenCount} child${job.childrenCount > 1 ? 'ren' : ''}` : null)
+    || 'Children info available';
+  const scheduleLabel = application?.schedule || job?.schedule || job?.time || null;
+  const messagePreviewRaw = application?.message || application?.coverLetter;
+  const messagePreview = typeof messagePreviewRaw === 'string' ? messagePreviewRaw.trim() : null;
 
   return (
     <View style={applicationCardStyles.card}>
@@ -54,15 +65,20 @@ const ApplicationCard = React.memo(({ application, onViewJob, onWithdraw }) => {
       <View style={applicationCardStyles.details}>
         <View style={applicationCardStyles.detailRow}>
           <Ionicons name="cash-outline" size={16} color="#6b7280" />
-          <Text style={applicationCardStyles.detailText}>₱{application?.proposedRate || job?.hourly_rate || job?.hourlyRate || job?.rate || 0}/hr</Text>
+          <Text style={applicationCardStyles.detailText}>{jobRateLabel}</Text>
         </View>
+
+        {showProposedRate && (
+          <View style={applicationCardStyles.detailRow}>
+            <Ionicons name="trending-up" size={16} color="#2563EB" />
+            <Text style={[applicationCardStyles.detailText, { color: '#2563EB' }]}>{proposedRateLabel}</Text>
+          </View>
+        )}
         
         <View style={applicationCardStyles.detailRow}>
           <Ionicons name="people-outline" size={16} color="#6b7280" />
           <Text style={applicationCardStyles.detailText}>
-            {job?.children?.length ? `${job.children.length} child${job.children.length > 1 ? 'ren' : ''}` : 
-             job?.childrenCount ? `${job.childrenCount} child${job.childrenCount > 1 ? 'ren' : ''}` : 
-             'Children info available'}
+            {childrenSummary}
           </Text>
         </View>
         
@@ -73,19 +89,19 @@ const ApplicationCard = React.memo(({ application, onViewJob, onWithdraw }) => {
           </Text>
         </View>
         
-        {job?.schedule && (
+        {scheduleLabel && (
           <View style={applicationCardStyles.detailRow}>
             <Ionicons name="time-outline" size={16} color="#6b7280" />
-            <Text style={applicationCardStyles.detailText}>{job.schedule}</Text>
+            <Text style={applicationCardStyles.detailText}>{scheduleLabel}</Text>
           </View>
         )}
       </View>
-      
-      {application?.message && (
+
+      {messagePreview && (
         <View style={applicationCardStyles.messageContainer}>
           <Text style={applicationCardStyles.messageLabel}>Your message:</Text>
           <Text style={applicationCardStyles.messageText} numberOfLines={2}>
-            "{application.message}"
+            "{messagePreview}"
           </Text>
         </View>
       )}

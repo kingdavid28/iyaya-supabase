@@ -1,5 +1,4 @@
 import { Ionicons } from '@expo/vector-icons'
-import { useFocusEffect, useNavigation } from "@react-navigation/native"
 import { LinearGradient } from "expo-linear-gradient"
 import React, { useCallback, useEffect, useMemo, useState } from "react"
 import { ActivityIndicator, Alert, Dimensions, Image, Linking, Modal, Platform, Pressable, RefreshControl, ScrollView, Text, TextInput, View, FlatList } from "react-native"
@@ -7,23 +6,11 @@ import { Button, Card, Chip } from "react-native-paper"
 import Toast from "../components/ui/feedback/Toast"
 import { supabaseService } from '../services/supabase'
 import { reviewService } from '../services/supabase/reviewService'
-import { getCurrentSocketURL } from '../config/api'
 import { useAuth } from "../contexts/AuthContext"
-import JobsTab, { CaregiverJobCard } from './CaregiverDashboard/JobsTab';
-import { usePrivacy } from '../components/features/privacy/PrivacyManager';
 import { useNotificationCounts } from '../hooks/useNotificationCounts';
-import { SettingsModal } from "../components/ui/modals/SettingsModal"
-import { RequestInfoModal } from "../components/ui/modals/RequestInfoModal"
-import BookingDetailsModal from '../shared/ui/modals/BookingDetailsModal';
-import { formatAddress } from "../utils/addressUtils"
-import { calculateAge } from "../utils/dateUtils"
-import { __DEV__ } from "../config/constants"
-import MessagesTab from './CaregiverDashboard/components/MessagesTab';
-import NotificationsTab from './CaregiverDashboard/components/NotificationsTab';
-import BookingsTab from './CaregiverDashboard/BookingsTab';
-import ApplicationsTab from './CaregiverDashboard/ApplicationsTab';
-import ReviewList from '../components/features/profile/ReviewList';
-import ReviewForm from '../components/forms/ReviewForm';
+import { usePrivacy } from '../components/features/privacy/PrivacyManager';
+import { useHighlightRequest } from '../hooks/useHighlightRequest';
+import { SettingsModal } from '../components/ui/modals/SettingsModal';
 
 import { 
   EmptyState, 
@@ -37,25 +24,52 @@ import {
   formatDate
 } from '../shared/ui';
 
+import {
+  authAPI,
+  jobsAPI,
+  applicationsAPI,
+  bookingsAPI,
+  childrenAPI,
+  getCurrentAPIURL,
+  getCurrentSocketURL
+} from '../services';
+
 import { styles } from './styles/CaregiverDashboard.styles';
 import { useCaregiverDashboard } from '../hooks/useCaregiverDashboard';
 import CaregiverProfileSection from './CaregiverDashboard/components/CaregiverProfileSection';
 import { PrivacyNotificationModal } from '../components/ui/modals/PrivacyNotificationModal';
-
-import MessageItemLocal from '../components/messaging/MessageItemLocal';
+import { RequestInfoModal } from '../shared/ui/modals/RequestInfoModal';
+import { BookingDetailsModal } from '../shared/ui/modals/BookingDetailsModal';
+import { ReviewForm } from '../components/forms/ReviewForm';
+import JobsTab, { CaregiverJobCard } from './CaregiverDashboard/JobsTab';
+import BookingsTab from './CaregiverDashboard/BookingsTab';
+import ApplicationsTab from './CaregiverDashboard/ApplicationsTab';
+import MessagesTab from './CaregiverDashboard/components/MessagesTab';
+import NotificationsTab from './CaregiverDashboard/components/NotificationsTab';
+import ReviewList from '../components/features/profile/ReviewList';
+import { useNavigation, useRoute } from '@react-navigation/native';
 import { normalizeCaregiverReviewsForList } from '../utils/reviews';
+import RatingsReviewsModal from '../components/ui/modals/RatingsReviewsModal';
+import {
+  SkeletonCard,
+  SkeletonBlock,
+  SkeletonCircle,
+  SkeletonPill
+} from '../components/common/SkeletonPlaceholder';
 
 function ApplicationCard({ application, onViewDetails, onMessage }) {
+  const navigation = useNavigation();
   const job = application.job || {};
 
+
   const getStatusColor = (status) => {
-    switch (status?.toLowerCase()) {
+    switch (status?.toLowerCase()) {        
       case 'pending': return '#F59E0B';
-      case 'accepted': return '#10B981';
+      case 'accepted': return '#10B981';  
       case 'rejected': return '#EF4444';
-      case 'withdrawn': return '#6B7280';
+      case 'withdrawn': return '#6B7280'; 
       default: return '#9CA3AF';
-    }
+    }   
   };
 
   const getStatusText = (status) => {
@@ -611,8 +625,35 @@ function BookingCard({ booking, onMessage, onViewDetails, onConfirmAttendance })
   )
 }
 
-function CaregiverDashboard({ onLogout, route }) {
+export const getRatingStats = (profile) => {
+  const rawProfileRating = Number(profile?.rating)
+  const profileRating = Number.isFinite(rawProfileRating) ? rawProfileRating : 0
+  const rawReviewCount = Number.isFinite(Number(profile?.reviewCount))
+    ? Number(profile?.reviewCount)
+    : Number.isFinite(Number(profile?.reviews))
+      ? Number(profile?.reviews)
+      : 0
+  const profileReviewCount = Math.max(0, rawReviewCount)
+  const ratingStatValue = profileReviewCount > 0 ? profileRating.toFixed(1) : "—"
+  const ratingStatSubtitle = profileReviewCount === 0
+    ? "No reviews yet"
+    : profileReviewCount === 1
+      ? "1 review"
+      : `${profileReviewCount} reviews`
+  const ratingStatCTA = profileReviewCount > 0 ? "See feedback" : "Build reputation"
+
+  return {
+    rating: profileRating,
+    ratingDisplay: ratingStatValue,
+    reviewCount: profileReviewCount,
+    subtitle: ratingStatSubtitle,
+    ctaLabel: ratingStatCTA
+  }
+}
+
+const CaregiverDashboard = () => {
   const navigation = useNavigation()
+  const route = useRoute()
   const { user, signOut } = useAuth()
   const { width } = Dimensions.get("window");
   const isTablet = width >= 768
@@ -663,6 +704,7 @@ function CaregiverDashboard({ onLogout, route }) {
   const [toast, setToast] = useState({ visible: false, message: '', type: 'success' })
   const showToast = (message, type = 'success') => setToast({ visible: true, message, type })
   const [refreshing, setRefreshing] = useState(false)
+  const [showRequestModal, setShowRequestModal] = useState(false);
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
@@ -671,14 +713,15 @@ function CaregiverDashboard({ onLogout, route }) {
         loadProfile(),
         fetchJobs(),
         fetchApplications(),
-        fetchBookings()
+        fetchBookings(),
+        fetchCaregiverReviews({ showSkeleton: false })
       ]);
     } catch (error) {
       console.error('Error refreshing data:', error);
     } finally {
       setRefreshing(false);
     }
-  }, [loadProfile, fetchJobs, fetchApplications, fetchBookings]);
+  }, [fetchApplications, fetchBookings, fetchCaregiverReviews, fetchJobs, loadProfile]);
 
   const fetchCaregiverReviews = useCallback(async ({ showSkeleton = true } = {}) => {
     if (!user?.id) return;
@@ -701,11 +744,26 @@ function CaregiverDashboard({ onLogout, route }) {
   }, [user?.id]);
 
   useEffect(() => {
-    if (!user?.id) return;
+    if (!user?.id) {
+      setInitialLoading(false);
+      return;
+    }
 
     let cancelled = false;
     const run = async () => {
-      await fetchCaregiverReviews({ showSkeleton: true });
+      try {
+        await Promise.all([
+          loadProfile(),
+          fetchJobs(),
+          fetchApplications(),
+          fetchBookings(),
+          fetchCaregiverReviews({ showSkeleton: true })
+        ]);
+      } finally {
+        if (!cancelled) {
+          setInitialLoading(false);
+        }
+      }
     };
 
     run();
@@ -713,7 +771,7 @@ function CaregiverDashboard({ onLogout, route }) {
     return () => {
       cancelled = true;
     };
-  }, [fetchCaregiverReviews, user?.id]);
+  }, [fetchApplications, fetchBookings, fetchCaregiverReviews, fetchJobs, loadProfile, user?.id]);
 
   const refreshCaregiverReviews = useCallback(async () => {
     if (!user?.id || refreshingReviews) return;
@@ -729,8 +787,46 @@ function CaregiverDashboard({ onLogout, route }) {
 
   const [showNotifications, setShowNotifications] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
-  const [showRequestModal, setShowRequestModal] = useState(false);
-  const [imageRefreshKey, setImageRefreshKey] = useState(0);
+  const [showHighlightRequestModal, setShowHighlightRequestModal] = useState(false);
+  const [selectedFamilyForHighlight, setSelectedFamilyForHighlight] = useState(null);
+  const [showRatingsModal, setShowRatingsModal] = useState(false);
+  const [initialLoading, setInitialLoading] = useState(true);
+
+  const openRatingsModal = useCallback(() => {
+    setShowRatingsModal(true);
+  }, []);
+
+  const closeRatingsModal = useCallback(() => {
+    setShowRatingsModal(false);
+  }, []);
+
+  const preloadCaregiverReviews = useCallback(async () => {
+    await fetchCaregiverReviews({ showSkeleton: false });
+  }, [fetchCaregiverReviews]);
+
+  const recentHighlightFamilies = useMemo(() => {
+    const combined = [...(bookings || []), ...(applications || [])];
+    const uniqueMap = new Map();
+
+    combined.forEach((item, index) => {
+      const familyName = item.family || item.parentName || 'Family';
+      const familyId = item.parentId || item.userId || item.createdBy || item.familyId || item.id;
+      const key = String(familyId ?? `${familyName}-${index}`);
+
+      if (!uniqueMap.has(key)) {
+        uniqueMap.set(key, {
+          key,
+          id: familyId ?? key,
+          name: familyName,
+          type: item.status ? 'booking' : 'application',
+          iconName: item.status ? 'calendar' : 'document-text-outline',
+          statusLabel: item.status ? `Recent booking (${item.status})` : 'Job application',
+        });
+      }
+    });
+
+    return Array.from(uniqueMap.values()).slice(0, 10);
+  }, [bookings, applications]);
 
   const openEditProfileModal = () => {
     try {
@@ -772,10 +868,47 @@ function CaregiverDashboard({ onLogout, route }) {
     setShowJobDetails(true)
   }
 
-  const handleViewApplication = (application) => {
-    setSelectedApplication(application)
-    setShowApplicationDetails(true)
-  }
+  const handleViewApplication = application => {
+    if (!application) return;
+
+    const job = application.job || {};
+    const baseRate = application.hourlyRateLabel
+      || (typeof application.hourlyRate === 'number' ? `₱${application.hourlyRate}/hr` : null)
+      || (typeof job.hourly_rate === 'number' ? `₱${job.hourly_rate}/hr` : null)
+      || (typeof job.hourlyRate === 'number' ? `₱${job.hourlyRate}/hr` : null)
+      || null;
+
+    const proposedRate = application.proposedRateLabel
+      || (typeof application.proposedRate === 'number' ? `₱${application.proposedRate}/hr` : null);
+
+    const mergedJob = {
+      ...job,
+      title: job.title || application.jobTitle,
+      family: job.family || job.familyName || application.family,
+      location: job.location || application.location,
+      schedule: application.schedule || job.schedule || job.time,
+      hourlyRateLabel: baseRate,
+      proposedRateLabel: proposedRate,
+      childrenSummary: application.childrenSummary
+        || job.childrenSummary
+        || (Array.isArray(job.children) && job.children.length
+          ? `${job.children.length} child${job.children.length > 1 ? 'ren' : ''}`
+          : null)
+        || (typeof job.childrenCount === 'number'
+          ? `${job.childrenCount} child${job.childrenCount > 1 ? 'ren' : ''}`
+          : null)
+        || application.childrenSummary,
+    };
+
+    setSelectedApplication({
+      ...application,
+      job: mergedJob,
+      baseRateLabel: baseRate,
+      proposedRateLabel: proposedRate,
+      message: application.message || application.coverLetter || '',
+    });
+    setShowApplicationDetails(true);
+  };
 
   const navigateToMessagesTab = useCallback((targetParent) => {
     setActiveTab('messages');
@@ -890,14 +1023,29 @@ function CaregiverDashboard({ onLogout, route }) {
     }
   }
 
+  // Sort reviews for display (newest first) - using a safer variable name to avoid potential conflicts
+  const reviewsSorted = useMemo(() => {
+    if (!Array.isArray(reviews)) {
+      return [];
+    }
+
+    return [...reviews].sort((a, b) => {
+      const dateA = new Date(a?.createdAt || a?.created_at || a?.created_at?.seconds * 1000 || 0);
+      const dateB = new Date(b?.createdAt || b?.created_at || b?.created_at?.seconds * 1000 || 0);
+      return dateB - dateA;
+    });
+  }, [reviews]);
+
   const handleRequestHighlight = useHighlightRequest({
     userId: user?.id,
-    reviews: sortedReviews,
+    reviews: reviewsSorted,
     onStart: () => setHighlightRequestSending(true),
     onComplete: ({ targetParentName, success }) => {
       setHighlightRequestSending(false);
       if (success) {
         showToast(`Highlight request sent to ${targetParentName || 'the family'}.`, 'success');
+        setShowHighlightRequestModal(false);
+        setSelectedFamilyForHighlight(null);
       }
     },
     onError: (message) => {
@@ -907,6 +1055,24 @@ function CaregiverDashboard({ onLogout, route }) {
     onInfo: (message) => showToast(message, 'info'),
     onNavigateToChat: navigateToMessagesTab
   });
+
+  // Wrapper function for general highlight requests (no specific parent) - shows modal to select family
+  const handleGeneralHighlightRequest = useCallback(() => {
+    setShowHighlightRequestModal(true);
+  }, []);
+
+  // Handle highlight request after family is selected
+  const handleSendHighlightRequest = useCallback(async (targetParentId, targetParentName) => {
+    if (!targetParentId || !targetParentName) {
+      showToast('Please select a family to send the highlight request to.', 'error');
+      return;
+    }
+
+    const result = await handleRequestHighlight(targetParentId, targetParentName);
+    if (!result) {
+      console.log('Highlight request did not complete successfully.');
+    }
+  }, [handleRequestHighlight, showToast]);
 
   const handleApplicationSubmit = async ({ jobId, jobTitle, family, coverLetter, proposedRate }) => {
     // Validate job ID
@@ -1110,65 +1276,54 @@ function CaregiverDashboard({ onLogout, route }) {
     
     return (
       <View style={styles.navContainer}>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.navScroll}>
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.navScroll}
+        >
           {tabs.map((tab) => {
-          const active = activeTab === tab.id
-          const onPress = () => {
-            setActiveTab(tab.id)
-            if (tab.id === 'jobs') {
-              fetchJobs()
-            } else if (tab.id === 'applications') {
-              fetchApplications()
-            }
-          }
-          const iconColor = active ? '#3b83f5' : '#6B7280'
-          return (
-            <Pressable
-              key={tab.id}
-              onPress={onPress}
-              style={[
-                styles.navTab,
-                active ? styles.navTabActive : null,
-              ]}
-            >
-              <View style={{ position: 'relative' }}>
-                <Ionicons name={tab.icon} size={18} color={iconColor} />
-                {tab.badgeCount > 0 && (
-                  <View style={styles.notificationBadge}>
-                    <Text style={styles.notificationBadgeText}>
-                      {tab.badgeCount > 99 ? '99+' : tab.badgeCount}
-                    </Text>
-                  </View>
-                )}
-              </View>
-              <Text style={[styles.navTabText, active ? styles.navTabTextActive : null]}>
-                {tab.label}
-              </Text>
-
-            </Pressable>
-          )
-        })}
-      </ScrollView>
-    </View>
-  );
-}
-
-  const sortedReviews = useMemo(() => {
-    if (!Array.isArray(reviews)) {
-      return [];
-    }
-    return [...reviews].sort((a, b) => {
-      const dateA = a?.createdAt ? new Date(a.createdAt).getTime() : 0;
-      const dateB = b?.createdAt ? new Date(b.createdAt).getTime() : 0;
-      return dateB - dateA;
-    });
-  }, [reviews]);
+            const active = activeTab === tab.id;
+            const onPress = () => {
+              setActiveTab(tab.id);
+              if (tab.id === 'jobs') {
+                fetchJobs();
+              } else if (tab.id === 'applications') {
+                fetchApplications();
+              }
+            };
+            const iconColor = active ? '#3b83f5' : '#6B7280';
+            return (
+              <Pressable
+                key={tab.id}
+                onPress={onPress}
+                style={[styles.navTab, active ? styles.navTabActive : null]}
+              >
+                <View style={{ position: 'relative' }}>
+                  <Ionicons name={tab.icon} size={18} color={iconColor} />
+                  {tab.badgeCount > 0 ? (
+                    <View style={styles.notificationBadge}>
+                      <Text style={styles.notificationBadgeText}>
+                        {tab.badgeCount > 99 ? '99+' : tab.badgeCount}
+                      </Text>
+                    </View>
+                  ) : null}
+                </View>
+                <Text style={[styles.navTabText, active ? styles.navTabTextActive : null]}>
+                  {tab.label}
+                </Text>
+              </Pressable>
+            );
+          })}
+        </ScrollView>
+      </View>
+    );
+  }
 
   const averageRating = useMemo(() => {
-    if (!sortedReviews.length) return '—';
-    const total = sortedReviews.reduce((sum, review) => sum + (review.rating || 0), 0);
-    return (total / sortedReviews.length).toFixed(1);
-  }, [sortedReviews]);
+    if (!reviewsSorted.length) return '—';
+    const total = reviewsSorted.reduce((sum, review) => sum + (review.rating || 0), 0);
+    return (total / reviewsSorted.length).toFixed(1);
+  }, [reviewsSorted]);
 
   const ratingDistribution = useMemo(() => {
     const buckets = [5, 4, 3, 2, 1].map(rating => ({ rating, count: 0 }));
@@ -1177,7 +1332,7 @@ function CaregiverDashboard({ onLogout, route }) {
       return acc;
     }, {});
 
-    sortedReviews.forEach(review => {
+    reviewsSorted.forEach(review => {
       const bucket = bucketMap[Math.round(review?.rating || 0)];
       if (bucket) {
         bucket.count += 1;
@@ -1185,9 +1340,9 @@ function CaregiverDashboard({ onLogout, route }) {
     });
 
     return buckets;
-  }, [sortedReviews]);
+  }, [reviewsSorted]);
 
-  const totalReviews = sortedReviews.length;
+  const totalReviews = reviewsSorted.length;
 
   const fiveStarShare = useMemo(() => {
     if (!totalReviews) return 0;
@@ -1197,9 +1352,9 @@ function CaregiverDashboard({ onLogout, route }) {
 
   const commentShare = useMemo(() => {
     if (!totalReviews) return 0;
-    const withComments = sortedReviews.filter(review => review?.comment?.trim()).length;
+    const withComments = reviewsSorted.filter(review => review?.comment?.trim()).length;
     return Math.round((withComments / totalReviews) * 100);
-  }, [sortedReviews, totalReviews]);
+  }, [reviewsSorted, totalReviews]);
 
   const reviewFilters = useMemo(() => ([
     { id: 'all', label: 'All highlights' },
@@ -1209,20 +1364,22 @@ function CaregiverDashboard({ onLogout, route }) {
     { id: 'needs-attention', label: 'Needs follow-up' },
   ]), []);
 
+  const { ratingDisplay, subtitle: ratingStatSubtitle, ctaLabel: ratingStatCTA } = getRatingStats(profile);
+
   const filteredReviews = useMemo(() => {
     switch (reviewsFilter) {
       case 'recent':
-        return sortedReviews.slice(0, 6);
+        return reviewsSorted.slice(0, 6);
       case 'positive':
-        return sortedReviews.filter(review => (review?.rating || 0) >= 4);
+        return reviewsSorted.filter(review => (review?.rating || 0) >= 4);
       case 'with-notes':
-        return sortedReviews.filter(review => review?.comment?.trim());
+        return reviewsSorted.filter(review => review?.comment?.trim());
       case 'needs-attention':
-        return sortedReviews.filter(review => (review?.rating || 0) > 0 && (review?.rating || 0) <= 3);
+        return reviewsSorted.filter(review => (review?.rating || 0) > 0 && (review?.rating || 0) <= 3);
       default:
-        return sortedReviews;
+        return reviewsSorted;
     }
-  }, [sortedReviews, reviewsFilter]);
+  }, [reviewsSorted, reviewsFilter]);
 
   const reviewSummaryItems = useMemo(() => ([
     {
@@ -1288,14 +1445,14 @@ function CaregiverDashboard({ onLogout, route }) {
       </View>
       <Pressable
         style={[styles.reviewsFooterButton, highlightRequestSending && { opacity: 0.6 }]}
-        onPress={handleRequestHighlight}
+        onPress={handleGeneralHighlightRequest}
         disabled={highlightRequestSending}
       >
         <Ionicons name="mail-unread-outline" size={16} color="#FFFFFF" />
         <Text style={styles.reviewsFooterButtonText}>Request highlight</Text>
       </Pressable>
     </View>
-  ), [handleRequestHighlight, highlightRequestSending]);
+  ), [handleGeneralHighlightRequest, highlightRequestSending]);
 
   const handleSelectReviewFilter = useCallback((filterId) => {
     setReviewsFilter(current => (current === filterId ? current : filterId));
@@ -1310,16 +1467,21 @@ function CaregiverDashboard({ onLogout, route }) {
         style={styles.reviewsHeroCard}
       >
         <View style={styles.reviewsHeroHeader}>
-          <View style={styles.reviewsHeroMetric}>
+          <Pressable
+            style={styles.reviewsHeroMetric}
+            onPress={openRatingsModal}
+            accessibilityRole="button"
+            accessibilityLabel="View ratings and reviews"
+          >
             <Text style={styles.reviewsHeroLabel}>Average rating</Text>
             <View style={styles.reviewsHeroValueRow}>
               <Text style={styles.reviewsHeroValue}>{averageRating}</Text>
               <Ionicons name="star" size={22} color="#FACC15" />
             </View>
             <Text style={styles.reviewsHeroHint}>Based on family-submitted highlights</Text>
-          </View>
+          </Pressable>
           <Pressable
-            onPress={handleRequestHighlight}
+            onPress={handleGeneralHighlightRequest}
             style={[styles.reviewsHeroButton, highlightRequestSending && { opacity: 0.6 }]}
             disabled={highlightRequestSending}
           >
@@ -1575,11 +1737,56 @@ function CaregiverDashboard({ onLogout, route }) {
       
       <View style={{ flex: 1 }}>
         {activeTab === "dashboard" && (
-          jobsLoading ? (
-            <View style={styles.loadingContainer}>
-              <ActivityIndicator size="large" color="#3B82F6" />
-              <Text style={styles.loadingText}>Loading dashboard...</Text>
-            </View>
+          initialLoading ? (
+            <ScrollView contentContainerStyle={styles.dashboardSkeletonContainer}>
+              <SkeletonCard style={styles.dashboardSkeletonSummaryCard}>
+                <View style={styles.dashboardSkeletonSummaryRow}>
+                  <SkeletonCircle size={64} />
+                  <View style={styles.dashboardSkeletonSummaryInfo}>
+                    <SkeletonBlock width="60%" height={18} />
+                    <SkeletonBlock width="40%" height={14} style={{ marginTop: 6 }} />
+                    <SkeletonPill width="45%" height={12} style={{ marginTop: 10 }} />
+                  </View>
+                </View>
+              </SkeletonCard>
+
+              <View style={styles.dashboardSkeletonStatsRow}>
+                {Array.from({ length: 4 }).map((_, index) => (
+                  <SkeletonCard key={`stat-skeleton-${index}`} style={styles.dashboardSkeletonQuickStat}>
+                    <SkeletonCircle size={36} />
+                    <SkeletonBlock width="50%" height={16} style={{ marginTop: 12 }} />
+                    <SkeletonPill width="70%" height={14} style={{ marginTop: 6 }} />
+                  </SkeletonCard>
+                ))}
+              </View>
+
+              <View style={styles.dashboardSkeletonActionsRow}>
+                {Array.from({ length: 4 }).map((_, index) => (
+                  <SkeletonCard key={`action-skeleton-${index}`} style={styles.dashboardSkeletonAction}>
+                    <SkeletonCircle size={32} />
+                    <SkeletonBlock width="60%" height={14} style={{ marginTop: 8 }} />
+                  </SkeletonCard>
+                ))}
+              </View>
+
+              {Array.from({ length: 3 }).map((_, sectionIndex) => (
+                <SkeletonCard key={`section-skeleton-${sectionIndex}`} style={styles.dashboardSkeletonSection}>
+                  <SkeletonBlock width="50%" height={16} />
+                  <SkeletonBlock width="30%" height={12} style={{ marginTop: 8 }} />
+                  <View style={styles.dashboardSkeletonItems}>
+                    {Array.from({ length: 2 }).map((_, itemIndex) => (
+                      <View key={`section-skeleton-${sectionIndex}-item-${itemIndex}`} style={styles.dashboardSkeletonItem}>
+                        <SkeletonCircle size={44} />
+                        <View style={styles.dashboardSkeletonItemInfo}>
+                          <SkeletonBlock width="70%" height={14} />
+                          <SkeletonBlock width="50%" height={12} style={{ marginTop: 6 }} />
+                        </View>
+                      </View>
+                    ))}
+                  </View>
+                </SkeletonCard>
+              ))}
+            </ScrollView>
           ) : (
             <ScrollView 
               style={styles.content}
@@ -1597,11 +1804,15 @@ function CaregiverDashboard({ onLogout, route }) {
             <View style={styles.statsGrid}>
               <QuickStat
                 icon="star"
-                value={profile?.rating?.toFixed(1) || "0.0"}
+                value={ratingDisplay}
                 label="Rating"
                 color="#F59E0B"
                 bgColor="#FEF3C7"
                 styles={styles}
+                onPress={openRatingsModal}
+                subtitle={ratingStatSubtitle}
+                ctaLabel={ratingStatCTA}
+                accessibilityHint="Shows detailed caregiver ratings and reviews"
               />
               <QuickStat
                 icon="briefcase"
@@ -2032,6 +2243,15 @@ function CaregiverDashboard({ onLogout, route }) {
         </Modal>
       )}
 
+      <RatingsReviewsModal
+        visible={showRatingsModal}
+        onClose={closeRatingsModal}
+        caregiverId={user?.id}
+        caregiverName={profile?.name || user?.name}
+        currentUserId={user?.id}
+        onPreload={preloadCaregiverReviews}
+      />
+
       {showApplicationDetails && selectedApplication && (
         <Modal
           visible={showApplicationDetails}
@@ -2369,6 +2589,187 @@ function CaregiverDashboard({ onLogout, route }) {
                 <Text style={styles.loadingText}>Saving review...</Text>
               </View>
             )}
+          </View>
+        </View>
+      </Modal>
+
+      {/* Settings Modal */}
+      <SettingsModal
+        visible={showSettings}
+        onClose={() => setShowSettings(false)}
+        user={user}
+        userType="caregiver"
+        colors={{ primary: '#3B82F6' }}
+      />
+
+      {/* Request Info Modal */}
+      <RequestInfoModal
+        visible={showRequestModal}
+        onClose={() => setShowRequestModal(false)}
+        targetUser={user}
+        onSuccess={() => {
+          setShowRequestModal(false);
+          showToast('Request sent successfully!', 'success');
+        }}
+      />
+
+      {/* Highlight Request Modal */}
+      <Modal
+        visible={showHighlightRequestModal}
+        animationType="fade"
+        transparent
+        onRequestClose={() => setShowHighlightRequestModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.highlightModalCard}>
+            <View style={styles.highlightModalHeader}>
+              <View style={styles.highlightModalTitleRow}>
+                <View style={{ flex: 1, paddingRight: 16 }}>
+                  <Text style={styles.highlightModalTitle}>Request a Highlight</Text>
+                  <Text style={styles.highlightModalSubtitle}>
+                    Choose a family you've recently worked with to ask for a highlight on your profile.
+                  </Text>
+                </View>
+                <Pressable
+                  onPress={() => {
+                    setShowHighlightRequestModal(false);
+                    setSelectedFamilyForHighlight(null);
+                  }}
+                  style={styles.highlightCloseButton}
+                  accessibilityRole="button"
+                  accessibilityLabel="Close highlight request"
+                >
+                  <Ionicons name="close" size={22} color="#4B5563" />
+                </Pressable>
+              </View>
+            </View>
+
+            <ScrollView
+              showsVerticalScrollIndicator={false}
+              style={styles.highlightBody}
+              contentContainerStyle={styles.highlightBodyContent}
+            >
+              <View style={styles.highlightSection}>
+                <Text style={styles.highlightSectionTitle}>Recent Families</Text>
+                <Text style={styles.highlightSectionDescription}>
+                  Highlights help families understand why others loved working with you. Select a recent booking or application below.
+                </Text>
+
+                <View style={styles.highlightFamiliesList}>
+                  {recentHighlightFamilies.map((item, index) => {
+                    const isSelected = selectedFamilyForHighlight?.key === item.key;
+                    const isLast = index === recentHighlightFamilies.length - 1;
+
+                    const handleSelectFamily = () => {
+                      if (isSelected) {
+                        setSelectedFamilyForHighlight(null);
+                      } else {
+                        setSelectedFamilyForHighlight({
+                          key: item.key,
+                          id: item.id,
+                          name: item.name,
+                          type: item.type,
+                        });
+                      }
+                    };
+
+                    return (
+                      <Pressable
+                        key={item.key}
+                        style={[
+                          styles.highlightFamilyItem,
+                          isSelected && styles.highlightFamilySelected,
+                          isLast && styles.highlightFamilyItemLast,
+                        ]}
+                        onPress={handleSelectFamily}
+                        accessibilityRole="button"
+                        accessibilityState={{ selected: isSelected }}
+                        android_ripple={{ color: 'rgba(99,102,241,0.12)' }}
+                      >
+                        <View style={styles.highlightFamilyRow}>
+                          <View style={styles.highlightFamilyInfo}>
+                            <View style={styles.highlightFamilyIconWrap}>
+                              <Ionicons
+                                name={item.iconName}
+                                size={20}
+                                color={isSelected ? '#4338CA' : '#6366F1'}
+                              />
+                            </View>
+                            <View style={styles.highlightFamilyText}>
+                              <Text style={styles.highlightFamilyName}>{item.name}</Text>
+                              <Text style={styles.highlightFamilyMeta}>{item.statusLabel}</Text>
+                            </View>
+                          </View>
+                          {isSelected && (
+                            <Ionicons name="checkmark-circle" size={22} color="#4338CA" />
+                          )}
+                        </View>
+                      </Pressable>
+                    );
+                  })}
+
+                  {recentHighlightFamilies.length === 0 && (
+                    <View style={styles.highlightEmptyState}>
+                      <View style={styles.highlightEmptyIcon}>
+                        <Ionicons name="sparkles-outline" size={28} color="#9CA3AF" />
+                      </View>
+                      <Text style={styles.highlightEmptyTitle}>No families available yet</Text>
+                      <Text style={styles.highlightEmptySubtitle}>
+                        Once you complete bookings or engage with families, they will appear here so you can request a highlight.
+                      </Text>
+                    </View>
+                  )}
+                </View>
+              </View>
+
+              <View style={styles.highlightSection}>
+                <View style={styles.highlightHintBox}>
+                  <Ionicons name="information-circle-outline" size={18} color="#6366F1" style={styles.highlightHintIcon} />
+                  <Text style={styles.highlightHintText}>
+                    Families receive a friendly message summarizing why highlights matter. You can add a personal note after selecting a family.
+                  </Text>
+                </View>
+              </View>
+            </ScrollView>
+
+            <View style={styles.highlightFooter}>
+              <View style={styles.highlightFooterActions}>
+                <Button
+                  mode="outlined"
+                  onPress={() => {
+                    setShowHighlightRequestModal(false);
+                    setSelectedFamilyForHighlight(null);
+                  }}
+                  style={[styles.highlightSecondaryButton, styles.highlightActionButton]}
+                  labelStyle={styles.highlightSecondaryLabel}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  mode="contained"
+                  onPress={() => {
+                    if (selectedFamilyForHighlight) {
+                      handleSendHighlightRequest(
+                        selectedFamilyForHighlight.id,
+                        selectedFamilyForHighlight.name
+                      );
+                    } else {
+                      showToast('Please select a family first', 'error');
+                    }
+                  }}
+                  style={[styles.highlightPrimaryButton, styles.highlightActionButton]}
+                  loading={highlightRequestSending}
+                  disabled={highlightRequestSending || !selectedFamilyForHighlight}
+                >
+                  <View style={styles.highlightPrimaryContent}>
+                    <Ionicons name="send" size={18} color="#FFFFFF" />
+                    <Text style={styles.highlightPrimaryText}>
+                      {highlightRequestSending ? 'Sending…' : 'Send Request'}
+                    </Text>
+                  </View>
+                </Button>
+              </View>
+            </View>
           </View>
         </View>
       </Modal>

@@ -6,50 +6,73 @@ import {
   TouchableOpacity,
   StyleSheet,
   RefreshControl,
-  Alert
+  Alert,
+  SafeAreaView
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { supabaseService } from '../services/supabase';
 import { useAuth } from '../contexts/AuthContext';
-import {
-  SkeletonCard,
-  SkeletonBlock,
-  SkeletonCircle,
-  SkeletonPill
-} from '../components/common/SkeletonPlaceholder';
+
+// Lazy load supabaseService to avoid import-time issues
+let supabaseService = null;
 
 const NotificationsScreen = ({ navigation }) => {
   const { user } = useAuth();
   const [notifications, setNotifications] = useState([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [serviceLoaded, setServiceLoaded] = useState(false);
 
+  // Load supabaseService on component mount
   useEffect(() => {
-    loadNotifications();
-    
-    // Setup real-time subscription
-    const subscription = supabaseService.notifications.subscribeToNotifications(user.id, (payload) => {
-      if (payload.eventType === 'INSERT') {
-        const newNotification = payload.new;
-        setNotifications(prev => [newNotification, ...prev]);
-      }
-    });
-
-    return () => {
-      if (subscription) {
-        subscription.unsubscribe();
+    const loadService = async () => {
+      try {
+        if (!supabaseService) {
+          const module = await import('../services/supabase');
+          supabaseService = module.supabaseService || module.default;
+        }
+        setServiceLoaded(true);
+      } catch (error) {
+        console.warn('Failed to load supabaseService:', error);
+        setServiceLoaded(false);
       }
     };
+
+    loadService();
   }, []);
 
+  useEffect(() => {
+    if (serviceLoaded && supabaseService && user?.id) {
+      loadNotifications();
+
+      // Setup real-time subscription
+      const subscription = supabaseService.notifications.subscribeToNotifications(user.id, (payload) => {
+        if (payload.eventType === 'INSERT') {
+          const newNotification = payload.new;
+          setNotifications(prev => [newNotification, ...prev]);
+        }
+      });
+
+      return () => {
+        if (subscription) {
+          subscription.unsubscribe();
+        }
+      };
+    }
+  }, [serviceLoaded, user?.id]);
+
   const loadNotifications = async () => {
+    if (!supabaseService || !user?.id) {
+      setLoading(false);
+      return;
+    }
+
     try {
       setLoading(true);
       const notificationsData = await supabaseService.notifications.getNotifications(user.id);
       setNotifications(notificationsData);
     } catch (error) {
       console.error('Error loading notifications:', error);
+      setNotifications([]);
     } finally {
       setLoading(false);
     }
@@ -62,6 +85,11 @@ const NotificationsScreen = ({ navigation }) => {
   };
 
   const markAsRead = async (notificationId) => {
+    if (!supabaseService) {
+      console.warn('supabaseService not available for markAsRead');
+      return;
+    }
+
     try {
       await supabaseService.notifications.markNotificationAsRead(notificationId);
       setNotifications(prev =>
@@ -75,6 +103,11 @@ const NotificationsScreen = ({ navigation }) => {
   };
 
   const markAllAsRead = async () => {
+    if (!supabaseService || !user?.id) {
+      console.warn('supabaseService or user not available for markAllAsRead');
+      return;
+    }
+
     try {
       await supabaseService.notifications.markAllNotificationsAsRead(user.id);
       setNotifications(prev =>
@@ -86,6 +119,34 @@ const NotificationsScreen = ({ navigation }) => {
     }
   };
 
+  const removeNotification = async (notificationId) => {
+    if (!supabaseService) {
+      console.warn('supabaseService not available for removeNotification');
+      return;
+    }
+
+    Alert.alert(
+      'Delete Notification',
+      'Are you sure you want to delete this notification?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await supabaseService.notifications.deleteNotification(notificationId);
+              setNotifications(prev => prev.filter(notif => notif.id !== notificationId));
+            } catch (error) {
+              console.error('Error deleting notification:', error);
+              Alert.alert('Error', 'Failed to delete notification');
+            }
+          }
+        }
+      ]
+    );
+  };
+
   const handleNotificationPress = async (notification) => {
     if (!notification.read) {
       await markAsRead(notification.id);
@@ -93,13 +154,13 @@ const NotificationsScreen = ({ navigation }) => {
 
     // Navigate based on notification type
     const { type, data } = notification;
-    
+
     switch (type) {
       case 'message':
         if (data?.conversationId) {
           navigation.navigate('Chat', {
-            userId: user.id,
-            userType: user.role,
+            userId: user?.id,
+            userType: user?.role,
             targetUserId: data.senderId,
             conversationId: data.conversationId
           });
@@ -120,6 +181,21 @@ const NotificationsScreen = ({ navigation }) => {
         // Just mark as read for other types
         break;
     }
+  };
+
+  const handleLongPress = (notification) => {
+    Alert.alert(
+      'Notification Options',
+      'What would you like to do?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: () => removeNotification(notification.id)
+        }
+      ]
+    );
   };
 
   const getNotificationIcon = (type) => {
@@ -159,6 +235,7 @@ const NotificationsScreen = ({ navigation }) => {
   };
 
   const formatTime = (timestamp) => {
+    if (!timestamp) return '';
     const date = new Date(timestamp);
     const now = new Date();
     const diff = now - date;
@@ -178,6 +255,8 @@ const NotificationsScreen = ({ navigation }) => {
         !item.read && styles.unreadNotification
       ]}
       onPress={() => handleNotificationPress(item)}
+      onLongPress={() => handleLongPress(item)}
+      delayLongPress={500}
     >
       <View style={[
         styles.iconContainer,
@@ -189,23 +268,34 @@ const NotificationsScreen = ({ navigation }) => {
           color={getNotificationColor(item.type)}
         />
       </View>
-      
+
       <View style={styles.notificationContent}>
         <Text style={[
           styles.notificationTitle,
           !item.read && styles.unreadText
         ]}>
-          {item.title}
+          {item.title || 'Notification'}
         </Text>
         <Text style={styles.notificationMessage}>
-          {item.message}
+          {item.message || 'You have a new notification'}
         </Text>
         <Text style={styles.notificationTime}>
           {formatTime(item.created_at)}
         </Text>
       </View>
-      
-      {!item.read && <View style={styles.unreadDot} />}
+
+      <View style={styles.actionsContainer}>
+        {!item.read && <View style={styles.unreadDot} />}
+        <TouchableOpacity
+          style={styles.deleteButton}
+          onPress={(e) => {
+            e.stopPropagation();
+            removeNotification(item.id);
+          }}
+        >
+          <Ionicons name="trash-outline" size={16} color="#EF4444" />
+        </TouchableOpacity>
+      </View>
     </TouchableOpacity>
   );
 
@@ -236,34 +326,8 @@ const NotificationsScreen = ({ navigation }) => {
           <View style={{ width: 60 }} />
         </View>
 
-        <View style={styles.skeletonList}>
-          <SkeletonCard style={styles.summarySkeleton}>
-            <View style={styles.summarySkeletonContent}>
-              <SkeletonBlock width="40%" height={18} />
-              <View style={styles.summarySkeletonRow}>
-                {['messages', 'bookings', 'other'].map((key) => (
-                  <View key={key} style={styles.summarySkeletonItem}>
-                    <SkeletonCircle size={32} />
-                    <SkeletonBlock width="50%" height={16} />
-                    <SkeletonPill width="70%" height={14} />
-                  </View>
-                ))}
-              </View>
-            </View>
-          </SkeletonCard>
-
-          {Array.from({ length: 6 }).map((_, index) => (
-            <SkeletonCard key={`notif-skeleton-${index}`} style={styles.notificationSkeletonCard}>
-              <View style={styles.notificationSkeletonHeader}>
-                <SkeletonCircle size={40} style={styles.notificationSkeletonIcon} />
-                <View style={styles.notificationSkeletonContent}>
-                  <SkeletonBlock width="70%" height={16} />
-                  <SkeletonBlock width="90%" height={14} style={styles.notificationSkeletonLine} />
-                  <SkeletonBlock width="40%" height={12} />
-                </View>
-              </View>
-            </SkeletonCard>
-          ))}
+        <View style={styles.loadingContainer}>
+          <Text style={styles.loadingText}>Loading notifications...</Text>
         </View>
       </SafeAreaView>
     );
@@ -290,7 +354,7 @@ const NotificationsScreen = ({ navigation }) => {
       <FlatList
         data={notifications}
         renderItem={renderNotification}
-        keyExtractor={(item) => item.id}
+        keyExtractor={(item) => item.id || Math.random().toString()}
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
@@ -299,7 +363,7 @@ const NotificationsScreen = ({ navigation }) => {
             tintColor="#3B82F6"
           />
         }
-        ListEmptyComponent={!loading ? EmptyState : null}
+        ListEmptyComponent={EmptyState}
         contentContainerStyle={notifications.length === 0 ? styles.emptyList : undefined}
         showsVerticalScrollIndicator={false}
       />
@@ -381,12 +445,19 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#9CA3AF',
   },
+  actionsContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
   unreadDot: {
     width: 8,
     height: 8,
     borderRadius: 4,
     backgroundColor: '#3B82F6',
-    marginTop: 8,
+  },
+  deleteButton: {
+    padding: 4,
   },
   emptyContainer: {
     flex: 1,
@@ -410,42 +481,14 @@ const styles = StyleSheet.create({
   emptyList: {
     flex: 1,
   },
-  skeletonList: {
-    padding: 16,
-    rowGap: 16,
-  },
-  summarySkeleton: {
-    padding: 16,
-  },
-  summarySkeletonContent: {
-    gap: 16,
-  },
-  summarySkeletonRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-  },
-  summarySkeletonItem: {
+  loadingContainer: {
     flex: 1,
+    justifyContent: 'center',
     alignItems: 'center',
-    gap: 8,
   },
-  notificationSkeletonCard: {
-    padding: 16,
-  },
-  notificationSkeletonHeader: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: 12,
-  },
-  notificationSkeletonIcon: {
-    marginTop: 4,
-  },
-  notificationSkeletonContent: {
-    flex: 1,
-    gap: 8,
-  },
-  notificationSkeletonLine: {
-    marginTop: 4,
+  loadingText: {
+    fontSize: 16,
+    color: '#6B7280',
   },
 });
 

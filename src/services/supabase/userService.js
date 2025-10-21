@@ -180,9 +180,32 @@ export class UserService extends SupabaseBase {
 
         const { data, error } = await query
         if (error) throw error
-        
-        console.log('✅ Fetched caregivers from Supabase:', data?.length || 0)
-        return data || []
+
+        // Calculate review count for each caregiver
+        const caregiversWithReviews = await Promise.all(
+          (data || []).map(async (caregiver) => {
+            try {
+              const { count } = await supabase
+                .from('reviews')
+                .select('*', { count: 'exact', head: true })
+                .eq('reviewee_id', caregiver.id)
+
+              return {
+                ...caregiver,
+                reviewCount: count || 0
+              }
+            } catch (reviewError) {
+              console.warn(`Error getting review count for caregiver ${caregiver.id}:`, reviewError)
+              return {
+                ...caregiver,
+                reviewCount: 0
+              }
+            }
+          })
+        )
+
+        console.log('✅ Fetched caregivers from Supabase:', caregiversWithReviews?.length || 0)
+        return caregiversWithReviews || []
       }, 60 * 1000)
     } catch (error) {
       return this._handleError('getCaregivers', error)

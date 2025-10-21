@@ -2,6 +2,8 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { useFocusEffect } from '@react-navigation/native';
 import { supabaseService } from '../services/supabase';
 import { supabase } from '../config/supabase';
+import { reviewService } from '../services/supabase/reviewService';
+import { normalizeCaregiverReviewsForList } from '../utils/reviews';
 import { useAuth } from '../contexts/AuthContext';
 import { formatAddress } from '../utils/addressUtils';
 
@@ -30,9 +32,91 @@ export const useCaregiverDashboard = () => {
   const [jobs, setJobs] = useState([]);
   const [applications, setApplications] = useState([]);
   const [bookings, setBookings] = useState([]);
+  const bookingsRef = useRef([]);
+  const reviewsCacheRef = useRef([]);
   const [jobsLoading, setJobsLoading] = useState(false);
   const [dataLoaded, setDataLoaded] = useState(false);
   const loadingRef = useRef(false);
+
+  const computeStats = useCallback((bookingsList = [], reviewsList = []) => {
+    const normalizedBookings = Array.isArray(bookingsList) ? bookingsList : [];
+    const normalizedReviews = Array.isArray(reviewsList) ? reviewsList : [];
+
+    const completedJobs = normalizedBookings.filter(booking =>
+      (booking.status || '').toLowerCase() === 'completed'
+    ).length;
+
+    const respondedCount = normalizedBookings.filter(booking => {
+      const status = (booking.status || '').toLowerCase();
+      return status === 'confirmed' || status === 'completed' || status === 'cancelled';
+    }).length;
+    const totalBookings = normalizedBookings.length;
+    const responseRate = totalBookings === 0
+      ? '0%'
+      : `${Math.round((respondedCount / totalBookings) * 100)}%`;
+
+    const ratingValues = normalizedReviews.map(review => {
+      const raw = review?.rating ?? 0;
+      return raw > 5 ? raw / 10 : raw;
+    });
+    const averageRating = ratingValues.length
+      ? ratingValues.reduce((sum, value) => sum + value, 0) / ratingValues.length
+      : 0;
+
+    return {
+      rating: Number(averageRating.toFixed(1)) || 0,
+      reviewCount: ratingValues.length,
+      completedJobs,
+      responseRate
+    };
+  }, []);
+
+  const updateProfileStats = useCallback(async ({
+    bookingsList,
+    reviewsList,
+    fetchReviews = false
+  } = {}) => {
+    if (!user?.id) return;
+
+    let effectiveBookings = Array.isArray(bookingsList) ? bookingsList : bookingsRef.current;
+    let effectiveReviews = Array.isArray(reviewsList) ? reviewsList : reviewsCacheRef.current;
+
+    if (!Array.isArray(effectiveBookings)) {
+      effectiveBookings = [];
+    }
+    bookingsRef.current = effectiveBookings;
+
+    if (fetchReviews || !Array.isArray(effectiveReviews) || effectiveReviews.length === 0) {
+      try {
+        const reviewsResponse = await reviewService.getReviews(user.id, 100, 0);
+        effectiveReviews = normalizeCaregiverReviewsForList(reviewsResponse || []);
+      } catch (error) {
+        console.warn('Failed to load caregiver reviews for stats:', error);
+        effectiveReviews = reviewsCacheRef.current || [];
+      }
+    }
+
+    if (!Array.isArray(effectiveReviews)) {
+      effectiveReviews = [];
+    }
+    reviewsCacheRef.current = effectiveReviews;
+
+    const stats = computeStats(effectiveBookings, effectiveReviews);
+
+    setProfile(prev => ({
+      ...prev,
+      rating: stats.rating,
+      reviews: stats.reviewCount,
+      reviewCount: stats.reviewCount,
+      completedJobs: stats.completedJobs,
+      responseRate: stats.responseRate
+    }));
+  }, [computeStats, setProfile, user?.id]);
+
+  const refreshStats = useCallback(async (options = {}) => {
+    const { fetchReviews = true, ...rest } = options || {};
+    await updateProfileStats({ fetchReviews, ...rest });
+  }, [updateProfileStats]);
 
   // Load profile data from Supabase
   const loadProfile = useCallback(async () => {
@@ -103,19 +187,21 @@ export const useCaregiverDashboard = () => {
         skills: combinedProfile.skills || prev.skills || [],
         certifications: combinedProfile.certifications || prev.certifications || [],
         availability: combinedProfile.availability || prev.availability,
-        rating: prev.rating, // Keep existing rating
-        reviews: prev.reviews, // Keep existing reviews
-        completedJobs: prev.completedJobs, // Keep existing completed jobs
-        responseRate: prev.responseRate, // Keep existing response rate
+        rating: prev.rating,
+        reviews: prev.reviews,
+        completedJobs: prev.completedJobs,
+        responseRate: prev.responseRate,
       }));
-      
+
+      await updateProfileStats({ fetchReviews: true });
+
       console.log('✅ Profile updated from Supabase');
     } catch (error) {
       console.error('❌ Error loading profile:', error?.message || error);
     } finally {
       loadingRef.current = false;
     }
-  }, [user?.id]);
+  }, [updateProfileStats, user?.id]);
 
   // Fetch jobs from Supabase
   const fetchJobs = useCallback(async () => {
@@ -136,6 +222,7 @@ export const useCaregiverDashboard = () => {
       setJobsLoading(false);
     }
   }, [user?.id, user?.role]);
+
   const fetchApplications = useCallback(async () => {
     if (!user?.id || user?.role !== 'caregiver') return;
 
@@ -144,21 +231,53 @@ export const useCaregiverDashboard = () => {
       const applications = await supabaseService.getMyApplications(user.id);
       console.log('📋 Applications from Supabase:', applications);
 
-      const normalized = applications.map(a => ({
-        id: a.id,
-        _id: a.id,
-        jobId: a.job_id,
-        jobTitle: a.jobs?.title || 'Childcare Position',
-        employerName: a.jobs?.users?.name || 'Family',
-        parentId: a.jobs?.parent_id,
-        family: a.jobs?.users?.name || 'Family',
-        status: a.status || 'pending',
-        appliedDate: a.applied_at || a.created_at,
-        hourlyRate: a.jobs?.hourly_rate || 200,
-        location: a.jobs?.location || 'Location not specified',
-        jobDate: a.jobs?.date,
-        message: a.message || ''
-      }));
+      const normalized = applications.map(application => {
+        const job = application.jobs || {};
+
+        const hourlyRateRaw = job?.hourly_rate ?? job?.hourlyRate ?? job?.rate ?? null;
+        const hourlyRate = Number.isFinite(Number(hourlyRateRaw)) ? Number(hourlyRateRaw) : null;
+
+        const proposedRateRaw = application.proposed_rate ?? application.proposedRate ?? application.rate;
+        const proposedRate = Number.isFinite(Number(proposedRateRaw)) ? Number(proposedRateRaw) : null;
+
+        const childrenSummary = (() => {
+          if (Array.isArray(job?.children) && job.children.length) {
+            const count = job.children.length;
+            return `${count} child${count > 1 ? 'ren' : ''}`;
+          }
+          const count = job?.children_count ?? job?.childrenCount;
+          if (typeof count === 'number') {
+            return `${count} child${count > 1 ? 'ren' : ''}`;
+          }
+          return null;
+        })();
+
+        const schedule = job?.schedule || job?.time || (job?.start_time && job?.end_time
+          ? `${job.start_time} - ${job.end_time}`
+          : null);
+
+        return {
+          id: application.id,
+          _id: application.id,
+          jobId: application.job_id,
+          jobTitle: job?.title || 'Childcare Position',
+          employerName: job?.users?.name || 'Family',
+          parentId: job?.parent_id,
+          family: job?.users?.name || 'Family',
+          status: application.status || 'pending',
+          appliedDate: application.applied_at || application.created_at,
+          hourlyRate,
+          hourlyRateLabel: hourlyRate !== null ? `₱${hourlyRate}/hr` : null,
+          proposedRate,
+          proposedRateLabel: proposedRate !== null ? `₱${proposedRate}/hr` : null,
+          location: job?.location || job?.address || 'Location not specified',
+          jobDate: job?.date,
+          schedule,
+          childrenSummary,
+          message: application.message || application.cover_letter || '',
+          job
+        };
+      });
 
       console.log('📋 Normalized applications:', normalized);
       setApplications(normalized);
@@ -277,12 +396,16 @@ export const useCaregiverDashboard = () => {
       });
 
       console.log('📅 Normalized bookings:', normalized);
+      bookingsRef.current = normalized;
       setBookings(normalized);
+      await updateProfileStats({ bookingsList: normalized, fetchReviews: false });
     } catch (error) {
       console.error('❌ Error fetching bookings:', error);
       setBookings([]);
+      bookingsRef.current = [];
+      await updateProfileStats({ bookingsList: [], fetchReviews: false });
     }
-  }, [user?.id, user?.role]);
+  }, [updateProfileStats, user?.id, user?.role]);
 
   // Load data only once on mount
   useEffect(() => {
@@ -323,6 +446,7 @@ export const useCaregiverDashboard = () => {
     fetchJobs,
     fetchApplications,
     fetchBookings,
+    refreshStats,
     dataLoaded
   };
 };

@@ -18,6 +18,8 @@ import { useApp } from "../contexts/AppContext";
 import { useAuth } from '../contexts/AuthContext';
 import { useAuthForm } from '../hooks/useAuthForm';
 import { useAuthSubmit } from '../hooks/useAuthSubmit';
+import { tokenManager } from '../utils/tokenManager';
+import { supabase } from '../config/supabase';
 import CustomDateTimePicker from '../shared/ui/inputs/DateTimePicker';
 import FacebookSignInButton from '../components/auth/FacebookSignInButton';
 
@@ -346,8 +348,22 @@ const ParentAuth = ({ navigation, route }) => {
 
                     <FacebookSignInButton
                       userRole="parent"
-                      onSuccess={(result) => {
+                      onSuccess={async (result) => {
                         console.log('Facebook sign-in successful:', result);
+
+                        // Debug authentication state after login
+                        const checkAuthAfterLogin = async () => {
+                          const token = await tokenManager.getValidToken(false);
+                          console.log('Token after login:', token ? 'present' : 'missing');
+                          const session = await supabase.auth.getSession();
+                          console.log('Session after login:', session?.session ? 'present' : 'missing');
+                        };
+
+                        // Run the debugging function after a short delay
+                        setTimeout(() => {
+                          checkAuthAfterLogin().catch(console.error);
+                        }, 1000);
+
                         // Navigation will be handled by the auth context
                       }}
                       onError={(error) => {

@@ -150,6 +150,12 @@ const EnhancedCaregiverProfileWizard = ({ navigation, route }) => {
     phone: existingProfile?.phone || '',
     bio: existingProfile?.bio || '',
     profileImage: existingProfile?.profileImage || '',
+
+    // Public metrics
+    rating: typeof existingProfile?.rating === 'number' ? existingProfile.rating : 0,
+    reviewCount: existingProfile?.reviewCount ?? existingProfile?.reviews ?? 0,
+    completedJobs: existingProfile?.completedJobs ?? 0,
+    responseRate: existingProfile?.responseRate || '0%',
     
     // Professional Details
     experience: {
@@ -206,6 +212,18 @@ const EnhancedCaregiverProfileWizard = ({ navigation, route }) => {
       agreeToTerms: false,
     },
   });
+
+  useEffect(() => {
+    if (!existingProfile) return;
+
+    setFormData(prev => ({
+      ...prev,
+      rating: typeof existingProfile.rating === 'number' ? existingProfile.rating : prev.rating,
+      reviewCount: existingProfile.reviewCount ?? existingProfile.reviews ?? prev.reviewCount ?? 0,
+      completedJobs: existingProfile.completedJobs ?? prev.completedJobs ?? 0,
+      responseRate: existingProfile.responseRate || prev.responseRate || '0%'
+    }));
+  }, [existingProfile]);
 
   const [tempInputs, setTempInputs] = useState({
     newSkill: '',
@@ -1870,7 +1888,7 @@ const handleProfileImageUpload = async () => {
       <Card style={styles.reviewCard}>
         <Card.Content>
           <Text style={styles.reviewSectionTitle}>Profile Summary</Text>
-          
+
           <View style={styles.reviewImageContainer}>
             {formData.profileImage && !profileImageError ? (
               <Image 
@@ -1889,7 +1907,7 @@ const handleProfileImageUpload = async () => {
               <Avatar.Icon size={80} icon="account" style={styles.reviewPlaceholderImage} />
             )}
           </View>
-          
+
           <View style={styles.reviewItem}>
             <Text style={styles.reviewLabel}>Name:</Text>
             <Text style={styles.reviewValue}>{String(formData.name)}</Text>
@@ -1901,6 +1919,20 @@ const handleProfileImageUpload = async () => {
           <View style={styles.reviewItem}>
             <Text style={styles.reviewLabel}>Phone:</Text>
             <Text style={styles.reviewValue}>{String(formData.phone)}</Text>
+          </View>
+          <View style={styles.reviewItem}>
+            <Text style={styles.reviewLabel}>Rating:</Text>
+            <Text style={styles.reviewValue}>
+              {`${Number(formData.rating || 0).toFixed(1)} (${Number(formData.reviewCount || 0)} reviews)`}
+            </Text>
+          </View>
+          <View style={styles.reviewItem}>
+            <Text style={styles.reviewLabel}>Completed Jobs:</Text>
+            <Text style={styles.reviewValue}>{String(formData.completedJobs || 0)}</Text>
+          </View>
+          <View style={styles.reviewItem}>
+            <Text style={styles.reviewLabel}>Response Rate:</Text>
+            <Text style={styles.reviewValue}>{String(formData.responseRate || '0%')}</Text>
           </View>
           <View style={styles.reviewItem}>
             <Text style={styles.reviewLabel}>Experience:</Text>

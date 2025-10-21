@@ -1,8 +1,10 @@
 import React, { createContext, useContext, useEffect, useMemo, useState, useRef, useCallback } from 'react'
 import { ActivityIndicator, View, Platform } from 'react-native'
+import Constants from 'expo-constants'
 import * as AuthSession from 'expo-auth-session'
 import * as WebBrowser from 'expo-web-browser'
 import { supabase } from '../config/supabase'
+import { tokenManager } from '../utils/tokenManager'
 
 WebBrowser.maybeCompleteAuthSession()
 
@@ -15,34 +17,91 @@ export const AuthProvider = ({ children }) => {
   const sessionRef = useRef(null)
 
   useEffect(() => {
-    // Get initial session and user profile
-    supabase.auth.getSession().then(async ({ data: { session } }) => {
-      sessionRef.current = session || null
-      if (session?.user) {
-        const userWithProfile = await fetchUserWithProfile(session.user)
-        setUser(userWithProfile)
-      } else {
-        setUser(null)
-      }
-      setLoading(false)
-    })
+    let isMounted = true
 
-    // Listen for auth changes
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (event, session) => {
-        console.log('Auth event:', event)
-        sessionRef.current = session || null
+    const initializeSession = async () => {
+      try {
+        const { data, error } = await supabase.auth.getSession()
+        if (error) throw error
+
+        const session = data?.session || null
+        sessionRef.current = session
+
+        if (!isMounted) return
+
+        setError(null)
+
         if (session?.user) {
           const userWithProfile = await fetchUserWithProfile(session.user)
+          if (!isMounted) return
           setUser(userWithProfile)
         } else {
           setUser(null)
         }
-        setLoading(false)
+      } catch (err) {
+        console.error('❌ Initial session fetch failed:', err)
+        sessionRef.current = null
+        await tokenManager.logout()
+        const { error: signOutError } = await supabase.auth.signOut()
+        if (signOutError) {
+          console.warn('Supabase signOut failed during session reset:', signOutError)
+        }
+
+        if (isMounted) {
+          setUser(null)
+          const friendlyMessage = err?.message?.includes('Invalid Refresh Token')
+            ? 'Your session expired. Please sign in again.'
+            : err?.message
+          setError(friendlyMessage || null)
+        }
+      } finally {
+        if (isMounted) {
+          setLoading(false)
+        }
+      }
+    }
+
+    initializeSession()
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      async (event, session) => {
+        console.log('Auth event:', event)
+        sessionRef.current = session || null
+
+        if (!isMounted) return
+
+        try {
+          if (event === 'SIGNED_OUT') {
+            await tokenManager.logout()
+          }
+
+          if (event === 'TOKEN_REFRESHED') {
+            tokenManager.clearCache()
+          }
+
+          if (session?.user) {
+            const userWithProfile = await fetchUserWithProfile(session.user)
+            if (!isMounted) return
+            setUser(userWithProfile)
+            setError(null)
+          } else {
+            setUser(null)
+          }
+        } catch (authError) {
+          console.error('❌ Auth state handling error:', authError)
+          setError(authError?.message || 'Authentication error')
+        } finally {
+          if (isMounted) {
+            setLoading(false)
+          }
+        }
       }
     )
 
-    return () => subscription.unsubscribe()
+    return () => {
+      isMounted = false
+      subscription.unsubscribe()
+    }
   }, [])
 
   const fetchUserWithProfile = async (authUser) => {
@@ -264,11 +323,16 @@ export const AuthProvider = ({ children }) => {
   }
 
   const signInWithOAuth = async (provider) => {
+    const isExpoGo = Constants.appOwnership === 'expo'
+
     const redirectTo = AuthSession.makeRedirectUri({
-      scheme: 'com.iyaya.app',
-      path: 'auth/callback',
+      path: 'auth',
+      native: 'iyaya-app://auth',
       preferLocalhost: false,
+      useProxy: isExpoGo,
     })
+
+    console.log('🔁 OAuth redirect URI:', redirectTo)
 
     const shouldUseAuthSession = Platform.OS !== 'web'
 
@@ -330,37 +394,68 @@ export const AuthProvider = ({ children }) => {
     try {
       setError(null)
       setLoading(true)
-      
+
       console.log('🔄 Processing Facebook login result:', facebookResult)
-      
-      // If it's a mock auth result, handle it differently
-      if (facebookResult.isMockAuth) {
-        console.log('⚠️ Processing mock Facebook authentication')
-        
-        // Create a mock user object that matches our expected structure
-        const mockUser = {
-          ...facebookResult.user,
-          id: facebookResult.user.uid,
-          email_confirmed_at: new Date().toISOString(),
-          user_metadata: {
-            name: facebookResult.user.name,
-            role: facebookResult.user.role
-          }
+      console.log('🔄 Facebook result structure:', Object.keys(facebookResult))
+
+      // Check if the result has success and user properties (from facebookAuthService)
+      if (facebookResult?.success && facebookResult?.user) {
+        console.log('✅ Processing real Facebook authentication from facebookAuthService')
+
+        // The user is already authenticated via Supabase OAuth
+        const user = facebookResult.user
+        console.log('🔍 Supabase user found:', user?.id ? 'yes' : 'no')
+
+        if (user) {
+          console.log('🔍 Fetching user profile...')
+          const userWithProfile = await fetchUserWithProfile(user)
+          setUser(userWithProfile)
+          console.log('✅ User with profile set:', userWithProfile)
+          return userWithProfile
         }
-        
-        setUser(mockUser)
-        return mockUser
+
+        console.log('❌ No user found in Facebook result')
+        throw new Error('Facebook authentication failed - no user data')
       }
-      
-      // For real Facebook auth, the user should already be authenticated via Supabase OAuth
-      // Just fetch the updated profile
+
+      // Handle test mode results - check for isTestMode flag
+      if (facebookResult?.isTestMode === true && facebookResult?.user) {
+        console.log('🧪 Processing test mode Facebook authentication')
+
+        const user = facebookResult.user
+        console.log('🔍 Test user found:', user?.id ? 'yes' : 'no')
+        console.log('🔍 Test user details:', {
+          id: user?.id,
+          email: user?.email,
+          role: user?.role,
+          isTestMode: facebookResult.isTestMode
+        })
+
+        if (user && user.id) {
+          console.log('🔍 Setting test user profile...')
+          setUser(user)
+          console.log('✅ Test user set:', user)
+          return user
+        }
+
+        console.log('❌ No valid user found in test mode result')
+        throw new Error('Test mode authentication failed - no valid user data')
+      }
+
+      // Fallback: check current Supabase user
+      console.log('🔍 Checking current Supabase user as fallback...')
       const currentUser = await supabase.auth.getUser()
+      console.log('🔍 Current user from Supabase:', currentUser?.data?.user ? 'found' : 'not found')
+
       if (currentUser.data.user) {
+        console.log('🔍 Fetching user profile from fallback...')
         const userWithProfile = await fetchUserWithProfile(currentUser.data.user)
         setUser(userWithProfile)
+        console.log('✅ User with profile set from fallback:', userWithProfile)
         return userWithProfile
       }
-      
+
+      console.log('❌ No user found after Facebook authentication')
       throw new Error('Facebook authentication failed')
     } catch (err) {
       console.error('❌ Facebook login error:', err)

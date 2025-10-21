@@ -4,7 +4,8 @@ import {
   Text, 
   StyleSheet, 
   Pressable, 
-  Image,  // Uncommented this import
+  TouchableOpacity, 
+  Image,  
   Platform, 
   ScrollView 
 } from "react-native";
@@ -235,11 +236,18 @@ export default function WelcomeScreen() {
               </View>
             ))}
           </View>
+          <TouchableOpacity 
+            onPress={() => navigation.navigate('FacebookAuthTest')}
+            style={styles.debugButton}
+            accessibilityLabel="Debug Facebook authentication"
+          >
+            <Text style={styles.debugButtonText}>🔧 Debug Auth</Text>
+          </TouchableOpacity>
         </ScrollView>
       </SafeAreaView>
     </LinearGradient>
   );
-}
+};
 
 const styles = StyleSheet.create({
   container: {
@@ -545,5 +553,18 @@ const styles = StyleSheet.create({
     color: "#6b7280",
     textAlign: "center",
     lineHeight: 16,
+  },
+  debugButton: {
+    backgroundColor: '#f59e0b',
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    borderRadius: 20,
+    marginTop: 20,
+    alignSelf: 'center',
+  },
+  debugButtonText: {
+    color: 'white',
+    fontSize: 14,
+    fontWeight: '600',
   },
 });

@@ -44,7 +44,7 @@ export class ReviewService extends SupabaseBase {
         reviewer_id: reviewData.reviewer_id,
         reviewee_id: reviewData.reviewee_id,
         booking_id: reviewData.booking_id || null,
-        rating: reviewData.rating,
+        rating: Math.round(reviewData.rating * 10), // Convert decimal to integer (e.g., 2.5 -> 25)
         comment: reviewData.comment?.trim() || '',
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString()
@@ -74,11 +74,42 @@ export class ReviewService extends SupabaseBase {
 
       if (error) throw error
 
+      // Update caregiver's overall rating and review count
+      await this._updateCaregiverRating(reviewData.reviewee_id)
+
       invalidateCache(`reviews:${reviewData.reviewee_id}`)
 
       return data
     } catch (error) {
       return this._handleError('createReview', error)
+    }
+  }
+
+  async updateReview(reviewId, updates) {
+    try {
+      this._validateId(reviewId, 'Review ID')
+
+      const { data, error } = await supabase
+        .from('reviews')
+        .update({
+          ...updates,
+          rating: updates.rating ? Math.round(updates.rating * 10) : undefined, // Convert decimal to integer
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', reviewId)
+        .select()
+        .single()
+
+      if (error) throw error
+
+      // Update caregiver's overall rating and review count after review update
+      if (data?.reviewee_id) {
+        await this._updateCaregiverRating(data.reviewee_id)
+      }
+
+      return data
+    } catch (error) {
+      return this._handleError('updateReview', error)
     }
   }
 
@@ -107,28 +138,97 @@ export class ReviewService extends SupabaseBase {
     }
   }
 
-  async updateReview(reviewId, updates) {
+  async testRatingUpdate(caregiverId) {
     try {
-      this._validateId(reviewId, 'Review ID')
-      
-      const { data, error } = await supabase
+      console.log('🔄 Testing rating update for caregiver:', caregiverId)
+
+      // Get all reviews for this caregiver
+      const { data: reviews, error: reviewsError } = await supabase
         .from('reviews')
+        .select('rating')
+        .eq('reviewee_id', caregiverId)
+
+      if (reviewsError) throw reviewsError
+
+      console.log('Found reviews:', reviews?.length || 0)
+
+      if (!reviews || reviews.length === 0) {
+        console.log('No reviews found')
+        return
+      }
+
+      // Calculate average rating (convert stored integers back to decimals)
+      const totalRating = reviews.reduce((sum, review) => sum + ((review.rating || 0) / 10), 0)
+      const averageRating = totalRating / reviews.length
+
+      console.log('Calculated rating:', averageRating)
+
+      // Update caregiver's rating
+      const { error: updateError } = await supabase
+        .from('users')
         .update({
-          ...updates,
+          rating: Math.round(averageRating * 10) / 10,
           updated_at: new Date().toISOString()
         })
-        .eq('id', reviewId)
-        .select()
-        .single()
-      
-      if (error) throw error
+        .eq('id', caregiverId)
 
-      if (data?.reviewee_id) {
-        invalidateCache(`reviews:${data.reviewee_id}`)
-      }
-      return data
+      if (updateError) throw updateError
+
+      console.log('✅ Rating updated successfully')
+
     } catch (error) {
-      return this._handleError('updateReview', error)
+      console.error('Error testing rating update:', error)
+      throw error
+    }
+  }
+
+  async _updateCaregiverRating(caregiverId) {
+    try {
+      // Get all reviews for this caregiver
+      const { data: reviews, error: reviewsError } = await supabase
+        .from('reviews')
+        .select('rating')
+        .eq('reviewee_id', caregiverId)
+
+      if (reviewsError) throw reviewsError
+
+      if (!reviews || reviews.length === 0) {
+        // No reviews, reset rating
+        await supabase
+          .from('users')
+          .update({
+            rating: 0,
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', caregiverId)
+        return
+      }
+
+      // Calculate average rating (convert stored integers back to decimals)
+      const totalRating = reviews.reduce((sum, review) => sum + ((review.rating || 0) / 10), 0)
+      const averageRating = totalRating / reviews.length
+
+      // Update caregiver's rating and review count
+      const updateData = {
+        rating: Math.round(averageRating * 10) / 10, // Round to 1 decimal place
+        updated_at: new Date().toISOString()
+      }
+
+      // For now, we'll just update the rating. Review count can be calculated from the reviews table
+      const { error: updateError } = await supabase
+        .from('users')
+        .update(updateData)
+        .eq('id', caregiverId)
+
+      if (updateError) throw updateError
+
+      // Invalidate relevant caches
+      invalidateCache(`profile:${caregiverId}`)
+      invalidateCache(`caregivers:*`)
+
+    } catch (error) {
+      console.error('Error updating caregiver rating:', error)
+      // Don't throw error - this is not critical for the review creation
     }
   }
 }

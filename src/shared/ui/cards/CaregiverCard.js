@@ -1,10 +1,12 @@
 import React from 'react';
 import { View, Text, TouchableOpacity, Image } from 'react-native';
+
 import { Ionicons } from '@expo/vector-icons';
 import { formatAddress } from '../../utils';
 import { getProfileImageUrl } from '../../../utils/imageUtils';
 
-const CaregiverCard = ({ caregiver, onPress, onMessage, onBook, showActions = true }) => {
+const CaregiverCard = ({ caregiver, onPress, onMessage, onBook, onPressRatings, showActions = true }) => {
+
   const {
     name,
     profileImage,
@@ -61,7 +63,14 @@ const CaregiverCard = ({ caregiver, onPress, onMessage, onBook, showActions = tr
 
           <View style={styles.nameSection}>
             <Text style={styles.name}>{name}</Text>
-            <View style={styles.ratingRow}>
+            <TouchableOpacity
+              style={styles.ratingRow}
+              onPress={onPressRatings}
+              disabled={!onPressRatings}
+              accessibilityRole={onPressRatings ? 'button' : undefined}
+              accessibilityLabel={onPressRatings ? 'View ratings and reviews' : undefined}
+              activeOpacity={onPressRatings ? 0.7 : 1}
+            >
               {reviewCount > 0 ? (
                 <>
                   <View style={styles.stars}>
@@ -70,11 +79,9 @@ const CaregiverCard = ({ caregiver, onPress, onMessage, onBook, showActions = tr
                   <Text style={styles.reviewText}>({reviewCount})</Text>
                 </>
               ) : (
-                <Text style={[styles.reviewText, { fontStyle: 'italic' }]}>
-                  New caregiver
-                </Text>
+                <Text style={[styles.reviewText, { fontStyle: 'italic' }]}>New caregiver</Text>
               )}
-            </View>
+            </TouchableOpacity>
           </View>
         </View>
 

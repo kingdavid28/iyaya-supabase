@@ -48,26 +48,63 @@ const BookingItem = ({
 
   const getStatusColor = (status) => {
     switch (status?.toLowerCase()) {
-      case 'pending': return '#F59E0B';
-      case 'confirmed': return '#10B981';
-      case 'completed': return '#3B82F6';
-      case 'cancelled': return '#EF4444';
-      default: return '#9CA3AF';
+      case 'pending':
+      case 'pending_confirmation':
+      case 'awaiting_payment':
+        return '#F59E0B';
+      case 'confirmed':
+      case 'in_progress':
+        return '#10B981';
+      case 'completed':
+      case 'paid':
+        return '#3B82F6';
+      case 'cancelled':
+        return '#EF4444';
+      default:
+        return '#9CA3AF';
     }
   };
 
   const getStatusText = (status) => {
     switch (status?.toLowerCase()) {
-      case 'pending': return 'Pending';
-      case 'confirmed': return 'Confirmed';
-      case 'completed': return 'Completed';
-      case 'cancelled': return 'Cancelled';
-      default: return status || 'Unknown';
+      case 'pending':
+      case 'pending_confirmation':
+      case 'awaiting_payment':
+        return 'Pending';
+      case 'confirmed':
+      case 'confirmed':
+        return 'Confirmed';
+      case 'in_progress':
+        return 'In Progress';
+      case 'completed':
+      case 'completed':
+        return 'Completed';
+      case 'cancelled':
+      case 'cancelled':
+        return 'Cancelled';
+      case 'paid':
+        return 'Paid';
+      default:
+        return status || 'Unknown';
     }
+  };
+
+  const canCancelBooking = (status) => {
+    const lowerStatus = status?.toLowerCase();
+    // Allow cancellation for pending, awaiting_payment, and confirmed bookings
+    return ['pending', 'pending_confirmation', 'awaiting_payment', 'confirmed'].includes(lowerStatus);
   };
 
   const caregiverData = user || booking?.caregiver || booking?.caregiverId || booking?.assignedCaregiver || null;
   const caregiverIdValue = caregiverData?._id || caregiverData?.id || caregiverData?.caregiver_id || booking?.caregiver_id;
+
+  // Debug logging for booking status
+  console.log('🔍 BookingItem Debug:', {
+    bookingId: booking?.id || booking?._id,
+    status: booking?.status,
+    canCancel: canCancelBooking(booking?.status),
+    statusLower: booking?.status?.toLowerCase()
+  });
 
   const handleLocationPress = () => {
     const address = booking?.address || booking?.location;
@@ -270,10 +307,18 @@ const BookingItem = ({
             <Text style={styles.buttonText}>Message</Text>
           </TouchableOpacity>
           
-          {booking?.status === 'pending' && (
+          {canCancelBooking(booking?.status) && (
             <TouchableOpacity 
               style={styles.cancelButton} 
-              onPress={() => onCancelBooking(booking?.id || booking?._id)}
+              onPress={() => {
+                console.log('🔍 Cancel button pressed for booking:', booking?.id || booking?._id, 'status:', booking?.status);
+                if (onCancelBooking) {
+                  onCancelBooking(booking?.id || booking?._id);
+                } else {
+                  console.warn('⚠️ onCancelBooking function not provided');
+                  Alert.alert('Error', 'Cancel functionality not available');
+                }
+              }}
             >
               <Ionicons name="close-outline" size={18} color="#FFFFFF" />
               <Text style={styles.buttonText}>Cancel</Text>

@@ -194,3 +194,5 @@ The app feels slow primarily because every dashboard render eagerly loads large 
   - Profile Supabase queries with the dashboard (execution plan/latency) and add indexes on frequently filtered columns.
 
 Implementing the above will align the app with the post-migration modular design while keeping runtime light and responsive. Let me know which areas you’d like to tackle first, and I can help draft the concrete changes.
+
+https://github.com/kingdavid28/iyaya-supabase.git

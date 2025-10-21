@@ -1,5 +1,4 @@
 import * as ImagePicker from 'expo-image-picker';
-import * as Permissions from 'expo-permissions';
 import { Platform, Image } from 'react-native';
 import * as FileSystem from 'expo-file-system';
 
@@ -15,7 +14,7 @@ const defaultOptions = {
 // Check and request camera roll permissions
 export const getCameraRollPermissions = async () => {
   if (Platform.OS !== 'web') {
-    const { status } = await Permissions.askAsync(Permissions.MEDIA_LIBRARY);
+    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (status !== 'granted') {
       throw new Error('Permission to access media library is required!');
     }
@@ -26,7 +25,7 @@ export const getCameraRollPermissions = async () => {
 // Check and request camera permissions
 export const getCameraPermissions = async () => {
   if (Platform.OS !== 'web') {
-    const { status } = await Permissions.askAsync(Permissions.CAMERA);
+    const { status } = await ImagePicker.requestCameraPermissionsAsync();
     if (status !== 'granted') {
       throw new Error('Camera permission is required to take photos!');
     }

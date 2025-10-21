@@ -1,4 +1,5 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
+
 import {
   View,
   Text,
@@ -13,6 +14,10 @@ import { useAuth } from '../contexts/AuthContext';
 // Removed old import - using updated Supabase service
 import { getCurrentSocketURL } from '../config/api';
 import { supabase } from '../config/supabase';
+import RatingsReviewsModal from '../components/ui/modals/RatingsReviewsModal';
+import { reviewService } from '../services';
+import { normalizeCaregiverReviewsForList } from '../utils/reviews';
+import { getRatingStats } from './CaregiverDashboard';
 
 const CaregiverProfileComplete = ({ navigation, route }) => {
   const { user } = useAuth();
@@ -20,20 +25,24 @@ const CaregiverProfileComplete = ({ navigation, route }) => {
   const [profile, setProfile] = useState(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  
+  const [showRatingsModal, setShowRatingsModal] = useState(false);
+  const [reviews, setReviews] = useState([]);
+  const [reviewsLoading, setReviewsLoading] = useState(false);
+  const [reviewsError, setReviewsError] = useState(null);
+
   // Use caregiverId from params if viewing another caregiver, otherwise use current user
   const profileUserId = caregiverId || user?.id;
   const isViewingOwnProfile = !caregiverId || caregiverId === user?.id;
 
   const loadProfile = async () => {
     if (!profileUserId) {
-      console.log('❌ No user ID available');
+      console.log(' No user ID available');
       return;
     }
     
     try {
       setLoading(true);
-      console.log('🔄 Loading profile for user:', profileUserId);
+      console.log(' Loading profile for user:', profileUserId);
       
       // Get user data from users table
       const { data: userData, error: userError } = await supabase
@@ -42,8 +51,8 @@ const CaregiverProfileComplete = ({ navigation, route }) => {
         .eq('id', profileUserId)
         .single();
       
-      console.log('👤 User data:', userData);
-      console.log('❌ User error:', userError);
+      console.log(' User data:', userData);
+      console.log(' User error:', userError);
       
       if (userError) throw userError;
       
@@ -54,8 +63,8 @@ const CaregiverProfileComplete = ({ navigation, route }) => {
         .eq('user_id', profileUserId)
         .single();
       
-      console.log('👨‍💼 Caregiver data:', caregiverData);
-      console.log('❌ Caregiver error:', caregiverError);
+      console.log(' Caregiver data:', caregiverData);
+      console.log(' Caregiver error:', caregiverError);
       
       // The issue is that EnhancedCaregiverProfileWizard saves complex data but it's not being stored properly
       // Let's check if the data exists in any format and extract it
@@ -105,24 +114,84 @@ const CaregiverProfileComplete = ({ navigation, route }) => {
         backgroundCheckStatus: caregiverData?.background_check_status
       };
       
-      console.log('📊 Combined profile data:', combinedProfile);
+      console.log(' Combined profile data:', combinedProfile);
       setProfile(combinedProfile);
     } catch (error) {
-      console.error('❌ Profile load error:', error);
+      console.error(' Profile load error:', error);
     } finally {
       setLoading(false);
     }
   };
 
+  const loadReviews = useCallback(async () => {
+    if (!profileUserId) {
+      return;
+    }
+
+    setReviewsLoading(true);
+    setReviewsError(null);
+    try {
+      const data = await reviewService.getReviews(profileUserId, 30, 0);
+      const normalized = normalizeCaregiverReviewsForList(Array.isArray(data) ? data : []);
+      setReviews(normalized);
+    } catch (error) {
+      console.error('Failed to load caregiver reviews:', error);
+      setReviews([]);
+      setReviewsError(error?.message || 'Unable to load reviews right now.');
+    } finally {
+      setReviewsLoading(false);
+    }
+  }, [profileUserId]);
+
   useEffect(() => {
     loadProfile();
   }, [profileUserId]);
+
+  useEffect(() => {
+    loadReviews();
+  }, [loadReviews]);
+
+  useEffect(() => {
+    if (showRatingsModal && !reviewsLoading && reviews.length === 0) {
+      loadReviews();
+    }
+  }, [showRatingsModal, reviews.length, reviewsLoading, loadReviews]);
 
   const onRefresh = async () => {
     setRefreshing(true);
     await loadProfile();
     setRefreshing(false);
   };
+
+  const openRatingsModal = useCallback(() => {
+    setShowRatingsModal(true);
+  }, []);
+
+  const closeRatingsModal = useCallback(() => {
+    setShowRatingsModal(false);
+  }, []);
+
+  const ratingStats = useMemo(() => {
+    if (reviews.length) {
+      const total = reviews.reduce((sum, review) => sum + Number(review?.rating ?? 0), 0);
+      const average = reviews.length ? total / reviews.length : 0;
+      const ratingDisplay = average > 0 ? average.toFixed(1) : '—';
+      const subtitle = reviews.length === 1 ? '1 review' : `${reviews.length} reviews`;
+      return {
+        rating: average,
+        ratingDisplay,
+        reviewCount: reviews.length,
+        subtitle,
+        ctaLabel: 'See feedback'
+      };
+    }
+
+    return getRatingStats({
+      rating: profile?.rating,
+      reviewCount: profile?.reviewCount,
+      reviews: profile?.reviews
+    });
+  }, [reviews, profile?.rating, profile?.reviewCount, profile?.reviews]);
 
   const getCompletionPercentage = () => {
     if (!profile) return 0;
@@ -172,213 +241,242 @@ const CaregiverProfileComplete = ({ navigation, route }) => {
   const completionPercentage = getCompletionPercentage();
 
   return (
-    <ScrollView 
-      style={styles.container}
-      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
-    >
-      {/* Header */}
-      <View style={styles.header}>
-        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
-          <Ionicons name="arrow-back" size={24} color="#333" />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>{isViewingOwnProfile ? 'My Profile' : 'Caregiver Profile'}</Text>
-        {isViewingOwnProfile && (
-          <TouchableOpacity onPress={() => navigation.navigate('EnhancedCaregiverProfileWizard', { isEdit: true, existingProfile: profile })} style={styles.editButton}>
-            <Ionicons name="create" size={24} color="#2196F3" />
+    <>
+      <ScrollView 
+        style={styles.container}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+      >
+        {/* Header */}
+        <View style={styles.header}>
+          <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
+            <Ionicons name="arrow-back" size={24} color="#333" />
           </TouchableOpacity>
-        )}
-      </View>
-
-      {/* Profile Completion */}
-      <View style={styles.completionCard}>
-        <Text style={styles.completionTitle}>Profile Completion</Text>
-        <View style={styles.progressBar}>
-          <View style={[styles.progressFill, { width: `${completionPercentage}%` }]} />
+          <Text style={styles.headerTitle}>{isViewingOwnProfile ? 'My Profile' : 'Caregiver Profile'}</Text>
+          {isViewingOwnProfile && (
+            <TouchableOpacity onPress={() => navigation.navigate('EnhancedCaregiverProfileWizard', { isEdit: true, existingProfile: profile })} style={styles.editButton}>
+              <Ionicons name="create" size={24} color="#2196F3" />
+            </TouchableOpacity>
+          )}
         </View>
-        <Text style={styles.completionText}>{completionPercentage}% Complete</Text>
-        {completionPercentage < 100 && (
-          <BestPracticesTip tip="Complete your profile to increase visibility and trust with families" />
-        )}
-      </View>
 
-      {/* Basic Information */}
-      <ProfileSection 
-        title="Basic Information" 
-        icon="person" 
-        isComplete={profile?.name && profile?.bio && profile?.profileImage}
-      >
-        <View style={styles.basicInfo}>
-          <View style={styles.profileImageContainer}>
-            {profile?.profileImage ? (
-              <Image 
-                source={{ 
-                  uri: profile.profileImage.startsWith('/') 
-                    ? `${getCurrentSocketURL() || ''}${profile.profileImage}` 
-                    : profile.profileImage
-                }}
-                style={styles.profileImage}
-                onError={() => console.log('Profile image load error')}
-              />
-            ) : (
-              <View style={styles.profileImagePlaceholder}>
-                <Ionicons name="person" size={40} color="#9CA3AF" />
-              </View>
-            )}
+        {/* Profile Completion */}
+        <View style={styles.completionCard}>
+          <Text style={styles.completionTitle}>Profile Completion</Text>
+          <View style={styles.progressBar}>
+            <View style={[styles.progressFill, { width: `${completionPercentage}%` }]} />
           </View>
-          <View style={styles.basicDetails}>
-            <Text style={styles.name}>{profile?.name || 'Add your name'}</Text>
-            <Text style={styles.bio}>{profile?.bio || 'Add a professional bio'}</Text>
-            <View style={styles.ratingContainer}>
-              <Ionicons name="star" size={16} color="#FFD700" />
-              <Text style={styles.rating}>{profile?.rating || '0.0'} ({profile?.reviewCount || 0} reviews)</Text>
+          <Text style={styles.completionText}>{completionPercentage}% Complete</Text>
+          {completionPercentage < 100 && (
+            <BestPracticesTip tip="Complete your profile to increase visibility and trust with families" />
+          )}
+        </View>
+
+        {/* Basic Information */}
+        <ProfileSection 
+          title="Basic Information" 
+          icon="person" 
+          isComplete={profile?.name && profile?.bio && profile?.profileImage}
+        >
+          <View style={styles.basicInfo}>
+            <View style={styles.profileImageContainer}>
+              {profile?.profileImage ? (
+                <Image 
+                  source={{ 
+                    uri: profile.profileImage.startsWith('/') 
+                      ? `${getCurrentSocketURL() || ''}${profile.profileImage}` 
+                      : profile.profileImage
+                  }}
+                  style={styles.profileImage}
+                  onError={() => console.log('Profile image load error')}
+                />
+              ) : (
+                <View style={styles.profileImagePlaceholder}>
+                  <Ionicons name="person" size={40} color="#9CA3AF" />
+                </View>
+              )}
+            </View>
+            <View style={styles.basicDetails}>
+              <Text style={styles.name}>{profile?.name || 'Add your name'}</Text>
+              <Text style={styles.bio}>{profile?.bio || 'Add a professional bio'}</Text>
+              <TouchableOpacity
+                style={styles.ratingContainer}
+                onPress={openRatingsModal}
+                accessibilityRole="button"
+                accessibilityLabel="View ratings and reviews"
+                accessibilityHint="Opens your ratings and reviews"
+                activeOpacity={0.7}
+              >
+                <View style={styles.ratingBadge}>
+                  <Ionicons name="star" size={16} color="#F59E0B" />
+                  <Text style={styles.ratingValueText}>{ratingStats.ratingDisplay}</Text>
+                </View>
+                <View style={styles.ratingMeta}>
+                  <Text style={styles.ratingSubtitle}>{ratingStats.subtitle}</Text>
+                  <View style={styles.ratingCTA}>
+                    <Text style={styles.ratingCTALabel}>{ratingStats.ctaLabel}</Text>
+                    <Ionicons name="chevron-forward" size={14} color="#1D4ED8" />
+                  </View>
+                </View>
+              </TouchableOpacity>
             </View>
           </View>
-        </View>
-        {(!profile?.name || !profile?.bio) && (
-          <BestPracticesTip tip="Add a professional photo and compelling bio to make a great first impression" />
-        )}
-      </ProfileSection>
+          {(!profile?.name || !profile?.bio) && (
+            <BestPracticesTip tip="Add a professional photo and compelling bio to make a great first impression" />
+          )}
+        </ProfileSection>
 
-      {/* Skills & Experience */}
-      <ProfileSection 
-        title="Skills & Experience" 
-        icon="school" 
-        isComplete={profile?.skills?.length > 0 && profile?.experience?.description}
-      >
-        <View style={styles.skillsContainer}>
-          <Text style={styles.subTitle}>Skills</Text>
-          <View style={styles.skillsList}>
-            {profile?.skills?.map((skill, index) => (
-              <View key={index} style={styles.skillTag}>
-                <Text style={styles.skillText}>{skill}</Text>
-              </View>
-            )) || <Text style={styles.emptyText}>No skills added</Text>}
+        {/* Skills & Experience */}
+        <ProfileSection 
+          title="Skills & Experience" 
+          icon="school" 
+          isComplete={profile?.skills?.length > 0 && profile?.experience?.description}
+        >
+          <View style={styles.skillsContainer}>
+            <Text style={styles.subTitle}>Skills</Text>
+            <View style={styles.skillsList}>
+              {profile?.skills?.map((skill, index) => (
+                <View key={index} style={styles.skillTag}>
+                  <Text style={styles.skillText}>{skill}</Text>
+                </View>
+              )) || <Text style={styles.emptyText}>No skills added</Text>}
+            </View>
           </View>
-        </View>
-        
-        <View style={styles.experienceContainer}>
-          <Text style={styles.subTitle}>Experience</Text>
-          {profile?.experience?.years || profile?.experience?.months ? (
-            <Text style={styles.experienceText}>
-              {profile.experience.years || 0} years, {profile.experience.months || 0} months
+          
+          <View style={styles.experienceContainer}>
+            <Text style={styles.subTitle}>Experience</Text>
+            {profile?.experience?.years || profile?.experience?.months ? (
+              <Text style={styles.experienceText}>
+                {profile.experience.years || 0} years, {profile.experience.months || 0} months
+              </Text>
+            ) : null}
+            <Text style={styles.experienceDescription}>
+              {profile?.experience?.description || 'Add your experience description'}
             </Text>
-          ) : null}
-          <Text style={styles.experienceDescription}>
-            {profile?.experience?.description || 'Add your experience description'}
-          </Text>
-        </View>
-        
-        {(!profile?.skills?.length || !profile?.experience?.description) && (
-          <BestPracticesTip tip="Highlight specific childcare skills and detailed experience to stand out" />
-        )}
-      </ProfileSection>
-
-      {/* Rates & Availability */}
-      <ProfileSection 
-        title="Rates & Availability" 
-        icon="time" 
-        isComplete={profile?.hourlyRate && profile?.availability?.days?.length > 0}
-      >
-        <View style={styles.ratesContainer}>
-          <Text style={styles.subTitle}>Hourly Rate</Text>
-          <Text style={styles.hourlyRate}>₱{profile?.hourlyRate || '0'}/hour</Text>
-        </View>
-        
-        <View style={styles.availabilityContainer}>
-          <Text style={styles.subTitle}>Available Days</Text>
-          <View style={styles.daysList}>
-            {profile?.availability?.days?.map((day, index) => (
-              <View key={index} style={styles.dayTag}>
-                <Text style={styles.dayText}>{day}</Text>
-              </View>
-            )) || <Text style={styles.emptyText}>No availability set</Text>}
           </View>
-        </View>
-        
-        {(!profile?.hourlyRate || !profile?.availability?.days?.length) && (
-          <BestPracticesTip tip="Set competitive rates and clear availability to get more bookings" />
-        )}
-      </ProfileSection>
+          
+          {(!profile?.skills?.length || !profile?.experience?.description) && (
+            <BestPracticesTip tip="Highlight specific childcare skills and detailed experience to stand out" />
+          )}
+        </ProfileSection>
 
-      {/* Age Care Ranges */}
-      <ProfileSection 
-        title="Age Care Specialization" 
-        icon="heart" 
-        isComplete={profile?.ageCareRanges?.length > 0}
-      >
-        <View style={styles.ageRangesList}>
-          {profile?.ageCareRanges?.map((range, index) => (
-            <View key={index} style={styles.ageRangeTag}>
-              <Text style={styles.ageRangeText}>{range}</Text>
+        {/* Rates & Availability */}
+        <ProfileSection 
+          title="Rates & Availability" 
+          icon="time" 
+          isComplete={profile?.hourlyRate && profile?.availability?.days?.length > 0}
+        >
+          <View style={styles.ratesContainer}>
+            <Text style={styles.subTitle}>Hourly Rate</Text>
+            <Text style={styles.hourlyRate}>₱{profile?.hourlyRate || '0'}/hour</Text>
+          </View>
+          
+          <View style={styles.availabilityContainer}>
+            <Text style={styles.subTitle}>Available Days</Text>
+            <View style={styles.daysList}>
+              {profile?.availability?.days?.map((day, index) => (
+                <View key={index} style={styles.dayTag}>
+                  <Text style={styles.dayText}>{day}</Text>
+                </View>
+              )) || <Text style={styles.emptyText}>No availability set</Text>}
             </View>
-          )) || <Text style={styles.emptyText}>No age ranges specified</Text>}
-        </View>
-        
-        {!profile?.ageCareRanges?.length && (
-          <BestPracticesTip tip="Specify age ranges you're comfortable with to match with suitable families" />
-        )}
-      </ProfileSection>
+          </View>
+          
+          {(!profile?.hourlyRate || !profile?.availability?.days?.length) && (
+            <BestPracticesTip tip="Set competitive rates and clear availability to get more bookings" />
+          )}
+        </ProfileSection>
 
-      {/* Certifications */}
-      <ProfileSection 
-        title="Certifications" 
-        icon="ribbon" 
-        isComplete={profile?.certifications?.length > 0}
-      >
-        {profile?.certifications?.length > 0 ? (
-          profile.certifications.map((cert, index) => (
-            <View key={index} style={styles.certificationItem}>
-              <View style={styles.certificationHeader}>
-                <Text style={styles.certificationName}>
-                  {typeof cert === 'string' ? cert : (cert?.name || cert)}
-                </Text>
-                {cert?.verified && <Ionicons name="checkmark-circle" size={16} color="#4CAF50" />}
+        {/* Age Care Ranges */}
+        <ProfileSection 
+          title="Age Care Specialization" 
+          icon="heart" 
+          isComplete={profile?.ageCareRanges?.length > 0}
+        >
+          <View style={styles.ageRangesList}>
+            {profile?.ageCareRanges?.map((range, index) => (
+              <View key={index} style={styles.ageRangeTag}>
+                <Text style={styles.ageRangeText}>{range}</Text>
               </View>
-              {cert?.issuedBy && <Text style={styles.certificationIssuer}>Issued by: {cert.issuedBy}</Text>}
-            </View>
-          ))
-        ) : (
-          <Text style={styles.emptyText}>No certifications added</Text>
-        )}
-        
-        <BestPracticesTip tip="Add relevant certifications like First Aid, CPR, or childcare training to build trust" />
-      </ProfileSection>
+            )) || <Text style={styles.emptyText}>No age ranges specified</Text>}
+          </View>
+          
+          {!profile?.ageCareRanges?.length && (
+            <BestPracticesTip tip="Specify age ranges you're comfortable with to match with suitable families" />
+          )}
+        </ProfileSection>
 
-      {/* Emergency Contacts */}
-      <ProfileSection 
-        title="Emergency Contacts" 
-        icon="call" 
-        isComplete={profile?.emergencyContacts?.length > 0}
-      >
-        {profile?.emergencyContacts?.length > 0 ? (
-          profile.emergencyContacts.map((contact, index) => (
-            <View key={index} style={styles.contactItem}>
-              <Text style={styles.contactName}>{contact.name}</Text>
-              <Text style={styles.contactRelation}>{contact.relationship}</Text>
-              <Text style={styles.contactPhone}>{contact.phone}</Text>
-            </View>
-          ))
-        ) : (
-          <Text style={styles.emptyText}>No emergency contacts added</Text>
-        )}
-        
-        {!profile?.emergencyContacts?.length && (
-          <BestPracticesTip tip="Add emergency contacts to provide families with peace of mind" />
-        )}
-      </ProfileSection>
+        {/* Certifications */}
+        <ProfileSection 
+          title="Certifications" 
+          icon="ribbon" 
+          isComplete={profile?.certifications?.length > 0}
+        >
+          {profile?.certifications?.length > 0 ? (
+            profile.certifications.map((cert, index) => (
+              <View key={index} style={styles.certificationItem}>
+                <View style={styles.certificationHeader}>
+                  <Text style={styles.certificationName}>
+                    {typeof cert === 'string' ? cert : (cert?.name || cert)}
+                  </Text>
+                  {cert?.verified && <Ionicons name="checkmark-circle" size={16} color="#4CAF50" />}
+                </View>
+                {cert?.issuedBy && <Text style={styles.certificationIssuer}>Issued by: {cert.issuedBy}</Text>}
+              </View>
+            ))
+          ) : (
+            <Text style={styles.emptyText}>No certifications added</Text>
+          )}
+          
+          <BestPracticesTip tip="Add relevant certifications like First Aid, CPR, or childcare training to build trust" />
+        </ProfileSection>
 
-      {/* Best Practices Summary */}
-      <View style={styles.bestPracticesCard}>
-        <Text style={styles.bestPracticesTitle}>Profile Best Practices</Text>
-        <BestPracticesTip tip="Upload a professional, smiling photo" />
-        <BestPracticesTip tip="Write a detailed bio highlighting your passion for childcare" />
-        <BestPracticesTip tip="List specific skills and certifications" />
-        <BestPracticesTip tip="Set competitive and fair hourly rates" />
-        <BestPracticesTip tip="Keep your availability updated" />
-        <BestPracticesTip tip="Respond to messages promptly" />
-        <BestPracticesTip tip="Maintain a 4.5+ star rating" />
-      </View>
-    </ScrollView>
+        {/* Emergency Contacts */}
+        <ProfileSection 
+          title="Emergency Contacts" 
+          icon="call" 
+          isComplete={profile?.emergencyContacts?.length > 0}
+        >
+          {profile?.emergencyContacts?.length > 0 ? (
+            profile.emergencyContacts.map((contact, index) => (
+              <View key={index} style={styles.contactItem}>
+                <Text style={styles.contactName}>{contact.name}</Text>
+                <Text style={styles.contactRelation}>{contact.relationship}</Text>
+                <Text style={styles.contactPhone}>{contact.phone}</Text>
+              </View>
+            ))
+          ) : (
+            <Text style={styles.emptyText}>No emergency contacts added</Text>
+          )}
+          
+          {!profile?.emergencyContacts?.length && (
+            <BestPracticesTip tip="Add emergency contacts to provide families with peace of mind" />
+          )}
+        </ProfileSection>
+
+        {/* Best Practices Summary */}
+        <View style={styles.bestPracticesCard}>
+          <Text style={styles.bestPracticesTitle}>Profile Best Practices</Text>
+          <BestPracticesTip tip="Upload a professional, smiling photo" />
+          <BestPracticesTip tip="Write a detailed bio highlighting your passion for childcare" />
+          <BestPracticesTip tip="List specific skills and certifications" />
+          <BestPracticesTip tip="Set competitive and fair hourly rates" />
+          <BestPracticesTip tip="Keep your availability updated" />
+          <BestPracticesTip tip="Respond to messages promptly" />
+          <BestPracticesTip tip="Maintain a 4.5+ star rating" />
+        </View>
+      </ScrollView>
+      <RatingsReviewsModal
+        visible={showRatingsModal}
+        onClose={closeRatingsModal}
+        caregiverId={profileUserId}
+        caregiverName={profile?.name || user?.name}
+        currentUserId={user?.id}
+        reviews={reviews}
+        loading={reviewsLoading}
+        error={reviewsError}
+        onPreload={loadReviews}
+      />
+    </>
   );
 };
 
@@ -500,11 +598,45 @@ const styles = {
   ratingContainer: {
     flexDirection: 'row',
     alignItems: 'center',
+    gap: 12,
+    padding: 8,
+    borderRadius: 12,
+    backgroundColor: '#F9FAFB',
   },
-  rating: {
-    marginLeft: 4,
+  ratingBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 999,
+    backgroundColor: '#FFF7ED',
+  },
+  ratingValueText: {
     fontSize: 14,
-    color: '#666',
+    fontWeight: '700',
+    color: '#C2410C',
+  },
+  ratingMeta: {
+    flex: 1,
+  },
+  ratingSubtitle: {
+    fontSize: 13,
+    fontWeight: '500',
+    color: '#4B5563',
+  },
+  ratingCTA: {
+    marginTop: 4,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  ratingCTALabel: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#1D4ED8',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
   },
   subTitle: {
     fontSize: 14,

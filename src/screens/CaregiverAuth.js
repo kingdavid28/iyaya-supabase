@@ -30,6 +30,8 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { STORAGE_KEYS } from '../config/constants';
 import FacebookSignInButton from '../components/auth/FacebookSignInButton';
 import { navigateToUserDashboard } from '../utils/navigationUtils';
+import { tokenManager } from '../utils/tokenManager';
+import { supabase } from '../config/supabase';
 
 const CaregiverAuth = ({ navigation }) => {
   const [mode, setMode] = useState('login');
@@ -397,8 +399,22 @@ const CaregiverAuth = ({ navigation }) => {
 
                   <FacebookSignInButton
                     userRole="caregiver"
-                    onSuccess={(result) => {
+                    onSuccess={async (result) => {
                       console.log('Facebook sign-in successful:', result);
+
+                      // Debug authentication state after login
+                      const checkAuthAfterLogin = async () => {
+                        const token = await tokenManager.getValidToken(false);
+                        console.log('Token after login:', token ? 'present' : 'missing');
+                        const session = await supabase.auth.getSession();
+                        console.log('Session after login:', session?.session ? 'present' : 'missing');
+                      };
+
+                      // Run the debugging function after a short delay
+                      setTimeout(() => {
+                        checkAuthAfterLogin().catch(console.error);
+                      }, 1000);
+
                       // Navigation will be handled by the auth context
                     }}
                     onError={(error) => {

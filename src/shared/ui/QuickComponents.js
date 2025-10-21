@@ -3,14 +3,52 @@ import { View, Text, Pressable } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 
-export function QuickStat({ icon, value, label, color = '#2563EB', bgColor = '#EFF6FF', styles }) {
+export function QuickStat({
+  icon,
+  value,
+  label,
+  color = '#2563EB',
+  bgColor = '#EFF6FF',
+  styles,
+  onPress,
+  subtitle,
+  ctaLabel,
+  accessibilityHint
+}) {
+  const baseTileStyle = [styles.quickTile, { backgroundColor: '#fff' }, onPress && styles.quickTileInteractive];
+  if (onPress) {
+    return (
+      <Pressable
+        onPress={onPress}
+        accessibilityRole="button"
+        accessibilityLabel={label}
+        accessibilityHint={accessibilityHint}
+        style={({ pressed }) => [...baseTileStyle, pressed && styles.quickTilePressed]}
+      >
+        <View style={[styles.quickIconWrap, { backgroundColor: bgColor }]}>
+          <Ionicons name={icon} size={18} color={color} />
+        </View>
+        <Text style={styles.quickValue}>{value ?? '-'}</Text>
+        <Text style={styles.quickLabel}>{label}</Text>
+        {subtitle ? <Text style={styles.quickStatSubtitle}>{subtitle}</Text> : null}
+        {ctaLabel ? (
+          <View style={styles.quickStatCTA}>
+            <Text style={styles.quickStatCTAText}>{ctaLabel}</Text>
+            <Ionicons name="chevron-forward" size={14} color={color} />
+          </View>
+        ) : null}
+      </Pressable>
+    );
+  }
+
   return (
-    <View style={[styles.quickTile, { backgroundColor: '#fff' }]}>
+    <View style={baseTileStyle}>
       <View style={[styles.quickIconWrap, { backgroundColor: bgColor }]}>
         <Ionicons name={icon} size={18} color={color} />
       </View>
       <Text style={styles.quickValue}>{value ?? '-'}</Text>
       <Text style={styles.quickLabel}>{label}</Text>
+      {subtitle ? <Text style={styles.quickStatSubtitle}>{subtitle}</Text> : null}
     </View>
   );
 }
