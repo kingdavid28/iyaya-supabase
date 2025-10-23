@@ -33,7 +33,7 @@ export const getPaymentActions = (booking) => {
     case BOOKING_STATUSES.COMPLETED:
       actions.push({
         type: 'final_payment',
-        label: 'Complete Payment',
+        label: 'Payment',
         amount: calculateRemainingPayment(booking.totalCost),
         description: 'Pay remaining amount after service completion'
       });

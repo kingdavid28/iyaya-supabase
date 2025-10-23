@@ -1,14 +1,16 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Image, ActivityIndicator, Alert } from 'react-native';
-import * as ImagePicker from 'expo-image-picker';
 import { useNavigation, useRoute } from '@react-navigation/native';
-import { CheckCircle, Upload, XCircle, AlertCircle, Clock, X, Check } from 'lucide-react-native';
-import { bookingsAPI } from '../config/api';
+import { CheckCircle, Upload, XCircle, AlertCircle, Clock, X } from 'lucide-react-native';
+import {
+  selectPaymentProofImage,
+  submitPaymentProof,
+  PaymentProofError
+} from '../utils/paymentProofHelpers';
 
 const PaymentConfirmationScreen = () => {
   const [image, setImage] = useState(null);
   const [uploading, setUploading] = useState(false);
-  const [uploadStatus, setUploadStatus] = useState('');
   const [bookingStatus, setBookingStatus] = useState('pending');
   const [bookingData, setBookingData] = useState(null);
   const [imageBase64, setImageBase64] = useState(null);
@@ -29,32 +31,22 @@ const PaymentConfirmationScreen = () => {
 
   const pickImage = async () => {
     try {
-      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-      if (status !== 'granted') {
-        Alert.alert('Permission required', 'We need access to your photos to upload the payment screenshot.');
+      const result = await selectPaymentProofImage();
+
+      if (!result) {
         return;
       }
 
-      const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ['images'],
-        allowsEditing: true,
-        aspect: [4, 3],
-        quality: 0.7,
-        base64: true,
-      });
-
-      if (!result.canceled) {
-        const asset = result.assets[0];
-        setImage(asset.uri);
-        setImageBase64(asset.base64 || null);
-        // Best-effort mime type; expo may not provide it
-        const inferred = asset.mimeType || (asset.uri?.toLowerCase().endsWith('.png') ? 'image/png' : 'image/jpeg');
-        setMimeType(inferred);
-        setUploadStatus('');
-      }
+      setImage(result.uri);
+      setImageBase64(result.base64 || null);
+      setMimeType(result.mimeType);
     } catch (error) {
+      const message = error instanceof PaymentProofError
+        ? error.message
+        : 'Failed to pick image. Please try again.';
+
       console.error('Error picking image:', error);
-      Alert.alert('Error', 'Failed to pick image. Please try again.');
+      Alert.alert('Error', message);
     }
   };
 
@@ -69,20 +61,21 @@ const PaymentConfirmationScreen = () => {
     }
 
     setUploading(true);
-    setUploadStatus('uploading');
+    setBookingStatus('uploading');
 
     try {
-      const res = await bookingsAPI.uploadPaymentProof(bookingId, imageBase64, mimeType);
-      setUploadStatus('pending_verification');
+      const res = await submitPaymentProof(bookingId, imageBase64, mimeType);
       setBookingStatus('pending_verification');
       if (res?.booking) setBookingData(res.booking);
       Alert.alert('Payment Submitted', 'We received your payment proof. We will verify it shortly.');
 
     } catch (error) {
       console.error('Error uploading image:', error);
-      setUploadStatus('error');
       setBookingStatus('error');
-      Alert.alert('Error', 'Failed to upload payment. Please try again.');
+      const message = error instanceof PaymentProofError
+        ? error.message
+        : 'Failed to upload payment. Please try again.';
+      Alert.alert('Error', message);
     } finally {
       setUploading(false);
     }

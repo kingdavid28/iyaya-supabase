@@ -20,6 +20,20 @@ const MessagesTab = ({ navigation, refreshing, onRefresh }) => {
     return `${parts[0].charAt(0)}${parts[parts.length - 1].charAt(0)}`.toUpperCase();
   };
 
+  const getDisplayName = (name = '') => {
+    const safeName = String(name ?? '').trim();
+    if (!safeName) return 'Parent';
+    return safeName.length <= 10 ? safeName : `${safeName.slice(0, 10)}...`;
+  };
+
+  const getPreviewMessage = (message = '') => {
+    const safeMessage = String(message ?? '').trim();
+    if (!safeMessage || safeMessage === 'Tap to view messages') {
+      return null;
+    }
+    return safeMessage.length <= 20 ? safeMessage : `${safeMessage.slice(0, 20)}...`;
+  };
+
   useEffect(() => {
     const userIdToUse = user?.id || user?.uid;
     if (!userIdToUse) {
@@ -50,6 +64,7 @@ const MessagesTab = ({ navigation, refreshing, onRefresh }) => {
             parentId: otherUser?.id,
             parentName: otherUser?.name || 'Parent',
             parentAvatar: otherUser?.profile_image,
+            date: conv.date,
             lastMessage: conv.last_message_preview || 'Tap to view messages',
             lastMessageTime: conv.last_message_at,
             isRead: true // Will be updated with actual read status
@@ -77,15 +92,26 @@ const MessagesTab = ({ navigation, refreshing, onRefresh }) => {
     };
   }, [user?.id, user?.uid]);
 
-  const formatTime = (timestamp) => {
-    const date = new Date(timestamp);
-    const now = new Date();
-    const diff = now - date;
-    const hours = Math.floor(diff / (1000 * 60 * 60));
+  const formatMessageDate = (timestamp) => {
+    if (!timestamp) return 'Unknown date';
+    try {
+      const date = new Date(timestamp);
+      if (Number.isNaN(date.getTime())) return 'Unknown date';
 
-    if (hours < 1) return 'Just now';
-    if (hours < 24) return `${hours}h ago`;
-    return date.toLocaleDateString();
+      const datePart = date.toLocaleDateString('en-US', {
+        month: 'short',
+        day: 'numeric',
+        year: 'numeric'
+      });
+      const timePart = date.toLocaleTimeString('en-US', {
+        hour: 'numeric',
+        minute: '2-digit'
+      });
+      return `${datePart} · ${timePart}`;
+    } catch (error) {
+      console.warn('Failed to format message date:', timestamp, error);
+      return 'Unknown date';
+    }
   };
 
   const handleConversationPress = async (conversation) => {
@@ -150,34 +176,28 @@ const MessagesTab = ({ navigation, refreshing, onRefresh }) => {
 
           <View style={messageStyles.messageInfo}>
             <View style={messageStyles.messageHeader}>
-              <Text style={messageStyles.parentName}>{item.parentName || 'Parent'}</Text>
-              <View style={messageStyles.metaRight}>
-                <Ionicons name="time-outline" size={14} color="#94A3B8" style={messageStyles.timeIcon} />
-                <Text style={messageStyles.messageTime}>
-                  {formatTime(item.lastMessageTime)}
-                </Text>
-              </View>
+              <Text style={messageStyles.parentName}>{getDisplayName(item.parentName)}</Text>
+              <Text style={messageStyles.messageDate}>{formatMessageDate(item.lastMessageTime)}</Text>
             </View>
             <View style={messageStyles.messagePreviewRow}>
               <Ionicons name="chatbubble-ellipses-outline" size={16} color="#6B7280" style={messageStyles.previewIcon} />
-              <Text
-                style={[
-                  messageStyles.lastMessage,
-                  !item.isRead && messageStyles.unreadMessage
-                ]}
-                numberOfLines={1}
-              >
-                {item.lastMessage}
-              </Text>
+              <View style={messageStyles.messagePreviewTextGroup}>
+                <Text style={messageStyles.previewPrompt}>Tap to view messages</Text>
+                {getPreviewMessage(item.lastMessage) && (
+                  <Text
+                    style={[
+                      messageStyles.lastMessage,
+                      !item.isRead && messageStyles.unreadMessage
+                    ]}
+                    numberOfLines={2}
+                  >
+                    {getPreviewMessage(item.lastMessage)}
+                  </Text>
+                )}
+              </View>
             </View>
           </View>
 
-          <Ionicons
-            name="chevron-forward"
-            size={20}
-            color="#9CA3AF"
-            style={messageStyles.chevronIcon}
-          />
         </View>
       </View>
     </TouchableOpacity>
@@ -318,45 +338,45 @@ const messageStyles = {
     marginRight: 12,
   },
   messageHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
+    flexDirection: 'column',
+    alignItems: 'flex-start',
     marginBottom: 6,
   },
   parentName: {
     fontSize: 16,
     fontWeight: '600',
     color: '#0F172A',
+    marginBottom: 2,
   },
-  metaRight: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    backgroundColor: '#EEF2FF',
-    borderRadius: 12,
-    paddingVertical: 2,
-    paddingHorizontal: 8,
-  },
-  timeIcon: {
-    marginRight: 2,
-  },
-  messageTime: {
-    fontSize: 11,
+  messageDate: {
+    fontSize: 12,
     fontWeight: '500',
-    color: '#64748B',
+    color: '#475569',
+    opacity: 0.8,
   },
   messagePreviewRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
+    marginTop: 2,
   },
   previewIcon: {
     marginTop: 1,
+  },
+  messagePreviewTextGroup: {
+    flex: 1,
+  },
+  previewPrompt: {
+    fontSize: 13,
+    color: '#4B5563',
+    marginBottom: 2,
+    fontWeight: '500',
   },
   lastMessage: {
     flex: 1,
     fontSize: 14,
     color: '#475569',
+    lineHeight: 18,
   },
   unreadMessage: {
     fontWeight: '600',
@@ -393,10 +413,6 @@ const messageStyles = {
     fontSize: 12,
     fontWeight: '600',
     color: '#1D4ED8',
-  },
-  chevronIcon: {
-    alignSelf: 'flex-start',
-    marginTop: 25,
   },
   emptyState: {
     flex: 1,

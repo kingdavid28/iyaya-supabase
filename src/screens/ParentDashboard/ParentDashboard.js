@@ -470,28 +470,43 @@ const ParentDashboard = () => {
       Alert.alert('Error', 'User authentication required. Please log out and back in.');
       return;
     }
-    
-    const caregiverId = caregiver._id || caregiver.id;
+
+    const caregiverId = caregiver?._id
+      || caregiver?.id
+      || caregiver?.userId
+      || caregiver?.user_id
+      || caregiver?.user?.id
+      || caregiver?.caregiver_id;
+
     if (!caregiverId) {
       console.error('❌ ParentDashboard - No caregiver ID available');
       Alert.alert('Error', 'Caregiver information not available');
       return;
     }
-    
+
+    const caregiverName = caregiver?.name
+      || caregiver?.user?.name
+      || caregiver?.profile?.name
+      || 'Caregiver';
+
     try {
-      // Create or get conversation in Supabase
       await supabaseService.getOrCreateConversation(user.id, caregiverId);
     } catch (error) {
-      console.log('Connection setup warning:', error.message);
+      console.warn('⚠️ ParentDashboard - Conversation setup issue:', error?.message || error);
     }
 
-    navigation.navigate('Chat', {
-      userId: user.id,
-      targetUserId: caregiverId,
-      targetUserName: caregiver.name,
-      userType: 'parent',
-      targetUserType: 'caregiver'
-    });
+    try {
+      navigation.navigate('Chat', {
+        userId: user.id,
+        targetUserId: caregiverId,
+        targetUserName: caregiverName,
+        userType: 'parent',
+        targetUserType: 'caregiver'
+      });
+    } catch (navError) {
+      console.error('❌ ParentDashboard - Navigation error:', navError);
+      Alert.alert('Error', 'Unable to open chat right now. Please try again later.');
+    }
   }, [navigation, user]);
 
   const handleViewReviews = useCallback((caregiver) => {

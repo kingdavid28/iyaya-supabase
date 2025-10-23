@@ -1,13 +1,15 @@
 import React, { useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Image, ActivityIndicator, Alert } from 'react-native';
-import * as ImagePicker from 'expo-image-picker';
 import { CheckCircle, Upload, XCircle, AlertCircle, Clock, X } from 'lucide-react-native';
 import { ModalWrapper } from '../../../shared/ui';
-import { bookingsAPI } from '../../../config/api';
 import RatingSystem from '../../../components/ui/feedback/RatingSystem';
 import ratingService from '../../../services/ratingService';
-import { getPaymentActions, calculateDeposit, calculateRemainingPayment } from '../../../utils/paymentUtils';
-import { BOOKING_STATUSES } from '../../../constants/bookingStatuses';
+import { calculateDeposit, calculateRemainingPayment } from '../../../utils/paymentUtils';
+import {
+  selectPaymentProofImage,
+  submitPaymentProof,
+  PaymentProofError
+} from '../../../utils/paymentProofHelpers';
 
 const PaymentModal = ({ 
   visible, 
@@ -21,7 +23,6 @@ const PaymentModal = ({
 }) => {
   const [image, setImage] = useState(null);
   const [uploading, setUploading] = useState(false);
-  const [uploadStatus, setUploadStatus] = useState('');
   const [bookingStatus, setBookingStatus] = useState('pending');
   const [imageBase64, setImageBase64] = useState(null);
   const [mimeType, setMimeType] = useState('image/jpeg');
@@ -56,31 +57,22 @@ const PaymentModal = ({
 
   const pickImage = async () => {
     try {
-      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-      if (status !== 'granted') {
-        Alert.alert('Permission required', 'We need access to your photos to upload the payment screenshot.');
+      const result = await selectPaymentProofImage();
+
+      if (!result) {
         return;
       }
 
-      const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ['images'],
-        allowsEditing: true,
-        aspect: [4, 3],
-        quality: 0.7,
-        base64: true,
-      });
-
-      if (!result.canceled) {
-        const asset = result.assets[0];
-        setImage(asset.uri);
-        setImageBase64(asset.base64 || null);
-        const inferred = asset.mimeType || (asset.uri?.toLowerCase().endsWith('.png') ? 'image/png' : 'image/jpeg');
-        setMimeType(inferred);
-        setUploadStatus('');
-      }
+      setImage(result.uri);
+      setImageBase64(result.base64 || null);
+      setMimeType(result.mimeType);
     } catch (error) {
+      const message = error instanceof PaymentProofError
+        ? error.message
+        : 'Failed to pick image. Please try again.';
+
       console.error('Error picking image:', error);
-      Alert.alert('Error', 'Failed to pick image. Please try again.');
+      Alert.alert('Error', message);
     }
   };
 
@@ -95,15 +87,14 @@ const PaymentModal = ({
     }
 
     setUploading(true);
-    setUploadStatus('uploading');
+    setBookingStatus('uploading');
 
     try {
       // Upload payment proof with base64 image and mime type
-      const res = await bookingsAPI.uploadPaymentProof(bookingId, imageBase64, mimeType);
-      
-      setUploadStatus('pending_verification');
+      const res = await submitPaymentProof(bookingId, imageBase64, mimeType);
+
       setBookingStatus('pending_verification');
-      
+
       // Check if user can rate after payment (if rating service exists)
       try {
         if (ratingService && ratingService.canRate) {
@@ -125,13 +116,14 @@ const PaymentModal = ({
       
     } catch (error) {
       console.error('Error uploading payment proof:', error);
-      setUploadStatus('error');
       setBookingStatus('error');
-      
-      const errorMessage = error.response?.data?.message || 
-                          error.message || 
-                          'Failed to upload payment proof. Please try again.';
-      
+
+      const errorMessage = error instanceof PaymentProofError
+        ? error.message
+        : error.response?.data?.message || 
+          error.message || 
+          'Failed to upload payment proof. Please try again.';
+
       Alert.alert('Upload Failed', errorMessage);
     } finally {
       setUploading(false);

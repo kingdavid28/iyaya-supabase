@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { View, Text, TouchableOpacity, ScrollView, RefreshControl, Alert } from 'react-native';
+import { View, Text, TouchableOpacity, ScrollView, RefreshControl } from 'react-native';
 import { Plus, Briefcase } from 'lucide-react-native';
 import { styles, colors } from '../../styles/ParentDashboard.styles';
 import JobPostingModal from '../modals/JobPostingModal';
@@ -34,23 +34,6 @@ const JobsTab = ({
       onJobPosted(jobData);
     }
     setShowJobModal(false);
-  };
-
-  // Use dedicated JobCard component with proper handlers
-  const handleJobPress = (job) => {
-    Alert.alert(
-      job.title || 'Job Details',
-      `Location: ${job.location || 'Not specified'}\n` +
-      `Rate: ₱${job.hourlyRate || job.rate || 'Negotiable'}/hr\n` +
-      `Schedule: ${job.workingHours || job.schedule || 'Flexible'}\n` +
-      `Children: ${job.childrenAges || 'Details available'}\n` +
-      `Status: ${job.status || 'Active'}\n\n` +
-      `${job.description || 'No description provided'}`,
-      [
-        { text: 'Close', style: 'cancel' },
-        { text: 'Edit Job', onPress: () => onEditJob?.(job) },
-      ]
-    );
   };
 
   if (loading) {
@@ -138,8 +121,7 @@ const JobsTab = ({
           filteredJobs.map((job, index) => (
             <JobCard 
               key={job._id || job.id || `job-${index}`} 
-              job={job} 
-              onPress={() => handleJobPress(job)}
+              job={job}
               onUpdate={onRefresh}
               onEdit={onEditJob}
               setActiveTab={setActiveTab}

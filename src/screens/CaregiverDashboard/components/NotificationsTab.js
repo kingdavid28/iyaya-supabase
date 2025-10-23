@@ -5,7 +5,11 @@ import {
   ScrollView, 
   TouchableOpacity, 
   RefreshControl,
-  StyleSheet 
+  StyleSheet,
+  Modal,
+  Image,
+  Linking,
+  Alert
 } from 'react-native';
 import { 
   Briefcase, 
@@ -15,7 +19,8 @@ import {
   DollarSign,
   CheckCircle,
   XCircle,
-  Clock
+  Clock,
+  FileCheck2
 } from 'lucide-react-native';
 import { notificationService } from '../../../services/supabase';
 import { useAuth } from '../../../contexts/AuthContext';
@@ -31,6 +36,9 @@ const NotificationsTab = ({ navigation, onNavigateTab }) => {
   const [notifications, setNotifications] = useState([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [selectedPaymentProof, setSelectedPaymentProof] = useState(null);
+  const [paymentProofModalVisible, setPaymentProofModalVisible] = useState(false);
+  const paymentProofData = selectedPaymentProof?.data ?? {};
 
   useEffect(() => {
     console.log('🔔 NotificationsTab useEffect - user:', user?.id);
@@ -55,8 +63,12 @@ const NotificationsTab = ({ navigation, onNavigateTab }) => {
       console.log('🔔 Loading notifications for user:', user.id);
       const notificationsData = await notificationService.getNotifications(user.id);
       console.log('🔔 Received notifications:', notificationsData);
-      
-      setNotifications(Array.isArray(notificationsData) ? notificationsData : []);
+
+      const filteredNotifications = Array.isArray(notificationsData)
+        ? notificationsData.filter(notification => notification?.user_id === user.id)
+        : [];
+
+      setNotifications(filteredNotifications);
     } catch (error) {
       console.error('❌ Error loading notifications:', error);
     } finally {
@@ -91,6 +103,7 @@ const NotificationsTab = ({ navigation, onNavigateTab }) => {
       case 'booking_confirmed':
       case 'booking_cancelled':
       case 'booking_update':
+      case 'payment_proof':
       case 'payment':
         return 'bookings';
       case 'message':
@@ -107,14 +120,92 @@ const NotificationsTab = ({ navigation, onNavigateTab }) => {
       await markAsRead(notification.id);
     }
 
-    const targetTab = resolveTargetTab(notification.type);
+    let notificationData = notification.data || {};
+    if (typeof notificationData === 'string') {
+      try {
+        notificationData = JSON.parse(notificationData);
+      } catch (parseError) {
+        notificationData = {};
+      }
+    }
+
+    const deepLink = notificationData?.bookingDeepLink;
+
+    if (notification.type === 'payment_proof') {
+      setSelectedPaymentProof({ ...notification, data: notificationData });
+      setPaymentProofModalVisible(true);
+      return;
+    }
+
+    const targetTab = deepLink?.tab || resolveTargetTab(notification.type);
+
     if (targetTab && onNavigateTab) {
-      onNavigateTab(targetTab, notification);
+      onNavigateTab(targetTab, { ...notification, data: notificationData, deepLink });
+      return;
+    }
+
+    if (deepLink?.screen && navigation?.navigate) {
+      navigation.navigate(deepLink.screen, deepLink.params || {});
       return;
     }
 
     if (navigation?.canGoBack?.()) {
       navigation.goBack();
+    }
+  };
+
+  const handleOpenPaymentProof = async () => {
+    const proofUrl = typeof paymentProofData?.paymentProofUrl === 'string'
+      ? paymentProofData.paymentProofUrl.trim()
+      : '';
+
+    if (!proofUrl || proofUrl.startsWith('<') || proofUrl.includes(' ')) {
+      Alert.alert(
+        'Payment proof unavailable',
+        'This payment proof does not include a valid link yet. Please ask the parent to re-upload the receipt.'
+      );
+      return;
+    }
+
+    const normalizedUrl = /^https?:\/\//i.test(proofUrl) ? proofUrl : `https://${proofUrl}`;
+
+    try {
+      const canOpen = await Linking.canOpenURL(normalizedUrl);
+
+      if (!canOpen) {
+        Alert.alert(
+          'Cannot open payment proof',
+          'We could not access the payment proof link. Try downloading it from the bookings tab instead.'
+        );
+        return;
+      }
+
+      await Linking.openURL(normalizedUrl);
+    } catch (error) {
+      console.error('Error opening payment proof URL:', error);
+      Alert.alert(
+        'Error opening payment proof',
+        'Something went wrong while opening the receipt. Please try again later.'
+      );
+    }
+  };
+
+  const handleViewBookingDetails = () => {
+    const deepLink = paymentProofData?.bookingDeepLink;
+
+    if (!deepLink) {
+      return;
+    }
+
+    setPaymentProofModalVisible(false);
+
+    if (deepLink.tab && onNavigateTab) {
+      onNavigateTab(deepLink.tab, { ...selectedPaymentProof, data: paymentProofData, deepLink });
+      return;
+    }
+
+    if (deepLink.screen && navigation?.navigate) {
+      navigation.navigate(deepLink.screen, deepLink.params || {});
     }
   };
 
@@ -130,6 +221,8 @@ const NotificationsTab = ({ navigation, onNavigateTab }) => {
         return <MessageCircle size={20} color="#8b5cf6" />;
       case 'review':
         return <Star size={20} color="#fcd34d" />;
+      case 'payment_proof':
+        return <FileCheck2 size={20} color="#0ea5e9" />;
       case 'payment':
         return <DollarSign size={20} color="#ef4444" />;
       default:
@@ -149,6 +242,8 @@ const NotificationsTab = ({ navigation, onNavigateTab }) => {
         return '#ede9fe';
       case 'review':
         return '#fef3c7';
+      case 'payment_proof':
+        return '#cffafe';
       case 'payment':
         return '#fee2e2';
       default:
@@ -169,35 +264,71 @@ const NotificationsTab = ({ navigation, onNavigateTab }) => {
     return date.toLocaleDateString();
   };
 
-  const renderNotification = (notification) => (
-    <TouchableOpacity
-      key={notification.id}
-      style={[
-        styles.notificationCard,
-        { backgroundColor: getNotificationColor(notification.type) },
-        !notification.read && styles.unreadNotification
-      ]}
-      onPress={() => handleNotificationPress(notification)}
-    >
-      <View style={styles.notificationHeader}>
-        <View style={styles.notificationIcon}>
-          {getNotificationIcon(notification.type)}
+  const renderNotification = (notification) => {
+    let notificationData = notification.data || {};
+    if (typeof notificationData === 'string') {
+      try {
+        notificationData = JSON.parse(notificationData);
+      } catch (parseError) {
+        notificationData = {};
+      }
+    }
+
+    const isPaymentProof = notification.type === 'payment_proof';
+    const paymentMetaLines = [];
+
+    if (isPaymentProof) {
+      if (notificationData.paymentType) {
+        const paymentLabel = notificationData.paymentType === 'final_payment' ? 'Final payment' : 'Deposit payment';
+        paymentMetaLines.push(`${paymentLabel}`);
+      }
+      if (typeof notificationData.totalAmount === 'number') {
+        paymentMetaLines.push(`Amount: ₱${Number(notificationData.totalAmount).toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`);
+      }
+      if (notificationData.parentName) {
+        paymentMetaLines.push(`Parent: ${notificationData.parentName}`);
+      }
+    }
+
+    return (
+      <TouchableOpacity
+        key={notification.id}
+        style={[
+          styles.notificationCard,
+          { backgroundColor: getNotificationColor(notification.type) },
+          !notification.read && styles.unreadNotification
+        ]}
+        onPress={() => handleNotificationPress(notification)}
+      >
+        <View style={styles.notificationHeader}>
+          <View style={styles.notificationIcon}>
+            {getNotificationIcon(notification.type)}
+          </View>
+          <View style={styles.notificationContent}>
+            <Text style={[styles.notificationTitle, !notification.read && styles.unreadText]}>
+              {notification.title}
+            </Text>
+            <Text style={styles.notificationMessage}>
+              {notification.message}
+            </Text>
+            {isPaymentProof && paymentMetaLines.length > 0 && (
+              <View style={styles.paymentMetaContainer}>
+                {paymentMetaLines.map((line, index) => (
+                  <Text key={`${notification.id}-meta-${index}`} style={styles.paymentMetaText}>
+                    {line}
+                  </Text>
+                ))}
+              </View>
+            )}
+            <Text style={styles.notificationTime}>
+              {formatTime(notification.created_at)}
+            </Text>
+          </View>
+          {!notification.read && <View style={styles.unreadDot} />}
         </View>
-        <View style={styles.notificationContent}>
-          <Text style={[styles.notificationTitle, !notification.read && styles.unreadText]}>
-            {notification.title}
-          </Text>
-          <Text style={styles.notificationMessage}>
-            {notification.message}
-          </Text>
-          <Text style={styles.notificationTime}>
-            {formatTime(notification.created_at)}
-          </Text>
-        </View>
-        {!notification.read && <View style={styles.unreadDot} />}
-      </View>
-    </TouchableOpacity>
-  );
+      </TouchableOpacity>
+    );
+  };
 
   const EmptyState = () => (
     <View style={styles.emptyContainer}>
@@ -206,6 +337,12 @@ const NotificationsTab = ({ navigation, onNavigateTab }) => {
       <Text style={styles.emptySubtitle}>
         You'll see job opportunities, booking requests, and updates here
       </Text>
+      <View style={styles.emptyHintContainer}>
+        <Text style={styles.emptyHintTitle}>Pro tip</Text>
+        <Text style={styles.emptyHintText}>
+          Uploading a booking payment proof sends a confirmation notification with the receipt details.
+        </Text>
+      </View>
     </View>
   );
 
@@ -261,6 +398,112 @@ const NotificationsTab = ({ navigation, onNavigateTab }) => {
           {notifications.map(renderNotification)}
         </View>
       )}
+
+      <Modal
+        visible={paymentProofModalVisible}
+        animationType="slide"
+        transparent
+        onRequestClose={() => setPaymentProofModalVisible(false)}
+      >
+        <View style={styles.modalBackdrop}>
+          <View style={styles.modalContainer}>
+            <View style={styles.modalHeader}>
+              <View style={styles.modalHeaderContent}>
+                <View style={styles.modalHeaderIcon}>
+                  <FileCheck2 size={28} color="#0ea5e9" />
+                </View>
+                <View style={styles.modalHeaderText}>
+                  <Text style={styles.modalTitle}>Payment Proof</Text>
+                  {selectedPaymentProof?.created_at && (
+                    <Text style={styles.modalTimestamp}>Submitted {formatTime(selectedPaymentProof.created_at)}</Text>
+                  )}
+                </View>
+              </View>
+              <TouchableOpacity onPress={() => setPaymentProofModalVisible(false)} style={styles.modalCloseButton}>
+                <Text style={styles.modalCloseText}>Close</Text>
+              </TouchableOpacity>
+            </View>
+
+            <View style={styles.modalMetaGrid}>
+              {paymentProofData?.paymentType && (
+                <View style={styles.modalMetaCard}>
+                  <Text style={styles.modalMetaLabel}>Payment Type</Text>
+                  <Text style={styles.modalMetaValue}>
+                    {paymentProofData.paymentType === 'final_payment' ? 'Final payment' : 'Deposit payment'}
+                  </Text>
+                </View>
+              )}
+
+              {typeof paymentProofData?.totalAmount === 'number' && (
+                <View style={styles.modalMetaCard}>
+                  <Text style={styles.modalMetaLabel}>Amount</Text>
+                  <Text style={styles.modalMetaValue}>
+                    ₱{Number(paymentProofData.totalAmount).toLocaleString('en-PH', {
+                      minimumFractionDigits: 2,
+                      maximumFractionDigits: 2
+                    })}
+                  </Text>
+                </View>
+              )}
+
+              {paymentProofData?.parentName && (
+                <View style={styles.modalMetaCard}>
+                  <Text style={styles.modalMetaLabel}>Parent</Text>
+                  <Text style={styles.modalMetaValue}>{paymentProofData.parentName}</Text>
+                </View>
+              )}
+
+              {paymentProofData?.bookingId && (
+                <View style={styles.modalMetaCard}>
+                  <Text style={styles.modalMetaLabel}>Booking ID</Text>
+                  <Text style={styles.modalMetaValue}>{paymentProofData.bookingId}</Text>
+                </View>
+              )}
+
+              {paymentProofData?.paymentProofId && (
+                <View style={styles.modalMetaCard}>
+                  <Text style={styles.modalMetaLabel}>Proof ID</Text>
+                  <Text style={styles.modalMetaValue}>{paymentProofData.paymentProofId}</Text>
+                </View>
+              )}
+            </View>
+
+            <View style={styles.modalSection}>
+              <Text style={styles.modalSectionTitle}>Receipt preview</Text>
+              <View style={styles.modalImageWrapper}>
+                {paymentProofData?.paymentProofUrl ? (
+                  <Image
+                    source={{ uri: paymentProofData.paymentProofUrl }}
+                    style={styles.modalImage}
+                    resizeMode="contain"
+                  />
+                ) : (
+                  <View style={styles.modalImageFallback}>
+                    <FileCheck2 size={32} color="#9ca3af" />
+                    <Text style={styles.modalImageFallbackText}>No payment proof image available.</Text>
+                  </View>
+                )}
+              </View>
+            </View>
+
+            {(paymentProofData?.paymentProofUrl || paymentProofData?.bookingDeepLink) && (
+              <View style={styles.modalActions}>
+                {paymentProofData?.paymentProofUrl && (
+                  <TouchableOpacity style={styles.modalSecondaryButton} onPress={handleOpenPaymentProof}>
+                    <Text style={styles.modalSecondaryButtonText}>Open proof</Text>
+                  </TouchableOpacity>
+                )}
+
+                {paymentProofData?.bookingDeepLink && (
+                  <TouchableOpacity style={styles.modalPrimaryButton} onPress={handleViewBookingDetails}>
+                    <Text style={styles.modalPrimaryButtonText}>View booking details</Text>
+                  </TouchableOpacity>
+                )}
+              </View>
+            )}
+          </View>
+        </View>
+      </Modal>
     </ScrollView>
   );
 };
@@ -318,6 +561,44 @@ const styles = StyleSheet.create({
     padding: 16,
     gap: 12,
   },
+  modalBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(15, 23, 42, 0.55)',
+    justifyContent: 'flex-end',
+    padding: 20,
+  },
+  modalContainer: {
+    backgroundColor: '#fff',
+    borderRadius: 20,
+    padding: 20,
+    gap: 20,
+    shadowColor: '#0f172a',
+    shadowOpacity: 0.15,
+    shadowRadius: 16,
+    shadowOffset: { width: 0, height: 8 },
+    elevation: 12,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  modalHeaderContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  modalHeaderIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#e0f2fe',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  modalHeaderText: {
+    gap: 4,
+  },
   notificationCard: {
     borderRadius: 12,
     padding: 16,
@@ -350,25 +631,153 @@ const styles = StyleSheet.create({
     color: '#111827',
     marginBottom: 4,
   },
+  modalTitle: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: '#0f172a',
+  },
+  modalTimestamp: {
+    fontSize: 12,
+    color: '#6b7280',
+  },
+  modalCloseButton: {
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    borderRadius: 999,
+    backgroundColor: '#e5e7eb',
+  },
+  modalCloseText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#374151',
+  },
   unreadText: {
     fontWeight: '700',
+  },
+  modalMetaGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 12,
+  },
+  modalMetaCard: {
+    flexGrow: 1,
+    minWidth: '45%',
+    backgroundColor: '#f8fafc',
+    borderRadius: 12,
+    padding: 12,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    gap: 4,
+  },
+  modalMetaLabel: {
+    fontSize: 12,
+    color: '#64748b',
+    textTransform: 'uppercase',
+    letterSpacing: 0.6,
+    fontWeight: '600',
+  },
+  modalMetaValue: {
+    fontSize: 15,
+    color: '#1f2937',
+    fontWeight: '600',
   },
   notificationMessage: {
     fontSize: 14,
     color: '#4b5563',
-    lineHeight: 20,
-    marginBottom: 8,
+    marginTop: 4,
+  },
+  modalSection: {
+    gap: 12,
+  },
+  modalSectionTitle: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#1f2937',
+  },
+  modalImageWrapper: {
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    backgroundColor: '#f8fafc',
+    overflow: 'hidden',
+    minHeight: 240,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  modalImage: {
+    width: '100%',
+    height: 300,
+  },
+  modalImageFallback: {
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: 8,
+    padding: 24,
+  },
+  modalImageFallbackText: {
+    fontSize: 14,
+    color: '#6b7280',
+  },
+  modalActions: {
+    flexDirection: 'row',
+    gap: 12,
+    flexWrap: 'wrap',
+    justifyContent: 'flex-end',
+  },
+  modalSecondaryButton: {
+    flexGrow: 1,
+    minWidth: 150,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#0ea5e9',
+    backgroundColor: '#fff',
+    alignItems: 'center',
+  },
+  modalSecondaryButtonText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#0ea5e9',
+  },
+  modalPrimaryButton: {
+    flexGrow: 1,
+    minWidth: 170,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 12,
+    backgroundColor: '#0ea5e9',
+    alignItems: 'center',
+    shadowColor: '#0ea5e9',
+    shadowOpacity: 0.25,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 6 },
+    elevation: 6,
+  },
+  modalPrimaryButtonText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#fff',
   },
   notificationTime: {
     fontSize: 12,
     color: '#9ca3af',
   },
+  paymentMetaContainer: {
+    marginTop: 4,
+    marginBottom: 8,
+    gap: 2,
+  },
+  paymentMetaText: {
+    fontSize: 13,
+    color: '#1f2937',
+  },
   unreadDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: '#3b82f6',
-    marginTop: 8,
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: '#ef4444',
+    marginLeft: 8,
   },
   emptyContainer: {
     flex: 1,
@@ -388,7 +797,26 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#6b7280',
     textAlign: 'center',
-    lineHeight: 24,
+    marginBottom: 16,
+  },
+  emptyHintContainer: {
+    marginTop: 8,
+    backgroundColor: '#eef2ff',
+    borderRadius: 12,
+    padding: 12,
+    width: '100%',
+    gap: 4,
+    borderWidth: 1,
+    borderColor: '#c7d2fe',
+  },
+  emptyHintTitle: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#4338ca',
+  },
+  emptyHintText: {
+    fontSize: 14,
+    color: '#4338ca',
   },
 });
 

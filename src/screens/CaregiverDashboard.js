@@ -655,6 +655,7 @@ const CaregiverDashboard = () => {
   const navigation = useNavigation()
   const route = useRoute()
   const { user, signOut } = useAuth()
+  const onLogout = route?.params?.onLogout
   const { width } = Dimensions.get("window");
   const isTablet = width >= 768
   const isAndroid = Platform.OS === 'android'
@@ -2088,7 +2089,39 @@ const CaregiverDashboard = () => {
         {activeTab === 'notifications' && (
           <NotificationsTab
             navigation={navigation}
-            onNavigateTab={(tabId) => setActiveTab(tabId)}
+            onNavigateTab={async (tabId, notification) => {
+              setActiveTab(tabId)
+
+              if (!notification) {
+                return
+              }
+
+              const notificationData = notification.data || {}
+              const deepLink = notification.deepLink || notificationData.bookingDeepLink
+
+              if (deepLink?.tab === 'bookings' && deepLink?.params?.bookingId) {
+                try {
+                  const bookingDetails = await supabaseService.bookings.getBookingById(
+                    deepLink.params.bookingId,
+                    user?.id
+                  )
+
+                  if (bookingDetails) {
+                    setSelectedBooking(bookingDetails)
+                    setShowBookingDetails(true)
+                    return
+                  }
+                } catch (error) {
+                  console.warn('⚠️ Failed to load booking from notification:', error)
+                }
+              }
+
+              if (deepLink?.screen && navigation?.navigate) {
+                requestAnimationFrame(() => {
+                  navigation.navigate(deepLink.screen, deepLink.params || {})
+                })
+              }
+            }}
             onRefresh={onRefresh}
           />
         )}

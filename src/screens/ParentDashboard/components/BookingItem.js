@@ -12,6 +12,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { format } from 'date-fns';
+import { getPaymentActions } from '../../../utils/paymentUtils';
 
 const BookingItem = ({
   booking,
@@ -172,42 +173,76 @@ const BookingItem = ({
 
 
 
+  const formatCurrency = (value) => {
+    const numericValue = typeof value === 'number' ? value : Number(String(value || '').replace(/[^0-9.]/g, ''));
+
+    if (!Number.isFinite(numericValue)) {
+      return '₱0.00';
+    }
+
+    return `₱${numericValue.toLocaleString('en-PH', {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2
+    })}`;
+  };
+
   const caregiverName = caregiverData?.name || caregiverData?.caregiver_name || booking?.caregiver_name || 'Unknown Caregiver';
   const caregiverImage = caregiverData?.profileImage || caregiverData?.avatar || caregiverData?.profile_image;
   const bookingDate = formatDate(booking?.date);
   const startTime = formatTime(booking?.start_time || booking?.startTime);
   const endTime = formatTime(booking?.end_time || booking?.endTime);
   const timeDisplay = booking?.time || (startTime && endTime ? `${startTime} - ${endTime}` : '');
-  const totalAmount = booking?.total_amount || booking?.totalAmount || booking?.totalCost || 0;
+  const normalizedTotalAmount = booking?.totalCost ?? booking?.total_amount ?? booking?.amount ?? booking?.totalAmount ?? 0;
+  const totalAmount = formatCurrency(normalizedTotalAmount);
+  const hourlyRate = booking?.hourly_rate || booking?.hourlyRate || 300;
+  const depositAmountValue = Number(normalizedTotalAmount) > 0 ? Number(normalizedTotalAmount) * 0.2 : 0;
+  const depositAmount = formatCurrency(depositAmountValue);
   const address = booking?.address || booking?.location;
+  const normalizedStatus = String(booking?.status || '').toLowerCase();
+  const isDepositPaid = Boolean(booking?.deposit_paid || booking?.depositPaidAt || booking?.deposit_paid_at);
+  const isFinalPaid = normalizedStatus === 'paid' || String(booking?.payment_status || '').toLowerCase() === 'paid';
+  const paymentAction = (() => {
+    if (!booking?.status) return null;
+    const normalizedTotal = booking?.totalCost ?? booking?.total_amount ?? booking?.amount ?? normalizedTotalAmount;
+    const actions = getPaymentActions({ status: booking.status, totalCost: normalizedTotal });
+    return actions?.[0] || null;
+  })();
 
   return (
     <View style={styles.container}>
-      {/* Header with parent theme gradient */}
       <LinearGradient
-        colors={['#ebc5dd', '#ccc8e8']}
+        colors={['#f5f3ff', '#ede9fe']}
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 0 }}
         style={styles.header}
       >
         <View style={styles.headerContent}>
           <View style={styles.caregiverInfo}>
-            <View style={styles.avatar}>
+            <View style={styles.avatarWrapper}>
               {caregiverImage ? (
                 <Image
                   source={{ uri: caregiverImage }}
-                  style={styles.avatar}
+                  style={styles.avatarImage}
                   onError={() => console.log('Avatar failed to load')}
                 />
               ) : (
-                <View style={[styles.avatar, styles.avatarPlaceholder]}>
-                  <Ionicons name="person" size={24} color="#9CA3AF" />
+                <View style={styles.avatarFallback}>
+                  <Ionicons name="person" size={28} color="#9CA3AF" />
                 </View>
               )}
             </View>
             <View style={styles.caregiverDetails}>
               <Text style={styles.caregiverName}>{caregiverName}</Text>
-              <Text style={styles.bookingDate}>{bookingDate}</Text>
+              <View style={styles.metaRow}>
+                <Ionicons name="calendar-outline" size={14} color="#6B7280" />
+                <Text style={styles.metaText}>{bookingDate}</Text>
+              </View>
+              {timeDisplay ? (
+                <View style={styles.metaRow}>
+                  <Ionicons name="time-outline" size={14} color="#6B7280" />
+                  <Text style={styles.metaText}>{timeDisplay}</Text>
+                </View>
+              ) : null}
             </View>
           </View>
           <View style={[styles.statusBadge, { backgroundColor: getStatusColor(booking?.status) }]}>
@@ -216,32 +251,38 @@ const BookingItem = ({
         </View>
       </LinearGradient>
 
-      {/* Booking Details */}
       <View style={styles.content}>
-        {/* Time and Rate Info */}
-        <View style={styles.infoRow}>
-          <View style={styles.infoItem}>
-            <Ionicons name="time-outline" size={16} color="#6B7280" />
-            <Text style={styles.infoText}>{timeDisplay || 'Time TBD'}</Text>
+        <View style={styles.amountRow}>
+          <View>
+            <Text style={styles.sectionLabel}>Total amount</Text>
+            <Text style={styles.amountValue}>{totalAmount}</Text>
           </View>
-          <View style={styles.infoItem}>
-            <Ionicons name="cash-outline" size={16} color="#6B7280" />
-            <Text style={styles.infoText}>₱{totalAmount} (₱{booking?.hourly_rate || booking?.hourlyRate || 300}/hr)</Text>
+          <View>
+            <Text style={styles.sectionLabel}>Hourly rate</Text>
+            <Text style={styles.amountValue}>₱{hourlyRate}</Text>
           </View>
         </View>
 
-        {/* Location */}
-        {address && (
-          <TouchableOpacity style={styles.locationContainer} onPress={handleLocationPress}>
-            <View style={styles.locationContent}>
-              <Ionicons name="location-outline" size={16} color="#8B5CF6" />
-              <Text style={styles.locationText} numberOfLines={2}>{address}</Text>
+        {depositAmountValue > 0 && (
+          <View style={styles.depositSection}>
+            <View style={styles.depositBadge}>
+              <Ionicons name="shield-checkmark-outline" size={16} color="#0EA5E9" />
+              <Text style={styles.depositBadgeText}>20% deposit</Text>
             </View>
-            <Ionicons name="chevron-forward" size={16} color="#8B5CF6" />
-          </TouchableOpacity>
+            <Text style={styles.depositAmount}>{depositAmount}</Text>
+          </View>
         )}
 
-        {/* Children Info with Names */}
+        {address ? (
+          <TouchableOpacity style={styles.locationContainer} onPress={handleLocationPress}>
+            <View style={styles.locationContent}>
+              <Ionicons name="location-outline" size={16} color="#7C3AED" />
+              <Text style={styles.locationText} numberOfLines={2}>{address}</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={16} color="#7C3AED" />
+          </TouchableOpacity>
+        ) : null}
+
         {booking?.selected_children && booking.selected_children.length > 0 && (
           <View style={styles.childrenContainer}>
             <Ionicons name="people-outline" size={16} color="#6B7280" />
@@ -261,69 +302,51 @@ const BookingItem = ({
           </View>
         )}
 
-        {/* Special Instructions */}
-        {booking?.special_instructions && (
+        {booking?.special_instructions ? (
           <View style={styles.notesContainer}>
-            <Text style={styles.notesLabel}>Special Instructions:</Text>
+            <Text style={styles.notesLabel}>Special instructions</Text>
             <Text style={styles.notesText} numberOfLines={2}>
               {booking.special_instructions}
             </Text>
           </View>
-        )}
+        ) : null}
 
-        {/* Contact Information */}
-        {(booking?.contact_phone || booking?.emergency_contact) && (
+        {(booking?.contact_phone || booking?.emergency_contact) ? (
           <View style={styles.contactContainer}>
-            {booking?.contact_phone && (
+            {booking?.contact_phone ? (
               <View style={styles.contactRow}>
                 <Ionicons name="call-outline" size={16} color="#6B7280" />
                 <Text style={styles.contactText}>{booking.contact_phone}</Text>
               </View>
-            )}
-            {booking?.emergency_contact && (
+            ) : null}
+            {booking?.emergency_contact ? (
               <View style={styles.emergencyContactRow}>
                 <Ionicons name="warning-outline" size={16} color="#EF4444" />
                 <Text style={styles.emergencyContactText}>Emergency: {booking.emergency_contact}</Text>
               </View>
-            )}
+            ) : null}
           </View>
-        )}
+        ) : null}
 
-        {/* Action Buttons */}
-        <View style={styles.actionButtons}>
-          <TouchableOpacity 
-            style={styles.detailsButton} 
+        <View style={styles.actionBar}>
+          <TouchableOpacity
+            style={styles.secondaryButton}
             onPress={() => onViewBookingDetails && onViewBookingDetails(booking?.id || booking?._id)}
           >
-            <Ionicons name="eye-outline" size={18} color="#FFFFFF" />
-            <Text style={styles.buttonText}>Details</Text>
+            <Ionicons name="eye-outline" size={18} color="#312E81" />
+            <Text style={styles.secondaryButtonText}>View details</Text>
           </TouchableOpacity>
-          
-          <TouchableOpacity style={styles.messageButton} onPress={handleMessagePress}>
-            <Ionicons name="chatbubble-outline" size={18} color="#FFFFFF" />
-            <Text style={styles.buttonText}>Message</Text>
+
+          <TouchableOpacity style={styles.secondaryButton} onPress={handleMessagePress}>
+            <Ionicons name="chatbubble-outline" size={18} color="#312E81" />
+            <Text style={styles.secondaryButtonText}>Message</Text>
           </TouchableOpacity>
-          
-          {canCancelBooking(booking?.status) && (
-            <TouchableOpacity 
-              style={styles.cancelButton} 
-              onPress={() => {
-                console.log('🔍 Cancel button pressed for booking:', booking?.id || booking?._id, 'status:', booking?.status);
-                if (onCancelBooking) {
-                  onCancelBooking(booking?.id || booking?._id);
-                } else {
-                  console.warn('⚠️ onCancelBooking function not provided');
-                  Alert.alert('Error', 'Cancel functionality not available');
-                }
-              }}
-            >
-              <Ionicons name="close-outline" size={18} color="#FFFFFF" />
-              <Text style={styles.buttonText}>Cancel</Text>
-            </TouchableOpacity>
-          )}
-          {typeof onWriteReview === 'function' && caregiverIdValue && (booking?.status || '').toLowerCase() === 'completed' && (
+        </View>
+
+        <View style={styles.actionBar}>
+          {typeof onWriteReview === 'function' && caregiverIdValue && normalizedStatus === 'completed' && (
             <TouchableOpacity
-              style={styles.reviewButton}
+              style={styles.primaryButton}
               onPress={() => onWriteReview({
                 bookingId: booking?.id || booking?._id,
                 caregiverId: caregiverIdValue,
@@ -332,7 +355,49 @@ const BookingItem = ({
               })}
             >
               <Ionicons name="star-outline" size={18} color="#FFFFFF" />
-              <Text style={styles.buttonText}>Review</Text>
+              <Text style={styles.primaryButtonText}>review</Text>
+            </TouchableOpacity>
+          )}
+
+          {paymentAction && typeof onUploadPayment === 'function' && (
+            (() => {
+              if (paymentAction.type === 'deposit' && isDepositPaid) return null;
+              if (paymentAction.type === 'final_payment' && isFinalPaid) return null;
+              return (
+                <TouchableOpacity
+                  style={styles.primaryButton}
+                  onPress={() => onUploadPayment(booking?.id || booking?._id, paymentAction.type)}
+                >
+                  <Ionicons name="card-outline" size={18} color="#FFFFFF" />
+                  <Text style={styles.primaryButtonText}>{paymentAction.label}</Text>
+                </TouchableOpacity>
+              );
+            })()
+          )}
+
+          {(!paymentAction || (paymentAction.type === 'deposit' && isDepositPaid) || (paymentAction.type === 'final_payment' && isFinalPaid)) && (
+            <TouchableOpacity
+              style={[styles.primaryButton, styles.primaryButtonDisabled]}
+              disabled
+            >
+              <Ionicons name="checkmark-done-outline" size={18} color="#FFFFFF" />
+              <Text style={styles.primaryButtonText}>Paid</Text>
+            </TouchableOpacity>
+          )}
+
+          {canCancelBooking(booking?.status) && (
+            <TouchableOpacity
+              style={[styles.primaryButton, styles.destructiveButton]}
+              onPress={() => {
+                if (onCancelBooking) {
+                  onCancelBooking(booking?.id || booking?._id);
+                } else {
+                  Alert.alert('Error', 'Cancel functionality not available');
+                }
+              }}
+            >
+              <Ionicons name="close-outline" size={18} color="#FFFFFF" />
+              <Text style={styles.primaryButtonText}>Cancel</Text>
             </TouchableOpacity>
           )}
         </View>
@@ -344,19 +409,21 @@ const BookingItem = ({
 const styles = StyleSheet.create({
   container: {
     backgroundColor: '#FFFFFF',
-    borderRadius: 16,
-    marginHorizontal: 16,
-    marginVertical: 8,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
-    elevation: 5,
+    borderRadius: 20,
+    marginHorizontal: 10,
+    marginVertical: 12,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    shadowColor: '#1F2937',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.06,
+    shadowRadius: 10,
+    elevation: 4,
     overflow: 'hidden',
   },
   header: {
-    paddingHorizontal: 16,
-    paddingVertical: 16,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
   },
   headerContent: {
     flexDirection: 'row',
@@ -368,14 +435,23 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     flex: 1,
   },
-  avatar: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
+  avatarWrapper: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
     backgroundColor: '#F3F4F6',
-    marginRight: 12,
+    marginRight: 14,
+    overflow: 'hidden',
+    justifyContent: 'center',
+    alignItems: 'center',
   },
-  avatarPlaceholder: {
+  avatarImage: {
+    width: '100%',
+    height: '100%',
+  },
+  avatarFallback: {
+    width: '100%',
+    height: '100%',
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -385,15 +461,21 @@ const styles = StyleSheet.create({
   caregiverName: {
     fontSize: 18,
     fontWeight: '700',
-    color: '#FFFFFF',
-    marginBottom: 2,
+    color: '#1F2937',
+    marginBottom: 4,
   },
-  bookingDate: {
-    fontSize: 14,
-    color: 'rgba(255, 255, 255, 0.9)',
+  metaRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 4,
+  },
+  metaText: {
+    fontSize: 13,
+    color: '#4B5563',
+    marginLeft: 4,
   },
   statusBadge: {
-    paddingHorizontal: 12,
+    paddingHorizontal: 5,
     paddingVertical: 6,
     borderRadius: 20,
     marginLeft: 12,
@@ -404,27 +486,56 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   content: {
-    padding: 16,
+    paddingHorizontal: 10,
+    paddingVertical: 20,
+    backgroundColor: '#FFFFFF',
   },
-  infoRow: {
+  amountRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     marginBottom: 16,
   },
-  infoItem: {
+  sectionLabel: {
+    fontSize: 12,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+    color: '#6B7280',
+    marginBottom: 4,
+    fontWeight: '600',
+  },
+  amountValue: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#111827',
+  },
+  depositSection: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#F8FAFC',
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 20,
-    flex: 0.48,
+    justifyContent: 'space-between',
+    backgroundColor: '#F0F9FF',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#BAE6FD',
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    marginBottom: 12,
   },
-  infoText: {
-    fontSize: 14,
-    color: '#374151',
-    fontWeight: '500',
-    marginLeft: 6,
+  depositBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  depositBadgeText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#0EA5E9',
+    textTransform: 'uppercase',
+    letterSpacing: 0.6,
+  },
+  depositAmount: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#0369A1',
   },
   locationContainer: {
     flexDirection: 'row',
@@ -526,77 +637,55 @@ const styles = StyleSheet.create({
     color: '#374151',
     lineHeight: 20,
   },
-  actionButtons: {
+  actionBar: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    gap: 8,
+    gap: 16,
+    marginBottom: 12,
   },
-  detailsButton: {
-    backgroundColor: '#6B7280',
+  secondaryButton: {
+    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 12,
-    paddingHorizontal: 16,
+    paddingVertical: 14,
     borderRadius: 12,
-    flex: 1,
-    shadowColor: '#6B7280',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
-    shadowRadius: 4,
-    elevation: 3,
+    borderWidth: 1,
+    borderColor: '#C7D2FE',
+    backgroundColor: '#EEF2FF',
   },
-  messageButton: {
-    backgroundColor: '#db2777',
+  secondaryButtonText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#312E81',
+    marginLeft: 6,
+  },
+  primaryButton: {
+    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 12,
-    paddingHorizontal: 16,
+    paddingVertical: 14,
     borderRadius: 12,
-    flex: 1,
-    shadowColor: '#db2777',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
-    shadowRadius: 4,
-    elevation: 3,
+    backgroundColor: '#4F46E5',
+    shadowColor: '#312E81',
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.18,
+    shadowRadius: 6,
+    elevation: 4,
   },
-
-  cancelButton: {
-    backgroundColor: '#EF4444',
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 12,
-    paddingHorizontal: 16,
-    borderRadius: 12,
-    flex: 1,
-    shadowColor: '#EF4444',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
-    shadowRadius: 4,
-    elevation: 3,
+  primaryButtonDisabled: {
+    backgroundColor: '#22C55E',
   },
-  reviewButton: {
-    backgroundColor: '#F59E0B',
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 12,
-    paddingHorizontal: 16,
-    borderRadius: 12,
-    flex: 1,
-    shadowColor: '#F59E0B',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
-    shadowRadius: 4,
-    elevation: 3,
-  },
-  buttonText: {
+  primaryButtonText: {
     color: '#FFFFFF',
     fontSize: 14,
     fontWeight: '600',
     marginLeft: 6,
+  },
+  destructiveButton: {
+    backgroundColor: '#EF4444',
+    shadowColor: '#B91C1C',
   },
 });
 

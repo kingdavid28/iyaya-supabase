@@ -354,7 +354,7 @@ export class NotificationService extends SupabaseBase {
       const { userService } = await import('./userService')
       const caregiverProfile = await userService.getProfile(caregiverId)
       const caregiverName = caregiverProfile?.name || 'Your caregiver'
-      
+
       const result = await this.createNotification({
         user_id: parentId,
         type: 'booking_cancelled',
@@ -370,6 +370,117 @@ export class NotificationService extends SupabaseBase {
       return result
     } catch (error) {
       console.error('Error creating booking cancellation notification:', error)
+      return null
+    }
+  }
+
+  async notifyPaymentProofReceived(caregiverId, bookingId, {
+    parentId,
+    parentName,
+    paymentType = 'deposit',
+    totalAmount,
+    paymentProofUrl,
+    paymentProofId,
+    paymentProofStoragePath,
+    bookingDeepLink
+  } = {}) {
+    try {
+      if (!caregiverId || !bookingId) {
+        console.warn('Invalid parameters for payment proof notification:', { caregiverId, bookingId })
+        return null
+      }
+
+      const resolvedCaregiverId = await this._ensureUserId(caregiverId, 'Caregiver ID')
+
+      let parentDisplayName = parentName
+      if (!parentDisplayName && parentId) {
+        try {
+          const { userService } = await import('./userService')
+          const parentProfile = await userService.getProfile(parentId)
+          parentDisplayName = parentProfile?.name || 'A parent'
+        } catch (profileError) {
+          console.warn('Unable to resolve parent profile for payment proof notification:', profileError)
+        }
+      }
+
+      const paymentLabel = paymentType === 'final_payment' ? 'final' : 'deposit'
+      const title = paymentType === 'final_payment'
+        ? 'Final Payment Proof Submitted'
+        : 'Payment Proof Submitted'
+
+      const amountText = typeof totalAmount === 'number'
+        ? ` Amount: ₱${Number(totalAmount).toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}.`
+        : ''
+
+      const message = `${parentDisplayName || 'A parent'} uploaded a ${paymentLabel} payment proof for booking #${bookingId}.${amountText}`
+
+      console.log('🧾 notifyPaymentProofReceived payload:', {
+        caregiverId,
+        bookingId,
+        parentId,
+        parentDisplayName,
+        paymentType,
+        totalAmount,
+        paymentProofUrl,
+        paymentProofId,
+        paymentProofStoragePath,
+        bookingDeepLink
+      })
+
+      const metadata = {
+        parentId: parentId || null,
+        parentName: parentDisplayName || null,
+        paymentType,
+        totalAmount: totalAmount ?? null,
+        paymentProofUrl: paymentProofUrl || null,
+        paymentProofId: paymentProofId || null,
+        paymentProofStoragePath: paymentProofStoragePath || null,
+        bookingDeepLink: bookingDeepLink || null
+      }
+
+      try {
+        const { data: functionData, error: functionError } = await supabase.functions.invoke('payment-proof-notification', {
+          body: {
+            caregiverId: resolvedCaregiverId,
+            bookingId,
+            metadata
+          }
+        })
+
+        if (functionError) {
+          console.warn('Edge function payment-proof-notification returned error, falling back to client insert', functionError)
+        } else if (functionData?.success) {
+          invalidateCache(`notification-counts:${resolvedCaregiverId}`)
+          console.log('✅ Payment proof notification created via edge function:', {
+            notificationId: functionData?.notificationId || null,
+            caregiverId: resolvedCaregiverId,
+            bookingId
+          })
+          return {
+            id: functionData?.notificationId || null
+          }
+        }
+      } catch (functionInvokeError) {
+        console.warn('Edge function invocation failed, using client-side fallback', functionInvokeError)
+      }
+
+      const result = await this.createNotification({
+        user_id: resolvedCaregiverId,
+        type: 'payment_proof',
+        title,
+        message,
+        data: metadata
+      })
+
+      invalidateCache(`notification-counts:${resolvedCaregiverId}`)
+      console.log('✅ Payment proof notification created:', result?.id, {
+        caregiverId: resolvedCaregiverId,
+        bookingId,
+        paymentProofId: paymentProofId || null
+      })
+      return result
+    } catch (error) {
+      console.error('Error creating payment proof notification:', error)
       return null
     }
   }

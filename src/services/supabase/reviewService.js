@@ -2,6 +2,17 @@ import { SupabaseBase, supabase } from './base'
 import { getCachedOrFetch, invalidateCache } from './cache'
 
 export class ReviewService extends SupabaseBase {
+  _normalizeRating(rawRating) {
+    const numeric = typeof rawRating === 'number' ? rawRating : Number(rawRating);
+
+    if (!Number.isFinite(numeric)) {
+      throw new Error('Invalid rating value');
+    }
+
+    const clamped = Math.min(5, Math.max(1, numeric));
+    return Math.round(clamped * 10) / 10;
+  }
+
   async getReviews(revieweeId, limit = 20, offset = 0) {
     try {
       this._validateId(revieweeId, 'Reviewee ID')
@@ -40,11 +51,13 @@ export class ReviewService extends SupabaseBase {
       await this._ensureAuthenticated()
       this._validateRequiredFields(reviewData, ['reviewer_id', 'reviewee_id', 'rating'], 'createReview')
 
+      const rating = this._normalizeRating(reviewData.rating)
+
       const payload = {
         reviewer_id: reviewData.reviewer_id,
         reviewee_id: reviewData.reviewee_id,
         booking_id: reviewData.booking_id || null,
-        rating: Math.round(reviewData.rating * 10), // Convert decimal to integer (e.g., 2.5 -> 25)
+        rating,
         comment: reviewData.comment?.trim() || '',
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString()
@@ -93,7 +106,7 @@ export class ReviewService extends SupabaseBase {
         .from('reviews')
         .update({
           ...updates,
-          rating: updates.rating ? Math.round(updates.rating * 10) : undefined, // Convert decimal to integer
+          rating: typeof updates.rating !== 'undefined' ? this._normalizeRating(updates.rating) : undefined,
           updated_at: new Date().toISOString()
         })
         .eq('id', reviewId)
@@ -157,8 +170,8 @@ export class ReviewService extends SupabaseBase {
         return
       }
 
-      // Calculate average rating (convert stored integers back to decimals)
-      const totalRating = reviews.reduce((sum, review) => sum + ((review.rating || 0) / 10), 0)
+      // Calculate average rating
+      const totalRating = reviews.reduce((sum, review) => sum + (Number(review.rating) || 0), 0)
       const averageRating = totalRating / reviews.length
 
       console.log('Calculated rating:', averageRating)
@@ -204,8 +217,8 @@ export class ReviewService extends SupabaseBase {
         return
       }
 
-      // Calculate average rating (convert stored integers back to decimals)
-      const totalRating = reviews.reduce((sum, review) => sum + ((review.rating || 0) / 10), 0)
+      // Calculate average rating
+      const totalRating = reviews.reduce((sum, review) => sum + (Number(review.rating) || 0), 0)
       const averageRating = totalRating / reviews.length
 
       // Update caregiver's rating and review count

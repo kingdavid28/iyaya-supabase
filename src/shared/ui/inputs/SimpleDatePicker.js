@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, TouchableOpacity, Platform, Modal } from 'react-native';
+import { View, Text, TouchableOpacity, Platform, Modal, TextInput } from 'react-native';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { Calendar } from 'lucide-react-native';
 
@@ -30,19 +30,35 @@ const SimpleDatePicker = ({
     });
   };
 
+  const formatWebDate = (date) => {
+    if (!date) return '';
+    const dateObj = date instanceof Date ? date : new Date(date);
+    if (Number.isNaN(dateObj.getTime())) return '';
+    const year = dateObj.getFullYear();
+    const month = String(dateObj.getMonth() + 1).padStart(2, '0');
+    const day = String(dateObj.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  };
+
+  const parseWebDate = (value) => {
+    if (!value) return null;
+    const parsed = new Date(`${value}T00:00:00`);
+    return Number.isNaN(parsed.getTime()) ? null : parsed;
+  };
+
   const handleDateChange = (event, selectedDate) => {
     if (Platform.OS === 'android') {
-      setShowPicker(true);
-      
       // Handle dismissal or cancellation
       if (event?.type === 'dismissed' || !selectedDate) {
+        setShowPicker(false);
         return;
       }
 
-      // Validate the selected date
-      if (selectedDate && !Number.isNaN(selectedDate.getTime())) {
+      if (!Number.isNaN(selectedDate.getTime())) {
         onDateChange(selectedDate);
       }
+
+      setShowPicker(false);
       return;
     }
 
@@ -50,7 +66,7 @@ const SimpleDatePicker = ({
     if (selectedDate && !Number.isNaN(selectedDate.getTime())) {
       onDateChange(selectedDate);
     }
-    setShowPicker(true);
+    setShowPicker(false);
   };
 
   const handleOpenPicker = () => {
@@ -68,6 +84,86 @@ const SimpleDatePicker = ({
     // If no valid value, use minimumDate or today
     return minimumDate || new Date();
   };
+
+  if (Platform.OS === 'web') {
+    const minValue = minimumDate ? formatWebDate(minimumDate) : undefined;
+    const maxValue = maximumDate ? formatWebDate(maximumDate) : undefined;
+
+    return (
+      <View style={{ marginBottom: 16 }}>
+        {label && (
+          <Text
+            style={{
+              fontSize: 14,
+              fontWeight: '500',
+              color: '#374151',
+              marginBottom: 6
+            }}
+          >
+            {label}
+          </Text>
+        )}
+
+        <View
+          style={{
+            flexDirection: 'row',
+            alignItems: 'center',
+            backgroundColor: disabled ? '#F3F4F6' : '#F9FAFB',
+            borderRadius: 8,
+            borderWidth: 1,
+            borderColor: error ? '#EF4444' : disabled ? '#D1D5DB' : '#E5E7EB',
+            opacity: disabled ? 0.6 : 1,
+            paddingHorizontal: 12
+          }}
+        >
+          <TextInput
+            value={formatWebDate(value)}
+            onChange={(event) => {
+              const nativeValue = event?.nativeEvent?.text ?? event?.target?.value;
+              const nextValue = nativeValue ?? '';
+              if (!nextValue) {
+                return;
+              }
+
+              const nextDate = parseWebDate(nextValue);
+              if (nextDate) {
+                onDateChange(nextDate);
+              }
+            }}
+            editable={!disabled}
+            placeholder={placeholder}
+            placeholderTextColor="#6B7280"
+            style={{
+              flex: 1,
+              fontSize: 14,
+              color: '#111827',
+              paddingVertical: 12,
+              backgroundColor: 'transparent',
+              outlineStyle: 'none'
+            }}
+            importantForAutofill="no"
+            {...{ type: 'date' }}
+            {...(minValue ? { min: minValue } : {})}
+            {...(maxValue ? { max: maxValue } : {})}
+          />
+          <Calendar size={20} color={disabled ? '#9CA3AF' : '#6B7280'} />
+        </View>
+
+        {error && (
+          <Text
+            style={{
+              color: '#EF4444',
+              fontSize: 12,
+              marginTop: 4,
+              marginLeft: 4
+            }}
+          >
+            {error}
+          </Text>
+        )}
+      </View>
+    );
+  }
 
   return (
     <View style={{ marginBottom: 16 }}>

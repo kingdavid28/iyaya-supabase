@@ -118,8 +118,16 @@ const ParentAuth = ({ navigation, route }) => {
         await signIn(formData.email, formData.password);
       }
     } catch (error) {
-      console.error('Auth error:', error.message);
-      // Error is handled by AuthContext
+      console.error('Auth error:', error?.message);
+
+      const friendlyMessage = error?.message?.includes('Invalid login credentials')
+        ? 'Invalid email or password. Please try again.'
+        : error?.message || 'Unable to complete the request. Please try again.';
+
+      Alert.alert('Authentication Failed', friendlyMessage, [
+        { text: 'OK' }
+      ]);
+      return;
     }
   };
 

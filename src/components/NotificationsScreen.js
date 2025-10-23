@@ -7,8 +7,10 @@ import {
   StyleSheet,
   RefreshControl,
   Alert,
-  SafeAreaView
+  Modal,
+  Image
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../contexts/AuthContext';
 
@@ -21,6 +23,8 @@ const NotificationsScreen = ({ navigation }) => {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [serviceLoaded, setServiceLoaded] = useState(false);
+  const [paymentProofModalVisible, setPaymentProofModalVisible] = useState(false);
+  const [selectedPaymentProof, setSelectedPaymentProof] = useState(null);
 
   // Load supabaseService on component mount
   useEffect(() => {
@@ -69,7 +73,11 @@ const NotificationsScreen = ({ navigation }) => {
     try {
       setLoading(true);
       const notificationsData = await supabaseService.notifications.getNotifications(user.id);
-      setNotifications(notificationsData);
+      const filteredNotifications = Array.isArray(notificationsData)
+        ? notificationsData.filter(notification => notification?.user_id === user.id)
+        : [];
+
+      setNotifications(filteredNotifications);
     } catch (error) {
       console.error('Error loading notifications:', error);
       setNotifications([]);
@@ -153,7 +161,20 @@ const NotificationsScreen = ({ navigation }) => {
     }
 
     // Navigate based on notification type
-    const { type, data } = notification;
+    let { type, data } = notification;
+    if (typeof data === 'string') {
+      try {
+        data = JSON.parse(data);
+      } catch (error) {
+        data = {};
+      }
+    }
+
+    if (type === 'payment_proof') {
+      setSelectedPaymentProof({ ...notification, data });
+      setPaymentProofModalVisible(true);
+      return;
+    }
 
     switch (type) {
       case 'message':
@@ -211,6 +232,8 @@ const NotificationsScreen = ({ navigation }) => {
         return 'star';
       case 'payment':
         return 'card';
+      case 'payment_proof':
+        return 'document-text';
       default:
         return 'notifications';
     }
@@ -229,6 +252,8 @@ const NotificationsScreen = ({ navigation }) => {
         return '#FCD34D';
       case 'payment':
         return '#8B5CF6';
+      case 'payment_proof':
+        return '#0EA5E9';
       default:
         return '#6B7280';
     }
@@ -279,6 +304,28 @@ const NotificationsScreen = ({ navigation }) => {
         <Text style={styles.notificationMessage}>
           {item.message || 'You have a new notification'}
         </Text>
+        {item.type === 'payment_proof' && item?.data && (
+          <View style={styles.paymentProofMeta}>
+            {item.data?.paymentType && (
+              <Text style={styles.paymentProofMetaText}>
+                Type: {item.data.paymentType === 'final_payment' ? 'Final payment' : 'Deposit payment'}
+              </Text>
+            )}
+            {typeof item.data?.totalAmount === 'number' && (
+              <Text style={styles.paymentProofMetaText}>
+                Amount: ₱{Number(item.data.totalAmount).toLocaleString('en-PH', {
+                  minimumFractionDigits: 2,
+                  maximumFractionDigits: 2
+                })}
+              </Text>
+            )}
+            {item.data?.parentName && (
+              <Text style={styles.paymentProofMetaText}>
+                Parent: {item.data.parentName}
+              </Text>
+            )}
+          </View>
+        )}
         <Text style={styles.notificationTime}>
           {formatTime(item.created_at)}
         </Text>
@@ -367,6 +414,58 @@ const NotificationsScreen = ({ navigation }) => {
         contentContainerStyle={notifications.length === 0 ? styles.emptyList : undefined}
         showsVerticalScrollIndicator={false}
       />
+
+      <Modal
+        visible={paymentProofModalVisible}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setPaymentProofModalVisible(false)}
+      >
+        <View style={styles.modalBackdrop}>
+          <View style={styles.modalContainer}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Payment Proof</Text>
+              <TouchableOpacity
+                onPress={() => setPaymentProofModalVisible(false)}
+                style={styles.modalCloseButton}
+              >
+                <Text style={styles.modalCloseText}>Close</Text>
+              </TouchableOpacity>
+            </View>
+            {selectedPaymentProof?.data?.parentName && (
+              <Text style={styles.modalSubtitle}>
+                Parent: {selectedPaymentProof.data.parentName}
+              </Text>
+            )}
+            {typeof selectedPaymentProof?.data?.totalAmount === 'number' && (
+              <Text style={styles.modalSubtitle}>
+                Amount: ₱{Number(selectedPaymentProof.data.totalAmount).toLocaleString('en-PH', {
+                  minimumFractionDigits: 2,
+                  maximumFractionDigits: 2
+                })}
+              </Text>
+            )}
+            {selectedPaymentProof?.data?.paymentType && (
+              <Text style={styles.modalSubtitle}>
+                Type: {selectedPaymentProof.data.paymentType === 'final_payment' ? 'Final payment' : 'Deposit payment'}
+              </Text>
+            )}
+            <View style={styles.modalImageWrapper}>
+              {selectedPaymentProof?.data?.paymentProofUrl ? (
+                <Image
+                  source={{ uri: selectedPaymentProof.data.paymentProofUrl }}
+                  style={styles.modalImage}
+                  resizeMode="contain"
+                />
+              ) : (
+                <View style={styles.modalImageFallback}>
+                  <Text style={styles.modalSubtitle}>No payment proof image available.</Text>
+                </View>
+              )}
+            </View>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 };
@@ -437,9 +536,16 @@ const styles = StyleSheet.create({
   },
   notificationMessage: {
     fontSize: 14,
-    color: '#6B7280',
-    lineHeight: 20,
-    marginBottom: 4,
+    color: '#4B5563',
+    marginTop: 4,
+  },
+  paymentProofMeta: {
+    marginTop: 6,
+    gap: 4,
+  },
+  paymentProofMetaText: {
+    fontSize: 13,
+    color: '#1F2937',
   },
   notificationTime: {
     fontSize: 12,
@@ -457,7 +563,8 @@ const styles = StyleSheet.create({
     backgroundColor: '#3B82F6',
   },
   deleteButton: {
-    padding: 4,
+    marginLeft: 12,
+    padding: 6,
   },
   emptyContainer: {
     flex: 1,

@@ -2,14 +2,16 @@ import {
   Calendar,
   CheckCircle,
   Clock,
+  DollarSign,
   MapPin,
   MessageCircle,
   Star,
   User,
 } from "lucide-react-native";
 import PropTypes from "prop-types";
-import React, { useEffect, useMemo, useState } from "react";
-import { Image, Text, TouchableOpacity, View } from "react-native";
+import React, { useState } from "react";
+import { Image, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import { LinearGradient } from "expo-linear-gradient";
 import { Card } from '../../../shared/ui';
 
 import { formatAddress } from "../../../utils/addressUtils";
@@ -89,210 +91,175 @@ const CaregiverCard = ({ caregiver = {}, onPress, onMessagePress, onViewReviews,
 
   // Format the location before rendering
   const locationText = getLocationString(locationSource);
+  const ratingValue = Number.isFinite(Number(rating)) ? Number(rating).toFixed(1) : "0.0";
+  const hasReviews = reviewCount > 0;
+  const ratingLabel = hasReviews ? `${ratingValue} • ${reviewCount} review${reviewCount === 1 ? "" : "s"}` : "New caregiver";
+  const experienceLabel = `${typeof experience === "number" && !Number.isNaN(experience) ? experience : 0} yrs exp`;
+  const hourlyRateLabel = hourlyRate ? `₱${hourlyRate}/hr` : "Rate TBD";
+  const displaySpecialties = specialties.slice(0, 3);
+  const remainingSpecialties = specialties.length - displaySpecialties.length;
+  const canMessage = typeof onMessagePress === "function";
+  const canViewReviews = caregiver?.hasCompletedJobs && typeof onViewReviews === "function";
+  const RatingComponent = canViewReviews ? TouchableOpacity : View;
+
+  const handleMessagePress = () => {
+    if (canMessage) {
+      onMessagePress(caregiver);
+    }
+  };
+
+  const handleViewReviews = () => {
+    if (canViewReviews) {
+      onViewReviews(caregiver);
+    }
+  };
 
   return (
     <Card
-      style={[{ marginBottom: spacing.md }, style]}
+      style={[caregiverCardStyles.card, { marginBottom: spacing.md }, style]}
       variant="elevated"
     >
       <View
         accessible
         accessibilityLabel={accessibilityLabel}
         testID={testID}
+        style={caregiverCardStyles.wrapper}
       >
-      <View
-        style={[
-          styles.flexRow,
-          styles.itemsCenter,
-          { marginBottom: spacing.sm },
-        ]}
-      >
-        {avatar && !imageError ? (
-          <Image
-            source={getImageSource(avatar)}
-            style={[styles.avatarLg, { marginRight: spacing.md }]}
-            accessible={false}
-            onError={(error) => {
-              // Reduce log noise - only log actual errors, not missing files
-              const errorMessage = error?.nativeEvent?.error || error;
-              if (errorMessage && !errorMessage.includes("couldn't be opened because there is no such file")) {
-                console.warn('Failed to load caregiver image:', errorMessage);
-              }
-              setImageError(true);
-            }}
-          />
-        ) : (
-          <View
-            style={[
-              styles.avatarLg,
-              {
-                backgroundColor: colors.gray100,
-                justifyContent: 'center',
-                alignItems: 'center',
-                marginRight: spacing.md,
-              },
-            ]}
-          >
-            <User size={32} color={colors.gray500} />
-          </View>
-        )}
-        <View style={{ flex: 1 }}>
-          <View
-            style={[
-              styles.flexRow,
-              styles.itemsCenter,
-              { marginBottom: spacing.xs },
-            ]}
-          >
-            <Text style={[typography.subtitle1, { marginRight: spacing.xs }]}>
-              {name}
-            </Text>
-            {caregiver?.verified && (
-              <CheckCircle size={20} color={colors.success} />
-            )}
-          </View>
-          <View
-            style={[
-              styles.flexRow,
-              styles.itemsCenter,
-              { marginBottom: spacing.xxs },
-            ]}
-          >
-            {reviewCount > 0 ? (
-              <>
-                <Star size={16} color={colors.warning} fill={colors.warning} />
-                <Text
-                  style={[
-                    typography.caption,
-                    { color: colors.textSecondary, marginLeft: spacing.xxs },
-                  ]}
-                >
-                  {rating} ({reviewCount} reviews)
-                </Text>
-              </>
-            ) : (
-              <Text
-                style={[
-                  typography.caption,
-                  { color: colors.textSecondary, fontStyle: 'italic' },
-                ]}
-              >
-                New caregiver
-              </Text>
-            )}
-          </View>
-          <View
-            style={[
-              styles.flexRow,
-              styles.itemsCenter,
-              { marginBottom: spacing.xxs },
-            ]}
-          >
-            <MapPin size={14} color={colors.textSecondary} />
-            <Text
-              style={[
-                typography.caption,
-                { color: colors.textSecondary, marginLeft: spacing.xxs },
-              ]}
-            >
-              {locationText}
-            </Text>
-          </View>
-          <View style={[styles.flexRow, styles.itemsCenter]}>
-            <Clock size={14} color={colors.textSecondary} />
-            <Text
-              style={[
-                typography.caption,
-                { color: colors.textSecondary, marginLeft: spacing.xxs },
-              ]}
-            >
-              <Text style={styles.experience}>
-                Experience: {experience ?? 0} years
-              </Text>
-            </Text>
-          </View>
-        </View>
-      </View>
-
-      {specialties && specialties.length > 0 && (
-        <View
-          style={[
-            styles.flexRow,
-            styles.flexWrap,
-            { marginBottom: spacing.sm },
-          ]}
+        <LinearGradient
+          colors={[colors.primaryLight, colors.primaryLighter]}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={caregiverCardStyles.gradientHeader}
         >
-          {specialties.map((specialty, index) => (
-            <View
-              key={index}
-              style={[
-                styles.tag,
-                {
-                  backgroundColor: `${colors.primary}15`,
-                  borderColor: colors.primary,
-                  marginRight: spacing.xs,
-                  marginBottom: spacing.xs,
-                },
-              ]}
-            >
-              <Text style={[typography.caption, { color: colors.primary }]}>
-                {specialty}
-              </Text>
+          <View style={caregiverCardStyles.headerRow}>
+            <View style={caregiverCardStyles.avatarRing}>
+              {avatar && !imageError ? (
+                <Image
+                  source={getImageSource(avatar)}
+                  style={caregiverCardStyles.avatarImage}
+                  accessible={false}
+                  onError={(error) => {
+                    const errorMessage = error?.nativeEvent?.error || error;
+                    if (errorMessage && !errorMessage.includes("couldn't be opened because there is no such file")) {
+                      console.warn('Failed to load caregiver image:', errorMessage);
+                    }
+                    setImageError(true);
+                  }}
+                />
+              ) : (
+                <View style={caregiverCardStyles.avatarFallback}>
+                  <User size={32} color={colors.textTertiary} />
+                </View>
+              )}
             </View>
-          ))}
-        </View>
-      )}
 
-      <View
-        style={[
-          styles.flexRow,
-          styles.justifyBetween,
-          styles.itemsCenter,
-          { marginTop: spacing.sm },
-        ]}
-      >
-        <Text style={[typography.subtitle2, { color: colors.primary }]}>
-          ₱{hourlyRate}/hr
-        </Text>
-        <View style={styles.flexRow}>
-          <TouchableOpacity
-            style={[styles.iconButton, { marginRight: spacing.sm }]}
-            onPress={() => onMessagePress(caregiver)}
-            accessibilityLabel={messageButtonLabel}
-            accessibilityRole="button"
-          >
-            <MessageCircle size={20} color={colors.primary} />
-          </TouchableOpacity>
-          {caregiver?.hasCompletedJobs && onViewReviews && (
-            <TouchableOpacity
-              style={[styles.iconButton, { marginRight: spacing.sm }]}
-              onPress={() => onViewReviews(caregiver)}
-              accessibilityLabel={`View reviews for ${name}`}
-              accessibilityRole="button"
-            >
-              <Star size={20} color={colors.primary} />
-            </TouchableOpacity>
+            <View style={caregiverCardStyles.headerInfo}>
+              <View style={caregiverCardStyles.nameRow}>
+                <Text style={[typography.subtitle1, caregiverCardStyles.nameText]}>
+                  {name}
+                </Text>
+                {caregiver?.verified && (
+                  <View style={caregiverCardStyles.verifiedBadge}>
+                    <CheckCircle size={16} color={colors.surface} />
+                  </View>
+                )}
+              </View>
+
+              <RatingComponent
+                style={caregiverCardStyles.ratingRow}
+                accessibilityRole={canViewReviews ? "button" : undefined}
+                accessibilityLabel={canViewReviews ? `View reviews for ${name}` : undefined}
+                onPress={canViewReviews ? handleViewReviews : undefined}
+              >
+                <Star size={14} color={hasReviews ? colors.warning : colors.textSecondary} fill={hasReviews ? colors.warning : "transparent"} />
+                <Text style={caregiverCardStyles.ratingText}>{ratingLabel}</Text>
+              </RatingComponent>
+
+              {locationText ? (
+                <View style={caregiverCardStyles.locationRow}>
+                  <MapPin size={14} color={colors.textSecondary} />
+                  <Text style={caregiverCardStyles.locationText}>{locationText}</Text>
+                </View>
+              ) : null}
+            </View>
+          </View>
+        </LinearGradient>
+
+        <View style={caregiverCardStyles.body}>
+          <View style={caregiverCardStyles.metaRow}>
+            <View style={caregiverCardStyles.metaChip}>
+              <Clock size={14} color={colors.textSecondary} />
+              <Text style={caregiverCardStyles.metaChipText}>{experienceLabel}</Text>
+            </View>
+            <View style={caregiverCardStyles.metaChip}>
+              <DollarSign size={14} color={colors.textSecondary} />
+              <Text style={caregiverCardStyles.metaChipText}>{hourlyRateLabel}</Text>
+            </View>
+          </View>
+
+          {displaySpecialties.length > 0 && (
+            <View style={caregiverCardStyles.specialtiesRow}>
+              {displaySpecialties.map((specialty, index) => (
+                <View
+                  key={index}
+                  style={[styles.tag, caregiverCardStyles.specialtyTag]}
+                >
+                  <Text style={[typography.caption, { color: colors.primary }]}>
+                    {specialty}
+                  </Text>
+                </View>
+              ))}
+              {remainingSpecialties > 0 && (
+                <View style={[styles.tag, caregiverCardStyles.moreTag]}>
+                  <Text style={[typography.caption, { color: colors.textSecondary }]}>
+                    +{remainingSpecialties} more
+                  </Text>
+                </View>
+              )}
+            </View>
           )}
+
+          {(canMessage || canViewReviews) && (
+            <View style={caregiverCardStyles.actionsRow}>
+              {canMessage && (
+                <TouchableOpacity
+                  style={caregiverCardStyles.secondaryButton}
+                  onPress={handleMessagePress}
+                  accessibilityLabel={messageButtonLabel}
+                  accessibilityRole="button"
+                >
+                  <MessageCircle size={18} color={colors.primaryDark} />
+                  <Text style={caregiverCardStyles.secondaryButtonText}>Message</Text>
+                </TouchableOpacity>
+              )}
+              {canViewReviews && (
+                <TouchableOpacity
+                  style={[caregiverCardStyles.secondaryButton, caregiverCardStyles.reviewButton]}
+                  onPress={handleViewReviews}
+                  accessibilityLabel={`View reviews for ${name}`}
+                  accessibilityRole="button"
+                >
+                  <Star size={18} color={colors.accent} fill={colors.accent} />
+                  <Text style={caregiverCardStyles.reviewButtonText}>Reviews</Text>
+                </TouchableOpacity>
+              )}
+            </View>
+          )}
+
           <TouchableOpacity
-            style={[
-              styles.button,
-              { flexDirection: "row", alignItems: "center" },
-            ]}
+            style={caregiverCardStyles.primaryButton}
             onPress={() => onPress(caregiver)}
             accessibilityLabel={bookButtonLabel}
             accessibilityRole="button"
           >
             <Calendar
-              size={16}
+              size={18}
               color={colors.textInverse}
-              style={{ marginRight: spacing.xs }}
+              style={caregiverCardStyles.primaryButtonIcon}
             />
-            <Text style={[typography.button, { color: colors.textInverse }]}>
-              Book Now
-            </Text>
+            <Text style={caregiverCardStyles.primaryButtonText}>Book Now</Text>
           </TouchableOpacity>
         </View>
-      </View>
       </View>
     </Card>
   );
@@ -312,3 +279,191 @@ CaregiverCard.propTypes = {
     ]),
   }).isRequired,
 };
+
+const caregiverCardStyles = StyleSheet.create({
+  card: {
+    borderRadius: 22,
+    backgroundColor: colors.primaryLight,
+    overflow: 'hidden',
+    shadowColor: '#1F2937',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.08,
+    shadowRadius: 12,
+    elevation: 6,
+  },
+  wrapper: {
+    overflow: 'hidden',
+  },
+  gradientHeader: {
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.md,
+  },
+  headerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: spacing.md,
+  },
+  avatarRing: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    backgroundColor: colors.surface,
+    padding: 4,
+    marginRight: spacing.md,
+    shadowColor: '#00000020',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.12,
+    shadowRadius: 8,
+    elevation: 3,
+  },
+  avatarImage: {
+    width: '100%',
+    height: '100%',
+    borderRadius: 28,
+  },
+  avatarFallback: {
+    flex: 1,
+    borderRadius: 28,
+    backgroundColor: colors.primaryLight,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  headerInfo: {
+    flex: 1,
+  },
+  nameRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: spacing.xs,
+  },
+  nameText: {
+    color: colors.text,
+  },
+  verifiedBadge: {
+    backgroundColor: colors.success,
+    borderRadius: 12,
+    paddingHorizontal: 6,
+    paddingVertical: 4,
+  },
+  ratingRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    alignSelf: 'flex-start',
+    borderRadius: 12,
+    paddingHorizontal: spacing.xs + 2,
+    paddingVertical: 4,
+    marginTop: spacing.xs,
+    backgroundColor: colors.surface,
+  },
+  ratingText: {
+    marginLeft: spacing.xs,
+    color: colors.primary,
+    fontSize: 12,
+  },
+  locationRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: spacing.xs,
+  },
+  locationText: {
+    marginLeft: spacing.xs,
+    color: colors.textSecondary,
+    fontSize: 12,
+  },
+  body: {
+    paddingHorizontal: spacing.md,
+    paddingBottom: spacing.lg,
+    paddingTop: spacing.sm,
+    backgroundColor: colors.surface,
+  },
+  metaRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    marginTop: spacing.sm,
+    marginBottom: spacing.sm,
+  },
+  metaChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.backgroundLight,
+    borderRadius: 14,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 6,
+    marginRight: spacing.sm,
+    marginBottom: spacing.sm,
+  },
+  metaChipText: {
+    marginLeft: spacing.xs,
+    color: colors.textSecondary,
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  specialtiesRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    marginBottom: spacing.sm,
+  },
+  specialtyTag: {
+    backgroundColor: `${colors.primary}12`,
+    borderColor: colors.primary,
+    marginRight: spacing.xs,
+    marginBottom: spacing.xs,
+  },
+  moreTag: {
+    borderColor: colors.border,
+    backgroundColor: colors.backgroundLight,
+  },
+  actionsRow: {
+    flexDirection: 'row',
+    marginTop: spacing.md,
+    gap: spacing.sm,
+  },
+  secondaryButton: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.primaryLight,
+    borderRadius: 16,
+    paddingVertical: 12,
+    paddingHorizontal: spacing.md,
+  },
+  secondaryButtonText: {
+    marginLeft: spacing.xs,
+    color: colors.primaryDark,
+    fontWeight: '600',
+    fontSize: 13,
+  },
+  reviewButton: {
+    backgroundColor: colors.accentLight,
+  },
+  reviewButtonText: {
+    marginLeft: spacing.xs,
+    color: colors.accent,
+    fontWeight: '600',
+    fontSize: 13,
+  },
+  primaryButton: {
+    marginTop: spacing.md,
+    backgroundColor: colors.primaryDark,
+    borderRadius: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 14,
+    shadowColor: '#312E81',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.18,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  primaryButtonIcon: {
+    marginRight: spacing.xs,
+  },
+  primaryButtonText: {
+    color: colors.textInverse,
+    fontWeight: '600',
+    fontSize: 15,
+  },
+});

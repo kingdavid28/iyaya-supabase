@@ -1,21 +1,22 @@
 import { SupabaseBase, supabase } from './base'
 import { getCachedOrFetch, invalidateCache } from './cache'
+import { notificationService } from './notificationService'
 
 export class BookingService extends SupabaseBase {
   async createBooking(bookingData) {
     try {
       console.log('📝 Creating booking with data:', bookingData)
-      
+
       let parentId = bookingData.clientId || bookingData.parent_id
       const caregiverId = bookingData.caregiverId || bookingData.caregiver_id
-      
+
       if (!parentId) {
         const user = await this._getCurrentUser()
         if (user) {
           parentId = user.id
         }
       }
-      
+
       if (!parentId || !caregiverId) {
         throw new Error(`Missing required IDs: parentId=${!!parentId}, caregiverId=${!!caregiverId}`)
       }
@@ -232,22 +233,121 @@ export class BookingService extends SupabaseBase {
     }
   }
 
-  async uploadPaymentProof(bookingId, paymentProof) {
+  async updateStatus(bookingId, status) {
+    try {
+      return await this.updateBookingStatus(bookingId, status)
+    } catch (error) {
+      logger.error('Update booking status failed:', error)
+      throw new Error('Failed to update booking status')
+    }
+  }
+
+  async uploadPaymentProof(bookingId, paymentProof, { storagePath, mimeType, uploadedBy, paymentType = 'deposit' } = {}) {
     try {
       this._validateId(bookingId, 'Booking ID')
-      
+
+      const fieldsToUpdate = {
+        payment_proof: paymentProof,
+        payment_proof_uploaded_at: new Date().toISOString()
+      }
+
+      const nowIso = new Date().toISOString()
+
+      if (paymentType === 'deposit') {
+        fieldsToUpdate.deposit_paid = true
+        fieldsToUpdate.deposit_paid_at = nowIso
+        fieldsToUpdate.status = 'confirmed'
+      } else if (paymentType === 'final_payment') {
+        fieldsToUpdate.final_payment_paid = true
+        fieldsToUpdate.final_payment_paid_at = nowIso
+        fieldsToUpdate.payment_status = 'paid'
+      }
+
       const { data, error } = await supabase
         .from('bookings')
-        .update({ 
-          payment_proof: paymentProof, 
-          updated_at: new Date().toISOString() 
-        })
+        .update(fieldsToUpdate)
         .eq('id', bookingId)
         .select()
         .single()
-      
+
       if (error) throw error
-      return data
+
+      if (storagePath) {
+        const { error: proofError } = await supabase
+          .from('payment_proofs')
+          .insert({
+            booking_id: bookingId,
+            storage_path: storagePath || '',
+            public_url: paymentProof,
+            mime_type: mimeType || 'image/jpeg',
+            uploaded_by: uploadedBy || (await this._getCurrentUser())?.id || null,
+            payment_type: paymentType
+          })
+
+        if (proofError) {
+          console.warn('⚠️ Failed to insert payment proof audit record:', proofError)
+        }
+      }
+
+      invalidateCache('bookings:')
+
+      let latestProofRecord = null
+
+      try {
+        const { data: proofRecord, error: fetchProofError } = await supabase
+          .from('payment_proofs')
+          .select('*')
+          .eq('booking_id', bookingId)
+          .order('uploaded_at', { ascending: false })
+          .limit(1)
+          .single()
+
+        if (fetchProofError && fetchProofError.code !== 'PGRST116') {
+          throw fetchProofError
+        }
+
+        latestProofRecord = proofRecord || null
+      } catch (fetchError) {
+        console.warn('⚠️ Failed to fetch latest payment proof record:', fetchError)
+      }
+
+      try {
+        const notificationResult = await notificationService.notifyPaymentProofReceived(
+          data?.caregiver_id,
+          bookingId,
+          {
+            parentId: data?.parent_id,
+            paymentType,
+            totalAmount: data?.total_amount,
+            paymentProofUrl: latestProofRecord?.public_url || paymentProof,
+            paymentProofId: latestProofRecord?.id || null,
+            paymentProofStoragePath: latestProofRecord?.storage_path || storagePath || null,
+            bookingDeepLink: {
+              tab: 'bookings',
+              screen: 'BookingDetails',
+              params: {
+                bookingId,
+                caregiverId: data?.caregiver_id,
+                parentId: data?.parent_id
+              }
+            }
+          }
+        )
+
+        console.log('📬 Payment proof notification dispatched:', {
+          notificationId: notificationResult?.id || null,
+          bookingId,
+          caregiverId: data?.caregiver_id,
+          parentId: data?.parent_id
+        })
+      } catch (notifyError) {
+        console.warn('⚠️ Failed to send payment proof notification:', notifyError)
+      }
+
+      return {
+        booking: data,
+        paymentProof: latestProofRecord
+      }
     } catch (error) {
       return this._handleError('uploadPaymentProof', error)
     }

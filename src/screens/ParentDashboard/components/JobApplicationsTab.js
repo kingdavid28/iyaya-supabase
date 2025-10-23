@@ -78,13 +78,15 @@ const JobApplicationsTab = ({
       }
     }
 
+    const caregiverPhone = item.caregiverPhone || item.caregiver?.phone;
+    const hasCaregiverPhone = Boolean(caregiverPhone);
+
     const handleCallCaregiver = () => {
-      const phone = item.caregiverPhone || item.caregiver?.phone;
-      if (!phone) {
+      if (!caregiverPhone) {
         Alert.alert('No phone number', 'This caregiver has not provided a phone number.');
         return;
       }
-      Linking.openURL(`tel:${phone}`).catch(() => {
+      Linking.openURL(`tel:${caregiverPhone}`).catch(() => {
         Alert.alert('Unable to place call', 'Please try again later.');
       });
     };
@@ -184,27 +186,8 @@ const JobApplicationsTab = ({
           </View>
         )}
 
-        {status === 'shortlisted' && (
+        {['accepted', 'rejected'].includes(status) && hasCaregiverPhone && (
           <View style={styles.followUpActions}>
-            <TouchableOpacity
-              style={[styles.contactBtn, styles.messageContactBtn]}
-              onPress={() => onMessageCaregiver?.({ id: item.caregiverId, _id: item.caregiverId, name: item.caregiverName })}
-            >
-              <MessageCircle size={16} color={colors.info} />
-              <Text style={styles.contactBtnText}>Message</Text>
-            </TouchableOpacity>
-          </View>
-        )}
-
-        {['accepted', 'rejected'].includes(status) && (
-          <View style={styles.followUpActions}>
-            <TouchableOpacity
-              style={[styles.contactBtn, styles.messageContactBtn]}
-              onPress={() => onMessageCaregiver?.({ id: item.caregiverId, _id: item.caregiverId, name: item.caregiverName })}
-            >
-              <MessageCircle size={16} color={colors.info} />
-              <Text style={styles.contactBtnText}>Message</Text>
-            </TouchableOpacity>
             <TouchableOpacity
               style={[styles.contactBtn, styles.callContactBtn]}
               onPress={handleCallCaregiver}

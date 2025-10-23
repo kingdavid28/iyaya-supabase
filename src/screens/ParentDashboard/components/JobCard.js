@@ -1,6 +1,7 @@
 import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, Alert } from 'react-native';
-import { Calendar, MapPin, Clock, DollarSign, Users, Edit2, Trash2, Check, Eye, MessageCircle } from 'lucide-react-native';
+import { Calendar, MapPin, Clock, DollarSign, Users, Edit2, Trash2, Check, MessageCircle } from 'lucide-react-native';
+
 import { StatusBadge } from '../../../shared/ui';
 import { supabaseService } from '../../../services/supabase';
 
@@ -22,7 +23,7 @@ const colors = {
   borderLight: '#F3F4F6',
 };
 
-const JobCard = ({ job, onPress, onUpdate, onEdit, setActiveTab }) => {
+const JobCard = ({ job, onUpdate, onEdit, setActiveTab }) => {
   
   const handleEdit = () => {
     if (onEdit) {
@@ -157,7 +158,7 @@ const JobCard = ({ job, onPress, onUpdate, onEdit, setActiveTab }) => {
         )}
       </View>
       
-      <TouchableOpacity onPress={onPress} activeOpacity={0.8}>
+      <View>
         <View style={styles.jobMeta}>
           <View style={styles.metaGrid}>
             <View style={styles.metaItem}>
@@ -213,69 +214,10 @@ const JobCard = ({ job, onPress, onUpdate, onEdit, setActiveTab }) => {
             {String(job.description)}
           </Text>
         )}
-      </TouchableOpacity>
+      </View>
       
       <View style={styles.cardFooter}>
         <View style={styles.primaryActions}>
-          <TouchableOpacity 
-            style={[styles.actionButton, styles.viewDetailsButton]}
-            onPress={() => {
-              const formatDate = (dateStr) => {
-                if (!dateStr) return 'Not specified';
-                try {
-                  return new Date(dateStr).toLocaleDateString('en-US', {
-                    year: 'numeric',
-                    month: 'short',
-                    day: 'numeric'
-                  });
-                } catch {
-                  return dateStr;
-                }
-              };
-
-              const formatTime = (timeStr) => {
-                if (!timeStr) return '';
-                try {
-                  const [hours, minutes] = timeStr.split(':');
-                  const hour = parseInt(hours);
-                  const ampm = hour >= 12 ? 'PM' : 'AM';
-                  const displayHour = hour % 12 || 12;
-                  return `${displayHour}:${minutes} ${ampm}`;
-                } catch {
-                  return timeStr;
-                }
-              };
-
-              const requirements = job.requirements?.length > 0 
-                ? `\nRequirements: ${job.requirements.join(', ')}`
-                : '';
-
-              const specialInstructions = job.special_instructions 
-                ? `\nSpecial Instructions: ${job.special_instructions}`
-                : '';
-
-              Alert.alert(
-                job.title || 'Job Details',
-                `📍 Location: ${job.location || 'Not specified'}\n` +
-                `💰 Rate: ₱${job.hourly_rate || job.rate || 'Negotiable'}/hr\n` +
-                `📅 Date: ${formatDate(job.date || job.startDate)}\n` +
-                `⏰ Time: ${formatTime(job.start_time)} - ${formatTime(job.end_time)}\n` +
-                `👶 Children: ${job.children_ages || job.childrenAges || 'Details available'}\n` +
-                `📊 Status: ${job.status || 'Active'}${requirements}${specialInstructions}\n\n` +
-                `📝 Description:\n${job.description || 'No description provided'}`,
-                [
-                  { text: 'Close', style: 'cancel' },
-                  { text: 'Edit Job', onPress: () => handleEdit() },
-                ]
-              );
-            }}
-          >
-            <Eye size={16} color={colors.primary} />
-            <Text style={[styles.actionButtonText, { color: colors.primary }]}>
-              View Details
-            </Text>
-          </TouchableOpacity>
-          
           <TouchableOpacity 
             style={[styles.actionButton, styles.editButton]}
             onPress={handleEdit}
@@ -451,11 +393,6 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '600',
     marginLeft: 4,
-  },
-  viewDetailsButton: {
-    paddingHorizontal: 18,
-    borderColor: colors.primary,
-    backgroundColor: colors.primary + '10',
   },
   editButton: {
     borderColor: colors.info,

@@ -66,7 +66,8 @@ export class SupabaseServiceFacade {
   async getBookingById(bookingId, userId) { return this.bookings.getBookingById(bookingId, userId) }
   async updateBookingStatus(bookingId, status, feedback) { return this.bookings.updateBookingStatus(bookingId, status) }
   async cancelBooking(bookingId) { return this.bookings.cancelBooking(bookingId) }
-  async uploadPaymentProof(bookingId, proofData) { return this.bookings.uploadPaymentProof(bookingId, proofData) }
+  async uploadPaymentProof(bookingId, proofData, metadata) { return this.bookings.uploadPaymentProof(bookingId, proofData, metadata) }
+  async getPaymentProof(bookingId) { return this.bookings.getPaymentProof(bookingId) }
 
   // === MESSAGING METHODS ===
   async getConversations(userId) { return this.messaging.getConversations(userId) }
@@ -91,6 +92,7 @@ export class SupabaseServiceFacade {
   async notifyBookingRequest(bookingId, parentId, caregiverId) { return this.notifications.notifyBookingRequest(bookingId, parentId, caregiverId) }
   async notifyBookingConfirmed(bookingId, caregiverId, parentId) { return this.notifications.notifyBookingConfirmed(bookingId, caregiverId, parentId) }
   async notifyNewMessage(senderId, recipientId, content) { return this.notifications.notifyNewMessage(senderId, recipientId, content) }
+  async notifyPaymentProofReceived(caregiverId, bookingId, metadata) { return this.notifications.notifyPaymentProofReceived(caregiverId, bookingId, metadata) }
 
   // === REVIEW METHODS ===
   async getReviews(userId, limit, offset) { return this.reviews.getReviews(userId, limit, offset) }

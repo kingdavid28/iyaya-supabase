@@ -158,6 +158,15 @@ export const useParentDashboard = () => {
         contactPhone: booking.contactPhone || booking.contact_phone,
         specialInstructions: booking.specialInstructions || booking.special_instructions,
         emergencyContact: booking.emergencyContact || booking.emergency_contact,
+        depositPaid: typeof booking.deposit_paid === 'boolean'
+          ? booking.deposit_paid
+          : Boolean(booking.depositPaid || booking.depositPaidAt || booking.deposit_paid_at),
+        depositPaidAt: booking.deposit_paid_at || booking.depositPaidAt || null,
+        finalPaymentPaid: typeof booking.final_payment_paid === 'boolean'
+          ? booking.final_payment_paid
+          : Boolean(booking.finalPaymentPaid || booking.finalPaymentPaidAt || booking.final_payment_paid_at),
+        finalPaymentPaidAt: booking.final_payment_paid_at || booking.finalPaymentPaidAt || null,
+        paymentStatus: booking.payment_status || booking.paymentStatus || null,
         createdAt: booking.created_at || booking.createdAt || new Date().toISOString(),
         updatedAt: booking.updated_at || booking.updatedAt || new Date().toISOString()
       }));
