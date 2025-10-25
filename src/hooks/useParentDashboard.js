@@ -143,6 +143,7 @@ export const useParentDashboard = () => {
       const normalized = bookingsList.map((booking, idx) => ({
         id: booking.id || booking._id || idx + 1,
         _id: booking.id || booking._id,
+        parentId: booking.parent_id || booking.parentId,
         caregiver: booking.caregiverId || booking.caregiver,
         caregiverName: booking.caregiverId?.name || booking.caregiver?.name || booking.caregiver_name || 'Caregiver',
         date: booking.date || booking.startDate || new Date().toISOString(),
@@ -167,6 +168,7 @@ export const useParentDashboard = () => {
           : Boolean(booking.finalPaymentPaid || booking.finalPaymentPaidAt || booking.final_payment_paid_at),
         finalPaymentPaidAt: booking.final_payment_paid_at || booking.finalPaymentPaidAt || null,
         paymentStatus: booking.payment_status || booking.paymentStatus || null,
+        contract: booking.contract || booking.latestContract || null,
         createdAt: booking.created_at || booking.createdAt || new Date().toISOString(),
         updatedAt: booking.updated_at || booking.updatedAt || new Date().toISOString()
       }));

@@ -2,20 +2,23 @@
 import { supabaseService } from './supabase';
 
 class ChildService {
-  async createChild(childData) {
+  async createChild(childData, userId = null) {
     try {
-      const user = await supabaseService.user._getCurrentUser();
-      if (!user) throw new Error('Authentication required');
-      
-      return await supabaseService.children.addChild(user.id, childData);
+      if (!userId) {
+        throw new Error('User ID is required to add child');
+      }
+
+      console.log('🔍 Creating child for user:', userId);
+      return await supabaseService.children.addChild(userId, childData);
     } catch (error) {
       console.error('Error creating child:', error);
       throw error;
     }
   }
 
-  async updateChild(childId, childData) {
+  async updateChild(childId, childData, userId = null) {
     try {
+      console.log('🔍 Updating child:', childId);
       return await supabaseService.children.updateChild(childId, childData);
     } catch (error) {
       console.error('Error updating child:', error);
@@ -23,17 +26,9 @@ class ChildService {
     }
   }
 
-  async getChildren(parentId = null) {
+  async deleteChild(childId, userId = null) {
     try {
-      return await supabaseService.children.getChildren(parentId);
-    } catch (error) {
-      console.error('Error fetching children:', error);
-      throw error;
-    }
-  }
-
-  async deleteChild(childId) {
-    try {
+      console.log('🗑️ Deleting child:', childId);
       return await supabaseService.children.deleteChild(childId);
     } catch (error) {
       console.error('Error deleting child:', error);

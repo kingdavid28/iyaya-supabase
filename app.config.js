@@ -38,6 +38,13 @@ export default {
       },
       package: "com.iyaya.app",
       jsEngine: "hermes",
+      usesCleartextTraffic: true, // Allow HTTP traffic (for development/debugging)
+      permissions: [
+        "INTERNET",
+        "ACCESS_NETWORK_STATE",
+        "ACCESS_FINE_LOCATION",
+        "ACCESS_COARSE_LOCATION"
+      ],
       intentFilters: [
         {
           action: "VIEW",

@@ -1,20 +1,19 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { View, Alert, Linking } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import * as FileSystem from 'expo-file-system';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { Alert, Linking, View } from 'react-native';
 import { processImageForUpload } from '../../utils/imageUtils';
 
 // Core imports
 import { useAuth } from '../../contexts/AuthContext';
-import { useParentDashboard } from '../../hooks/useParentDashboard';
 import { useNotificationCounts } from '../../hooks/useNotificationCounts';
+import { useParentDashboard } from '../../hooks/useParentDashboard';
 
 // Supabase service import
 import { supabaseService } from '../../services/supabase';
-import { __DEV__ } from '../../config/constants';
 
 // Utility imports
-import { applyFilters, countActiveFilters } from '../../utils/caregiverUtils';
+import { countActiveFilters } from '../../utils/caregiverUtils';
 import { styles } from '../styles/ParentDashboard.styles';
 
 // Privacy components
@@ -22,27 +21,27 @@ import { usePrivacy } from '../../components/features/privacy/PrivacyManager';
 import { useProfileData } from '../../components/features/privacy/ProfileDataManager';
 
 // Component imports
-import Header from './components/Header';
-import NavigationTabs from './components/NavigationTabs';
-import HomeTab from './components/HomeTab';
-import SearchTab from './components/SearchTab';
-import BookingsTab from './components/BookingsTab';
-import JobsTab from './components/JobsTab';
-import JobApplicationsTab from './components/JobApplicationsTab';
-import MessagesTab from './components/MessagesTab'; // Added missing import
-import ReviewsTab from './components/ReviewsTab';
 import AlertsTab from './components/AlertsTab';
+import BookingsTab from './components/BookingsTab';
+import Header from './components/Header';
+import HomeTab from './components/HomeTab';
+import JobApplicationsTab from './components/JobApplicationsTab';
+import JobsTab from './components/JobsTab';
+import MessagesTab from './components/MessagesTab'; // Added missing import
+import NavigationTabs from './components/NavigationTabs';
+import ReviewsTab from './components/ReviewsTab';
+import SearchTab from './components/SearchTab';
 
 
 // Modal imports
-import ProfileModal from './modals/ProfileModal';
+import ContractModal from '../../components/modals/ContractModal';
+import BookingDetailsModal from '../../shared/ui/modals/BookingDetailsModal';
+import BookingModal from './modals/BookingModal';
+import ChildModal from './modals/ChildModal';
 import FilterModal from './modals/FilterModal';
 import JobPostingModal from './modals/JobPostingModal';
-import BookingModal from './modals/BookingModal';
 import PaymentModal from './modals/PaymentModal';
-import ChildModal from './modals/ChildModal';
-import BookingDetailsModal from '../../shared/ui/modals/BookingDetailsModal';
-import { BOOKING_STATUSES } from '../../constants/bookingStatuses';
+import ProfileModal from './modals/ProfileModal';
 // Constants
 const DEFAULT_FILTERS = {
   availability: { availableNow: false, days: [] },
@@ -125,10 +124,12 @@ const ParentDashboard = () => {
     filter: false,
     payment: false,
     booking: false,
-    bookingDetails: false
+    bookingDetails: false,
+    contract: false
   });
 
   const [selectedBooking, setSelectedBooking] = useState(null);
+  const [selectedContract, setSelectedContract] = useState(null);
 
   // Search and filter state
   const [searchQuery, setSearchQuery] = useState('');
@@ -317,7 +318,8 @@ const ParentDashboard = () => {
           onPress: async () => {
             try {
               console.log('🗑️ Deleting child:', child);
-              await supabaseService.deleteChild(child.id || child._id);
+              const { childService } = await import('../../services/childService');
+              await childService.deleteChild(child.id || child._id, user.id);
               await fetchChildren();
               Alert.alert('Success', 'Child deleted successfully!');
             } catch (error) {
@@ -343,7 +345,8 @@ const ParentDashboard = () => {
 
     try {
       if (childForm.editingId) {
-        await supabaseService.updateChild(childForm.editingId, childData);
+        const { childService } = await import('../../services/childService');
+        await childService.updateChild(childForm.editingId, childData, user.id);
       } else {
         // Check if child already exists before creating
         const existingChild = children.find(child =>
@@ -360,7 +363,8 @@ const ParentDashboard = () => {
                 text: 'Update',
                 onPress: async () => {
                   try {
-                    await supabaseService.updateChild(existingChild._id || existingChild.id, childData);
+                    const { childService } = await import('../../services/childService');
+                    await childService.updateChild(existingChild._id || existingChild.id, childData, user.id);
                     await fetchChildren();
                     toggleModal('child', false);
                     setChildForm({ name: '', age: '', allergies: '', notes: '', editingId: null });
@@ -378,7 +382,9 @@ const ParentDashboard = () => {
 
         // Try to create the child
         try {
-          await supabaseService.addChild(user.id, childData);
+          // Use childService with user.id from AuthContext
+          const { childService } = await import('../../services/childService');
+          await childService.createChild(childData, user.id);
         } catch (createError) {
           // If creation fails due to "already exists", try to find and update existing child
           if (createError.message && createError.message.includes('already exists')) {
@@ -396,7 +402,8 @@ const ParentDashboard = () => {
                     text: 'Update',
                     onPress: async () => {
                       try {
-                        await supabaseService.updateChild(existingChild._id || existingChild.id, childData);
+                        const { childService } = await import('../../services/childService');
+                        await childService.updateChild(existingChild._id || existingChild.id, childData, user.id);
                         await fetchChildren();
                         toggleModal('child', false);
                         setChildForm({ name: '', age: '', allergies: '', notes: '', editingId: null });
@@ -660,26 +667,70 @@ const ParentDashboard = () => {
     }
   }, [fetchBookings]);
 
-  const handleCompleteBooking = useCallback(async (booking) => {
-    const bookingId = booking?.id || booking?._id;
-
-    if (!bookingId) {
-      Alert.alert('Unable to mark complete', 'Missing booking information.');
-      return;
-    }
+  const handleContractSign = useCallback(async ({ signature, acknowledged }) => {
+    if (!selectedContract || !selectedBooking) return;
 
     try {
-      setRefreshing(true);
-      await supabaseService.updateBookingStatus(bookingId, BOOKING_STATUSES.COMPLETED);
-      await fetchBookings();
-      Alert.alert('Success', 'Booking marked as completed.');
+      const { contractService } = await import('../../services/supabase/contractService');
+      const result = await contractService.signContract(selectedContract.id, 'parent', {
+        signature,
+        signatureHash: btoa(signature), // Simple hash for demo
+        ipAddress: null
+      });
+
+      if (result) {
+        Alert.alert('Success', 'Contract signed successfully!');
+        toggleModal('contract', false);
+        setSelectedContract(null);
+        setSelectedBooking(null);
+        await fetchBookings(); // Refresh to update contract status
+      }
     } catch (error) {
-      console.error('Failed to complete booking:', error);
-      Alert.alert('Error', 'Unable to mark booking as completed. Please try again.');
-    } finally {
-      setRefreshing(false);
+      console.error('Error signing contract:', error);
+      Alert.alert('Error', 'Failed to sign contract. Please try again.');
     }
-  }, [fetchBookings]);
+  }, [selectedContract, selectedBooking, fetchBookings]);
+
+  const handleContractResend = useCallback(async (contract) => {
+    if (!contract) return;
+
+    try {
+      const { contractService } = await import('../../services/supabase/contractService');
+      await contractService.resendContract(contract.id, user?.id);
+      Alert.alert('Success', 'Contract reminder sent!');
+    } catch (error) {
+      console.error('Error resending contract:', error);
+      Alert.alert('Error', 'Failed to send reminder. Please try again.');
+    }
+  }, [user?.id]);
+
+  const handleDownloadPdf = useCallback(async (contract) => {
+    if (!contract) return;
+
+    try {
+      const { contractService } = await import('../../services/supabase/contractService');
+      const pdfData = await contractService.generateContractPdf(contract.id);
+      if (pdfData?.url) {
+        await Linking.openURL(pdfData.url);
+        Alert.alert('Success', 'Contract PDF opened!');
+      } else {
+        Alert.alert('Success', 'Contract PDF downloaded!');
+      }
+    } catch (error) {
+      console.error('Error downloading PDF:', error);
+      Alert.alert(
+        'PDF Generation Unavailable',
+        'PDF downloads are not currently available, but your contract is still valid. You can view and sign contracts in the app.'
+      );
+    }
+  }, []);
+
+  const handleOpenContract = useCallback((booking, contract) => {
+    console.log('🔍 ParentDashboard - Opening contract:', { booking, contract });
+    setSelectedBooking(booking);
+    setSelectedContract(contract);
+    toggleModal('contract', true);
+  }, [toggleModal]);
 
   const openPaymentModal = useCallback((bookingId, paymentType = 'deposit') => {
     setPaymentData({
@@ -1034,6 +1085,7 @@ const ParentDashboard = () => {
               toggleModal('booking', true);
             }}
             onMessageCaregiver={handleMessageCaregiver}
+            onOpenContract={handleOpenContract}
             navigation={navigation}
             loading={loading}
           />
@@ -1131,7 +1183,44 @@ const ParentDashboard = () => {
             refreshing={refreshing}
             onRefresh={onRefresh}
             loading={loading}
-            onNavigateTab={setActiveTab}
+            onNavigateTab={async (tabId, metadata) => {
+              setActiveTab(tabId);
+
+              if (!metadata?.contractId) {
+                return;
+              }
+
+              try {
+                const [{ contractService }] = await Promise.all([
+                  import('../../services/supabase/contractService'),
+                ]);
+
+                const [contract, booking] = await Promise.all([
+                  contractService.getContractById(metadata.contractId),
+                  metadata.bookingId
+                    ? supabaseService.bookings.getBookingById(metadata.bookingId, user?.id)
+                    : null,
+                ]);
+
+                if (contract) {
+                  setSelectedContract(contract);
+                  if (booking) {
+                    setSelectedBooking(booking);
+                  } else if (contract.bookingId) {
+                    const bookingRecord = await supabaseService.bookings.getBookingById(
+                      contract.bookingId,
+                      user?.id
+                    );
+                    if (bookingRecord) {
+                      setSelectedBooking(bookingRecord);
+                    }
+                  }
+                  toggleModal('contract', true);
+                }
+              } catch (error) {
+                console.error('❌ Failed to open contract from alert:', error);
+              }
+            }}
           />
         );
       default:
@@ -1262,6 +1351,21 @@ const ParentDashboard = () => {
               onCancelBooking={() => handleCancelBooking(selectedBooking)}
             />
           )}
+
+          <ContractModal
+            visible={modals.contract}
+            onClose={() => {
+              toggleModal('contract', false);
+              setSelectedContract(null);
+              setSelectedBooking(null);
+            }}
+            contract={selectedContract}
+            booking={selectedBooking}
+            viewerRole="parent"
+            onSign={handleContractSign}
+            onResend={handleContractResend}
+            onDownloadPdf={handleDownloadPdf}
+          />
         </View>
   );
 };

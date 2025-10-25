@@ -1,66 +1,68 @@
 import { Ionicons } from '@expo/vector-icons'
+import { useNavigation, useRoute } from '@react-navigation/native'
 import { LinearGradient } from "expo-linear-gradient"
-import React, { useCallback, useEffect, useMemo, useState } from "react"
-import { ActivityIndicator, Alert, Dimensions, Image, Linking, Modal, Platform, Pressable, RefreshControl, ScrollView, Text, TextInput, View, FlatList } from "react-native"
-import { Button, Card, Chip } from "react-native-paper"
+import React, { Fragment, useCallback, useEffect, useMemo, useState } from "react"
+import { ActivityIndicator, Alert, Dimensions, Image, Linking, Modal, Platform, Pressable, RefreshControl, ScrollView, Text, TextInput, View } from "react-native"
+import { Button, Card } from "react-native-paper"
 import Toast from "../components/ui/feedback/Toast"
+import { SettingsModal } from '../components/ui/modals/SettingsModal'
+import { useAuth } from "../contexts/AuthContext"
+import { useHighlightRequest } from '../hooks/useHighlightRequest'
+import { useNotificationCounts } from '../hooks/useNotificationCounts'
 import { supabaseService } from '../services/supabase'
 import { reviewService } from '../services/supabase/reviewService'
-import { useAuth } from "../contexts/AuthContext"
-import { useNotificationCounts } from '../hooks/useNotificationCounts';
-import { usePrivacy } from '../components/features/privacy/PrivacyManager';
-import { useHighlightRequest } from '../hooks/useHighlightRequest';
-import { SettingsModal } from '../components/ui/modals/SettingsModal';
 
-import { 
-  EmptyState, 
-  StatusBadge, 
-  ModalWrapper, 
-  Card as SharedCard, 
-  Button as SharedButton,
+import {
   FormInput,
-  QuickStat, 
+  ModalWrapper,
   QuickAction,
+  QuickStat,
+  Button as SharedButton,
+  Card as SharedCard,
+  StatusBadge,
   formatDate
-} from '../shared/ui';
+} from '../shared/ui'
 
-import {
-  authAPI,
-  jobsAPI,
-  applicationsAPI,
-  bookingsAPI,
-  childrenAPI,
-  getCurrentAPIURL,
-  getCurrentSocketURL
-} from '../services';
+import { useCaregiverDashboard } from '../hooks/useCaregiverDashboard'
+import { BookingDetailsModal } from '../shared/ui/modals/BookingDetailsModal'
+import { RequestInfoModal } from '../shared/ui/modals/RequestInfoModal'
+import { normalizeCaregiverReviewsForList } from '../utils/reviews'
+import ApplicationsTab from './CaregiverDashboard/ApplicationsTab'
+import CaregiverBookingsTabWithModal from './CaregiverDashboard/BookingsTab'
+import CaregiverProfileSection from './CaregiverDashboard/components/CaregiverProfileSection'
+import MessagesTab from './CaregiverDashboard/components/MessagesTab'
+import NotificationsTab from './CaregiverDashboard/components/NotificationsTab'
+import JobsTab, { CaregiverJobCard } from './CaregiverDashboard/JobsTab'
+import { styles } from './styles/CaregiverDashboard.styles'
+// Lines 27-42 - Added usePrivacy import
+import { usePrivacy } from '../components/features/privacy/PrivacyManager'; // ✅ Added this import
+import ReviewList from '../components/features/profile/ReviewList'
+import { ReviewForm } from '../components/forms/ReviewForm'
+import { PrivacyNotificationModal } from '../components/ui/modals/PrivacyNotificationModal'
+import RatingsReviewsModal from '../components/ui/modals/RatingsReviewsModal'
 
-import { styles } from './styles/CaregiverDashboard.styles';
-import { useCaregiverDashboard } from '../hooks/useCaregiverDashboard';
-import CaregiverProfileSection from './CaregiverDashboard/components/CaregiverProfileSection';
-import { PrivacyNotificationModal } from '../components/ui/modals/PrivacyNotificationModal';
-import { RequestInfoModal } from '../shared/ui/modals/RequestInfoModal';
-import { BookingDetailsModal } from '../shared/ui/modals/BookingDetailsModal';
-import { ReviewForm } from '../components/forms/ReviewForm';
-import JobsTab, { CaregiverJobCard } from './CaregiverDashboard/JobsTab';
-import BookingsTab from './CaregiverDashboard/BookingsTab';
-import ApplicationsTab from './CaregiverDashboard/ApplicationsTab';
-import MessagesTab from './CaregiverDashboard/components/MessagesTab';
-import NotificationsTab from './CaregiverDashboard/components/NotificationsTab';
-import ReviewList from '../components/features/profile/ReviewList';
-import { useNavigation, useRoute } from '@react-navigation/native';
-import { normalizeCaregiverReviewsForList } from '../utils/reviews';
-import RatingsReviewsModal from '../components/ui/modals/RatingsReviewsModal';
-import {
-  SkeletonCard,
-  SkeletonBlock,
-  SkeletonCircle,
-  SkeletonPill
-} from '../components/common/SkeletonPlaceholder';
+// Add missing Skeleton components
+const SkeletonCard = ({ children, style }) => (
+  <View style={[styles.dashboardSkeletonCard, style]}>
+    {children}
+  </View>
+);
+
+const SkeletonCircle = ({ size }) => (
+  <View style={[styles.dashboardSkeletonCircle, { width: size, height: size }]} />
+);
+
+const SkeletonBlock = ({ width, height, style }) => (
+  <View style={[styles.dashboardSkeletonBlock, { width, height }, style]} />
+);
+
+const SkeletonPill = ({ width, height, style }) => (
+  <View style={[styles.dashboardSkeletonPill, { width, height }, style]} />
+);
 
 function ApplicationCard({ application, onViewDetails, onMessage }) {
   const navigation = useNavigation();
   const job = application.job || {};
-
 
   const getStatusColor = (status) => {
     switch (status?.toLowerCase()) {        
@@ -690,6 +692,7 @@ const CaregiverDashboard = () => {
   const [showJobDetails, setShowJobDetails] = useState(false)
   const [selectedApplication, setSelectedApplication] = useState(null)
   const [showApplicationDetails, setShowApplicationDetails] = useState(false)
+  const [pendingContractToOpen, setPendingContractToOpen] = useState(null)
   const [applicationSubmitting, setApplicationSubmitting] = useState(false)
   const [applicationForm, setApplicationForm] = useState({ coverLetter: '', proposedRate: '' })
   
@@ -707,22 +710,16 @@ const CaregiverDashboard = () => {
   const [refreshing, setRefreshing] = useState(false)
   const [showRequestModal, setShowRequestModal] = useState(false);
 
-  const onRefresh = useCallback(async () => {
-    setRefreshing(true);
-    try {
-      await Promise.all([
-        loadProfile(),
-        fetchJobs(),
-        fetchApplications(),
-        fetchBookings(),
-        fetchCaregiverReviews({ showSkeleton: false })
-      ]);
-    } catch (error) {
-      console.error('Error refreshing data:', error);
-    } finally {
-      setRefreshing(false);
+  // Add missing handleGetDirections function
+  const handleGetDirections = (booking) => {
+    if (booking?.location) {
+      const mapsUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(booking.location)}`;
+      Linking.openURL(mapsUrl).catch(err => {
+        console.error('Error opening maps:', err);
+        Alert.alert('Error', 'Could not open maps. Please check if you have a maps app installed.');
+      });
     }
-  }, [fetchApplications, fetchBookings, fetchCaregiverReviews, fetchJobs, loadProfile]);
+  };
 
   const fetchCaregiverReviews = useCallback(async ({ showSkeleton = true } = {}) => {
     if (!user?.id) return;
@@ -743,6 +740,23 @@ const CaregiverDashboard = () => {
       }
     }
   }, [user?.id]);
+
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true);
+    try {
+      await Promise.all([
+        loadProfile(),
+        fetchJobs(),
+        fetchApplications(),
+        fetchBookings(),
+        fetchCaregiverReviews({ showSkeleton: false })
+      ]);
+    } catch (error) {
+      console.error('Error refreshing data:', error);
+    } finally {
+      setRefreshing(false);
+    }
+  }, [loadProfile, fetchJobs, fetchApplications, fetchBookings, fetchCaregiverReviews]);
 
   useEffect(() => {
     if (!user?.id) {
@@ -850,7 +864,7 @@ const CaregiverDashboard = () => {
     if (navigation?.setParams) {
       navigation.setParams({ refreshProfile: undefined });
     }
-  }, [route?.params?.refreshProfile, loadProfile]);
+  }, [route?.params?.refreshProfile, loadProfile, navigation]);
 
   const handleJobApplication = (job) => {
     if (!job || (!job.id && !job._id)) {
@@ -1005,22 +1019,6 @@ const CaregiverDashboard = () => {
     } catch (error) {
       console.error('Cancel booking failed:', error);
       showToast('Failed to cancel booking. Please try again.', 'error');
-    }
-  }
-
-  const handleGetDirections = (booking) => {
-    const destination = booking?.address || booking?.location;
-    if (!destination) {
-      showToast('No address available for this booking.', 'info');
-      return;
-    }
-
-    try {
-      const mapsUrl = `https://maps.google.com/?q=${encodeURIComponent(destination)}`;
-      Linking.openURL(mapsUrl);
-    } catch (error) {
-      console.error('Get directions failed:', error);
-      Alert.alert('Error', 'Unable to open maps');
     }
   }
 
@@ -1256,14 +1254,9 @@ const CaregiverDashboard = () => {
       { id: 'jobs', label: 'Jobs', icon: 'briefcase', badgeCount: notificationCounts.jobs },
       { id: 'applications', label: 'Applications', icon: 'document-text' },
       { id: 'bookings', label: 'Bookings', icon: 'calendar', badgeCount: notificationCounts.bookings },
-      { id: 'messages', label: 'Messages', icon: 'chatbubbles', badgeCount: notificationCounts.messages },
+      { id: 'messages', label: 'Messages', icon: 'chatbubble-ellipses-outline', badgeCount: notificationCounts.messages },
       { id: 'reviews', label: 'Reviews', icon: 'star', badgeCount: notificationCounts.reviews },
-      { 
-        id: 'notifications', 
-        label: 'Notifications', 
-        icon: 'notifications',
-        badgeCount: totalUnread
-      },
+      { id: 'notifications', label: 'Notifications', icon: 'notifications-outline', badgeCount: totalUnread },
     ];
     
     // Debug tab badge counts
@@ -1644,8 +1637,8 @@ const CaregiverDashboard = () => {
                 <Ionicons name="chatbubble-ellipses-outline" size={22} color="#FFFFFF" />
               </Pressable>
               
-              <Pressable 
-                style={[styles.headerButton, { position: 'relative' }]} 
+              <Pressable
+                style={[styles.headerButton, { position: 'relative' }]}
                 onPress={() => setShowNotifications(true)}
               >
                 <Ionicons name="shield-outline" size={22} color="#FFFFFF" />
@@ -1653,6 +1646,20 @@ const CaregiverDashboard = () => {
                   <View style={styles.notificationBadge}>
                     <Text style={styles.notificationBadgeText}>
                       {totalUnread > 9 ? '9+' : totalUnread}
+                    </Text>
+                  </View>
+                )}
+              </Pressable>
+
+              <Pressable
+                style={[styles.headerButton, { position: 'relative' }]}
+                onPress={() => setActiveTab('notifications')}
+              >
+                <Ionicons name="notifications-outline" size={22} color="#FFFFFF" />
+                {notificationCounts.notifications > 0 && (
+                  <View style={styles.notificationBadge}>
+                    <Text style={styles.notificationBadgeText}>
+                      {notificationCounts.notifications > 9 ? '9+' : notificationCounts.notifications}
                     </Text>
                   </View>
                 )}
@@ -1732,10 +1739,11 @@ const CaregiverDashboard = () => {
   }
 
   return (
+    <Fragment>
       <View style={styles.container}>
       {renderHeader()}
       {renderTopNav()}
-      
+
       <View style={{ flex: 1 }}>
         {activeTab === "dashboard" && (
           initialLoading ? (
@@ -1789,7 +1797,7 @@ const CaregiverDashboard = () => {
               ))}
             </ScrollView>
           ) : (
-            <ScrollView 
+            <ScrollView
               style={styles.content}
               refreshControl={
                 <RefreshControl
@@ -1925,9 +1933,9 @@ const CaregiverDashboard = () => {
                   <Text style={styles.loadingText}>Loading jobs...</Text>
                 </View>
               ) : (
-                <ScrollView 
-                  horizontal 
-                  showsHorizontalScrollIndicator={false} 
+                <ScrollView
+                  horizontal
+                  showsHorizontalScrollIndicator={false}
                   style={styles.horizontalScroll}
                   contentContainerStyle={{
                     paddingLeft: 2,
@@ -1972,8 +1980,8 @@ const CaregiverDashboard = () => {
                 </Pressable>
               </View>
               {(applications || []).slice(0, 2).map((application, index) => (
-                <ApplicationCard 
-                  key={application.id || index} 
+                <ApplicationCard
+                  key={application.id || index}
                   application={application}
                   onViewDetails={handleViewApplication}
                   onMessage={handleMessageFamily}
@@ -2062,7 +2070,7 @@ const CaregiverDashboard = () => {
         )}
 
         {activeTab === "bookings" && (
-          <BookingsTab
+          <CaregiverBookingsTabWithModal
             bookings={bookings}
             onMessageFamily={handleBookingMessage}
             onConfirmBooking={handleConfirmAttendance}
@@ -2073,6 +2081,8 @@ const CaregiverDashboard = () => {
             refreshing={refreshing}
             onRefresh={onRefresh}
             loading={false}
+            pendingContract={pendingContractToOpen}
+            onPendingContractHandled={() => setPendingContractToOpen(null)}
           />
         )}
 
@@ -2089,15 +2099,61 @@ const CaregiverDashboard = () => {
         {activeTab === 'notifications' && (
           <NotificationsTab
             navigation={navigation}
-            onNavigateTab={async (tabId, notification) => {
+            onNavigateTab={async (tabId, payload) => {
               setActiveTab(tabId)
 
-              if (!notification) {
+              if (!payload) {
                 return
               }
 
-              const notificationData = notification.data || {}
-              const deepLink = notification.deepLink || notificationData.bookingDeepLink
+              if (payload.contractId) {
+                try {
+                  console.log('📄 Processing contract notification:', {
+                    contractId: payload.contractId,
+                    bookingId: payload.bookingId,
+                    tab: tabId
+                  });
+
+                  const [{ contractService }] = await Promise.all([
+                    import('../services/supabase/contractService'),
+                  ]);
+
+                  const [contract, booking] = await Promise.all([
+                    contractService.getContractById(payload.contractId),
+                    payload.bookingId
+                      ? supabaseService.bookings.getBookingById(payload.bookingId, user?.id)
+                      : null,
+                  ]);
+
+                  console.log('📄 Contract and booking loaded:', {
+                    contractFound: !!contract,
+                    bookingFound: !!booking,
+                    contractId: contract?.id,
+                    bookingId: booking?.id
+                  });
+
+                  if (contract) {
+                    setPendingContractToOpen({
+                      contract,
+                      booking: booking || null,
+                    });
+                    if (tabId !== 'bookings') {
+                      setActiveTab('bookings');
+                    }
+                    console.log('✅ Contract notification stored for bookings tab to open');
+                  } else {
+                    console.warn('⚠️ Contract not found:', payload.contractId);
+                    Alert.alert('Contract Not Found', 'The contract could not be loaded. It may have been deleted.');
+                  }
+                } catch (error) {
+                  console.error('❌ Failed to open contract from caregiver notification:', error);
+                  Alert.alert('Error', 'Failed to load contract. Please try again later.');
+                }
+                return;
+              }
+
+              const notificationData = payload.data || {}
+              const deepLink = payload.deepLink || notificationData.bookingDeepLink
 
               if (deepLink?.tab === 'bookings' && deepLink?.params?.bookingId) {
                 try {
@@ -2126,6 +2182,7 @@ const CaregiverDashboard = () => {
           />
         )}
 
+      </View>
       </View>
 
       {showBookingDetails && selectedBooking && (
@@ -2164,7 +2221,7 @@ const CaregiverDashboard = () => {
               <ScrollView showsVerticalScrollIndicator={false}>
                 <View style={styles.applicationModalHeader}>
                   <Text style={styles.applicationModalTitle}>Apply to Job</Text>
-                  <Pressable 
+                  <Pressable
                     onPress={() => {
                       if (!applicationSubmitting) {
                         setShowJobApplication(false)
@@ -2177,13 +2234,13 @@ const CaregiverDashboard = () => {
                     <Ionicons name="close" size={24} color="#6B7280" />
                   </Pressable>
                 </View>
-                
+
                 <View style={styles.jobSummary}>
                   <Text style={styles.jobSummaryTitle}>{selectedJob.title}</Text>
                   <Text style={styles.jobSummaryFamily}>{selectedJob.family}</Text>
                   <Text style={styles.jobSummaryRate}>₱{selectedJob.hourlyRate}/hour</Text>
                 </View>
-                
+
                 <View style={styles.applicationFormContainer}>
                   <View style={styles.inputGroup}>
                     <Text style={styles.inputLabel}>Proposed Rate (Optional)</Text>
@@ -2196,10 +2253,10 @@ const CaregiverDashboard = () => {
                       editable={!applicationSubmitting}
                     />
                   </View>
-                  
+
                   <View style={styles.inputGroup}>
                     <Text style={styles.inputLabel}>Cover Letter (Optional)</Text>
-                    
+
                     <View style={styles.suggestedCoverLettersContainer}>
                       {[
                         'I am passionate about childcare and have experience working with children of all ages. I would love to help your family.',
@@ -2225,7 +2282,7 @@ const CaregiverDashboard = () => {
                         );
                       })}
                     </View>
-                    
+
                     <TextInput
                       style={[styles.applicationInput, styles.applicationTextArea]}
                       placeholder="Tell the family why you're the perfect fit for this job..."
@@ -2238,10 +2295,10 @@ const CaregiverDashboard = () => {
                     />
                   </View>
                 </View>
-                
+
                 <View style={styles.applicationModalActions}>
-                  <Button 
-                    mode="outlined" 
+                  <Button
+                    mode="outlined"
                     onPress={() => {
                       if (!applicationSubmitting) {
                         setShowJobApplication(false)
@@ -2276,15 +2333,6 @@ const CaregiverDashboard = () => {
         </Modal>
       )}
 
-      <RatingsReviewsModal
-        visible={showRatingsModal}
-        onClose={closeRatingsModal}
-        caregiverId={user?.id}
-        caregiverName={profile?.name || user?.name}
-        currentUserId={user?.id}
-        onPreload={preloadCaregiverReviews}
-      />
-
       {showApplicationDetails && selectedApplication && (
         <Modal
           visible={showApplicationDetails}
@@ -2296,14 +2344,14 @@ const CaregiverDashboard = () => {
             <View style={styles.applicationModal}>
               <View style={styles.applicationModalHeader}>
                 <Text style={styles.applicationModalTitle}>Application Details</Text>
-                <Pressable 
+                <Pressable
                   onPress={() => setShowApplicationDetails(false)}
                   style={styles.modalCloseButton}
                 >
                   <Ionicons name="close" size={24} color="#6B7280" />
                 </Pressable>
               </View>
-              
+
               <ScrollView style={styles.applicationFormContainer}>
                 <View style={styles.jobSummary}>
                   <Text style={styles.jobSummaryTitle} numberOfLines={2}>
@@ -2314,7 +2362,7 @@ const CaregiverDashboard = () => {
                   </Text>
                   <StatusBadge status={selectedApplication.status} />
                 </View>
-                
+
                 <View style={styles.applicationDetails}>
                   {selectedApplication.job?.appliedDate || selectedApplication.appliedDate ? (
                     <View style={styles.applicationDetailRow}>
@@ -2380,18 +2428,18 @@ const CaregiverDashboard = () => {
                   )}
                 </View>
               </ScrollView>
-              
+
               <View style={styles.applicationModalActions}>
-                <Button 
-                  mode="outlined" 
+                <Button
+                  mode="outlined"
                   onPress={() => setShowApplicationDetails(false)}
                   style={styles.cancelButton}
                 >
                   Close
                 </Button>
                 {selectedApplication.status === 'accepted' && (
-                  <Button 
-                    mode="contained" 
+                  <Button
+                    mode="contained"
                     style={styles.submitButton}
                     onPress={() => handleMessageFamily(selectedApplication)}
                   >
@@ -2416,188 +2464,189 @@ const CaregiverDashboard = () => {
         >
           <View style={styles.modalOverlay}>
             <View style={[styles.jobDetailsModal, { height: '50%' }]}>
-            <ScrollView showsVerticalScrollIndicator={false}>
-              <View style={styles.jobDetailsContent}>
-                <View style={styles.jobDetailsHeader}>
-                  <Text style={styles.jobDetailsTitle}>{String(selectedJob.title || 'Childcare Position')}</Text>
-                  <Text style={styles.jobDetailsFamily}>{String(selectedJob.family || selectedJob.familyName || 'Family')}</Text>
-                  {selectedJob.urgent && (
-                    <View style={styles.urgentBadge}>
-                      <Text style={styles.urgentText}>URGENT</Text>
-                    </View>
-                  )}
-                </View>
-                
-                <View style={styles.jobDetailsInfo}>
-                  <View style={styles.jobDetailsRow}>
-                    <Ionicons name="location" size={16} color="#6B7280" />
-                    <Text style={styles.jobDetailsText}>{selectedJob.location || 'Location not specified'}</Text>
+              <ScrollView showsVerticalScrollIndicator={false}>
+                <View style={styles.jobDetailsContent}>
+                  <View style={styles.jobDetailsHeader}>
+                    <Text style={styles.jobDetailsTitle}>{String(selectedJob.title || 'Childcare Position')}</Text>
+                    <Text style={styles.jobDetailsFamily}>{String(selectedJob.family || selectedJob.familyName || 'Family')}</Text>
+                    {selectedJob.urgent && (
+                      <View style={styles.urgentBadge}>
+                        <Text style={styles.urgentText}>URGENT</Text>
+                      </View>
+                    )}
                   </View>
-                  <View style={styles.jobDetailsRow}>
-                    <Ionicons name="calendar" size={16} color="#6B7280" />
-                    <Text style={styles.jobDetailsText}>{selectedJob.date ? new Date(selectedJob.date).toLocaleDateString() : 'Date not specified'}</Text>
-                  </View>
-                  <View style={styles.jobDetailsRow}>
-                    <Ionicons name="time" size={16} color="#6B7280" />
-                    <Text style={styles.jobDetailsText}>
-                      {selectedJob.start_time || selectedJob.startTime || 'Start time'} - {selectedJob.end_time || selectedJob.endTime || 'End time'}
-                    </Text>
-                  </View>
-                  <View style={styles.jobDetailsRow}>
-                    <Ionicons name="cash" size={16} color="#059669" />
-                    <Text style={[styles.jobDetailsText, { color: '#059669', fontWeight: '600' }]}>₱{selectedJob.hourly_rate || selectedJob.hourlyRate || 0}/hr (Job Rate)</Text>
-                  </View>
-                  {selectedJob.applicationData?.proposedRate && selectedJob.applicationData.proposedRate !== (selectedJob.hourly_rate || selectedJob.hourlyRate) && (
+
+                  <View style={styles.jobDetailsInfo}>
                     <View style={styles.jobDetailsRow}>
-                      <Ionicons name="trending-up" size={16} color="#3B82F6" />
-                      <Text style={[styles.jobDetailsText, { color: '#3B82F6', fontWeight: '600' }]}>₱{selectedJob.applicationData.proposedRate}/hr (Your Proposed Rate)</Text>
+                      <Ionicons name="location" size={16} color="#6B7280" />
+                      <Text style={styles.jobDetailsText}>{selectedJob.location || 'Location not specified'}</Text>
                     </View>
-                  )}
-                  {selectedJob.children?.length > 0 && (
                     <View style={styles.jobDetailsRow}>
-                      <Ionicons name="people" size={16} color="#6B7280" />
+                      <Ionicons name="calendar" size={16} color="#6B7280" />
+                      <Text style={styles.jobDetailsText}>{selectedJob.date ? new Date(selectedJob.date).toLocaleDateString() : 'Date not specified'}</Text>
+                    </View>
+                    <View style={styles.jobDetailsRow}>
+                      <Ionicons name="time" size={16} color="#6B7280" />
                       <Text style={styles.jobDetailsText}>
-                        {selectedJob.children.length} child{selectedJob.children.length > 1 ? 'ren' : ''}
-                        {selectedJob.children.map(child => ` ${child.name} (${child.age})`).join(', ')}
+                        {selectedJob.start_time || selectedJob.startTime || 'Start time'} - {selectedJob.end_time || selectedJob.endTime || 'End time'}
                       </Text>
                     </View>
-                  )}
-                  {selectedJob.users?.email && (
                     <View style={styles.jobDetailsRow}>
-                      <Ionicons name="mail" size={16} color="#6B7280" />
-                      <Text style={styles.jobDetailsText}>{selectedJob.users.email}</Text>
+                      <Ionicons name="cash" size={16} color="#059669" />
+                      <Text style={[styles.jobDetailsText, { color: '#059669', fontWeight: '600' }]}>₱{selectedJob.hourly_rate || selectedJob.hourlyRate || 0}/hr (Job Rate)</Text>
+                    </View>
+                    {selectedJob.applicationData?.proposedRate && selectedJob.applicationData.proposedRate !== (selectedJob.hourly_rate || selectedJob.hourlyRate) && (
+                      <View style={styles.jobDetailsRow}>
+                        <Ionicons name="trending-up" size={16} color="#3B82F6" />
+                        <Text style={[styles.jobDetailsText, { color: '#3B82F6', fontWeight: '600' }]}>₱{selectedJob.applicationData.proposedRate}/hr (Your Proposed Rate)</Text>
+                      </View>
+                    )}
+                    {selectedJob.children?.length > 0 && (
+                      <View style={styles.jobDetailsRow}>
+                        <Ionicons name="people" size={16} color="#6B7280" />
+                        <Text style={styles.jobDetailsText}>
+                          {selectedJob.children.length} child{selectedJob.children.length > 1 ? 'ren' : ''}
+                          {selectedJob.children.map(child => ` ${child.name} (${child.age})`).join(', ')}
+                        </Text>
+                      </View>
+                    )}
+                    {selectedJob.users?.email && (
+                      <View style={styles.jobDetailsRow}>
+                        <Ionicons name="mail" size={16} color="#6B7280" />
+                        <Text style={styles.jobDetailsText}>{selectedJob.users.email}</Text>
+                      </View>
+                    )}
+                    {selectedJob.users?.phone && (
+                      <View style={styles.jobDetailsRow}>
+                        <Ionicons name="call" size={16} color="#6B7280" />
+                        <Text style={styles.jobDetailsText}>{selectedJob.users.phone}</Text>
+                      </View>
+                    )}
+                  </View>
+
+                  {selectedJob.description && (
+                    <View style={styles.jobDetailsSection}>
+                      <Text style={styles.jobDetailsSectionTitle}>Job Description</Text>
+                      <Text style={styles.jobDetailsDescription}>{String(selectedJob.description)}</Text>
                     </View>
                   )}
-                  {selectedJob.users?.phone && (
-                    <View style={styles.jobDetailsRow}>
-                      <Ionicons name="call" size={16} color="#6B7280" />
-                      <Text style={styles.jobDetailsText}>{selectedJob.users.phone}</Text>
-                    </View>
-                  )}
-                </View>
-                
-                {selectedJob.description && (
-                  <View style={styles.jobDetailsSection}>
-                    <Text style={styles.jobDetailsSectionTitle}>Job Description</Text>
-                    <Text style={styles.jobDetailsDescription}>{String(selectedJob.description)}</Text>
-                  </View>
-                )}
-                
-                {selectedJob.children?.length > 0 && (
-                  <View style={styles.jobDetailsSection}>
-                    <Text style={styles.jobDetailsSectionTitle}>Children Information</Text>
-                    {selectedJob.children.map((child, index) => (
-                      <View key={index} style={styles.applicationStatusCard}>
-                        <Text style={styles.applicationStatusText}>{child.name} - Age {child.age}</Text>
-                        {child.allergies && (
-                          <Text style={styles.coverLetterText}>Allergies: {child.allergies}</Text>
-                        )}
-                        {child.preferences && (
-                          <Text style={styles.coverLetterText}>Notes: {child.preferences}</Text>
-                        )}
-                      </View>
-                    ))}
-                  </View>
-                )}
-                
-                {Array.isArray(selectedJob.requirements) && selectedJob.requirements.length > 0 && (
-                  <View style={styles.jobDetailsRequirements}>
-                    <Text style={styles.jobDetailsRequirementsTitle}>Requirements</Text>
-                    {selectedJob.requirements.map((req, idx) => (
-                      <View key={idx} style={styles.jobDetailsRequirementRow}>
-                        <Ionicons name="checkmark-circle" size={14} color="#10B981" />
-                        <Text style={styles.jobDetailsRequirementText}>{String(req)}</Text>
-                      </View>
-                    ))}
-                  </View>
-                )}
-                
-                {/* Application Status */}
-                {(() => {
-                  // Check if this job view is from applications tab (has applicationData)
-                  const applicationData = selectedJob?.applicationData;
-                  
-                  // Fallback to finding application in applications array
-                  const application = applicationData || applications.find(app => 
-                    (app.jobId || app.job_id || app.job?.id || app.job?._id) === (selectedJob.id || selectedJob._id)
-                  );
-                  
-                  if (application || applicationData) {
-                    const appData = applicationData || application;
-                    return (
-                      <View style={styles.jobDetailsSection}>
-                        <Text style={styles.jobDetailsSectionTitle}>Your Application</Text>
-                        <View style={styles.applicationStatusCard}>
-                          <View style={styles.applicationStatusHeader}>
-                            <Ionicons name="checkmark-circle" size={20} color="#10B981" />
-                            <Text style={styles.applicationStatusText}>
-                              Applied on {new Date(appData.appliedDate || appData.applied_at || Date.now()).toLocaleDateString()}
-                            </Text>
-                          </View>
-                          <Text style={styles.applicationStatusLabel}>
-                            Status: {appData.applicationStatus || appData.status || 'Pending'}
-                          </Text>
-                          
-                          {appData.proposedRate && (
-                            <View style={styles.coverLetterPreview}>
-                              <Text style={styles.coverLetterLabel}>Your Proposed Rate:</Text>
-                              <Text style={styles.applicationStatusText}>₱{appData.proposedRate}/hr</Text>
-                            </View>
+
+                  {selectedJob.children?.length > 0 && (
+                    <View style={styles.jobDetailsSection}>
+                      <Text style={styles.jobDetailsSectionTitle}>Children Information</Text>
+                      {selectedJob.children.map((child, index) => (
+                        <View key={index} style={styles.applicationStatusCard}>
+                          <Text style={styles.applicationStatusText}>{child.name} - Age {child.age}</Text>
+                          {child.allergies && (
+                            <Text style={styles.coverLetterText}>Allergies: {child.allergies}</Text>
                           )}
-                          
-                          {(appData.coverLetter || appData.message) && (
-                            <View style={styles.coverLetterPreview}>
-                              <Text style={styles.coverLetterLabel}>Your Message:</Text>
-                              <Text style={styles.coverLetterText}>{appData.coverLetter || appData.message}</Text>
-                            </View>
+                          {child.preferences && (
+                            <Text style={styles.coverLetterText}>Notes: {child.preferences}</Text>
                           )}
                         </View>
-                      </View>
+                      ))}
+                    </View>
+                  )}
+
+                  {Array.isArray(selectedJob.requirements) && selectedJob.requirements.length > 0 && (
+                    <View style={styles.jobDetailsRequirements}>
+                      <Text style={styles.jobDetailsRequirementsTitle}>Requirements</Text>
+                      {selectedJob.requirements.map((req, idx) => (
+                        <View key={idx} style={styles.jobDetailsRequirementRow}>
+                          <Ionicons name="checkmark-circle" size={14} color="#10B981" />
+                          <Text style={styles.jobDetailsRequirementText}>{String(req)}</Text>
+                        </View>
+                      ))}
+                    </View>
+                  )}
+
+                  {/* Application Status */}
+                  {(() => {
+                    // Check if this job view is from applications tab (has applicationData)
+                    const applicationData = selectedJob?.applicationData;
+
+                    // Fallback to finding application in applications array
+                    const application = applicationData || applications.find(app =>
+                      (app.jobId || app.job_id || app.job?.id || app.job?._id) === (selectedJob.id || selectedJob._id)
                     );
-                  }
-                  return null;
-                })()}
-                
-                <View style={styles.jobDetailsActions}>
-                  <Button 
-                    mode="contained" 
-                    onPress={() => { setShowJobDetails(false); setSelectedJob(null) }}
-                    style={styles.jobDetailsCloseButton}
-                    labelStyle={{ fontSize: 14 }}
-                  >
-                    Close
-                  </Button>
+
+                    if (application || applicationData) {
+                      const appData = applicationData || application;
+                      return (
+                        <View style={styles.jobDetailsSection}>
+                          <Text style={styles.jobDetailsSectionTitle}>Your Application</Text>
+                          <View style={styles.applicationStatusCard}>
+                            <View style={styles.applicationStatusHeader}>
+                              <Ionicons name="checkmark-circle" size={20} color="#10B981" />
+                              <Text style={styles.applicationStatusText}>
+                                Applied on {new Date(appData.appliedDate || appData.applied_at || Date.now()).toLocaleDateString()}
+                              </Text>
+                            </View>
+                            <Text style={styles.applicationStatusLabel}>
+                              Status: {appData.applicationStatus || appData.status || 'Pending'}
+                            </Text>
+
+                            {appData.proposedRate && (
+                              <View style={styles.coverLetterPreview}>
+                                <Text style={styles.coverLetterLabel}>Your Proposed Rate:</Text>
+                                <Text style={styles.applicationStatusText}>₱{appData.proposedRate}/hr</Text>
+                              </View>
+                            )}
+
+                            {(appData.coverLetter || appData.message) && (
+                              <View style={styles.coverLetterPreview}>
+                                <Text style={styles.coverLetterLabel}>Your Message:</Text>
+                                <Text style={styles.coverLetterText}>{appData.coverLetter || appData.message}</Text>
+                              </View>
+                            )}
+                          </View>
+                        </View>
+                      );
+                    }
+                    return null;
+                  })()}
+
+                  <View style={styles.jobDetailsActions}>
+                    <Button
+                      mode="contained"
+                      onPress={() => { setShowJobDetails(false); setSelectedJob(null) }}
+                      style={styles.jobDetailsCloseButton}
+                      labelStyle={{ fontSize: 14 }}
+                    >
+                      Close
+                    </Button>
+                  </View>
                 </View>
-              </View>
-            </ScrollView>
+              </ScrollView>
             </View>
           </View>
         </Modal>
       )}
 
       {renderToast()}
-      
+
+      <RatingsReviewsModal
+        visible={showRatingsModal}
+        onClose={closeRatingsModal}
+        caregiverId={user?.id}
+        caregiverName={profile?.name || user?.name}
+        currentUserId={user?.id}
+        onPreload={preloadCaregiverReviews}
+      />
+
       <PrivacyNotificationModal
         visible={showNotifications}
         onClose={() => setShowNotifications(false)}
         requests={pendingRequests}
       />
-      
-      <SettingsModal
-        visible={showSettings}
-        onClose={() => setShowSettings(false)}
-        user={user}
-        userType={user?.role || 'caregiver'}
-        colors={{ primary: '#3B82F6' }}
-      />
-      
+
       <RequestInfoModal
         visible={showRequestModal}
         onClose={() => setShowRequestModal(false)}
         targetUser={{ id: 'sample', name: 'Parent' }}
         colors={{ primary: '#3B82F6' }}
       />
-      
+
       <Modal
         visible={showReviewForm}
         animationType="slide"
@@ -2605,8 +2654,7 @@ const CaregiverDashboard = () => {
         transparent
       >
         <View style={styles.modalOverlay}>
-          <View style={[styles.applicationModal, { maxHeight: '80%' }]}
-          >
+          <View style={[styles.applicationModal, { maxHeight: '80%' }]}>
             <ReviewForm
               onSubmit={handleSubmitReview}
               onCancel={handleCloseReviewModal}
@@ -2806,8 +2854,7 @@ const CaregiverDashboard = () => {
           </View>
         </View>
       </Modal>
-
-      </View>
+    </Fragment>
   );
 }
 

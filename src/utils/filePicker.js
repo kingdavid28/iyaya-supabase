@@ -1,5 +1,5 @@
-import * as ImagePicker from 'expo-image-picker';
 import * as DocumentPicker from 'expo-document-picker';
+import * as ImagePicker from 'expo-image-picker';
 import { Alert } from 'react-native';
 
 export const pickImage = async () => {
@@ -11,7 +11,7 @@ export const pickImage = async () => {
     }
 
     const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      mediaTypes: ImagePicker.MediaType?.Images || 'images',
       allowsEditing: true,
       aspect: [4, 3],
       quality: 0.7,

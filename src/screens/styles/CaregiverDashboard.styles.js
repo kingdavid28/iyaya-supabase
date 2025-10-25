@@ -1281,8 +1281,8 @@ export const styles = StyleSheet.create({
   // Notification badge styles
   notificationBadge: {
     position: 'absolute',
-    top: -8,
-    right: -12,
+    top: -6,
+    right: -8,
     backgroundColor: '#ef4444',
     borderRadius: 12,
     minWidth: 20,
@@ -1297,6 +1297,7 @@ export const styles = StyleSheet.create({
     shadowRadius: 2,
     elevation: 3,
     zIndex: 10,
+    paddingHorizontal: 2,
   },
   notificationBadgeText: {
     color: '#fff',
@@ -1304,6 +1305,7 @@ export const styles = StyleSheet.create({
     fontWeight: '700',
     textAlign: 'center',
     lineHeight: 12,
+    paddingHorizontal: 2,
   },
   // Modal overlay
   modalOverlay: {

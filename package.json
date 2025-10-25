@@ -22,7 +22,7 @@
   "dependencies": {
     "@expo/image-utils": "^0.8.7",
     "@expo/metro-runtime": "~6.1.2",
-    "@expo/vector-icons": "^15.0.2",
+    "@expo/vector-icons": "^15.0.3",
     "@miblanchard/react-native-slider": "^2.6.0",
     "@react-native-async-storage/async-storage": "^2.2.0",
     "@react-native-community/datetimepicker": "8.4.4",
@@ -34,7 +34,7 @@
     "@types/react": "~19.1.10",
     "axios": "^1.6.0",
     "date-fns": "^4.1.0",
-    "expo": "~54.0.17",
+    "expo": "54.0.20",
     "expo-auth-session": "~7.0.8",
     "expo-constants": "~18.0.10",
     "expo-crypto": "~15.0.7",

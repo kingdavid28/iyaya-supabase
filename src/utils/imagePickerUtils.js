@@ -1,10 +1,10 @@
-import * as ImagePicker from 'expo-image-picker';
-import { Platform, Image } from 'react-native';
 import * as FileSystem from 'expo-file-system';
+import * as ImagePicker from 'expo-image-picker';
+import { Image, Platform } from 'react-native';
 
 // Default options for image picker
 const defaultOptions = {
-  mediaTypes: ImagePicker.MediaTypeOptions.Images,
+  mediaTypes: ImagePicker.MediaType?.Images || 'images',
   allowsEditing: true,
   aspect: [1, 1],
   quality: 0.8,
@@ -106,7 +106,7 @@ export const resizeImage = async (uri, maxWidth, maxHeight) => {
     }
 
     const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      mediaTypes: ImagePicker.MediaType?.Images || 'images',
       allowsEditing: true,
       aspect: [1, 1],
       quality: 0.8,
@@ -180,7 +180,7 @@ export const compressImage = async (uri, options = {}) => {
     const { quality = 0.8, base64 = false } = options;
     
     const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      mediaTypes: ImagePicker.MediaType?.Images || 'images',
       allowsEditing: true,
       aspect: [1, 1],
       quality,

@@ -382,3 +382,16 @@ src/
 
     https://github.com/kingdavid28/iyaya-supabase.git
     https://github.com/kingdavid28/iyaya-supabase.git
+
+Recommended Actions
+[Supabase schema] Create job_contracts with fields like booking_id, parent_id, caregiver_id, status, terms, created_at, updated_at, parent_signed_at, caregiver_signed_at, plus hash/signature storage. Add triggers to enforce one active contract per booking.
+[API layer] Extend bookingService and/or new contractService to CRUD contracts, generate PDF snapshots (via edge function), and send notifications. Include optimistic updates and error handling for network failures.
+[UI updates]
+Modify 
+BookingItem.js
+ to show contract status row with actions (“Review contract”, “Await caregiver”, etc.).
+Introduce a ContractModal component for review/signing that pulls from contract state and handles e-sign acknowledgements (check boxes + typed signature).
+Surface contract badge on 
+CaregiverCard.js
+ when a caregiver has active contracts to highlight trust.
+[Compliance & security] Log signatures with IP/time, store immutable contract versions, and ensure compliance with local labor/e-signature laws (consult legal). Encrypt sensitive terms and restrict access to involved parties only.

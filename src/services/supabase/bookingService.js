@@ -85,7 +85,8 @@ export class BookingService extends SupabaseBase {
               email,
               phone,
               profile_image
-            )
+            ),
+            contracts:job_contracts!job_contracts_booking_id_fkey(*)
           `)
 
         if (role === 'parent') {
@@ -99,46 +100,86 @@ export class BookingService extends SupabaseBase {
         const { data, error } = await query
         if (error) throw error
         
-        const transformedData = data?.map(booking => ({
-          ...booking,
-          caregiverId: booking.caregiver ? {
-            _id: booking.caregiver.id || booking.caregiver_id,
-            id: booking.caregiver.id || booking.caregiver_id,
-            name: booking.caregiver_name || booking.caregiver?.name || 'Unknown Caregiver',
-            email: booking.caregiver?.email,
-            profileImage: booking.caregiver?.profile_image,
-            avatar: booking.caregiver?.profile_image
-          } : {
-            _id: booking.caregiver_id,
-            id: booking.caregiver_id,
-            name: booking.caregiver_name || 'Unknown Caregiver',
-            email: null,
-            profileImage: null,
-            avatar: null
-          },
-          clientId: booking.parent ? {
-            _id: booking.parent.id || booking.parent_id,
-            id: booking.parent.id || booking.parent_id,
-            name: booking.parent?.name || 'Unknown Parent',
-            email: booking.parent?.email
-          } : {
-            _id: booking.parent_id,
-            id: booking.parent_id,
-            name: 'Unknown Parent',
-            email: null
-          },
-          parentId: booking.parent_id,
-          startTime: booking.start_time,
-          endTime: booking.end_time,
-          hourlyRate: booking.hourly_rate,
-          totalAmount: booking.total_amount,
-          contactPhone: booking.contact_phone,
-          selectedChildren: booking.selected_children,
-          specialInstructions: booking.special_instructions,
-          emergencyContact: booking.emergency_contact,
-          time: booking.start_time && booking.end_time ? `${booking.start_time} - ${booking.end_time}` : '',
-          family: booking.parent?.name || 'Unknown Family'
-        })) || []
+        const transformedData = data?.map(booking => {
+          const { contracts: bookingContracts = [], job_contracts: legacyContracts = [], ...bookingRest } = booking
+          const contractRecords = Array.isArray(bookingContracts) && bookingContracts.length > 0
+            ? bookingContracts
+            : (Array.isArray(legacyContracts) ? legacyContracts : [])
+
+          const latestContractRecord = contractRecords.reduce((latest, current) => {
+            if (!current) return latest
+            if (!latest) return current
+            const latestCreated = new Date(latest.created_at || latest.createdAt || 0).getTime()
+            const currentCreated = new Date(current.created_at || current.createdAt || 0).getTime()
+            return currentCreated > latestCreated ? current : latest
+          }, null)
+
+          const latestContract = latestContractRecord ? {
+            id: latestContractRecord.id,
+            bookingId: latestContractRecord.booking_id,
+            parentId: latestContractRecord.parent_id,
+            caregiverId: latestContractRecord.caregiver_id,
+            status: latestContractRecord.status,
+            terms: latestContractRecord.terms || {},
+            version: latestContractRecord.version,
+            effectiveDate: latestContractRecord.effective_date,
+            expiryDate: latestContractRecord.expiry_date,
+            parentSignedAt: latestContractRecord.parent_signed_at,
+            parentSignature: latestContractRecord.parent_signature,
+            parentSignatureHash: latestContractRecord.parent_signature_hash,
+            parentSignedIp: latestContractRecord.parent_signed_ip,
+            caregiverSignedAt: latestContractRecord.caregiver_signed_at,
+            caregiverSignature: latestContractRecord.caregiver_signature,
+            caregiverSignatureHash: latestContractRecord.caregiver_signature_hash,
+            caregiverSignedIp: latestContractRecord.caregiver_signed_ip,
+            contractHash: latestContractRecord.contract_hash,
+            metadata: latestContractRecord.metadata || {},
+            createdAt: latestContractRecord.created_at || latestContractRecord.createdAt,
+            updatedAt: latestContractRecord.updated_at || latestContractRecord.updatedAt
+          } : null
+
+          return {
+            ...bookingRest,
+            caregiverId: booking.caregiver ? {
+              _id: booking.caregiver.id || booking.caregiver_id,
+              id: booking.caregiver.id || booking.caregiver_id,
+              name: booking.caregiver_name || booking.caregiver?.name || 'Unknown Caregiver',
+              email: booking.caregiver?.email,
+              profileImage: booking.caregiver?.profile_image,
+              avatar: booking.caregiver?.profile_image
+            } : {
+              _id: booking.caregiver_id,
+              id: booking.caregiver_id,
+              name: booking.caregiver_name || 'Unknown Caregiver',
+              email: null,
+              profileImage: null,
+              avatar: null
+            },
+            clientId: booking.parent ? {
+              _id: booking.parent.id || booking.parent_id,
+              id: booking.parent.id || booking.parent_id,
+              name: booking.parent?.name || 'Unknown Parent',
+              email: booking.parent?.email
+            } : {
+              _id: booking.parent_id,
+              id: booking.parent_id,
+              name: 'Unknown Parent',
+              email: null
+            },
+            parentId: booking.parent_id,
+            startTime: booking.start_time,
+            endTime: booking.end_time,
+            hourlyRate: booking.hourly_rate,
+            totalAmount: booking.total_amount,
+            contactPhone: booking.contact_phone,
+            selectedChildren: booking.selected_children,
+            specialInstructions: booking.special_instructions,
+            emergencyContact: booking.emergency_contact,
+            time: booking.start_time && booking.end_time ? `${booking.start_time} - ${booking.end_time}` : '',
+            family: booking.parent?.name || 'Unknown Family',
+            latestContract
+          }
+        }) || []
         
         return transformedData
       }, 30 * 1000)

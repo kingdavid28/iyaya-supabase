@@ -11,7 +11,8 @@ import {
   StyleSheet,
   KeyboardAvoidingView,
   Image,
-  Modal,
+  Keyboard,
+  Dimensions,
 } from 'react-native';
 import { Button } from 'react-native-paper';
 import { ModalWrapper } from '../../../shared/ui';
@@ -58,6 +59,42 @@ const BookingModal = ({ caregiver, childrenList = [], onConfirm, onClose, visibl
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState('');
   const [locationLoading, setLocationLoading] = useState(false);
+  const [keyboardVisible, setKeyboardVisible] = useState(false);
+  const [keyboardHeight, setKeyboardHeight] = useState(0);
+
+  useEffect(() => {
+    const keyboardWillShowListener = Keyboard.addListener('keyboardWillShow', (e) => {
+      setKeyboardVisible(true);
+      setKeyboardHeight(e.endCoordinates.height);
+    });
+    const keyboardWillHideListener = Keyboard.addListener('keyboardWillHide', () => {
+      setKeyboardVisible(false);
+      setKeyboardHeight(0);
+    });
+
+    return () => {
+      keyboardWillShowListener?.remove();
+      keyboardWillHideListener?.remove();
+    };
+  }, []);
+
+  // Helper function to convert time to 24-hour format
+  const convertTo24Hour = (time12h) => {
+    if (!time12h) return '';
+    
+    const [time, modifier] = time12h.split(' ');
+    let [hours, minutes] = time.split(':');
+    
+    if (hours === '12') {
+      hours = '00';
+    }
+    
+    if (modifier === 'PM') {
+      hours = parseInt(hours, 10) + 12;
+    }
+    
+    return `${hours.padStart(2, '0')}:${minutes}`;
+  };
 
   const resolveHourlyRate = () => {
     if (typeof caregiver?.hourlyRate === 'number' && caregiver.hourlyRate > 0) return caregiver.hourlyRate;
@@ -101,32 +138,13 @@ const BookingModal = ({ caregiver, childrenList = [], onConfirm, onClose, visibl
       
       if (locationData && locationData.address) {
         const formattedAddress = `${locationData.address.street || ''} ${locationData.address.city || ''}, ${locationData.address.province || ''}`;
-        setBookingData({ ...bookingData, address: formattedAddress.trim() });
+        setBookingData(prev => ({ ...prev, address: formattedAddress.trim() }));
       }
     } catch (error) {
       Alert.alert('Location Error', error.message || 'Failed to get current location.');
     } finally {
       setLocationLoading(false);
     }
-  };
-
-  const convertTo24Hour = (timeStr) => {
-    if (!timeStr) return '';
-    
-    // If already in 24-hour format, return as is
-    if (!/AM|PM/i.test(timeStr)) return timeStr;
-    
-    const [time, period] = timeStr.split(' ');
-    const [hour, minute] = time.split(':');
-    let hour24 = parseInt(hour);
-    
-    if (period.toUpperCase() === 'PM' && hour24 !== 12) {
-      hour24 += 12;
-    } else if (period.toUpperCase() === 'AM' && hour24 === 12) {
-      hour24 = 0;
-    }
-    
-    return `${hour24.toString().padStart(2, '0')}:${minute}`;
   };
 
   const handleSubmit = async () => {
@@ -201,7 +219,7 @@ const BookingModal = ({ caregiver, childrenList = [], onConfirm, onClose, visibl
         <SimpleDatePicker
           label="Date"
           value={bookingData.date}
-          onDateChange={(date) => setBookingData({ ...bookingData, date })}
+          onDateChange={(date) => setBookingData(prev => ({ ...prev, date }))}
           minimumDate={new Date()}
           placeholder="Select date"
           error={null}
@@ -216,10 +234,10 @@ const BookingModal = ({ caregiver, childrenList = [], onConfirm, onClose, visibl
             value={bookingData.startTime}
             onTimeChange={(time) => {
               console.log('Start time selected:', time);
-              setBookingData({ ...bookingData, startTime: time });
+              setBookingData(prev => ({ ...prev, startTime: time }));
             }}
             label="Start Time"
-            placeholder="Select start time"
+            placeholder="Start"
             minuteInterval={30}
             format24Hour={false}
           />
@@ -230,10 +248,10 @@ const BookingModal = ({ caregiver, childrenList = [], onConfirm, onClose, visibl
             value={bookingData.endTime}
             onTimeChange={(time) => {
               console.log('End time selected:', time);
-              setBookingData({ ...bookingData, endTime: time });
+              setBookingData(prev => ({ ...prev, endTime: time }));
             }}
             label="End Time"
-            placeholder="Select end time"
+            placeholder="End"
             minuteInterval={30}
             format24Hour={false}
           />
@@ -251,6 +269,33 @@ const BookingModal = ({ caregiver, childrenList = [], onConfirm, onClose, visibl
           </Text>
         </View>
       )}
+      
+      {/* Step Navigation Buttons */}
+      <View style={styles.stepNavigation}>
+        <TouchableOpacity
+          onPress={onClose}
+          disabled={submitting}
+          style={[
+            styles.footerButton,
+            styles.secondaryButton,
+            submitting && styles.disabledButton
+          ]}
+        >
+          <Text style={styles.secondaryButtonText}>Close</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          onPress={handleNextStep}
+          disabled={!isStepValid() || submitting}
+          style={[
+            styles.footerButton,
+            styles.primaryButton,
+            (!isStepValid() || submitting) && styles.disabledButton
+          ]}
+        >
+          <Text style={styles.primaryButtonText}>Next</Text>
+        </TouchableOpacity>
+      </View>
     </View>
   );
 
@@ -264,15 +309,15 @@ const BookingModal = ({ caregiver, childrenList = [], onConfirm, onClose, visibl
             <TouchableOpacity
               onPress={() => {
                 if (bookingData.selectedChildren.includes(child.name)) {
-                  setBookingData({
-                    ...bookingData,
-                    selectedChildren: bookingData.selectedChildren.filter(name => name !== child.name)
-                  });
+                  setBookingData(prev => ({
+                    ...prev,
+                    selectedChildren: prev.selectedChildren.filter(name => name !== child.name)
+                  }));
                 } else {
-                  setBookingData({
-                    ...bookingData,
-                    selectedChildren: [...bookingData.selectedChildren, child.name]
-                  });
+                  setBookingData(prev => ({
+                    ...prev,
+                    selectedChildren: [...prev.selectedChildren, child.name]
+                  }));
                 }
               }}
               style={styles.checkboxContainer}
@@ -287,10 +332,14 @@ const BookingModal = ({ caregiver, childrenList = [], onConfirm, onClose, visibl
               </View>
             </TouchableOpacity>
             <View style={styles.childInfo}>
-            <Text style={styles.childHeaderName}>{child.name}</Text>
+              <Text style={styles.childHeaderName} numberOfLines={1} ellipsizeMode="tail">
+                {child.name}
+              </Text>
               <Text style={styles.childDetailsText}>{`Age ${child.age} • ${child.preferences}`}</Text>
               {child.allergies && child.allergies !== 'None' && (
-                <Text style={styles.allergyWarning}>{`⚠️ Allergies: ${child.allergies}`}</Text>
+                <Text style={styles.allergyWarning} numberOfLines={2} ellipsizeMode="tail">
+                  {`⚠️ Allergies: ${child.allergies}`}
+                </Text>
               )}
             </View>
           </View>
@@ -301,11 +350,38 @@ const BookingModal = ({ caregiver, childrenList = [], onConfirm, onClose, visibl
         <Text style={styles.label}>Special Instructions</Text>
         <TextInput
           value={bookingData.specialInstructions}
-          onChangeText={(text) => setBookingData({ ...bookingData, specialInstructions: text })}
+          onChangeText={(text) => setBookingData(prev => ({ ...prev, specialInstructions: text }))}
           style={[styles.input, styles.multilineInput]}
           multiline
           placeholder="Any special instructions for the caregiver..."
         />
+      </View>
+
+      {/* Step Navigation Buttons */}
+      <View style={styles.stepNavigation}>
+        <TouchableOpacity
+          onPress={handlePrevStep}
+          disabled={submitting}
+          style={[
+            styles.footerButton,
+            styles.secondaryButton,
+            submitting && styles.disabledButton
+          ]}
+        >
+          <Text style={styles.secondaryButtonText}>Previous</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          onPress={handleNextStep}
+          disabled={!isStepValid() || submitting}
+          style={[
+            styles.footerButton,
+            styles.primaryButton,
+            (!isStepValid() || submitting) && styles.disabledButton
+          ]}
+        >
+          <Text style={styles.primaryButtonText}>Next</Text>
+        </TouchableOpacity>
       </View>
     </View>
   );
@@ -331,7 +407,7 @@ const BookingModal = ({ caregiver, childrenList = [], onConfirm, onClose, visibl
         <Text style={styles.label}>Address</Text>
         <TextInput
           value={bookingData.address}
-          onChangeText={(text) => setBookingData({ ...bookingData, address: text })}
+          onChangeText={(text) => setBookingData(prev => ({ ...prev, address: text }))}
           style={[styles.input, styles.multilineInput]}
           multiline
           placeholder="Full address where care will be provided"
@@ -342,7 +418,7 @@ const BookingModal = ({ caregiver, childrenList = [], onConfirm, onClose, visibl
         <Text style={styles.label}>Contact Phone</Text>
         <TextInput
           value={bookingData.contactPhone}
-          onChangeText={(text) => setBookingData({ ...bookingData, contactPhone: text })}
+          onChangeText={(text) => setBookingData(prev => ({ ...prev, contactPhone: text }))}
           style={styles.input}
           placeholder="Your phone number"
           keyboardType="phone-pad"
@@ -354,33 +430,60 @@ const BookingModal = ({ caregiver, childrenList = [], onConfirm, onClose, visibl
         <View style={styles.emergencyContactContainer}>
           <TextInput
             value={bookingData.emergencyContact.name}
-            onChangeText={(text) => setBookingData({
-              ...bookingData,
-              emergencyContact: { ...bookingData.emergencyContact, name: text }
-            })}
+            onChangeText={(text) => setBookingData(prev => ({
+              ...prev,
+              emergencyContact: { ...prev.emergencyContact, name: text }
+            }))}
             style={styles.input}
             placeholder="Emergency contact name"
           />
           <TextInput
             value={bookingData.emergencyContact.phone}
-            onChangeText={(text) => setBookingData({
-              ...bookingData,
-              emergencyContact: { ...bookingData.emergencyContact, phone: text }
-            })}
+            onChangeText={(text) => setBookingData(prev => ({
+              ...prev,
+              emergencyContact: { ...prev.emergencyContact, phone: text }
+            }))}
             style={styles.input}
             placeholder="Emergency contact phone"
             keyboardType="phone-pad"
           />
           <TextInput
             value={bookingData.emergencyContact.relation}
-            onChangeText={(text) => setBookingData({
-              ...bookingData,
-              emergencyContact: { ...bookingData.emergencyContact, relation: text }
-            })}
+            onChangeText={(text) => setBookingData(prev => ({
+              ...prev,
+              emergencyContact: { ...prev.emergencyContact, relation: text }
+            }))}
             style={styles.input}
             placeholder="Relationship (e.g., Spouse, Parent, Friend)"
           />
         </View>
+      </View>
+
+      {/* Step Navigation Buttons */}
+      <View style={styles.stepNavigation}>
+        <TouchableOpacity
+          onPress={handlePrevStep}
+          disabled={submitting}
+          style={[
+            styles.footerButton,
+            styles.secondaryButton,
+            submitting && styles.disabledButton
+          ]}
+        >
+          <Text style={styles.secondaryButtonText}>Previous</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          onPress={handleNextStep}
+          disabled={!isStepValid() || submitting}
+          style={[
+            styles.footerButton,
+            styles.primaryButton,
+            (!isStepValid() || submitting) && styles.disabledButton
+          ]}
+        >
+          <Text style={styles.primaryButtonText}>Next</Text>
+        </TouchableOpacity>
       </View>
     </View>
   );
@@ -394,15 +497,15 @@ const BookingModal = ({ caregiver, childrenList = [], onConfirm, onClose, visibl
     };
 
     return (
-      <ScrollView style={styles.reviewContainer} showsVerticalScrollIndicator={false}>
+      <View style={styles.stepContainer}>
         <Text style={styles.sectionTitle}>Review Booking Details</Text>
-        
+
         {/* Caregiver Information */}
         <View style={styles.reviewCard}>
           <Text style={styles.reviewCardTitle}>Caregiver Information</Text>
           <View style={styles.caregiverHeader}>
             {caregiver?.avatar || caregiver?.profileImage ? (
-              <Image 
+              <Image
                 source={getImageSource(caregiver.avatar || caregiver.profileImage)}
                 style={styles.reviewAvatar}
               />
@@ -412,7 +515,9 @@ const BookingModal = ({ caregiver, childrenList = [], onConfirm, onClose, visibl
               </View>
             )}
             <View style={styles.caregiverInfo}>
-              <Text style={styles.caregiverName}>{caregiver.name}</Text>
+              <Text style={styles.caregiverName} numberOfLines={2} ellipsizeMode="tail">
+                {caregiver.name}
+              </Text>
               <Text style={styles.rateText}>₱{resolveHourlyRate()}/hour</Text>
             </View>
           </View>
@@ -450,7 +555,9 @@ const BookingModal = ({ caregiver, childrenList = [], onConfirm, onClose, visibl
                 <View key={index} style={styles.childReviewItem}>
                   <View style={styles.childReviewHeader}>
                     <Baby size={16} color="#10b981" />
-                    <Text style={styles.childReviewName}>{childName}</Text>
+                    <Text style={styles.childReviewName} numberOfLines={1} ellipsizeMode="tail">
+                      {childName}
+                    </Text>
                     {child?.age && <Text style={styles.childReviewAge}>Age {child.age}</Text>}
                   </View>
                   {child?.allergies && child.allergies !== 'None' && (
@@ -460,7 +567,9 @@ const BookingModal = ({ caregiver, childrenList = [], onConfirm, onClose, visibl
                     </View>
                   )}
                   {child?.preferences && (
-                    <Text style={styles.childPreferences}>Preferences: {child.preferences}</Text>
+                    <Text style={styles.childPreferences} numberOfLines={2} ellipsizeMode="tail">
+                      Preferences: {child.preferences}
+                    </Text>
                   )}
                 </View>
               );
@@ -469,7 +578,9 @@ const BookingModal = ({ caregiver, childrenList = [], onConfirm, onClose, visibl
           {bookingData.specialInstructions && (
             <View style={styles.specialInstructionsReview}>
               <Text style={styles.instructionsLabel}>Special Instructions:</Text>
-              <Text style={styles.instructionsText}>{bookingData.specialInstructions}</Text>
+              <Text style={styles.instructionsText} numberOfLines={3} ellipsizeMode="tail">
+                {bookingData.specialInstructions}
+              </Text>
             </View>
           )}
         </View>
@@ -482,7 +593,9 @@ const BookingModal = ({ caregiver, childrenList = [], onConfirm, onClose, visibl
               <MapPin size={16} color="#8b5cf6" />
               <View style={styles.locationInfo}>
                 <Text style={styles.locationLabel}>Address:</Text>
-                <Text style={styles.locationValue}>{bookingData.address}</Text>
+                <Text style={styles.locationValue} numberOfLines={2} ellipsizeMode="tail">
+                  {bookingData.address}
+                </Text>
               </View>
             </View>
             <View style={styles.locationRow}>
@@ -493,7 +606,7 @@ const BookingModal = ({ caregiver, childrenList = [], onConfirm, onClose, visibl
               </View>
             </View>
           </View>
-          
+
           {/* Emergency Contact */}
           {(bookingData.emergencyContact.name || bookingData.emergencyContact.phone) && (
             <View style={styles.emergencySummaryCard}>
@@ -503,17 +616,17 @@ const BookingModal = ({ caregiver, childrenList = [], onConfirm, onClose, visibl
               </View>
               <View style={styles.emergencyContactReview}>
                 {bookingData.emergencyContact.name && (
-                  <Text style={styles.emergencyDetail}>
+                  <Text style={styles.emergencyDetail} numberOfLines={1} ellipsizeMode="tail">
                     Name: {bookingData.emergencyContact.name}
                   </Text>
                 )}
                 {bookingData.emergencyContact.phone && (
-                  <Text style={styles.emergencySummaryDetail}>
-                  Phone: {bookingData.emergencyContact.phone}
-                </Text>
+                  <Text style={styles.emergencyDetail} numberOfLines={1} ellipsizeMode="tail">
+                    Phone: {bookingData.emergencyContact.phone}
+                  </Text>
                 )}
                 {bookingData.emergencyContact.relation && (
-                  <Text style={styles.emergencyDetail}>
+                  <Text style={styles.emergencyDetail} numberOfLines={1} ellipsizeMode="tail">
                     Relationship: {bookingData.emergencyContact.relation}
                   </Text>
                 )}
@@ -540,7 +653,7 @@ const BookingModal = ({ caregiver, childrenList = [], onConfirm, onClose, visibl
             </View>
           </View>
         </View>
-      </ScrollView>
+      </View>
     );
   };
 
@@ -551,30 +664,39 @@ const BookingModal = ({ caregiver, childrenList = [], onConfirm, onClose, visibl
       animationType="slide"
       style={styles.modalContainer}
     >
-      <KeyboardAvoidingView 
+      <KeyboardAvoidingView
         style={{ flex: 1 }}
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        keyboardVerticalOffset={Platform.OS === 'ios' ? 100 : 0}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 120 : 0}
       >
         {/* Header */}
         <View style={styles.modalHeader}>
           <View style={styles.headerLeft}>
             <View style={styles.caregiverAvatar}>
               {caregiver?.avatar || caregiver?.profileImage ? (
-                <Image 
+                <Image
                   source={getImageSource(caregiver.avatar || caregiver.profileImage)}
-                  style={styles.avatarImage} 
+                  style={styles.avatarImage}
                 />
               ) : (
                 <User size={20} color="#6b7280" />
               )}
             </View>
-            <View>
-              <Text style={styles.modalTitle}>Book {caregiver?.name || "Caregiver"}</Text>
+            <View style={{ flex: 1, minWidth: 0 }}>
+              <Text style={styles.modalTitle} numberOfLines={1} ellipsizeMode="tail">
+                Book {caregiver?.name || "Caregiver"}
+              </Text>
               <Text style={styles.stepIndicator}>Step {currentStep} of 4</Text>
             </View>
           </View>
-          <TouchableOpacity onPress={onClose} style={styles.closeButton}>
+          <TouchableOpacity
+            onPress={onClose}
+            style={styles.closeButton}
+            accessibilityLabel="Close booking modal"
+            accessibilityRole="button"
+            accessibilityHint="Closes the booking form"
+            activeOpacity={0.7}
+          >
             <X size={24} color="#6b7280" />
           </TouchableOpacity>
         </View>
@@ -612,16 +734,51 @@ const BookingModal = ({ caregiver, childrenList = [], onConfirm, onClose, visibl
           </View>
         </View>
 
-        {/* Content */}
-        <ScrollView 
+        {/* Content with Navigation */}
+        <ScrollView
           style={styles.contentContainer}
           contentContainerStyle={styles.scrollContent}
           showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
         >
           {currentStep === 1 && renderStep1()}
           {currentStep === 2 && renderStep2()}
           {currentStep === 3 && renderStep3()}
-          {currentStep === 4 && renderStep4()}
+          {currentStep === 4 && (
+            <View style={styles.stepContainer}>
+              {renderStep4()}
+
+              {/* Final Submit Button */}
+              <View style={styles.stepNavigation}>
+                <TouchableOpacity
+                  onPress={handlePrevStep}
+                  disabled={submitting}
+                  style={[
+                    styles.footerButton,
+                    styles.secondaryButton,
+                    submitting && styles.disabledButton
+                  ]}
+                >
+                  <Text style={styles.secondaryButtonText}>Previous</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  onPress={handleSubmit}
+                  disabled={submitting}
+                  style={[
+                    styles.footerButton,
+                    styles.successButton,
+                    submitting && styles.disabledButton
+                  ]}
+                >
+                  {submitting && <ActivityIndicator size="small" color="white" style={{ marginRight: 8 }} />}
+                  <Text style={styles.primaryButtonText}>
+                    {submitting ? 'Submitting…' : 'Confirm'}
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          )}
         </ScrollView>
 
         {submitError ? (
@@ -630,61 +787,12 @@ const BookingModal = ({ caregiver, childrenList = [], onConfirm, onClose, visibl
             <Text style={styles.errorText}>{submitError}</Text>
           </View>
         ) : null}
-
-        {/* Footer */}
-        <View style={styles.modalFooter}>
-          <TouchableOpacity
-            onPress={currentStep === 1 ? onClose : handlePrevStep}
-            disabled={submitting}
-            style={[
-              styles.footerButton, 
-              styles.secondaryButton, 
-              submitting && styles.disabledButton
-            ]}
-          >
-            <Text style={styles.secondaryButtonText}>{currentStep === 1 ? 'Close' : 'Previous'}</Text>
-          </TouchableOpacity>
-          
-          {currentStep < 4 ? (
-            <TouchableOpacity
-              onPress={handleNextStep}
-              disabled={!isStepValid() || submitting}
-              style={[
-                styles.footerButton, 
-                styles.primaryButton, 
-                (!isStepValid() || submitting) && styles.disabledButton
-              ]}
-            >
-              <Text style={styles.primaryButtonText}>Next</Text>
-            </TouchableOpacity>
-          ) : (
-            <TouchableOpacity
-              onPress={handleSubmit}
-              disabled={submitting}
-              style={[
-                styles.footerButton, 
-                styles.successButton, 
-                submitting && styles.disabledButton
-              ]}
-            >
-              {submitting && <ActivityIndicator size="small" color="white" style={{ marginRight: 8 }} />}
-              <Text style={styles.primaryButtonText}>
-                {submitting ? 'Submitting…' : 'Confirm Booking'}
-              </Text>
-            </TouchableOpacity>
-          )}
-        </View>
       </KeyboardAvoidingView>
     </ModalWrapper>
   );
 };
 
 const styles = StyleSheet.create({
-  // Common styles
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.6)',
-  },
   modalContainer: {
     flex: 1,
     backgroundColor: 'white',
@@ -695,20 +803,26 @@ const styles = StyleSheet.create({
     maxWidth: 500,
     alignSelf: 'center',
     maxHeight: '95%',
+    paddingHorizontal: 0, // Ensure no horizontal padding conflicts
   },
   modalHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    padding: 5,
+    padding: 16,
     borderBottomWidth: 1,
     borderBottomColor: '#f0f0f0',
     backgroundColor: 'white',
+    minHeight: 64,
+    paddingRight: 8, // Extra padding for close button
   },
   headerLeft: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 5,
+    gap: 12,
+    flex: 1,
+    marginRight: 12, // Space between content and close button
+    minWidth: 0,
   },
   caregiverAvatar: {
     width: 40,
@@ -724,24 +838,31 @@ const styles = StyleSheet.create({
     borderRadius: 20,
   },
   modalTitle: {
-    fontSize: 15,
-    padding: 1,
+    fontSize: 18,
     fontWeight: '600',
     color: '#111827',
+    minWidth: 0, // Allow text to shrink but don't expand
   },
   stepIndicator: {
-    fontSize: 13,
+    fontSize: 14,
     color: '#6b7280',
     marginTop: 2,
   },
   closeButton: {
-    padding: 1,
+    padding: 8,
+    marginLeft: 8,
+    borderRadius: 20,
+    backgroundColor: '#f8fafc', // Subtle background for visibility
+    borderWidth: 1,
+    borderColor: '#e5e7eb',
+    width: 40,
+    height: 40,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
-  
-  // BookingModal specific styles
   progressContainer: {
-    paddingHorizontal: 12,
-    paddingVertical: 8,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
     backgroundColor: '#f9fafb',
   },
   progressBar: {
@@ -786,21 +907,20 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     marginTop: 8,
-    paddingHorizontal: 16,
+    paddingHorizontal: 8,
   },
   progressLabel: {
-    fontSize: 10,
+    fontSize: 12,
     color: '#6b7280',
     flex: 1,
     textAlign: 'center',
   },
-  
   contentContainer: {
     flex: 1,
   },
   scrollContent: {
     padding: 16,
-    paddingBottom: 20,
+    paddingBottom: 100,
   },
   stepContainer: {
     gap: 16,
@@ -811,7 +931,7 @@ const styles = StyleSheet.create({
     color: '#111827',
   },
   inputContainer: {
-    marginBottom: 20,
+    marginBottom: 16,
   },
   label: {
     fontSize: 16,
@@ -827,10 +947,9 @@ const styles = StyleSheet.create({
     fontSize: 16,
     backgroundColor: 'white',
     minHeight: 44,
-    width: '100%',
   },
   multilineInput: {
-    minHeight: 50,
+    minHeight: 80,
     textAlignVertical: 'top',
   },
   timeContainer: {
@@ -839,7 +958,6 @@ const styles = StyleSheet.create({
   },
   timeInputContainer: {
     flex: 1,
-    gap: 8,
   },
   costContainer: {
     backgroundColor: '#eff6ff',
@@ -853,7 +971,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   costLabel: {
+    fontSize: 16,
     color: '#374151',
+    fontWeight: '500',
   },
   costValue: {
     fontSize: 20,
@@ -864,13 +984,12 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#4b5563',
   },
-  
   childrenList: {
     gap: 12,
   },
   childItem: {
     flexDirection: 'row',
-    alignItems: 'center',
+    alignItems: 'flex-start',
     borderWidth: 1,
     borderColor: '#e5e7eb',
     borderRadius: 8,
@@ -878,6 +997,7 @@ const styles = StyleSheet.create({
   },
   checkboxContainer: {
     marginRight: 12,
+    marginTop: 2,
   },
   checkbox: {
     width: 20,
@@ -894,20 +1014,24 @@ const styles = StyleSheet.create({
   },
   childInfo: {
     flex: 1,
+    minWidth: 0, // Allow text to shrink
   },
-  childName: {
+  childHeaderName: {
+    fontSize: 16,
     fontWeight: '600',
     color: '#111827',
+    marginBottom: 4,
   },
   childDetailsText: {
     fontSize: 14,
     color: '#6b7280',
+    marginBottom: 4,
   },
   allergyWarning: {
     fontSize: 14,
     color: '#ef4444',
+    fontWeight: '500',
   },
-  
   subsectionTitle: {
     fontSize: 16,
     fontWeight: '600',
@@ -917,29 +1041,14 @@ const styles = StyleSheet.create({
   emergencyContactContainer: {
     gap: 12,
   },
-  // Styles
-childHeaderName: {
-  fontWeight: '600',
-  color: '#111827',
-  flex: 1,
-},
-emergencySummaryDetail: {
-  fontSize: 14,
-  color: '#991b1b',
-  fontWeight: '500',
-},
-emergencyDetailText: {
-  fontSize: 14,
-  color: '#991b1b',
-},
-  
-  caregiverSummary: {
-    backgroundColor: '#f9fafb',
-    padding: 16,
-    borderRadius: 8,
-  },
-  reviewContainer: {
-    flex: 1,
+  stepNavigation: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    gap: 12,
+    marginTop: 24,
+    paddingTop: 16,
+    borderTopWidth: 1,
+    borderTopColor: '#e5e7eb',
   },
   reviewCard: {
     backgroundColor: '#ffffff',
@@ -960,6 +1069,38 @@ emergencyDetailText: {
     color: '#111827',
     marginBottom: 12,
   },
+  caregiverHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  reviewAvatar: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+  },
+  avatarPlaceholder: {
+    backgroundColor: '#f3f4f6',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  caregiverInfo: {
+    flex: 1,
+    minWidth: 0, // Allow text to shrink
+    justifyContent: 'center',
+  },
+  caregiverName: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#111827',
+    marginBottom: 4,
+    lineHeight: 20,
+  },
+  rateText: {
+    fontSize: 14,
+    color: '#ec4899',
+    fontWeight: '500',
+  },
   scheduleCard: {
     backgroundColor: '#eff6ff',
     borderColor: '#bfdbfe',
@@ -972,23 +1113,9 @@ emergencyDetailText: {
     backgroundColor: '#faf5ff',
     borderColor: '#e9d5ff',
   },
-  emergencyCard: {
-    backgroundColor: '#fef2f2',
-    borderColor: '#fecaca',
-  },
   costCard: {
     backgroundColor: '#f9fafb',
     borderColor: '#d1d5db',
-  },
-  reviewAvatar: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-  },
-  avatarPlaceholder: {
-    backgroundColor: '#f3f4f6',
-    justifyContent: 'center',
-    alignItems: 'center',
   },
   scheduleDetails: {
     gap: 8,
@@ -1017,17 +1144,20 @@ emergencyDetailText: {
     padding: 12,
     borderRadius: 8,
     gap: 6,
+    minWidth: 0, // Allow text to shrink
   },
   childReviewHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
+    minWidth: 0, // Allow text to shrink
   },
   childReviewName: {
     fontSize: 14,
     fontWeight: '600',
     color: '#111827',
     flex: 1,
+    minWidth: 0, // Allow text to shrink
   },
   childReviewAge: {
     fontSize: 12,
@@ -1081,6 +1211,7 @@ emergencyDetailText: {
   },
   locationInfo: {
     flex: 1,
+    minWidth: 0, // Allow text to shrink
   },
   locationLabel: {
     fontSize: 12,
@@ -1092,142 +1223,102 @@ emergencyDetailText: {
     fontWeight: '500',
     color: '#111827',
   },
+  emergencySummaryCard: {
+    marginTop: 12,
+    padding: 12,
+    backgroundColor: '#fef2f2',
+    borderRadius: 8,
+  },
   emergencyContactHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-    marginBottom: 12,
+    marginBottom: 8,
   },
-  emergencySummaryCard: {
-    marginTop: 12,
-    padding: 12,
   emergencyContactReview: {
-    gap: 6,
+    gap: 4,
   },
-  emergencySummaryDetail: {
-    fontSize: 14,
-    color: '#991b1b',
-    fontWeight: '500',
-  },
-  emergencyDetailText: {
+  emergencyDetail: {
     fontSize: 14,
     color: '#991b1b',
   },
+  costBreakdown: {
+    gap: 8,
+  },
+  totalCostRow: {
     borderTopWidth: 1,
     borderTopColor: '#e5e7eb',
-    backgroundColor: '#f9fafb',
-    borderBottomLeftRadius: 20,
-    borderBottomRightRadius: 20,
+    paddingTop: 8,
+    marginTop: 4,
   },
-  actionButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    paddingVertical: 8,
-    paddingHorizontal: 12,
-    borderRadius: 6,
-    minHeight: 36,
-    flex: 1,
-    justifyContent: 'center',
+  totalCostLabel: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#111827',
   },
-  actionButtonText: {
-    fontWeight: '500',
-    fontSize: 13,
+  totalCostValue: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#059669',
   },
-  messageButton: {
-    backgroundColor: '#dbeafe',
-    borderWidth: 1,
-    borderColor: '#93c5fd',
-  },
-  directionsButton: {
-    backgroundColor: '#d1fae5',
-    borderWidth: 1,
-    borderColor: '#86efac',
-  },
-  completeButton: {
-    backgroundColor: '#3b82f6',
-  },
-  completeButtonText: {
-    color: 'white',
-    fontSize: 13,
-  },
-  cancelButton: {
-    backgroundColor: '#fee2e2',
-    borderWidth: 1,
-    borderColor: '#fca5a5',
-  },
-  cancelButtonText: {
-    color: '#ef4444',
-    fontWeight: '500',
-    fontSize: 13,
-  },
-  specialInstructionsSection: {
-    backgroundColor: '#fef3c7',
-    padding: 12,
-    borderRadius: 8,
-    marginTop: 12,
-    borderLeftWidth: 4,
-    borderLeftColor: '#f59e0b',
-  },
-  
-  // Location functionality styles
   locationSection: {
     marginBottom: 16,
   },
   gpsButton: {
-    width: '100%',
+    borderColor: '#3b82f6',
   },
-    modalFooter: {
-      flexDirection: 'row',
-      justifyContent: 'space-between',
-      alignItems: 'center',
-      padding: 16,
-      borderTopWidth: 1,
-      borderTopColor: '#e5e7eb',
-      backgroundColor: 'white',
-      gap: 12,
-    },
-    
-    footerButton: {
-      flex: 1,
-      paddingVertical: 12,
-      paddingHorizontal: 16,
-      borderRadius: 8,
-      alignItems: 'center',
-      justifyContent: 'center',
-      minHeight: 44,
-    },
-    
-    secondaryButton: {
-      backgroundColor: '#f3f4f6',
-      borderWidth: 1,
-      borderColor: '#d1d5db',
-    },
-    
-    primaryButton: {
-      backgroundColor: '#ec4899',
-    },
-    
-    successButton: {
-      backgroundColor: '#10b981',
-      flexDirection: 'row',
-      alignItems: 'center',
-    },
-    
-    disabledButton: {
-      opacity: 0.6,
-    },
-    
-    secondaryButtonText: {
-      color: '#374151',
-      fontSize: 16,
-      fontWeight: '500',
-    },
-    
-    primaryButtonText: {
-      color: 'white',
-      fontWeight: '600',
-    },
+  footerButton: {
+    flex: 1,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+    minHeight: 44,
+  },
+  secondaryButton: {
+    backgroundColor: '#f3f4f6',
+    borderWidth: 1,
+    borderColor: '#d1d5db',
+  },
+  primaryButton: {
+    backgroundColor: '#ec4899',
+  },
+  successButton: {
+    backgroundColor: '#10b981',
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  disabledButton: {
+    opacity: 0.6,
+  },
+  secondaryButtonText: {
+    color: '#374151',
+    fontSize: 16,
+    fontWeight: '500',
+  },
+  primaryButtonText: {
+    color: 'white',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  errorContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#fef2f2',
+    padding: 12,
+    marginHorizontal: 16,
+    marginBottom: 8,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#fecaca',
+  },
+  errorText: {
+    color: '#ef4444',
+    fontSize: 14,
+    marginLeft: 8,
+    flex: 1,
+  },
 });
 
 export default BookingModal;

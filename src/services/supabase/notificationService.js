@@ -12,7 +12,6 @@ export class NotificationService extends SupabaseBase {
         console.warn('No authenticated user for notification creation')
         return null
       }
-      
       const resolvedUserId = await this._ensureUserId(notificationData.user_id, 'Notification user ID')
 
       const dbNotificationData = {
@@ -48,17 +47,152 @@ export class NotificationService extends SupabaseBase {
     }
   }
 
-  async getNotifications(userId, limit = 50) {
+  async notifyContractCreated(contract) {
+    try {
+      if (!contract) return null
+
+      await Promise.all([
+        this.createNotification({
+          user_id: contract.parentId,
+          type: 'system',
+          title: 'Contract Created',
+          message: 'A new contract is ready for your review.',
+          data: { contractId: contract.id, bookingId: contract.bookingId, notificationType: 'contract_created' }
+        }),
+        this.createNotification({
+          user_id: contract.caregiverId,
+          type: 'system',
+          title: 'New Contract',
+          message: 'A parent sent you a contract to review.',
+          data: { contractId: contract.id, bookingId: contract.bookingId, notificationType: 'contract_created' }
+        })
+      ])
+
+      invalidateCache(`notification-counts:${contract.parentId}`)
+      invalidateCache(`notification-counts:${contract.caregiverId}`)
+      return true
+    } catch (error) {
+      console.warn('Error notifying contract creation:', error)
+      return null
+    }
+  }
+
+  async notifyContractStatusChange(contract, status) {
+    try {
+      if (!contract) return null
+      const targets = [contract.parentId, contract.caregiverId].filter(Boolean)
+
+      await Promise.all(targets.map(userId => this.createNotification({
+        user_id: userId,
+        type: 'contract_status',
+        title: 'Contract Updated',
+        message: `Contract status changed to ${status}.`,
+        data: { contractId: contract.id, status }
+      })))
+
+      targets.forEach(userId => invalidateCache(`notification-counts:${userId}`))
+      return true
+    } catch (error) {
+      console.warn('Error notifying contract status change:', error)
+      return null
+    }
+  }
+
+  async notifyContractSigned(contract, signer) {
+    try {
+      if (!contract) return null
+      const recipient = signer === 'parent' ? contract.caregiverId : contract.parentId
+      if (!recipient) return null
+
+      await this.createNotification({
+        user_id: recipient,
+        type: 'contract_signed',
+        title: `${signer === 'parent' ? 'Parent' : 'Caregiver'} Signed`,
+        message: `The ${signer} signed the contract for your booking.`,
+        data: { contractId: contract.id, bookingId: contract.bookingId, signer }
+      })
+
+      invalidateCache(`notification-counts:${recipient}`)
+      return true
+    } catch (error) {
+      console.warn('Error notifying contract signed:', error)
+      return null
+    }
+  }
+
+  async notifyContractActivated(contract) {
+    try {
+      if (!contract) return null
+      const targets = [contract.parentId, contract.caregiverId].filter(Boolean)
+
+      await Promise.all(targets.map(userId => this.createNotification({
+        user_id: userId,
+        type: 'contract_status',
+        title: 'Contract Active',
+        message: 'Both parties signed the contract. You can now proceed with the job.',
+        data: { contractId: contract.id, bookingId: contract.bookingId, status: 'active' }
+      })))
+
+      targets.forEach(userId => invalidateCache(`notification-counts:${userId}`))
+      return true
+    } catch (error) {
+      console.warn('Error notifying contract activation:', error)
+      return null
+    }
+  }
+
+  async notifyContractResent(contract, actorId) {
+    try {
+      if (!contract) return null
+      const targets = [contract.parentId, contract.caregiverId].filter(id => id && id !== actorId)
+      if (!targets.length) return null
+
+      await Promise.all(targets.map(userId => this.createNotification({
+        user_id: userId,
+        type: 'contract_resent',
+        title: 'Contract Resent',
+        message: 'A contract was resent for your attention.',
+        data: { contractId: contract.id, bookingId: contract.bookingId, actorId }
+      })))
+
+      targets.forEach(userId => invalidateCache(`notification-counts:${userId}`))
+      return true
+    } catch (error) {
+      console.warn('Error notifying contract resend:', error)
+      return null
+    }
+  }
+
+  async getNotifications(userId, options = {}) {
+    const normalizedOptions = (typeof options === 'object' && options !== null)
+      ? options
+      : { limit: Number(options) || 50 }
+
+    const {
+      limit = 50,
+      offset = 0
+    } = normalizedOptions
+
     try {
       const resolvedUserId = await this._ensureUserId(userId, 'User ID')
 
-      const { data, error } = await supabase
+      let query = supabase
         .from('notifications')
         .select('*')
         .eq('user_id', resolvedUserId)
         .order('created_at', { ascending: false })
-        .limit(limit)
+
+      if (Number.isFinite(limit)) {
+        const safeLimit = Math.max(0, Number(limit) || 0)
+        query = query.limit(safeLimit)
+
+        const safeOffset = Math.max(0, Number(offset) || 0)
+        if (safeOffset > 0) {
+          query = query.offset(safeOffset)
+        }
+      }
       
+      const { data, error } = await query
       if (error) throw error
       return data || []
     } catch (error) {
@@ -466,10 +600,10 @@ export class NotificationService extends SupabaseBase {
 
       const result = await this.createNotification({
         user_id: resolvedCaregiverId,
-        type: 'payment_proof',
+        type: 'payment',
         title,
         message,
-        data: metadata
+        data: { ...metadata, notificationType: 'payment_proof', bookingId }
       })
 
       invalidateCache(`notification-counts:${resolvedCaregiverId}`)

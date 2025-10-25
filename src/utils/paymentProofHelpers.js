@@ -20,14 +20,7 @@ export const selectPaymentProofImage = async () => {
       );
     }
 
-    const imageMediaType = ImagePicker?.MediaType?.Images ?? ImagePicker?.MediaTypeOptions?.Images;
-
-    if (!imageMediaType) {
-      throw new PaymentProofError(
-        'IMAGE_PICKER_MEDIA_TYPE_UNAVAILABLE',
-        'Image selection is not supported on this device configuration.'
-      );
-    }
+    const imageMediaType = ImagePicker?.MediaType?.Images || 'images';
 
     const pickerOptions = {
       allowsEditing: true,

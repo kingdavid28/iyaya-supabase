@@ -1,37 +1,30 @@
-import React, { useState, useEffect } from 'react';
+import { Ionicons } from '@expo/vector-icons';
+import { useFocusEffect } from '@react-navigation/native';
+import { LinearGradient } from 'expo-linear-gradient';
+import React, { useState } from 'react';
 import {
-  View,
-  Text,
-  TextInput as RNTextInput,
-  TouchableOpacity,
   Alert,
-  ScrollView,
+  Image,
+  Keyboard,
   KeyboardAvoidingView,
   Platform,
-  ActivityIndicator,
-  Image,
-  Dimensions,
+  ScrollView,
   StyleSheet,
-  Keyboard,
-  Linking,
+  Text,
+  TouchableOpacity,
+  View
 } from 'react-native';
-import KeyboardAvoidingWrapper from '../shared/ui/layout/KeyboardAvoidingWrapper';
-import { TextInput, Button } from 'react-native-paper';
-import { Ionicons } from '@expo/vector-icons';
-import { LinearGradient } from 'expo-linear-gradient';
-import { useApp, ACTION_TYPES } from '../contexts/AppContext';
+import { Button, TextInput } from 'react-native-paper';
+import FacebookSignInButton from '../components/auth/FacebookSignInButton';
 import { authAPI } from '../config/api';
+import { supabase } from '../config/supabase';
+import { useApp } from '../contexts/AppContext';
 import { useAuth } from '../contexts/AuthContext';
-import { CommonActions, useFocusEffect } from '@react-navigation/native';
 import { useAuthForm } from '../hooks/useAuthForm';
 import { useAuthSubmit } from '../hooks/useAuthSubmit';
 import CustomDateTimePicker from '../shared/ui/inputs/DateTimePicker';
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import { STORAGE_KEYS } from '../config/constants';
-import FacebookSignInButton from '../components/auth/FacebookSignInButton';
 import { navigateToUserDashboard } from '../utils/navigationUtils';
 import { tokenManager } from '../utils/tokenManager';
-import { supabase } from '../config/supabase';
 
 const CaregiverAuth = ({ navigation }) => {
   const [mode, setMode] = useState('login');
@@ -426,6 +419,7 @@ const CaregiverAuth = ({ navigation }) => {
                       );
                     }}
                     style={styles.facebookButton}
+                    buttonColor="#2563eb"
                   />
                 </>
               )}

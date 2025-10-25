@@ -9,6 +9,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import DateTimePicker from '@react-native-community/datetimepicker';
+import WebDatePicker from '../WebDatePicker';
 import { styles } from './styles';
 
 const CustomDateTimePicker = ({
@@ -30,37 +31,37 @@ const CustomDateTimePicker = ({
 
   const formatDate = (date) => {
     if (!date) return placeholder || 'Select date';
-    
+
     switch (mode) {
       case 'date':
         switch (format) {
           case 'short':
-            return date.toLocaleDateString('en-US', { 
-              month: 'short', 
-              day: 'numeric', 
-              year: 'numeric' 
+            return date.toLocaleDateString('en-US', {
+              month: 'short',
+              day: 'numeric',
+              year: 'numeric'
             });
           case 'long':
-            return date.toLocaleDateString('en-US', { 
+            return date.toLocaleDateString('en-US', {
               weekday: 'long',
-              month: 'long', 
-              day: 'numeric', 
-              year: 'numeric' 
+              month: 'long',
+              day: 'numeric',
+              year: 'numeric'
             });
           default:
             return date.toLocaleDateString();
         }
       case 'time':
-        return date.toLocaleTimeString('en-US', { 
-          hour: '2-digit', 
+        return date.toLocaleTimeString('en-US', {
+          hour: '2-digit',
           minute: '2-digit',
-          hour12: true 
+          hour12: true
         });
       case 'datetime':
-        return `${date.toLocaleDateString()} ${date.toLocaleTimeString('en-US', { 
-          hour: '2-digit', 
+        return `${date.toLocaleDateString()} ${date.toLocaleTimeString('en-US', {
+          hour: '2-digit',
           minute: '2-digit',
-          hour12: true 
+          hour12: true
         })}`;
       default:
         return date.toLocaleDateString();
@@ -102,60 +103,6 @@ const CustomDateTimePicker = ({
     }
   };
 
-  const getWebInputType = () => {
-    switch (mode) {
-      case 'time':
-        return 'time';
-      case 'datetime':
-        return 'datetime-local';
-      default:
-        return 'date';
-    }
-  };
-
-  const formatDateForWeb = (date) => {
-    if (!date) return '';
-    
-    switch (mode) {
-      case 'time':
-        return date.toTimeString().slice(0, 5);
-      case 'datetime':
-        return date.toISOString().slice(0, 16);
-      default:
-        return date.toISOString().slice(0, 10);
-    }
-  };
-
-  const handleWebDateChange = (event) => {
-    const value = event.nativeEvent?.target?.value || event.target?.value;
-    if (!value) return;
-    
-    let newDate;
-    try {
-      switch (mode) {
-        case 'time': {
-          newDate = new Date();
-          const [hours, minutes] = value.split(':');
-          newDate.setHours(parseInt(hours), parseInt(minutes));
-          break;
-        }
-        case 'datetime':
-          newDate = new Date(value);
-          break;
-        default:
-          newDate = new Date(value + 'T00:00:00');
-          break;
-      }
-      
-      // Check if date is valid before calling onDateChange
-      if (newDate && !isNaN(newDate.getTime())) {
-        onDateChange(newDate);
-      }
-    } catch (error) {
-      console.warn('Invalid date value:', value, error);
-    }
-  };
-
   const renderIOSModal = () => (
     <Modal
       visible={showPicker}
@@ -170,15 +117,15 @@ const CustomDateTimePicker = ({
               <Text style={styles.modalCancelText}>Cancel</Text>
             </TouchableOpacity>
             <Text style={styles.modalTitle}>
-              {mode === 'date' ? 'Select Date' : 
-               mode === 'time' ? 'Select Time' : 
+              {mode === 'date' ? 'Select Date' :
+               mode === 'time' ? 'Select Time' :
                'Select Date & Time'}
             </Text>
             <TouchableOpacity onPress={handleCancel}>
               <Text style={styles.modalConfirmText}>Done</Text>
             </TouchableOpacity>
           </View>
-          
+
           <DateTimePicker
             value={currentDate}
             mode={mode}
@@ -195,47 +142,20 @@ const CustomDateTimePicker = ({
 
   if (Platform.OS === 'web') {
     return (
-      <View style={[styles.container, style]}>
-        {label && (
-          <Text style={[styles.label, error && styles.labelError]}>
-            {label}
-          </Text>
-        )}
-        
-        <View style={[
-          styles.dateButton,
-          error && styles.dateButtonError,
-          disabled && styles.dateButtonDisabled
-        ]}>
-          <TextInput
-            style={[
-              styles.webDateInput,
-              disabled && styles.disabledText,
-              textStyle
-            ]}
-            value={formatDateForWeb(value)}
-            onChange={handleWebDateChange}
-            {...(Platform.OS === 'web' && {
-              type: getWebInputType(),
-              min: minimumDate ? formatDateForWeb(minimumDate) : undefined,
-              max: maximumDate ? formatDateForWeb(maximumDate) : undefined,
-            })}
-            editable={!disabled}
-            placeholder={placeholder || 'Select date'}
-          />
-          
-          <Ionicons 
-            name={getIcon()} 
-            size={20} 
-            color={disabled ? '#ccc' : error ? '#ff4444' : '#666'} 
-            style={styles.webDateIcon}
-          />
-        </View>
-        
-        {error && (
-          <Text style={styles.errorText}>{error}</Text>
-        )}
-      </View>
+      <WebDatePicker
+        value={value}
+        mode={mode}
+        onDateChange={onDateChange}
+        minimumDate={minimumDate}
+        maximumDate={maximumDate}
+        placeholder={placeholder}
+        label={label}
+        error={error}
+        disabled={disabled}
+        style={style}
+        textStyle={textStyle}
+        format={format}
+      />
     );
   }
 
@@ -246,7 +166,7 @@ const CustomDateTimePicker = ({
           {label}
         </Text>
       )}
-      
+
       <TouchableOpacity
         style={[
           styles.dateButton,
@@ -264,14 +184,14 @@ const CustomDateTimePicker = ({
         ]}>
           {formatDate(value)}
         </Text>
-        
-        <Ionicons 
-          name={getIcon()} 
-          size={20} 
-          color={disabled ? '#ccc' : error ? '#ff4444' : '#666'} 
+
+        <Ionicons
+          name={getIcon()}
+          size={20}
+          color={disabled ? '#ccc' : error ? '#ff4444' : '#666'}
         />
       </TouchableOpacity>
-      
+
       {error && (
         <Text style={styles.errorText}>{error}</Text>
       )}

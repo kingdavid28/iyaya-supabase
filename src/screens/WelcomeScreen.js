@@ -1,20 +1,18 @@
+import { Ionicons } from "@expo/vector-icons";
+import { CommonActions, useNavigation } from "@react-navigation/native";
+import { LinearGradient } from "expo-linear-gradient";
 import React from 'react';
-import { 
-  View, 
-  Text, 
-  StyleSheet, 
-  Pressable, 
-  TouchableOpacity, 
-  Image,  
-  Platform, 
-  ScrollView 
+import {
+  Image,
+  Platform,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View
 } from "react-native";
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { LinearGradient } from "expo-linear-gradient";
-import { Ionicons } from "@expo/vector-icons";
-import { useNavigation, CommonActions } from "@react-navigation/native";
 import { useAuth } from "../contexts/AuthContext";
-import { useApp } from "../contexts/AppContext";
 
 /**
  * WelcomeScreen displays the landing page for the Iyaya app.
@@ -27,36 +25,87 @@ export default function WelcomeScreen() {
   const { user, signOut } = useAuth();
   const isLoggedIn = !!user;
   const role = user?.role;
+  const hasNavigated = React.useRef(false);
   
   // Debug: log auth state when it changes
   React.useEffect(() => {
-    try {
-      console.log('[Welcome] user:', !!user, user ? { email: user.email, role: user.role } : null, 'isLoggedIn:', isLoggedIn, 'role:', role);
-    } catch(error) {
-      console.warn('Welcome screen log error:', error);
-    }
-  }, [user, role]);
+    console.log('[Welcome] Auth state:', { 
+      hasUser: !!user, 
+      userEmail: user?.email, 
+      userRole: user?.role,
+      isLoggedIn,
+      role 
+    });
+  }, [user, isLoggedIn, role]);
 
-  // If logged in, immediately reset to the correct dashboard based on role
+  // Reset navigation flag when user logs out
   React.useEffect(() => {
-    if (!isLoggedIn) return;
-    const target = role === 'caregiver' ? 'CaregiverDashboard' : 'ParentDashboard';
-    try {
-      navigation.dispatch(
-        CommonActions.reset({
-          index: 0,
-          routes: [{ name: target }],
-        })
-      );
-    } catch (e) {
-      try { console.warn('[Welcome] reset navigation failed, falling back to navigate', e?.message || e); } catch(error) {
-        console.warn('Console warn error:', error);
-      }
-      try { navigation.dispatch(CommonActions.navigate({ name: target })); } catch(error) {
-        console.warn('Navigation fallback error:', error);
-      }
+    if (!isLoggedIn) {
+      hasNavigated.current = false;
     }
+  }, [isLoggedIn]);
+
+  // If logged in, immediately reset to the correct dashboard based on role (only once)
+  React.useEffect(() => {
+    if (!isLoggedIn || !role || hasNavigated.current) return;
+
+    const target = role === 'caregiver' ? 'CaregiverDashboard' : 'ParentDashboard';
+    
+    console.log(`[Welcome] User logged in as ${role}, navigating to ${target}`);
+    hasNavigated.current = true;
+    
+    // Use setTimeout to ensure navigation happens after component mount
+    const navigationTimer = setTimeout(() => {
+      try {
+        navigation.dispatch(
+          CommonActions.reset({
+            index: 0,
+            routes: [{ name: target }],
+          })
+        );
+      } catch (error) {
+        console.error('[Welcome] Navigation reset failed:', error);
+        // Fallback to regular navigation
+        try {
+          navigation.dispatch(CommonActions.navigate(target));
+        } catch (fallbackError) {
+          console.error('[Welcome] Fallback navigation also failed:', fallbackError);
+        }
+      }
+    }, 100);
+
+    return () => clearTimeout(navigationTimer);
   }, [isLoggedIn, role, navigation]);
+
+  // Navigation handlers
+  const handleParentPress = React.useCallback(() => {
+    console.log('[Welcome] Parent card pressed', { isLoggedIn });
+    
+    if (isLoggedIn) {
+      navigation.dispatch(CommonActions.navigate('ParentDashboard'));
+    } else {
+      navigation.dispatch(CommonActions.navigate('ParentAuth'));
+    }
+  }, [isLoggedIn, navigation]);
+
+  const handleCaregiverPress = React.useCallback(() => {
+    console.log('[Welcome] Caregiver card pressed', { isLoggedIn });
+    
+    if (isLoggedIn) {
+      navigation.dispatch(CommonActions.navigate('CaregiverDashboard'));
+    } else {
+      navigation.dispatch(CommonActions.navigate('CaregiverAuth'));
+    }
+  }, [isLoggedIn, navigation]);
+
+  // Don't render the welcome screen if user is logged in
+  if (isLoggedIn && role) {
+    return (
+      <View style={styles.loadingContainer}>
+        <Text>Redirecting to your dashboard...</Text>
+      </View>
+    );
+  }
 
   // Gradient colors reused throughout the component
   const backgroundGradient = ["#fce8f4", "#e0f2fe", "#f3e8ff"];
@@ -64,20 +113,42 @@ export default function WelcomeScreen() {
   const caregiverGradient = ["#e0f2fe", "#bae6fd"];
   const logoGradient = ["#fbcfe8", "#f9a8d4"];
 
+  const features = [
+    {
+      icon: "checkmark-circle-outline",
+      color: "#16a34a",
+      bgColor: "#dcfce7",
+      title: "Verified Profiles",
+      description: "All caregivers undergo background checks\nand verification"
+    },
+    {
+      icon: "people-outline",
+      color: "#d97706",
+      bgColor: "#fef3c7",
+      title: "Trusted Community",
+      description: "Join thousands of happy families and\ncaregivers"
+    },
+    {
+      icon: "heart-outline",
+      color: "#9333ea",
+      bgColor: "#f3e8ff",
+      title: "Made with Love",
+      description: "Built by parents, for parents and caregivers"
+    }
+  ];
+
   return (
     <LinearGradient 
       colors={backgroundGradient} 
-      style={{ flex: 1 }}
+      style={styles.gradient}
       start={{ x: 0, y: 0 }}
       end={{ x: 1, y: 1 }}
     >
-      <SafeAreaView style={{ flex: 1 }}>
+      <SafeAreaView style={styles.safeArea}>
         <ScrollView 
           contentContainerStyle={styles.container}
           showsVerticalScrollIndicator={false}
         >
-
-
           {/* Header Section */}
           <View style={styles.header}>
             <View style={styles.logoContainer} accessibilityLabel="Iyaya logo">
@@ -110,22 +181,7 @@ export default function WelcomeScreen() {
                 styles.parentCard,
                 pressed && styles.cardPressed
               ]}
-              onPress={() => {
-                try { console.log('[Welcome] Parent card pressed. user?', !!user, 'isLoggedIn', isLoggedIn); } catch(error) {
-                  console.warn('Console log error:', error);
-                }
-                try {
-                  if (isLoggedIn) {
-                    navigation.dispatch(CommonActions.navigate({ name: 'ParentDashboard' }));
-                  } else {
-                    navigation.dispatch(CommonActions.navigate({ name: 'ParentAuth' }));
-                  }
-                } catch (e) {
-                  try { console.error('[Welcome] Parent navigation error:', e?.message || e); } catch(error) {
-                    console.warn('Console error log error:', error);
-                  }
-                }
-              }}
+              onPress={handleParentPress}
               android_ripple={{ color: "#fce7f3" }}
               accessibilityRole="button"
               accessibilityLabel="I'm a Parent. Find trusted caregivers for your little ones. Get Started."
@@ -159,22 +215,7 @@ export default function WelcomeScreen() {
                 styles.caregiverCard,
                 pressed && styles.cardPressed
               ]}
-              onPress={() => {
-                try { console.log('[Welcome] Caregiver card pressed. user?', !!user, 'isLoggedIn', isLoggedIn); } catch(error) {
-                  console.warn('Console log error:', error);
-                }
-                try {
-                  if (isLoggedIn) {
-                    navigation.dispatch(CommonActions.navigate({ name: 'CaregiverDashboard' }));
-                  } else {
-                    navigation.dispatch(CommonActions.navigate({ name: 'CaregiverAuth' }));
-                  }
-                } catch (e) {
-                  try { console.error('[Welcome] Caregiver navigation error:', e?.message || e); } catch(error) {
-                    console.warn('Console error log error:', error);
-                  }
-                }
-              }}
+              onPress={handleCaregiverPress}
               android_ripple={{ color: "#e0f2fe" }}
               accessibilityRole="button"
               accessibilityLabel="I'm a Child Caregiver. Join our community of trusted caregivers. Get Started."
@@ -204,58 +245,44 @@ export default function WelcomeScreen() {
 
           {/* Features Section */}
           <View style={styles.featuresContainer}>
-            {[
-              {
-                icon: "checkmark-circle-outline",
-                color: "#16a34a",
-                bgColor: "#dcfce7",
-                title: "Verified Profiles",
-                description: "All caregivers undergo background checks\nand verification"
-              },
-              {
-                icon: "people-outline",
-                color: "#d97706",
-                bgColor: "#fef3c7",
-                title: "Trusted Community",
-                description: "Join thousands of happy families and\ncaregivers"
-              },
-              {
-                icon: "heart-outline",
-                color: "#9333ea",
-                bgColor: "#f3e8ff",
-                title: "Made with Love",
-                description: "Built by parents, for parents and caregivers"
-              }
-            ].map((feature, index) => (
+            {features.map((feature, index) => (
               <View key={index} style={styles.feature}>
-                <View style={[styles.featureIcon, { backgroundColor: feature.bgColor }]}> 
-                  <Ionicons name={feature.icon} size={24} color={feature.color} accessibilityLabel={feature.title + ' icon'} />
+                <View style={[styles.featureIcon, { backgroundColor: feature.bgColor }]}>
+                  <Ionicons 
+                    name={feature.icon} 
+                    size={24} 
+                    color={feature.color} 
+                    accessibilityLabel={`${feature.title} icon`} 
+                  />
                 </View>
                 <Text style={styles.featureTitle}>{feature.title}</Text>
                 <Text style={styles.featureDescription}>{feature.description}</Text>
               </View>
             ))}
           </View>
-          <TouchableOpacity 
-            onPress={() => navigation.navigate('FacebookAuthTest')}
-            style={styles.debugButton}
-            accessibilityLabel="Debug Facebook authentication"
-          >
-            <Text style={styles.debugButtonText}>🔧 Debug Auth</Text>
-          </TouchableOpacity>
         </ScrollView>
       </SafeAreaView>
     </LinearGradient>
-  )
+  );
 }
 
 const styles = StyleSheet.create({
+  gradient: {
+    flex: 1,
+  },
+  safeArea: {
+    flex: 1,
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#f8f9fa',
+  },
   container: {
     flexGrow: 1,
-    paddingHorizontal: Platform.select({
-      web: 20,
-      default: 16
-    }),
+    justifyContent: 'center',
+    alignItems: 'center',
     paddingTop: Platform.select({
       web: 60,
       default: 40
@@ -266,12 +293,10 @@ const styles = StyleSheet.create({
     }),
     maxWidth: Platform.select({
       web: 1200,
-      default: undefined,
+      default: '100%',
     }),
-    alignSelf: Platform.select({
-      web: 'center',
-      default: undefined,
-    }),
+    alignSelf: 'center',
+    width: '100%',
   },
   header: {
     alignItems: "center",
@@ -279,6 +304,7 @@ const styles = StyleSheet.create({
       web: 40,
       default: 30
     }),
+    paddingHorizontal: 16,
   },
   logoContainer: {
     marginBottom: 20,
@@ -332,30 +358,25 @@ const styles = StyleSheet.create({
     color: "#6b7280",
     textAlign: "center",
     lineHeight: 24,
-    paddingHorizontal: Platform.select({
-      web: 20,
-      default: 10
-    }),
   },
   cardsContainer: {
     flexDirection: Platform.select({
       web: 'row',
       default: 'column'
     }),
-    justifyContent: 'space-between',
+    justifyContent: 'center',
+    alignItems: 'center',
     marginBottom: Platform.select({
       web: 50,
       default: 30
     }),
     gap: 16,
+    width: '100%',
     maxWidth: Platform.select({
       web: 1200,
-      default: undefined,
+      default: '100%',
     }),
-    alignSelf: Platform.select({
-      web: 'center',
-      default: 'center',
-    }),
+    paddingHorizontal: 16,
   },
   card: {
     flex: Platform.select({
@@ -363,7 +384,11 @@ const styles = StyleSheet.create({
       default: undefined
     }),
     width: Platform.select({
-      web: undefined,
+      web: 'auto',
+      default: '100%'
+    }),
+    maxWidth: Platform.select({
+      web: 400,
       default: '100%'
     }),
     backgroundColor: "rgba(255, 255, 255, 0.99)",
@@ -390,17 +415,17 @@ const styles = StyleSheet.create({
     }),
     elevation: Platform.select({
       web: 8,
-      default: 0
+      default: 3
     }),
     minHeight: Platform.select({
       web: 320,
       default: 280
     }),
     borderWidth: 2,
-    overflow: 'hidden',
   },
   cardPressed: {
     transform: [{ scale: 0.98 }],
+    opacity: 0.9,
   },
   parentCard: {
     borderColor: "#fbcfe8",
@@ -411,6 +436,7 @@ const styles = StyleSheet.create({
   cardContent: {
     alignItems: "center",
     flex: 1,
+    justifyContent: 'space-between',
   },
   iconContainer: {
     width: 80,
@@ -450,7 +476,6 @@ const styles = StyleSheet.create({
     textAlign: "center",
     lineHeight: 20,
     marginBottom: 24,
-    flex: 1,
   },
   getStartedButton: {
     flexDirection: "row",
@@ -458,7 +483,6 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     paddingHorizontal: 20,
     borderRadius: 25,
-    marginTop: "auto",
   },
   parentButton: {
     backgroundColor: "transparent",
@@ -492,23 +516,13 @@ const styles = StyleSheet.create({
       default: 'column'
     }),
     justifyContent: 'space-between',
+    alignItems: 'center',
     gap: 16,
-    marginTop: Platform.select({
-      web: 'auto',
-      default: 20
-    }),
     width: '100%',
-    paddingHorizontal: Platform.select({
-      web: 0,
-      default: 16
-    }),
+    paddingHorizontal: 16,
     maxWidth: Platform.select({
       web: 1200,
-      default: undefined,
-    }),
-    alignSelf: Platform.select({
-      web: 'center',
-      default: undefined,
+      default: '100%',
     }),
   },
   feature: {
@@ -525,6 +539,10 @@ const styles = StyleSheet.create({
     marginBottom: Platform.select({
       web: 0,
       default: 16
+    }),
+    maxWidth: Platform.select({
+      web: 300,
+      default: '100%'
     }),
   },
   featureIcon: {
@@ -553,18 +571,5 @@ const styles = StyleSheet.create({
     color: "#6b7280",
     textAlign: "center",
     lineHeight: 16,
-  },
-  debugButton: {
-    backgroundColor: '#f59e0b',
-    paddingHorizontal: 20,
-    paddingVertical: 10,
-    borderRadius: 20,
-    marginTop: 20,
-    alignSelf: 'center',
-  },
-  debugButtonText: {
-    color: 'white',
-    fontSize: 14,
-    fontWeight: '600',
   },
 });

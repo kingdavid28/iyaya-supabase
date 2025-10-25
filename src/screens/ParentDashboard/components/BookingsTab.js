@@ -1,11 +1,12 @@
+import { Calendar, Clock, DollarSign, Plus } from 'lucide-react-native';
 import React, { useCallback, useEffect, useMemo, useRef } from 'react';
-import { View, Text, FlatList, RefreshControl, TouchableOpacity, Alert, Linking, ActivityIndicator, ScrollView, StyleSheet, Animated, Easing } from 'react-native';
-import { Calendar, Clock, DollarSign, Filter, Plus } from 'lucide-react-native';
-import { styles, colors } from '../../styles/ParentDashboard.styles';
-import BookingItem from './BookingItem';
-import { parseDate } from '../../../utils/dateUtils';
-import { formatAddress } from '../../../utils/addressUtils';
+import { ActivityIndicator, Alert, Animated, Easing, FlatList, Linking, RefreshControl, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import ContractTypeSelector from '../../../components/modals/ContractTypeSelector';
 import { BOOKING_STATUSES } from '../../../constants/bookingStatuses';
+import { supabase } from '../../../services/supabase/base';
+import { contractService } from '../../../services/supabase/contractService';
+import { colors, styles } from '../../styles/ParentDashboard.styles';
+import BookingItem from './BookingItem';
 
 const BOOKING_ITEM_HEIGHT = 320;
 const SKELETON_ITEMS = 5;
@@ -170,9 +171,17 @@ const BookingsTab = ({
   onWriteReview,
   onCreateBooking,
   onMessageCaregiver,
+  onOpenContract,
   navigation,
   loading
 }) => {
+  const [contracts, setContracts] = React.useState({});
+  const [contractsLoading, setContractsLoading] = React.useState(false);
+  const [contractModalVisible, setContractModalVisible] = React.useState(false);
+  const [selectedContract, setSelectedContract] = React.useState(null);
+  const [selectedBookingForContract, setSelectedBookingForContract] = React.useState(null);
+  const [contractTypeSelectorVisible, setContractTypeSelectorVisible] = React.useState(false);
+  const [selectedContractType, setSelectedContractType] = React.useState(null);
   const filteredBookings = useMemo(() => {
     if (!bookings || !Array.isArray(bookings)) return [];
     
@@ -282,15 +291,236 @@ const BookingsTab = ({
     }
   };
 
-  const handleCallCaregiver = async (caregiver) => {
+  // Contract management functions
+  const fetchContractsForBookings = useCallback(async (bookingList) => {
+    if (!bookingList || bookingList.length === 0) return;
+
+    try {
+      setContractsLoading(true);
+      const contractPromises = bookingList.map(async (booking) => {
+        const bookingId = booking?.id || booking?._id;
+        if (!bookingId) return null;
+
+        try {
+          const bookingContracts = await contractService.getContractsByBooking(bookingId);
+          return { bookingId, contracts: bookingContracts };
+        } catch (error) {
+          console.warn(`Failed to fetch contracts for booking ${bookingId}:`, error);
+          return { bookingId, contracts: [] };
+        }
+      });
+
+      const contractResults = await Promise.all(contractPromises);
+      const contractsMap = {};
+
+      contractResults.forEach(result => {
+        if (result && result.contracts && result.contracts.length > 0) {
+          // Get the latest contract (most recent first)
+          contractsMap[result.bookingId] = result.contracts[0];
+        }
+      });
+
+      setContracts(contractsMap);
+    } catch (error) {
+      console.error('Error fetching contracts for bookings:', error);
+    } finally {
+      setContractsLoading(false);
+    }
+  }, []);
+
+  const handleContractTypeSelect = useCallback(async (contractType) => {
+    if (!selectedBookingForContract || !contractType) return;
+
+    try {
+      setContractTypeSelectorVisible(false);
+      console.log('🔍 BookingsTab - Creating contract with type:', contractType);
+
+      // Generate contract terms based on selected type
+      const contractTerms = {
+        contractType: contractType.id,
+        contractTitle: contractType.title,
+        ...contractType.terms,
+        createdAt: new Date().toISOString(),
+        version: 1
+      };
+
+      // Get current user for parent ID
+      const currentUser = await supabase.auth.getUser();
+      if (!currentUser?.data?.user?.id) {
+        Alert.alert('Error', 'You must be logged in to create contracts');
+        return;
+      }
+
+      // Debug: Inspect the booking object for caregiverId
+      console.log('🔍 selectedBookingForContract:', JSON.stringify(selectedBookingForContract, null, 2));
+      console.log('🔍 caregiver_id field:', selectedBookingForContract.caregiver_id);
+      console.log('🔍 caregiverId field:', selectedBookingForContract.caregiverId);
+      
+      // Extract caregiverId from various possible locations
+      const caregiverData = selectedBookingForContract.caregiverId || 
+                           selectedBookingForContract.caregiver || 
+                           selectedBookingForContract.caregiverProfile || 
+                           selectedBookingForContract.assignedCaregiver;
+      
+      // If caregiverData is an object, extract the ID; otherwise use it directly
+      const extractedCaregiverId = typeof caregiverData === 'object' && caregiverData !== null
+        ? (caregiverData.id || caregiverData._id || caregiverData.user_id)
+        : (selectedBookingForContract.caregiver_id || caregiverData);
+      
+      console.log('🔍 Extracted caregiverId:', extractedCaregiverId);
+      
+      if (!extractedCaregiverId) {
+        Alert.alert('Error', 'Caregiver information is missing from this booking. Please contact support.');
+        setSelectedContractType(null);
+        setSelectedBookingForContract(null);
+        return;
+      }
+
+      // Create the contract
+      const contractData = {
+        bookingId: selectedBookingForContract.id || selectedBookingForContract._id,
+        parentId: currentUser.data.user.id,
+        caregiverId: extractedCaregiverId,
+        terms: contractTerms,
+        status: 'draft',
+        version: 1,
+        effectiveDate: new Date().toISOString(),
+        metadata: {
+          contractType: contractType.id,
+          createdVia: 'contract-selector'
+        }
+      };
+
+      const result = await contractService.createContract(contractData);
+
+      if (result) {
+        // Update the contract in state
+        setContracts(prev => ({
+          ...prev,
+          [selectedBookingForContract.id || selectedBookingForContract._id]: result
+        }));
+
+        // Open the contract modal for review
+        setSelectedContract(result);
+        setContractModalVisible(true);
+
+        Alert.alert('Success', `${contractType.title} contract created successfully!`);
+      }
+    } catch (error) {
+      console.error('Error creating contract:', error);
+      Alert.alert('Error', 'Failed to create contract. Please try again.');
+    } finally {
+      setSelectedContractType(null);
+      setSelectedBookingForContract(null);
+    }
+  }, [selectedBookingForContract]);
+
+  const handleCreateContract = useCallback((booking) => {
+    console.log('🔍 BookingsTab - Creating contract for booking:', booking);
+    setSelectedBookingForContract(booking);
+    setContractTypeSelectorVisible(true);
+  }, []);
+
+  const handleContractSign = useCallback(async ({ signature, acknowledged }) => {
+    if (!selectedContract || !selectedBookingForContract) return;
+
+    try {
+      const result = await contractService.signContract(selectedContract.id, 'parent', {
+        signature,
+        signatureHash: btoa(signature), // Simple hash for demo
+        ipAddress: null
+      });
+
+      if (result) {
+        // Update the contract in state
+        setContracts(prev => ({
+          ...prev,
+          [selectedBookingForContract.id || selectedBookingForContract._id]: result
+        }));
+
+        Alert.alert('Success', 'Contract signed successfully!');
+        setContractModalVisible(false);
+        setSelectedContract(null);
+        setSelectedBookingForContract(null);
+      }
+    } catch (error) {
+      console.error('Error signing contract:', error);
+      Alert.alert('Error', 'Failed to sign contract. Please try again.');
+    }
+  }, [selectedContract, selectedBookingForContract]);
+
+  const handleDownloadPdf = useCallback(async (contract) => {
+    if (!contract) {
+      Alert.alert('Error', 'Contract information not available');
+      return;
+    }
+
+    try {
+      console.log('🔍 BookingsTab - Downloading PDF for contract:', contract);
+
+      // Check if contract has a PDF URL
+      const pdfUrl = contract?.pdfUrl || contract?.pdf_url || contract?.documentUrl || contract?.document_url;
+
+      if (pdfUrl) {
+        // Open the PDF URL
+        const canOpen = await Linking.canOpenURL(pdfUrl);
+        if (canOpen) {
+          await Linking.openURL(pdfUrl);
+        } else {
+          Alert.alert('Cannot Open PDF', 'Unable to open the contract PDF. The link may be invalid.');
+        }
+      } else {
+        // Show message that PDF is not available
+        Alert.alert(
+          'PDF Not Available',
+          'The contract PDF is not available for download at this time. Please contact support if you need a copy of your contract.'
+        );
+      }
+    } catch (error) {
+      console.error('Error downloading contract PDF:', error);
+      Alert.alert('Download Error', 'Failed to download the contract PDF. Please try again later.');
+    }
+  }, []);
+
+  const handleContractResend = useCallback(async (contract) => {
+    if (!contract) {
+      Alert.alert('Error', 'Contract information not available');
+      return;
+    }
+
+    try {
+      console.log('🔄 BookingsTab - Resending contract:', contract);
+
+      // Get current user for actor ID (parent resending)
+      const currentUser = await supabase.auth.getUser();
+      if (!currentUser?.data?.user?.id) {
+        Alert.alert('Error', 'You must be logged in to resend contracts');
+        return;
+      }
+
+      // Use contractService to resend the contract
+      const result = await contractService.resendContract(contract.id, currentUser.data.user.id);
+
+      if (result) {
+        Alert.alert('Success', 'Contract resent successfully! The caregiver will receive a new email notification.');
+      } else {
+        Alert.alert('Warning', 'Contract resent but no confirmation received. Please check with the caregiver.');
+      }
+    } catch (error) {
+      console.error('Error resending contract:', error);
+      Alert.alert('Resend Error', 'Failed to resend contract. Please try again later.');
+    }
+  }, []);
+
+  const handleCallCaregiver = useCallback(async (caregiver) => {
     try {
       if (!caregiver || !caregiver.phone) {
         Alert.alert('No Phone Number', 'Caregiver phone number is not available');
         return;
       }
-      
+
       const phoneNumber = caregiver.phone.replace(/[^0-9+]/g, '');
-      
+
       Alert.alert(
         'Call Caregiver',
         `Call ${caregiver.name || 'caregiver'} at ${caregiver.phone}?`,
@@ -308,7 +538,7 @@ const BookingsTab = ({
       console.error('Error calling caregiver:', error);
       Alert.alert('Error', 'Failed to make call. Please try again.');
     }
-  };
+  }, []);
 
   const renderStatsHeader = useCallback(() => (
     <View style={styles.bookingStatsContainer}>
@@ -424,6 +654,24 @@ const BookingsTab = ({
     );
   }, [bookingsFilter, onCreateBooking]);
 
+  // Fetch contracts when bookings change
+  useEffect(() => {
+    if (filteredBookings.length > 0 && !contractsLoading) {
+      fetchContractsForBookings(filteredBookings);
+    }
+  }, [filteredBookings, fetchContractsForBookings, contractsLoading]);
+
+  // Import ContractModal dynamically to avoid circular imports
+  const [ContractModal, setContractModal] = React.useState(null);
+
+  useEffect(() => {
+    import('../../../components/modals/ContractModal').then(module => {
+      setContractModal(() => module.default);
+    }).catch(error => {
+      console.warn('Failed to load ContractModal:', error);
+    });
+  }, []);
+
   const keyExtractor = useCallback((item, index) => item?._id || item?.id || `booking-${index}`, []);
 
   const getItemLayout = useCallback((_, index) => ({
@@ -434,6 +682,8 @@ const BookingsTab = ({
 
   const renderBookingItem = useCallback(({ item }) => {
     const caregiverData = item?.caregiverId || item?.caregiver || item?.caregiverProfile || item?.assignedCaregiver;
+    const bookingId = item?.id || item?._id;
+    const bookingContract = bookingId ? contracts[bookingId] : null;
 
     return (
       <MemoizedBookingItem
@@ -445,9 +695,12 @@ const BookingsTab = ({
         onWriteReview={onWriteReview}
         onMessageCaregiver={handleMessageCaregiver}
         onCallCaregiver={handleCallCaregiver}
+        onOpenContract={onOpenContract}
+        onCreateContract={handleCreateContract}
+        contract={bookingContract}
       />
     );
-  }, [handleCallCaregiver, handleMessageCaregiver, onCancelBooking, onUploadPayment, onViewBookingDetails, onWriteReview]);
+  }, [contracts, handleCallCaregiver, handleContractResend, handleCreateContract, handleMessageCaregiver, onCancelBooking, onOpenContract, onUploadPayment, onViewBookingDetails, onWriteReview]);
 
   const skeletonData = useMemo(
     () => Array.from({ length: SKELETON_ITEMS }, (_, index) => `skeleton-${index}`),
@@ -520,6 +773,36 @@ const BookingsTab = ({
         maxToRenderPerBatch={8}
         updateCellsBatchingPeriod={120}
         removeClippedSubviews
+      />
+
+      {/* Contract Modal */}
+      {ContractModal && contractModalVisible && selectedBookingForContract && (
+        <ContractModal
+          visible={contractModalVisible}
+          onClose={() => {
+            setContractModalVisible(false);
+            setSelectedContract(null);
+            setSelectedBookingForContract(null);
+          }}
+          contract={selectedContract}
+          booking={selectedBookingForContract}
+          viewerRole="parent"
+          onSign={handleContractSign}
+          onResend={handleContractResend}
+          onDownloadPdf={handleDownloadPdf}
+        />
+      )}
+
+      {/* Contract Type Selector Modal */}
+      <ContractTypeSelector
+        visible={contractTypeSelectorVisible}
+        onClose={() => {
+          setContractTypeSelectorVisible(false);
+          setSelectedContractType(null);
+          setSelectedBookingForContract(null);
+        }}
+        onSelectContractType={handleContractTypeSelect}
+        selectedType={selectedContractType}
       />
     </View>
   );

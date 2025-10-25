@@ -1,13 +1,14 @@
+import { Ionicons } from '@expo/vector-icons';
 import React, { useState } from 'react';
 import {
-  View,
+  Modal,
+  Platform,
+  ScrollView,
   Text,
   TouchableOpacity,
-  Modal,
-  ScrollView,
-  Platform,
+  View,
 } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
+import WebDatePicker from '../WebDatePicker';
 import { styles } from './styles';
 
 const TimePicker = ({
@@ -67,7 +68,7 @@ const TimePicker = ({
   const formatTime = (hour, minute, period) => {
     const h = hour.toString().padStart(2, '0');
     const m = minute.toString().padStart(2, '0');
-    
+
     if (format24Hour) {
       return `${h}:${m}`;
     } else {
@@ -77,10 +78,10 @@ const TimePicker = ({
 
   const formatDisplayTime = () => {
     if (!value) return placeholder;
-    
+
     if (typeof value === 'string') {
       if (format24Hour) return value;
-      
+
       const [time] = value.split(' ');
       const [hour, minute] = time.split(':');
       const h = parseInt(hour);
@@ -88,17 +89,17 @@ const TimePicker = ({
       const period = h >= 12 ? 'PM' : 'AM';
       return `${displayHour}:${minute} ${period}`;
     }
-    
-    return value.toLocaleTimeString('en-US', { 
-      hour: 'numeric', 
+
+    return value.toLocaleTimeString('en-US', {
+      hour: 'numeric',
       minute: '2-digit',
-      hour12: !format24Hour 
+      hour12: !format24Hour
     });
   };
 
   const handleConfirm = () => {
     let finalHour = selectedHour;
-    
+
     if (!format24Hour && selectedPeriod) {
       if (selectedPeriod === 'PM' && selectedHour !== 12) {
         finalHour = selectedHour + 12;
@@ -106,11 +107,11 @@ const TimePicker = ({
         finalHour = 0;
       }
     }
-    
+
     // Validate hour is within bounds
     finalHour = Math.max(0, Math.min(23, finalHour));
     const validMinute = Math.max(0, Math.min(59, selectedMinute));
-    
+
     const timeString = `${finalHour.toString().padStart(2, '0')}:${validMinute.toString().padStart(2, '0')}`;
     onTimeChange(timeString);
     setShowPicker(false);
@@ -138,12 +139,12 @@ const TimePicker = ({
               <Text style={styles.modalConfirmText}>Done</Text>
             </TouchableOpacity>
           </View>
-          
+
           <View style={styles.pickerContainer}>
             {/* Hours */}
             <View style={styles.pickerColumn}>
               <Text style={styles.pickerColumnTitle}>Hour</Text>
-              <ScrollView 
+              <ScrollView
                 style={styles.pickerScroll}
                 showsVerticalScrollIndicator={false}
               >
@@ -166,11 +167,11 @@ const TimePicker = ({
                 ))}
               </ScrollView>
             </View>
-            
+
             {/* Minutes */}
             <View style={styles.pickerColumn}>
               <Text style={styles.pickerColumnTitle}>Minute</Text>
-              <ScrollView 
+              <ScrollView
                 style={styles.pickerScroll}
                 showsVerticalScrollIndicator={false}
               >
@@ -193,12 +194,12 @@ const TimePicker = ({
                 ))}
               </ScrollView>
             </View>
-            
+
             {/* AM/PM */}
             {!format24Hour && (
               <View style={styles.pickerColumn}>
                 <Text style={styles.pickerColumnTitle}>Period</Text>
-                <ScrollView 
+                <ScrollView
                   style={styles.pickerScroll}
                   showsVerticalScrollIndicator={false}
                 >
@@ -228,6 +229,21 @@ const TimePicker = ({
     </Modal>
   );
 
+  if (Platform.OS === 'web') {
+    return (
+      <WebDatePicker
+        value={value}
+        mode="time"
+        onDateChange={onTimeChange}
+        placeholder={placeholder}
+        label={label}
+        error={error}
+        disabled={disabled}
+        style={style}
+      />
+    );
+  }
+
   return (
     <View style={[styles.container, style]}>
       {label && (
@@ -235,7 +251,7 @@ const TimePicker = ({
           {label}
         </Text>
       )}
-      
+
       <TouchableOpacity
         style={[
           styles.timeButton,
@@ -252,14 +268,14 @@ const TimePicker = ({
         ]}>
           {formatDisplayTime()}
         </Text>
-        
-        <Ionicons 
-          name="time-outline" 
-          size={20} 
-          color={disabled ? '#ccc' : error ? '#ff4444' : '#666'} 
+
+        <Ionicons
+          name="time-outline"
+          size={20}
+          color={disabled ? '#ccc' : error ? '#ff4444' : '#666'}
         />
       </TouchableOpacity>
-      
+
       {error && (
         <Text style={styles.errorText}>{error}</Text>
       )}

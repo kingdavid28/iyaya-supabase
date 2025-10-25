@@ -23,13 +23,23 @@ export class SupabaseBase {
       return null
     }
     
+    // Improved error logging with proper serialization
     console.error(`❌ Error in ${method}:`, {
       message: error?.message,
       code: error?.code,
       details: error?.details,
       hint: error?.hint,
-      error: error
+      status: error?.status,
+      statusText: error?.statusText
     })
+    
+    // Log full error as string for better visibility
+    try {
+      console.error(`Full error: ${JSON.stringify(error, null, 2)}`)
+    } catch (e) {
+      console.error('Full error (non-serializable):', error)
+    }
+    
     if (throwError) throw error
     return null
   }

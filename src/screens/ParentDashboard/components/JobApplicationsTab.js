@@ -2,7 +2,7 @@ import React, { useMemo, useState } from 'react';
 import { View, Text, FlatList, TouchableOpacity, StyleSheet, RefreshControl, Image, Alert, Linking, ScrollView } from 'react-native';
 import { formatDistanceToNow } from 'date-fns';
 import { User, Briefcase, MapPin, Clock, MessageCircle, CheckCircle, XCircle } from 'lucide-react-native';
-import { colors } from '../../styles/ParentDashboard.styles';
+import { colors, styles as sharedStyles } from '../../styles/ParentDashboard.styles';
 import { getProfileImageUrl } from '../../../utils/imageUtils';
 import {
   SkeletonCard,
@@ -247,35 +247,35 @@ const JobApplicationsTab = ({
   }
 
   return (
-    <View style={styles.wrapper}>
-      <View style={styles.tabsContainer}>
-        {['all', 'new', 'reviewed'].map((filterKey) => {
-          const isActive = selectedFilter === filterKey;
-          const label = filterKey === 'all' ? 'All' : filterKey === 'new' ? 'New' : 'Reviewed';
-          return (
-            <TouchableOpacity
-              key={filterKey}
-              style={[styles.tab, isActive && styles.tabActive]}
-              onPress={() => setSelectedFilter(filterKey)}
-            >
-              <Text style={[styles.tabText, isActive && styles.tabTextActive]}>{label}</Text>
-              {filterKey === 'new' && !isActive && pendingCount > 0 && (
-                <View style={styles.badge}>
-                  <Text style={styles.badgeText}>{pendingCount}</Text>
-                </View>
-              )}
-              {isActive && <View style={styles.tabIndicator} />}
-            </TouchableOpacity>
-          );
-        })}
+    <View style={sharedStyles.tabContent}>
+      {/* Filter Tabs */}
+      <View style={sharedStyles.filterTabs}>
+        {['all', 'new', 'reviewed'].map((filterKey) => (
+          <TouchableOpacity
+            key={filterKey}
+            style={[
+              sharedStyles.filterTab,
+              selectedFilter === filterKey && sharedStyles.activeFilterTab
+            ]}
+            onPress={() => setSelectedFilter(filterKey)}
+          >
+            <Text style={[
+              sharedStyles.filterTabText,
+              selectedFilter === filterKey && sharedStyles.activeFilterTabText
+            ]}>
+              {filterKey.charAt(0).toUpperCase() + filterKey.slice(1)}
+            </Text>
+          </TouchableOpacity>
+        ))}
       </View>
 
       <FlatList
         data={filteredApplications}
         keyExtractor={(item, index) => String(item.id || `${item.jobId || 'job'}-${item.caregiverId || index}`)}
         renderItem={renderApplication}
-        contentContainerStyle={filteredApplications.length === 0 ? styles.emptyContent : styles.listContent}
+        contentContainerStyle={filteredApplications.length === 0 ? styles.emptyContent : sharedStyles.jobsList}
         refreshControl={onRefresh ? <RefreshControl refreshing={refreshing} onRefresh={onRefresh} /> : undefined}
+        showsVerticalScrollIndicator={false}
         ListEmptyComponent={
           <View style={styles.emptyState}>
             <User size={40} color={colors.textTertiary} />
@@ -301,9 +301,6 @@ const JobApplicationsTab = ({
 };
 
 const styles = StyleSheet.create({
-  wrapper: {
-    flex: 1
-  },
   skeletonContainer: {
     padding: 20,
     gap: 16
@@ -349,60 +346,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     marginTop: 16
-  },
-  listContent: {
-    paddingHorizontal: 20,
-    paddingVertical: 16
-  },
-  tabsContainer: {
-    flexDirection: 'row',
-    paddingHorizontal: 20,
-    paddingBottom: 12,
-    gap: 12
-  },
-  tab: {
-    flex: 1,
-    paddingVertical: 10,
-    borderRadius: 12,
-    backgroundColor: '#F3F4F6',
-    alignItems: 'center',
-    position: 'relative'
-  },
-  tabActive: {
-    backgroundColor: '#EEF2FF',
-    borderWidth: 1,
-    borderColor: colors.info
-  },
-  tabText: {
-    fontWeight: '600',
-    color: colors.textSecondary
-  },
-  tabTextActive: {
-    color: colors.info
-  },
-  tabIndicator: {
-    position: 'absolute',
-    bottom: -6,
-    height: 4,
-    width: '30%',
-    borderRadius: 2,
-    backgroundColor: colors.info
-  },
-  badge: {
-    position: 'absolute',
-    top: -6,
-    right: -6,
-    minWidth: 20,
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 10,
-    backgroundColor: colors.secondary
-  },
-  badgeText: {
-    color: colors.surface,
-    fontSize: 10,
-    fontWeight: '700',
-    textAlign: 'center'
   },
   emptyContent: {
     flexGrow: 1,

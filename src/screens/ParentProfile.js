@@ -1,14 +1,14 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { View, ScrollView, StyleSheet, Image, TouchableOpacity, Alert, ActivityIndicator, Animated, Dimensions, Text, KeyboardAvoidingView, Platform, Modal } from 'react-native';
-import { Card, Button, TextInput } from 'react-native-paper';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
+import React, { useCallback, useEffect, useState } from 'react';
+import { ActivityIndicator, Alert, Modal, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Button, Card, TextInput } from 'react-native-paper';
+import ProfileImage from '../components/ui/feedback/ProfileImage';
+import { getCurrentAPIURL } from '../config/api';
+import { useAuth } from '../contexts/AuthContext';
 import { supabaseService } from '../services/supabase';
 import { processImageForUpload } from '../utils/imageUtils';
-import { useAuth } from '../contexts/AuthContext';
-import ProfileImage from '../components/ui/feedback/ProfileImage';
 import { getCurrentDeviceLocation } from '../utils/locationUtils';
-import { getCurrentAPIURL } from '../config/api';
 
 const ParentProfile = ({ navigation }) => {
   const { user } = useAuth();
@@ -107,7 +107,7 @@ const ParentProfile = ({ navigation }) => {
       }
 
       const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        mediaTypes: ImagePicker.MediaType?.Images || 'images',
         allowsEditing: true,
         aspect: [1, 1],
         quality: 0.8,

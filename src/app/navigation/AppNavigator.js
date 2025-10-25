@@ -8,44 +8,43 @@ import { useAuth } from "../../contexts/AuthContext";
 import { useThemeContext } from "../../contexts/ThemeContext";
 
 // Main screen imports
-import WelcomeScreen from "../../screens/WelcomeScreen";
-import CaregiverProfileComplete from "../../screens/CaregiverProfileComplete";
-import VerificationSuccessScreen from "../../screens/VerificationSuccessScreen";
-import ParentDashboard from "../../screens/ParentDashboard/ParentDashboard";
 import CaregiverDashboard from "../../screens/CaregiverDashboard";
+import CaregiverProfileComplete from "../../screens/CaregiverProfileComplete";
+import ParentDashboard from "../../screens/ParentDashboard/ParentDashboard";
+import VerificationSuccessScreen from "../../screens/VerificationSuccessScreen";
+import WelcomeScreen from "../../screens/WelcomeScreen";
 
 // Auth screen imports
-import ParentAuth from "../../screens/ParentAuth";
 import CaregiverAuth from "../../screens/CaregiverAuth";
 import EmailVerificationScreen from "../../screens/EmailVerificationScreen";
+import ParentAuth from "../../screens/ParentAuth";
 
 // Profile screen imports
 import ParentProfile from "../../screens/ParentProfile";
 
 // Chat screen imports
-import ChatScreen from "../../screens/ChatScreen";
 import CaregiverReviewsScreen from "../../screens/CaregiverReviewsScreen";
+import ChatScreen from "../../screens/ChatScreen";
 
 // Debug screen imports
 import FacebookAuthTest from "../../components/debug/FacebookAuthTest";
-import NotificationsScreen from "../../components/NotificationsScreen";
 
 // Legacy screen imports (to be migrated)
 import AvailabilityManagementScreen from "../../screens/AvailabilityManagementScreen";
 import BookingManagementScreen from "../../screens/BookingManagementScreen";
 import ChildrenManagementScreen from "../../screens/ChildrenManagementScreen";
+import EmailVerificationPendingScreen from "../../screens/EmailVerificationPendingScreen";
 import EnhancedCaregiverProfileWizard from "../../screens/EnhancedCaregiverProfileWizard";
 import JobSearchScreen from "../../screens/JobSearchScreen";
 import OnboardingScreen from "../../screens/OnboardingScreen";
 import PaymentConfirmationScreen from "../../screens/PaymentConfirmationScreen";
 import ProfileScreen from "../../screens/profile/ProfileScreen";
-import EmailVerificationPendingScreen from "../../screens/EmailVerificationPendingScreen";
 
 import CaregiverChat from "../../screens/CaregiverChat";
 
 // Utils
-import { hasSeenOnboarding } from "../../utils/onboarding";
 import DeepLinkHandler from "../../components/navigation/DeepLinkHandler";
+import { hasSeenOnboarding } from "../../utils/onboarding";
 
 const Stack = createNativeStackNavigator();
 
@@ -132,7 +131,6 @@ const AppNavigatorWithAuth = () => {
         <Stack.Screen name="Chat" component={ChatScreen} options={{ headerShown: false }} />
         <Stack.Screen name="CaregiverChat" component={CaregiverChat} options={{ title: "Chat with Caregiver" }} />
         <Stack.Screen name="CaregiverReviews" component={CaregiverReviewsScreen} options={{ title: "Caregiver Reviews" }} />
-        <Stack.Screen name="Notifications" component={NotificationsScreen} options={{ headerShown: false }} />
         <Stack.Screen name="FacebookAuthTest" component={FacebookAuthTest} options={{ title: "Facebook Auth Test", headerShown: false }} />
         <Stack.Screen name="CaregiverProfile" component={CaregiverProfileComplete} options={{ title: "Caregiver Profile", headerBackTitle: "Back" }} />
       </Stack.Navigator>

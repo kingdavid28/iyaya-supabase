@@ -1,6 +1,6 @@
 import * as ImagePicker from 'expo-image-picker';
-import { supabaseService } from './supabase';
 import { processImageForUpload } from '../utils/imageUtils';
+import { supabaseService } from './supabase';
 
 export const imageUploadService = {
   async pickAndUploadProfileImage(userId) {
@@ -13,7 +13,7 @@ export const imageUploadService = {
 
       // Pick image
       const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        mediaTypes: ImagePicker.MediaType?.Images || 'images',
         allowsEditing: true,
         aspect: [1, 1],
         quality: 0.8,

@@ -1,9 +1,9 @@
 // src/components/auth/FacebookSignInButton.js
-import React, { useState, useCallback, memo } from 'react';
-import { TouchableOpacity, Text, View, StyleSheet, ActivityIndicator, Alert } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import facebookAuthService from '../../services/facebookAuthService';
+import React, { memo, useCallback, useState } from 'react';
+import { ActivityIndicator, Alert, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { useAuth } from '../../contexts/AuthContext';
+import facebookAuthService from '../../services/facebookAuthService';
 
 /**
  * FacebookSignInButton - A reusable component for Facebook authentication
@@ -28,6 +28,7 @@ const FacebookSignInButton = ({
   disabled = false,
   mode = 'signin',
   onPress,
+  buttonColor = '#db2777',
 }) => {
   const [isLoading, setIsLoading] = useState(false);
   const { loginWithFacebook } = useAuth();
@@ -105,7 +106,12 @@ const FacebookSignInButton = ({
 
   return (
     <TouchableOpacity
-      style={[styles.button, style, disabled && styles.disabled]}
+      style={[
+        styles.button,
+        { backgroundColor: buttonColor },
+        style,
+        disabled && styles.disabled,
+      ]}
       onPress={handleFacebookSignIn}
       disabled={disabled || isLoading}
       activeOpacity={0.8}
@@ -140,7 +146,6 @@ const FacebookSignInButton = ({
 
 const styles = StyleSheet.create({
   button: {
-    backgroundColor: '#1877F2', // Facebook blue
     borderRadius: 8,
     paddingVertical: 12,
     paddingHorizontal: 16,

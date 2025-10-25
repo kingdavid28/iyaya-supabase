@@ -1,6 +1,7 @@
 import { SupabaseBase, supabase } from './base'
 
 const PROFILE_BUCKET = 'profile-images'
+const PAYMENT_PROOF_BUCKET = 'payment-proofs'
 const SIGNED_URL_TTL_SECONDS = 60 * 60 * 24 * 30 // 30 days
 
 export class StorageService extends SupabaseBase {
@@ -70,66 +71,95 @@ export class StorageService extends SupabaseBase {
     }
   }
 
-  async uploadPaymentProofImage(bookingId, imageData) {
+  async uploadPaymentProofImage(bookingId, { base64, mimeType = 'image/jpeg', paymentType = 'deposit' }) {
     try {
       this._validateId(bookingId, 'Booking ID')
       
-      if (!imageData) {
+      if (!base64) {
         throw new Error('Image data is required')
       }
 
-      let fileData
-      let contentType = 'image/jpeg'
-      let base64Payload = null
-
-      if (typeof imageData === 'object' && imageData !== null) {
-        if (imageData.uri) {
-          const response = await fetch(imageData.uri)
-          fileData = await response.blob()
-          contentType = response.headers.get('content-type') || imageData.mimeType || 'image/jpeg'
-        } else if (imageData.base64) {
-          base64Payload = imageData.base64
-          contentType = imageData.mimeType || 'image/jpeg'
-        } else if (typeof imageData === 'string') {
-          base64Payload = imageData
-        }
-      }
-
-      if (!fileData && base64Payload) {
-        const base64Data = base64Payload.replace(/^data:image\/[a-z]+;base64,/, '')
-        const binaryString = atob(base64Data)
-        const bytes = new Uint8Array(binaryString.length)
-        for (let i = 0; i < binaryString.length; i++) {
-          bytes[i] = binaryString.charCodeAt(i)
-        }
-        fileData = bytes
-      }
-
-      if (!fileData) {
-        throw new Error('Invalid image data format')
-      }
-
-      const fileName = `payment-${bookingId}-${Date.now()}.jpg`
+      // Remove data URL prefix if present
+      const base64Data = base64.replace(/^data:image\/[a-z]+;base64,/, '')
       
+      // Convert base64 to binary
+      const binaryString = atob(base64Data)
+      const bytes = new Uint8Array(binaryString.length)
+      for (let i = 0; i < binaryString.length; i++) {
+        bytes[i] = binaryString.charCodeAt(i)
+      }
+
+      // Generate unique filename
+      const timestamp = Date.now()
+      const fileName = `payment-proofs/${bookingId}/${paymentType}-${timestamp}.jpg`
+      
+      // Upload to Supabase Storage
       const { data, error } = await supabase.storage
-        .from('payment-proofs')
-        .upload(fileName, fileData, {
-          contentType
+        .from(PAYMENT_PROOF_BUCKET)
+        .upload(fileName, bytes, {
+          contentType: mimeType,
+          upsert: false
         })
 
       if (error) throw error
 
+      const storagePath = data?.path || fileName
+
+      // Get signed URL for the uploaded image
+      const { data: signedData, error: signedError } = await supabase.storage
+        .from(PAYMENT_PROOF_BUCKET)
+        .createSignedUrl(storagePath, SIGNED_URL_TTL_SECONDS)
+
+      if (signedError) {
+        console.warn('Failed to create signed URL, using public URL:', signedError)
+        const { data: { publicUrl } } = supabase.storage
+          .from(PAYMENT_PROOF_BUCKET)
+          .getPublicUrl(storagePath)
+        
+        return {
+          url: publicUrl,
+          path: storagePath,
+          mimeType
+        }
+      }
+
+      return {
+        url: signedData.signedUrl,
+        path: storagePath,
+        mimeType
+      }
+    } catch (error) {
+      return this._handleError('uploadPaymentProofImage', error)
+    }
+  }
+
+  async getPaymentProofUrl(fileName) {
+    try {
+      this._validateRequiredFields({ fileName }, ['fileName'], 'getPaymentProofUrl')
+
+      // Try to get signed URL first (more reliable)
+      const { data: signedData, error: signedError } = await supabase.storage
+        .from('payment-proofs')
+        .createSignedUrl(fileName, SIGNED_URL_TTL_SECONDS)
+
+      if (!signedError && signedData?.signedUrl) {
+        return signedData.signedUrl
+      }
+
+      // Fallback to public URL if signed URL fails
+      console.warn('Signed URL failed, using public URL:', signedError)
       const { data: { publicUrl } } = supabase.storage
         .from('payment-proofs')
         .getPublicUrl(fileName)
 
-      return {
-        url: publicUrl,
-        path: data?.path || fileName,
-        mimeType: contentType
-      }
+      return publicUrl
     } catch (error) {
-      return this._handleError('uploadPaymentProofImage', error)
+      console.error('Error getting payment proof URL:', error)
+      const { data: { publicUrl } } = supabase.storage
+        .from('payment-proofs')
+        .getPublicUrl(fileName)
+
+      return publicUrl
     }
   }
 }

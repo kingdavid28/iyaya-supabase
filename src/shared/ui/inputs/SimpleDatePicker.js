@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, TouchableOpacity, Platform, Modal, TextInput } from 'react-native';
+import { View, Text, TouchableOpacity, Platform } from 'react-native';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { Calendar } from 'lucide-react-native';
+import WebDatePicker from './WebDatePicker';
 
 const SimpleDatePicker = ({ 
   label, 
@@ -30,20 +31,15 @@ const SimpleDatePicker = ({
     });
   };
 
-  const formatWebDate = (date) => {
-    if (!date) return '';
-    const dateObj = date instanceof Date ? date : new Date(date);
-    if (Number.isNaN(dateObj.getTime())) return '';
-    const year = dateObj.getFullYear();
-    const month = String(dateObj.getMonth() + 1).padStart(2, '0');
-    const day = String(dateObj.getDate()).padStart(2, '0');
-    return `${year}-${month}-${day}`;
-  };
-
-  const parseWebDate = (value) => {
-    if (!value) return null;
-    const parsed = new Date(`${value}T00:00:00`);
-    return Number.isNaN(parsed.getTime()) ? null : parsed;
+  const getPickerValue = () => {
+    if (value) {
+      const dateObj = value instanceof Date ? value : new Date(value);
+      if (!Number.isNaN(dateObj.getTime())) {
+        return dateObj;
+      }
+    }
+    // If no valid value, use minimumDate or today
+    return minimumDate || new Date();
   };
 
   const handleDateChange = (event, selectedDate) => {
@@ -74,94 +70,19 @@ const SimpleDatePicker = ({
     setShowPicker(true);
   };
 
-  const getPickerValue = () => {
-    if (value) {
-      const dateObj = value instanceof Date ? value : new Date(value);
-      if (!Number.isNaN(dateObj.getTime())) {
-        return dateObj;
-      }
-    }
-    // If no valid value, use minimumDate or today
-    return minimumDate || new Date();
-  };
-
   if (Platform.OS === 'web') {
-    const minValue = minimumDate ? formatWebDate(minimumDate) : undefined;
-    const maxValue = maximumDate ? formatWebDate(maximumDate) : undefined;
-
     return (
-      <View style={{ marginBottom: 16 }}>
-        {label && (
-          <Text
-            style={{
-              fontSize: 14,
-              fontWeight: '500',
-              color: '#374151',
-              marginBottom: 6
-            }}
-          >
-            {label}
-          </Text>
-        )}
-
-        <View
-          style={{
-            flexDirection: 'row',
-            alignItems: 'center',
-            backgroundColor: disabled ? '#F3F4F6' : '#F9FAFB',
-            borderRadius: 8,
-            borderWidth: 1,
-            borderColor: error ? '#EF4444' : disabled ? '#D1D5DB' : '#E5E7EB',
-            opacity: disabled ? 0.6 : 1,
-            paddingHorizontal: 12
-          }}
-        >
-          <TextInput
-            value={formatWebDate(value)}
-            onChange={(event) => {
-              const nativeValue = event?.nativeEvent?.text ?? event?.target?.value;
-              const nextValue = nativeValue ?? '';
-              if (!nextValue) {
-                return;
-              }
-
-              const nextDate = parseWebDate(nextValue);
-              if (nextDate) {
-                onDateChange(nextDate);
-              }
-            }}
-            editable={!disabled}
-            placeholder={placeholder}
-            placeholderTextColor="#6B7280"
-            style={{
-              flex: 1,
-              fontSize: 14,
-              color: '#111827',
-              paddingVertical: 12,
-              backgroundColor: 'transparent',
-              outlineStyle: 'none'
-            }}
-            importantForAutofill="no"
-            {...{ type: 'date' }}
-            {...(minValue ? { min: minValue } : {})}
-            {...(maxValue ? { max: maxValue } : {})}
-          />
-          <Calendar size={20} color={disabled ? '#9CA3AF' : '#6B7280'} />
-        </View>
-
-        {error && (
-          <Text
-            style={{
-              color: '#EF4444',
-              fontSize: 12,
-              marginTop: 4,
-              marginLeft: 4
-            }}
-          >
-            {error}
-          </Text>
-        )}
-      </View>
+      <WebDatePicker
+        value={value}
+        mode="date"
+        onDateChange={onDateChange}
+        minimumDate={minimumDate}
+        maximumDate={maximumDate}
+        placeholder={placeholder}
+        label={label}
+        error={error}
+        disabled={disabled}
+      />
     );
   }
 
@@ -177,7 +98,7 @@ const SimpleDatePicker = ({
           {label}
         </Text>
       )}
-      
+
       <TouchableOpacity
         style={{
           flexDirection: 'row',
@@ -200,12 +121,12 @@ const SimpleDatePicker = ({
         }}>
           {formatDate(value)}
         </Text>
-        <Calendar 
-          size={20} 
-          color={disabled ? '#9CA3AF' : '#6B7280'} 
+        <Calendar
+          size={20}
+          color={disabled ? '#9CA3AF' : '#6B7280'}
         />
       </TouchableOpacity>
-      
+
       {error && (
         <Text style={{
           color: '#EF4444',

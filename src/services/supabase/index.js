@@ -1,21 +1,22 @@
 // Import services
-import { userService } from './userService'
-import { childrenService } from './childrenService'
-import { jobService } from './jobService'
 import { applicationService } from './applicationService'
 import { bookingService } from './bookingService'
+import { childrenService } from './childrenService'
+import { contractService } from './contractService'
+import { jobService } from './jobService'
 import { messagingService } from './messagingService'
 import { notificationService } from './notificationService'
-import { storageService } from './storageService'
 import { realtimeService } from './realtimeService'
 import { reviewService } from './reviewService'
+import { storageService } from './storageService'
+import { userService } from './userService'
 
 // Import the main supabaseService for upload functionality
 // Note: This creates a circular dependency issue since we're importing from parent directory
 // TODO: Move uploadProfileImage to storageService and remove this import
 
 // Export individual services (preferred approach)
-export { userService, childrenService, jobService, applicationService, bookingService, messagingService, notificationService, storageService, realtimeService, reviewService }
+export { applicationService, bookingService, childrenService, contractService, jobService, messagingService, notificationService, realtimeService, reviewService, storageService, userService }
 
 // Facade pattern for unified access (when needed)
 export class SupabaseServiceFacade {
@@ -30,6 +31,7 @@ export class SupabaseServiceFacade {
     this.storage = storageService
     this.realtime = realtimeService
     this.reviews = reviewService
+    this.contracts = contractService
   }
 
   // === USER & PROFILE METHODS ===
@@ -69,6 +71,16 @@ export class SupabaseServiceFacade {
   async uploadPaymentProof(bookingId, proofData, metadata) { return this.bookings.uploadPaymentProof(bookingId, proofData, metadata) }
   async getPaymentProof(bookingId) { return this.bookings.getPaymentProof(bookingId) }
 
+  // === CONTRACT METHODS ===
+  async createContract(contractData) { return this.contracts.createContract(contractData) }
+  async getContractById(contractId) { return this.contracts.getContractById(contractId) }
+  async getContractsByBooking(bookingId) { return this.contracts.getContractsByBooking(bookingId) }
+  async getContractsForUser(userId, role) { return this.contracts.getContractsForUser(userId, role) }
+  async updateContractStatus(contractId, status, metadata) { return this.contracts.updateContractStatus(contractId, status, metadata) }
+  async signContract(contractId, signer, payload) { return this.contracts.signContract(contractId, signer, payload) }
+  async resendContract(contractId, actorId) { return this.contracts.resendContract(contractId, actorId) }
+  async generateContractPdf(contractId, options) { return this.contracts.generateContractPdf(contractId, options) }
+
   // === MESSAGING METHODS ===
   async getConversations(userId) { return this.messaging.getConversations(userId) }
   async getOrCreateConversation(userId, targetUserId) { return this.messaging.getOrCreateConversation(userId, targetUserId) }
@@ -79,7 +91,7 @@ export class SupabaseServiceFacade {
   subscribeToMessages(conversationId, callback) { return this.messaging.subscribeToMessages(conversationId, callback) }
 
   // === NOTIFICATION METHODS ===
-  async getNotifications(userId, limit) { return this.notifications.getNotifications(userId, limit) }
+  async getNotifications(userId, options) { return this.notifications.getNotifications(userId, options) }
   async createNotification(notificationData) { return this.notifications.createNotification(notificationData) }
   async markNotificationAsRead(notificationId) { return this.notifications.markNotificationAsRead(notificationId) }
   async markAllNotificationsAsRead(userId) { return this.notifications.markAllNotificationsAsRead(userId) }

@@ -1,16 +1,16 @@
-import React, { useMemo, useState } from 'react';
-import { FlatList, ScrollView, View, Text, TouchableOpacity } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { EmptyState } from '../../shared/ui';
-import { styles } from '../styles/CaregiverDashboard.styles';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { Alert, FlatList, Linking, ScrollView, Text, TouchableOpacity, View } from 'react-native';
 import {
-  SkeletonCard,
   SkeletonBlock,
-  SkeletonCircle,
+  SkeletonCard,
   SkeletonPill
 } from '../../components/common/SkeletonPlaceholder';
+import { contractService } from '../../services/supabase/contractService';
+import { EmptyState } from '../../shared/ui';
+import { styles } from '../styles/CaregiverDashboard.styles';
 
-const BookingCard = React.memo(({ booking, onMessageFamily, onConfirmBooking, onViewDetails }) => {
+const BookingCard = React.memo(({ booking, onMessageFamily, onConfirmBooking, onViewDetails, onOpenContract, contract }) => {
   const formatTime = (timeString) => {
     if (!timeString) return '';
     try {
@@ -81,10 +81,49 @@ const BookingCard = React.memo(({ booking, onMessageFamily, onConfirmBooking, on
     });
   }
 
-  const contactChips = [
-    contactPhone ? { key: 'phone', icon: 'call-outline', text: contactPhone } : null,
-    contactEmail ? { key: 'email', icon: 'mail-outline', text: contactEmail } : null,
-  ].filter(Boolean);
+  const contactChips = [];
+  if (contactPhone) {
+    contactChips.push({
+      key: 'phone',
+      icon: 'call-outline',
+      text: contactPhone
+    });
+  }
+  if (contactEmail) {
+    contactChips.push({
+      key: 'email',
+      icon: 'mail-outline',
+      text: contactEmail
+    });
+  }
+
+  const getContractStatus = (contract) => {
+    if (!contract) return { status: 'none', label: 'No contract yet', action: 'Create contract', variant: 'neutral' };
+
+    switch (contract.status) {
+      case 'draft':
+        return { status: 'draft', label: 'Draft contract ready', action: 'Review contract', variant: 'neutral' };
+      case 'sent':
+        return { status: 'sent', label: 'Awaiting signatures', action: 'Review contract', variant: 'neutral' };
+      case 'signed_parent':
+        return { status: 'signed_parent', label: 'Parent signed', action: 'Sign contract', variant: 'primary' };
+      case 'signed_caregiver':
+        return { status: 'signed_caregiver', label: 'Signed by you', action: 'Await parent', variant: 'primary' };
+      case 'active':
+        return { status: 'active', label: 'Contract active', action: 'View contract', variant: 'success' };
+      case 'completed':
+        return { status: 'completed', label: 'Contract completed', action: 'View contract', variant: 'success' };
+      default:
+        return { status: 'unknown', label: 'Contract status unknown', action: 'View contract', variant: 'neutral' };
+    }
+  };
+
+  const contractInfo = getContractStatus(contract);
+
+  const handleContractPress = () => {
+    if (!onOpenContract) return;
+    onOpenContract(booking, contract);
+  };
 
   return (
     <View style={bookingCardStyles.card}>
@@ -128,6 +167,45 @@ const BookingCard = React.memo(({ booking, onMessageFamily, onConfirmBooking, on
           </View>
         </View>
       )}
+
+      {/* Contract Row */}
+      <TouchableOpacity
+        style={[
+          bookingCardStyles.contractRow,
+          contractInfo.variant === 'primary' && bookingCardStyles.contractRow_primary,
+          contractInfo.variant === 'success' && bookingCardStyles.contractRow_success,
+          contractInfo.variant === 'neutral' && bookingCardStyles.contractRow_neutral,
+        ]}
+        onPress={handleContractPress}
+        activeOpacity={0.7}
+      >
+        <View style={bookingCardStyles.contractRowLeft}>
+          <View style={bookingCardStyles.contractIconWrapper}>
+            <Ionicons
+              name="document-text-outline"
+              size={20}
+              color={contractInfo.variant === 'success' ? '#10B981' : contractInfo.variant === 'primary' ? '#3B82F6' : '#6B7280'}
+            />
+          </View>
+          <View style={bookingCardStyles.contractInfo}>
+            <Text style={bookingCardStyles.contractTitle}>{contractInfo.label}</Text>
+            <Text style={bookingCardStyles.contractSubtitle}>{contractInfo.action}</Text>
+          </View>
+        </View>
+        <View style={bookingCardStyles.contractAction}>
+          <Text style={[
+            bookingCardStyles.contractActionText,
+            contractInfo.variant === 'success' && bookingCardStyles.contractActionTextDisabled
+          ]}>
+            {contractInfo.action === 'Create contract' ? 'Create' : 'View'}
+          </Text>
+          <Ionicons
+            name="chevron-forward"
+            size={16}
+            color={contractInfo.variant === 'success' ? '#9CA3AF' : '#3B82F6'}
+          />
+        </View>
+      </TouchableOpacity>
       
       <View style={bookingCardStyles.footer}>
         <View style={bookingCardStyles.amountContainer}>
@@ -341,6 +419,80 @@ const bookingCardStyles = {
     fontWeight: '600',
     marginLeft: 4,
   },
+  contractRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#F8FAFC',
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    borderRadius: 12,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 2,
+    elevation: 1,
+  },
+  contractRow_primary: {
+    backgroundColor: '#F0F9FF',
+    borderColor: '#3B82F6',
+    shadowColor: '#3B82F6',
+    shadowOpacity: 0.1,
+  },
+  contractRow_neutral: {
+    backgroundColor: '#F8FAFC',
+    borderColor: '#6B7280',
+  },
+  contractRow_success: {
+    backgroundColor: '#F0FDF4',
+    borderColor: '#10B981',
+    shadowColor: '#10B981',
+    shadowOpacity: 0.1,
+  },
+  contractRowLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+  },
+  contractIconWrapper: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#E2E8F0',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 12,
+  },
+  contractInfo: {
+    flex: 1,
+  },
+  contractTitle: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#111827',
+    marginBottom: 2,
+  },
+  contractSubtitle: {
+    fontSize: 13,
+    color: '#6B7280',
+    lineHeight: 16,
+  },
+  contractAction: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  contractActionText: {
+    fontSize: 13,
+    fontWeight: '500',
+    color: '#3B82F6',
+  },
+  contractActionTextDisabled: {
+    color: '#9CA3AF',
+  },
 };
 
 const normalizeStatus = (status) => String(status || '').toLowerCase();
@@ -401,16 +553,64 @@ const buildFilterOptions = (metrics) => ([
   { key: 'completed', label: 'Done', count: metrics.completed }
 ]);
 
-export default function BookingsTab({
+const BookingsTab = ({
   bookings,
   onMessageFamily,
   onConfirmBooking,
   onViewDetails,
+  onOpenContract,
   refreshing = false,
   onRefresh,
   loading = false
-}) {
+}) => {
   const [activeFilter, setActiveFilter] = useState('all');
+  const [contracts, setContracts] = useState({});
+  const [contractsLoading, setContractsLoading] = useState(false);
+
+  const fetchContractsForBookings = useCallback(async (bookingList) => {
+    if (!bookingList || bookingList.length === 0) return;
+
+    try {
+      setContractsLoading(true);
+      const contractPromises = bookingList.map(async (booking) => {
+        const bookingId = booking?.id || booking?._id;
+        if (!bookingId) return null;
+
+        try {
+          const bookingContracts = await contractService.getContractsByBooking(bookingId);
+          return { bookingId, contracts: bookingContracts };
+        } catch (error) {
+          console.warn(`Failed to fetch contracts for booking ${bookingId}:`, error);
+          return { bookingId, contracts: [] };
+        }
+      });
+
+      const contractResults = await Promise.all(contractPromises);
+      const contractsMap = {};
+
+      contractResults.forEach(result => {
+        if (result && result.contracts && result.contracts.length > 0) {
+          // Get the latest contract (most recent first)
+          contractsMap[result.bookingId] = result.contracts[0];
+        }
+      });
+
+      setContracts(contractsMap);
+    } catch (error) {
+      console.error('Error fetching contracts for bookings:', error);
+    } finally {
+      setContractsLoading(false);
+    }
+  }, []);
+
+  const handleOpenContract = useCallback((booking, contract) => {
+    if (!onOpenContract) return;
+    if (!contract) {
+      onOpenContract(booking, null, { intent: 'create' });
+      return;
+    }
+    onOpenContract(booking, contract, { intent: 'view' });
+  }, [onOpenContract]);
 
   const filterMetrics = useMemo(() => computeFilterCounts(bookings), [bookings]);
   const visibleBookings = useMemo(() => getFilteredBookings(bookings, activeFilter), [bookings, activeFilter]);
@@ -449,17 +649,29 @@ export default function BookingsTab({
       );
     }
 
+    const bookingId = item?.id || item?._id;
+    const bookingContract = bookingId ? contracts[bookingId] : null;
+
     return (
       <BookingCard
         booking={item}
         onMessageFamily={onMessageFamily}
         onConfirmBooking={onConfirmBooking}
         onViewDetails={onViewDetails}
+        onOpenContract={handleOpenContract}
+        contract={bookingContract}
       />
     );
   };
 
   const listData = loading ? skeletonItems : visibleBookings;
+
+  // Fetch contracts when bookings change
+  useEffect(() => {
+    if (visibleBookings.length > 0 && !contractsLoading) {
+      fetchContractsForBookings(visibleBookings);
+    }
+  }, [visibleBookings, fetchContractsForBookings, contractsLoading]);
 
   return (
     <FlatList
@@ -521,4 +733,138 @@ export default function BookingsTab({
       ListFooterComponent={!loading && visibleBookings.length > 0 ? <View style={{ height: 8 }} /> : null}
     />
   );
-}
+};
+
+// ContractModal integration - wrap the component with modal functionality
+const CaregiverBookingsTabWithModal = ({ pendingContract, onPendingContractHandled, ...props }) => {
+  const [ContractModal, setContractModal] = useState(null);
+  const [contractModalVisible, setContractModalVisible] = useState(false);
+  const [selectedContract, setSelectedContract] = useState(null);
+  const [selectedBookingForContract, setSelectedBookingForContract] = useState(null);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    import('../../components/modals/ContractModal')
+      .then((module) => {
+        if (isMounted) {
+          setContractModal(() => module.default || module.ContractModal || module);
+        }
+      })
+      .catch((error) => {
+        console.warn('Failed to load ContractModal:', error);
+      });
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!pendingContract) return;
+
+    const { contract, booking } = pendingContract;
+    if (!contract) return;
+
+    setSelectedContract(contract);
+    setSelectedBookingForContract(booking || null);
+    setContractModalVisible(true);
+    onPendingContractHandled?.();
+  }, [pendingContract, onPendingContractHandled]);
+
+  const handleOpenContract = useCallback((booking, contract) => {
+    if (!contract) {
+      console.warn('Attempted to open contract modal without contract data');
+      return;
+    }
+
+    console.log('🔍 CaregiverDashboard - Opening contract:', { booking, contract });
+    setSelectedBookingForContract(booking || null);
+    setSelectedContract(contract);
+    setContractModalVisible(true);
+  }, []);
+
+  const handleContractSign = useCallback(async ({ signature, acknowledged }) => {
+    if (!selectedContract || !selectedBookingForContract) return;
+
+    try {
+      const { contractService } = await import('../../services/supabase/contractService');
+      const result = await contractService.signContract(selectedContract.id, 'caregiver', {
+        signature,
+        signatureHash: btoa(signature),
+        ipAddress: null
+      });
+
+      if (result) {
+        Alert.alert('Success', 'Contract signed successfully!');
+        setContractModalVisible(false);
+        setSelectedContract(null);
+        setSelectedBookingForContract(null);
+      }
+    } catch (error) {
+      console.error('Error signing contract:', error);
+      Alert.alert('Error', 'Failed to sign contract. Please try again.');
+    }
+  }, [selectedContract, selectedBookingForContract]);
+
+  const handleContractResend = useCallback(async (contract) => {
+    if (!contract) return;
+
+    try {
+      const { contractService } = await import('../../services/supabase/contractService');
+      await contractService.resendContract(contract.id, 'caregiver-id-placeholder');
+      Alert.alert('Success', 'Contract reminder sent!');
+    } catch (error) {
+      console.error('Error resending contract:', error);
+      Alert.alert('Error', 'Failed to send reminder. Please try again.');
+    }
+  }, []);
+
+  const handleDownloadPdf = useCallback(async (contract) => {
+    if (!contract) return;
+
+    try {
+      const { contractService } = await import('../../services/supabase/contractService');
+      const pdfData = await contractService.generateContractPdf(contract.id);
+      console.log('PDF generated:', pdfData);
+      if (pdfData?.url) {
+        await Linking.openURL(pdfData.url);
+        Alert.alert('Success', 'Contract PDF opened!');
+      } else {
+        Alert.alert('Success', 'Contract PDF downloaded!');
+      }
+    } catch (error) {
+      console.error('Error downloading PDF:', error);
+      Alert.alert(
+        'PDF Generation Unavailable',
+        'PDF downloads are not currently available, but your contract is still valid. You can view and sign contracts in the app.'
+      );
+    }
+  }, []);
+
+  return (
+    <>
+      <BookingsTab {...props} onOpenContract={handleOpenContract} />
+
+      {/* Contract Modal */}
+      {ContractModal && contractModalVisible && selectedBookingForContract && (
+        <ContractModal
+          visible={contractModalVisible}
+          onClose={() => {
+            setContractModalVisible(false);
+            setSelectedContract(null);
+            setSelectedBookingForContract(null);
+          }}
+          contract={selectedContract}
+          booking={selectedBookingForContract}
+          viewerRole="caregiver"
+          onSign={handleContractSign}
+          onResend={handleContractResend}
+          onDownloadPdf={handleDownloadPdf}
+        />
+      )}
+    </>
+  );
+};
+
+export default CaregiverBookingsTabWithModal;

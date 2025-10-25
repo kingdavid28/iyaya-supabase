@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import {
   View,
   Text,
@@ -22,7 +22,10 @@ const BookingItem = ({
   onViewBookingDetails,
   onWriteReview,
   onMessageCaregiver,
-  onCallCaregiver
+  onCallCaregiver,
+  onOpenContract,
+  onCreateContract,
+  contract: contractProp
 }) => {
   const formatDate = (dateString) => {
     try {
@@ -186,6 +189,7 @@ const BookingItem = ({
     })}`;
   };
 
+  const contract = useMemo(() => contractProp || booking?.contract || booking?.latestContract || null, [contractProp, booking?.contract, booking?.latestContract]);
   const caregiverName = caregiverData?.name || caregiverData?.caregiver_name || booking?.caregiver_name || 'Unknown Caregiver';
   const caregiverImage = caregiverData?.profileImage || caregiverData?.avatar || caregiverData?.profile_image;
   const bookingDate = formatDate(booking?.date);
@@ -207,6 +211,51 @@ const BookingItem = ({
     const actions = getPaymentActions({ status: booking.status, totalCost: normalizedTotal });
     return actions?.[0] || null;
   })();
+
+  const contractStatusCopy = useMemo(() => {
+    if (!contract) {
+      return {
+        label: 'No contract yet',
+        action: 'Create contract',
+        intent: 'primary',
+        actionable: Boolean(onCreateContract)
+      };
+    }
+
+    const status = String(contract.status || '').toLowerCase();
+    switch (status) {
+      case 'draft':
+        return { label: 'Draft contract ready', action: 'Review contract', intent: 'primary', actionable: true };
+      case 'sent':
+        return { label: 'Awaiting signatures', action: 'Review contract', intent: 'primary', actionable: true };
+      case 'signed_parent':
+        return { label: 'Signed by you', action: 'Await caregiver', intent: 'neutral', actionable: true };
+      case 'signed_caregiver':
+        return { label: 'Caregiver signed', action: 'Sign now', intent: 'primary', actionable: true };
+      case 'active':
+        return { label: 'Contract active', action: 'View contract', intent: 'success', actionable: true };
+      case 'completed':
+        return { label: 'Contract completed', action: 'View contract', intent: 'neutral', actionable: true };
+      case 'cancelled':
+        return { label: 'Contract cancelled', action: 'View contract', intent: 'neutral', actionable: true };
+      default:
+        return { label: `Status: ${contract.status}`, action: 'View contract', intent: 'neutral', actionable: true };
+    }
+  }, [contract, onCreateContract]);
+
+  const handleContractPress = () => {
+    if (!contract) {
+      // No contract exists, create new one
+      if (onCreateContract) {
+        onCreateContract(booking);
+      }
+    } else {
+      // Contract exists, open for review
+      if (onOpenContract) {
+        onOpenContract(booking, contract);
+      }
+    }
+  };
 
   return (
     <View style={styles.container}>
@@ -273,6 +322,39 @@ const BookingItem = ({
           </View>
         )}
 
+        <TouchableOpacity
+          style={[styles.contractRow, styles[`contractRow_${contractStatusCopy.intent}`]]}
+          activeOpacity={contractStatusCopy.actionable ? 0.7 : 1}
+          onPress={contractStatusCopy.actionable ? handleContractPress : undefined}
+          disabled={!contractStatusCopy.actionable}
+        >
+          <View style={styles.contractRowLeft}>
+            <View style={styles.contractIconWrapper}>
+              <Ionicons
+                name={contract ? 'document-text-outline' : 'document-outline'}
+                size={20}
+                color={contractStatusCopy.intent === 'primary' ? '#3B82F6' :
+                       contractStatusCopy.intent === 'success' ? '#10B981' :
+                       contractStatusCopy.intent === 'neutral' ? '#6B7280' : '#4338CA'}
+              />
+            </View>
+            <View style={styles.contractInfo}>
+              <Text style={styles.contractTitle}>{contractStatusCopy.label}</Text>
+              <Text style={styles.contractSubtitle} numberOfLines={1}>
+                {contract ? `Version ${contract.version || 1}` : 'Tap to start a contract'}
+              </Text>
+            </View>
+          </View>
+          <View style={styles.contractAction}>
+            <Text style={[styles.contractActionText, !contractStatusCopy.actionable && styles.contractActionTextDisabled]}>
+              {contractStatusCopy.action}
+            </Text>
+            {contractStatusCopy.actionable && (
+              <Ionicons name="chevron-forward" size={16} color="#3B82F6" />
+            )}
+          </View>
+        </TouchableOpacity>
+
         {address ? (
           <TouchableOpacity style={styles.locationContainer} onPress={handleLocationPress}>
             <View style={styles.locationContent}>
@@ -328,34 +410,58 @@ const BookingItem = ({
           </View>
         ) : null}
 
-        <View style={styles.actionBar}>
+        {/* Primary Actions - Always visible */}
+        <View style={styles.primaryActions}>
           <TouchableOpacity
-            style={styles.secondaryButton}
+            style={styles.viewDetailsButton}
             onPress={() => onViewBookingDetails && onViewBookingDetails(booking?.id || booking?._id)}
+            accessibilityLabel="View booking details"
+            accessibilityRole="button"
           >
-            <Ionicons name="eye-outline" size={18} color="#312E81" />
-            <Text style={styles.secondaryButtonText}>View details</Text>
+            <Ionicons name="eye-outline" size={18} color="#FFFFFF" />
+            <Text style={styles.viewDetailsButtonText}>View Details</Text>
           </TouchableOpacity>
 
-          <TouchableOpacity style={styles.secondaryButton} onPress={handleMessagePress}>
-            <Ionicons name="chatbubble-outline" size={18} color="#312E81" />
-            <Text style={styles.secondaryButtonText}>Message</Text>
+          <TouchableOpacity
+            style={styles.messageButton}
+            onPress={handleMessagePress}
+            accessibilityLabel={`Message ${caregiverName}`}
+            accessibilityRole="button"
+          >
+            <Ionicons name="chatbubble-outline" size={18} color="#FFFFFF" />
+            <Text style={styles.messageButtonText}>Message</Text>
           </TouchableOpacity>
+
+          {caregiverData?.phone && (
+            <TouchableOpacity
+              style={styles.callButton}
+              onPress={() => onCallCaregiver && onCallCaregiver(caregiverData)}
+              accessibilityLabel={`Call ${caregiverName}`}
+              accessibilityRole="button"
+              accessibilityHint="Opens phone dialer"
+            >
+              <Ionicons name="call-outline" size={18} color="#FFFFFF" />
+              <Text style={styles.callButtonText}>Call</Text>
+            </TouchableOpacity>
+          )}
         </View>
 
-        <View style={styles.actionBar}>
+        {/* Secondary Actions - Context dependent */}
+        <View style={styles.secondaryActions}>
           {typeof onWriteReview === 'function' && caregiverIdValue && normalizedStatus === 'completed' && (
             <TouchableOpacity
-              style={styles.primaryButton}
+              style={styles.reviewButton}
               onPress={() => onWriteReview({
                 bookingId: booking?.id || booking?._id,
                 caregiverId: caregiverIdValue,
                 caregiverName,
                 booking
               })}
+              accessibilityLabel="Write a review for this caregiver"
+              accessibilityRole="button"
             >
               <Ionicons name="star-outline" size={18} color="#FFFFFF" />
-              <Text style={styles.primaryButtonText}>review</Text>
+              <Text style={styles.reviewButtonText}>Write Review</Text>
             </TouchableOpacity>
           )}
 
@@ -365,41 +471,43 @@ const BookingItem = ({
               if (paymentAction.type === 'final_payment' && isFinalPaid) return null;
               return (
                 <TouchableOpacity
-                  style={styles.primaryButton}
+                  style={styles.paymentButton}
                   onPress={() => onUploadPayment(booking?.id || booking?._id, paymentAction.type)}
+                  accessibilityLabel={`${paymentAction.label} for this booking`}
+                  accessibilityRole="button"
                 >
                   <Ionicons name="card-outline" size={18} color="#FFFFFF" />
-                  <Text style={styles.primaryButtonText}>{paymentAction.label}</Text>
+                  <Text style={styles.paymentButtonText}>{paymentAction.label}</Text>
                 </TouchableOpacity>
               );
             })()
           )}
 
           {(!paymentAction || (paymentAction.type === 'deposit' && isDepositPaid) || (paymentAction.type === 'final_payment' && isFinalPaid)) && (
-            <TouchableOpacity
-              style={[styles.primaryButton, styles.primaryButtonDisabled]}
-              disabled
-            >
+            <View style={styles.paymentStatusButton}>
               <Ionicons name="checkmark-done-outline" size={18} color="#FFFFFF" />
-              <Text style={styles.primaryButtonText}>Paid</Text>
-            </TouchableOpacity>
+              <Text style={styles.paymentStatusText}>Payment Complete</Text>
+            </View>
           )}
 
           {canCancelBooking(booking?.status) && (
-            <TouchableOpacity
-              style={[styles.primaryButton, styles.destructiveButton]}
-              onPress={() => {
-                if (onCancelBooking) {
-                  onCancelBooking(booking?.id || booking?._id);
-                } else {
-                  Alert.alert('Error', 'Cancel functionality not available');
-                }
-              }}
-            >
-              <Ionicons name="close-outline" size={18} color="#FFFFFF" />
-              <Text style={styles.primaryButtonText}>Cancel</Text>
-            </TouchableOpacity>
-          )}
+              <TouchableOpacity
+                style={styles.cancelButton}
+                onPress={() => {
+                  if (onCancelBooking) {
+                    onCancelBooking(booking?.id || booking?._id);
+                  } else {
+                    Alert.alert('Error', 'Cancel functionality not available');
+                  }
+                }}
+                accessibilityLabel="Cancel this booking"
+                accessibilityRole="button"
+                accessibilityHint="This action cannot be undone"
+              >
+                <Ionicons name="close-outline" size={18} color="#FFFFFF" />
+                <Text style={styles.cancelButtonText}>Cancel Booking</Text>
+              </TouchableOpacity>
+            )}
         </View>
       </View>
     </View>
@@ -640,52 +748,249 @@ const styles = StyleSheet.create({
   actionBar: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    gap: 16,
+    gap: 8,
     marginBottom: 12,
   },
-  secondaryButton: {
+  primaryActions: {
+    flexDirection: 'row',
+    gap: 8,
+    marginBottom: 12,
+    paddingHorizontal: 4,
+  },
+  secondaryActions: {
+    flexDirection: 'row',
+    gap: 8,
+    marginBottom: 12,
+    paddingHorizontal: 4,
+    flexWrap: 'wrap',
+  },
+  viewDetailsButton: {
     flex: 1,
+    minWidth: 100,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 14,
+    paddingVertical: 12,
+    paddingHorizontal: 12,
     borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#C7D2FE',
-    backgroundColor: '#EEF2FF',
+    backgroundColor: '#6B7280',
+    shadowColor: '#6B7280',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.15,
+    shadowRadius: 4,
+    elevation: 3,
   },
-  secondaryButtonText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#312E81',
-    marginLeft: 6,
-  },
-  primaryButton: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 14,
-    borderRadius: 12,
-    backgroundColor: '#4F46E5',
-    shadowColor: '#312E81',
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.18,
-    shadowRadius: 6,
-    elevation: 4,
-  },
-  primaryButtonDisabled: {
-    backgroundColor: '#22C55E',
-  },
-  primaryButtonText: {
+  viewDetailsButtonText: {
     color: '#FFFFFF',
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: '600',
     marginLeft: 6,
   },
-  destructiveButton: {
-    backgroundColor: '#EF4444',
-    shadowColor: '#B91C1C',
+  messageButton: {
+    flex: 1,
+    minWidth: 90,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 12,
+    paddingHorizontal: 12,
+    borderRadius: 12,
+    backgroundColor: '#3B82F6',
+    shadowColor: '#3B82F6',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.15,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  messageButtonText: {
+    color: '#FFFFFF',
+    fontSize: 13,
+    fontWeight: '600',
+    marginLeft: 6,
+  },
+  callButton: {
+    flex: 1,
+    minWidth: 80,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 12,
+    paddingHorizontal: 12,
+    borderRadius: 12,
+    backgroundColor: '#10B981',
+    shadowColor: '#10B981',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.15,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  callButtonText: {
+    color: '#FFFFFF',
+    fontSize: 13,
+    fontWeight: '600',
+    marginLeft: 6,
+  },
+  reviewButton: {
+    flex: 1,
+    minWidth: 120,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 12,
+    paddingHorizontal: 12,
+    borderRadius: 12,
+    backgroundColor: '#F59E0B',
+    shadowColor: '#F59E0B',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.15,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  reviewButtonText: {
+    color: '#FFFFFF',
+    fontSize: 13,
+    fontWeight: '600',
+    marginLeft: 6,
+  },
+  paymentButton: {
+    flex: 1,
+    minWidth: 110,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 12,
+    paddingHorizontal: 12,
+    borderRadius: 12,
+    backgroundColor: '#8B5CF6',
+    shadowColor: '#8B5CF6',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.15,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  paymentButtonText: {
+    color: '#FFFFFF',
+    fontSize: 13,
+    fontWeight: '600',
+    marginLeft: 6,
+  },
+  paymentStatusButton: {
+    flex: 1,
+    minWidth: 130,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 12,
+    paddingHorizontal: 12,
+    borderRadius: 12,
+    backgroundColor: '#22C55E',
+    shadowColor: '#22C55E',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.15,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  paymentStatusText: {
+    color: '#FFFFFF',
+    fontSize: 13,
+    fontWeight: '600',
+    marginLeft: 6,
+  },
+  cancelButton: {
+  flex: 1,
+  minWidth: 120,
+  flexDirection: 'row',
+  alignItems: 'center',
+  justifyContent: 'center',
+  paddingVertical: 12,
+  paddingHorizontal: 12,
+  borderRadius: 12,
+  backgroundColor: '#EF4444',
+  shadowColor: '#EF4444',
+  shadowOffset: { width: 0, height: 2 },
+  shadowOpacity: 0.15,
+  shadowRadius: 4,
+  elevation: 3,
+},
+cancelButtonText: {
+  color: '#FFFFFF',
+  fontSize: 13,
+  fontWeight: '600',
+  marginLeft: 6,
+},
+  contractRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#F8FAFC',
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    borderRadius: 12,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 2,
+    elevation: 1,
+  },
+  contractRow_primary: {
+    backgroundColor: '#F0F9FF',
+    borderColor: '#3B82F6',
+    shadowColor: '#3B82F6',
+    shadowOpacity: 0.1,
+  },
+  contractRow_neutral: {
+    backgroundColor: '#F8FAFC',
+    borderColor: '#6B7280',
+  },
+  contractRow_success: {
+    backgroundColor: '#F0FDF4',
+    borderColor: '#10B981',
+    shadowColor: '#10B981',
+    shadowOpacity: 0.1,
+  },
+  contractRowLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+  },
+  contractIconWrapper: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#E2E8F0',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 12,
+  },
+  contractInfo: {
+    flex: 1,
+  },
+  contractTitle: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#111827',
+    marginBottom: 2,
+  },
+  contractSubtitle: {
+    fontSize: 13,
+    color: '#6B7280',
+    lineHeight: 16,
+  },
+  contractAction: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  contractActionText: {
+    fontSize: 13,
+    fontWeight: '500',
+    color: '#3B82F6',
+  },
+  contractActionTextDisabled: {
+    color: '#9CA3AF',
   },
 });
 

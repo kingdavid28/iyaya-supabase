@@ -1,28 +1,24 @@
-import React, { useState, useEffect } from 'react';
-import { 
-  View, 
-  Text, 
-  ScrollView, 
-  TouchableOpacity, 
-  RefreshControl,
-  ActivityIndicator,
-  StyleSheet 
-} from 'react-native';
-import { 
-  Briefcase, 
-  Calendar, 
-  MessageCircle, 
-  AlertTriangle, 
-  Shield, 
-  DollarSign,
-  User,
-  Clock,
-  CheckCircle,
-  XCircle
-} from 'lucide-react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { notificationService } from '../../../services/supabase';
+import {
+  AlertTriangle,
+  Briefcase,
+  Calendar,
+  DollarSign,
+  MessageCircle,
+  Shield
+} from 'lucide-react-native';
+import React, { useEffect, useState } from 'react';
+import {
+  ActivityIndicator,
+  RefreshControl,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View
+} from 'react-native';
 import { useAuth } from '../../../contexts/AuthContext';
+import { notificationService } from '../../../services/supabase';
 
 const AlertsTab = ({ navigation, onNavigateTab }) => {
   const { user } = useAuth();
@@ -45,7 +41,7 @@ const AlertsTab = ({ navigation, onNavigateTab }) => {
     try {
       setLoading(true);
       console.log('🚨 Loading alerts for user:', user.id);
-      const notifications = await notificationService.getNotifications(user.id);
+      const notifications = await notificationService.getNotifications(user.id, { limit: 25 });
       console.log('🚨 Received notifications:', notifications);
       
       // Filter and categorize alerts for parents
@@ -79,9 +75,34 @@ const AlertsTab = ({ navigation, onNavigateTab }) => {
     }
   };
 
+  const parseAlertData = (data) => {
+    if (!data) return {};
+    if (typeof data === 'string') {
+      try {
+        return JSON.parse(data);
+      } catch (error) {
+        console.warn('⚠️ Failed to parse alert data:', error);
+        return {};
+      }
+    }
+    return data;
+  };
+
   const handleAlertPress = async (alert) => {
     if (!alert.read) {
       await markAsRead(alert.id);
+    }
+
+    const alertData = parseAlertData(alert.data);
+    const isContractCreated = alertData?.notificationType === 'contract_created' && alertData?.contractId;
+
+    if (isContractCreated) {
+      onNavigateTab?.('bookings', {
+        contractId: alertData.contractId,
+        bookingId: alertData.bookingId,
+        rawAlert: alert,
+      });
+      return;
     }
 
     // Navigate based on alert type - use existing navigation structure
