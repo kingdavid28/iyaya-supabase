@@ -1,23 +1,57 @@
 import { SupabaseBase, supabase } from './base'
 
 export class ApplicationService extends SupabaseBase {
-  async applyToJob(jobId, caregiverId, message = '') {
+  async applyToJob(jobId, caregiverId, applicationData = {}) {
     try {
       this._validateId(jobId, 'Job ID')
       const resolvedCaregiverId = await this._ensureUserId(caregiverId, 'Caregiver ID')
+
+      const { message, proposedRate } = (applicationData && typeof applicationData === 'object' && !Array.isArray(applicationData))
+        ? applicationData
+        : { message: applicationData }
+
+      const normalizedMessage = typeof message === 'string' ? message.trim() : ''
+
+      const normalizedProposedRate = (() => {
+        if (proposedRate === undefined || proposedRate === null || proposedRate === '') {
+          return null
+        }
+        const cleaned = String(proposedRate).replace(/[^0-9.,-]/g, '').replace(/,/g, '')
+        const parsed = Number.parseFloat(cleaned)
+        if (!Number.isFinite(parsed) || parsed <= 0) {
+          return null
+        }
+        return Math.round(parsed * 100) / 100
+      })()
       
-      const { data, error } = await supabase
-        .from('applications')
-        .insert([{
-          job_id: jobId,
-          caregiver_id: resolvedCaregiverId,
-          message: message?.trim() || '',
-          status: 'pending',
-          applied_at: new Date().toISOString(),
-          created_at: new Date().toISOString()
-        }])
-        .select()
-        .single()
+      const basePayload = {
+        job_id: jobId,
+        caregiver_id: resolvedCaregiverId,
+        message: normalizedMessage || '',
+        status: 'pending',
+        applied_at: new Date().toISOString(),
+        created_at: new Date().toISOString()
+      }
+
+      const insertPayload = normalizedProposedRate !== null
+        ? { ...basePayload, proposed_rate: normalizedProposedRate }
+        : basePayload
+
+      const executeInsert = async (payload) => {
+        return await supabase
+          .from('applications')
+          .insert([payload])
+          .select()
+          .single()
+      }
+
+      let { data, error } = await executeInsert(insertPayload)
+
+      if (error && normalizedProposedRate !== null && (error.code === 'PGRST204' || error.message?.includes('proposed_rate'))) {
+        console.warn('⚠️ Falling back without proposed_rate column in applications.applyToJob:', error.message)
+        ;({ data, error } = await executeInsert(basePayload))
+        ;({ data, error } = await performInsert(fallbackPayload))
+      }
       
       if (error) throw error
       return data
@@ -40,7 +74,12 @@ export class ApplicationService extends SupabaseBase {
         .order('applied_at', { ascending: false })
       
       if (error) throw error
-      return data || []
+      return (data || []).map(app => ({
+        ...app,
+        bookingId: app.booking_id || app.bookingId,
+        contractId: app.contract_id || app.contractId,
+        proposedRate: app.proposed_rate ?? app.proposedRate ?? null,
+      }))
     } catch (error) {
       return this._handleError('getMyApplications', error)
     }
@@ -71,7 +110,10 @@ export class ApplicationService extends SupabaseBase {
       const normalizedData = (data || []).map(app => ({
         ...app,
         caregiver: app.users || {},
-        caregiverId: app.caregiver_id
+        caregiverId: app.caregiver_id,
+        booking_id: app.booking_id || app.bookingId,
+        contract_id: app.contract_id || app.contractId,
+        proposedRate: app.proposed_rate ?? app.proposedRate ?? null,
       }))
       
       return normalizedData
@@ -122,6 +164,9 @@ export class ApplicationService extends SupabaseBase {
         jobStartTime: app.jobs?.start_time,
         jobEndTime: app.jobs?.end_time,
         jobHourlyRate: app.jobs?.hourly_rate,
+        bookingId: app.booking_id || app.bookingId,
+        contractId: app.contract_id || app.contractId,
+        proposedRate: app.proposed_rate ?? app.proposedRate ?? null,
         caregiverId: app.caregiver?.id || app.caregiver_id,
         caregiverName: app.caregiver?.name || 'Caregiver',
         caregiverEmail: app.caregiver?.email || null,
@@ -136,6 +181,62 @@ export class ApplicationService extends SupabaseBase {
       }))
     } catch (error) {
       return this._handleError('getParentApplications', error)
+    }
+  }
+
+  async promoteApplication(applicationId, options = {}) {
+    try {
+      this._validateId(applicationId, 'Application ID')
+
+      const { data: sessionData, error: sessionError } = await supabase.auth.getSession()
+      if (sessionError) {
+        throw sessionError
+      }
+
+      const session = sessionData?.session
+      const accessToken = session?.access_token
+
+      if (!accessToken) {
+        throw new Error('Authentication required to promote application.')
+      }
+
+      const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL || supabase.supabaseUrl
+      if (!supabaseUrl) {
+        throw new Error('Supabase URL is not configured.')
+      }
+
+      const functionUrl = `${supabaseUrl}/functions/v1/promote-application`
+      const payload = {
+        applicationId,
+        contractTerms: options.contractTerms && typeof options.contractTerms === 'object'
+          ? options.contractTerms
+          : {},
+        createdBy: options.createdBy || session?.user?.id || null
+      }
+
+      const response = await fetch(functionUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${accessToken}`
+        },
+        body: JSON.stringify(payload)
+      })
+
+      if (!response.ok) {
+        let message = 'Promotion failed.'
+        try {
+          const errorBody = await response.json()
+          message = errorBody?.message || errorBody?.error || message
+        } catch (parseError) {
+          // ignore parse failure and use default message
+        }
+        throw new Error(message)
+      }
+
+      return await response.json()
+    } catch (error) {
+      return this._handleError('promoteApplication', error)
     }
   }
 

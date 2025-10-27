@@ -1,15 +1,15 @@
-import React, { useState, useMemo } from 'react';
-import { View, Text, TouchableOpacity, ScrollView, RefreshControl } from 'react-native';
-import { Plus, Briefcase } from 'lucide-react-native';
-import { styles, colors } from '../../styles/ParentDashboard.styles';
+import { Briefcase, Plus } from 'lucide-react-native';
+import React, { useMemo, useState } from 'react';
+import { RefreshControl, ScrollView, Text, TouchableOpacity, View } from 'react-native';
+import {
+    SkeletonBlock,
+    SkeletonCard,
+    SkeletonCircle,
+    SkeletonPill
+} from '../../../components/common/SkeletonPlaceholder';
+import { colors, styles } from '../../styles/ParentDashboard.styles';
 import JobPostingModal from '../modals/JobPostingModal';
 import JobCard from './JobCard';
-import {
-  SkeletonCard,
-  SkeletonBlock,
-  SkeletonCircle,
-  SkeletonPill
-} from '../../../components/common/SkeletonPlaceholder';
 
 const JobsTab = ({
   jobs = [],
@@ -18,7 +18,8 @@ const JobsTab = ({
   onEditJob,
   onJobPosted,
   loading = false,
-  setActiveTab
+  setActiveTab,
+  childrenList = []
 }) => {
   const [filter, setFilter] = useState('all');
   const [showJobModal, setShowJobModal] = useState(false);
@@ -152,6 +153,7 @@ const JobsTab = ({
         visible={showJobModal}
         onClose={() => setShowJobModal(false)}
         onJobPosted={handleJobPosted}
+        childrenList={childrenList}
       />
     </View>
   );

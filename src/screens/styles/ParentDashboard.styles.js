@@ -53,6 +53,9 @@ export const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: colors.background,
   },
+  contentContainer: {
+    flex: 1,
+  },
   header: {
     paddingTop: Platform.select({
       web: 20,

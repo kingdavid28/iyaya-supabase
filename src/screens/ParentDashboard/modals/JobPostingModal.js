@@ -1,38 +1,40 @@
-import React, { useState, useEffect, useMemo } from 'react';
-import {
-  View,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  StyleSheet,
-  Modal,
-  ScrollView,
-  Alert,
-  KeyboardAvoidingView,
-  Platform
-} from 'react-native';
-import {
-  X,
-  Clock,
-  MapPin,
-  DollarSign,
-  Calendar,
-  Check,
-  AlertCircle,
-  Plus
-} from 'lucide-react-native';
 import { useHeaderHeight } from '@react-navigation/elements';
-import jobService from '../../../services/jobService';
+import {
+    AlertCircle,
+    AlertTriangle,
+    Calendar,
+    Check,
+    Clock,
+    DollarSign,
+    MapPin,
+    Plus,
+    X
+} from 'lucide-react-native';
+import React, { useEffect, useMemo, useState } from 'react';
+import {
+    Alert,
+    KeyboardAvoidingView,
+    Modal,
+    Platform,
+    ScrollView,
+    StyleSheet,
+    Switch,
+    Text,
+    TextInput,
+    TouchableOpacity,
+    View,
+} from 'react-native';
 import { useAuth } from '../../../contexts/AuthContext';
+import jobService from '../../../services/jobService';
 import { getCurrentDeviceLocation } from '../../../utils/locationUtils';
 
-import SimpleDatePicker from '../../../shared/ui/inputs/SimpleDatePicker';
 import {
-  SkeletonCard,
-  SkeletonBlock,
-  SkeletonCircle,
-  SkeletonPill
+    SkeletonBlock,
+    SkeletonCard,
+    SkeletonCircle,
+    SkeletonPill
 } from '../../../components/common/SkeletonPlaceholder';
+import SimpleDatePicker from '../../../shared/ui/inputs/SimpleDatePicker';
 
 const SUGGESTED_SKILLS = [
   'CPR Certified',
@@ -42,7 +44,7 @@ const SUGGESTED_SKILLS = [
   'Light Housekeeping'
 ];
 
-const JobPostingModal = ({ visible, onClose, onJobPosted }) => {
+const JobPostingModal = ({ visible, onClose, onJobPosted, childrenList = [] }) => {
   const { user } = useAuth();
   const headerHeight = useHeaderHeight?.() ?? 0;
   const keyboardOffset = useMemo(() => {
@@ -72,6 +74,7 @@ const JobPostingModal = ({ visible, onClose, onJobPosted }) => {
     createdAt: null,
     updatedAt: null,
     applicants: [],
+    urgent: false,
   });
 
   // Set parent ID when component mounts
@@ -106,6 +109,7 @@ const JobPostingModal = ({ visible, onClose, onJobPosted }) => {
         createdAt: null,
         updatedAt: null,
         applicants: [],
+        urgent: false,
       });
       setErrors({});
     }
@@ -253,7 +257,8 @@ const JobPostingModal = ({ visible, onClose, onJobPosted }) => {
         parentId: user?.uid || user?.id,
         parentName: user?.displayName || user?.name || 'Parent',
         parentPhoto: user?.photoURL || user?.profileImage || user?.profile_image || null,
-        status: 'open'
+        status: 'open',
+        urgent: Boolean(jobData.urgent),
       };
       
       console.log('📱 [MOBILE] Job payload:', payload);
@@ -278,6 +283,12 @@ const JobPostingModal = ({ visible, onClose, onJobPosted }) => {
         workingHours: '',
         requirements: [],
         children: [],
+        status: 'open',
+        parentId: user?.uid || user?.id || '',
+        createdAt: null,
+        updatedAt: null,
+        applicants: [],
+        urgent: false,
       });
       setStep(1);
       setErrors({});
@@ -415,6 +426,21 @@ const JobPostingModal = ({ visible, onClose, onJobPosted }) => {
                 />
               </View>
               {errors.rate && <Text style={styles.errorText}>{errors.rate}</Text>}
+            </View>
+
+            <View style={styles.toggleRow}>
+              <View style={styles.toggleTextContainer}>
+                <Text style={styles.label}>Mark as urgent</Text>
+                <Text style={styles.toggleDescription}>
+                  Urgent jobs are highlighted for caregivers and surface in the urgent filter.
+                </Text>
+              </View>
+              <Switch
+                value={Boolean(jobData.urgent)}
+                onValueChange={(value) => setJobData((prev) => ({ ...prev, urgent: value }))}
+                trackColor={{ false: '#D1D5DB', true: '#FECACA' }}
+                thumbColor={jobData.urgent ? '#EF4444' : '#F9FAFB'}
+              />
             </View>
 
             <View style={styles.sectionDivider} />
@@ -612,6 +638,18 @@ const JobPostingModal = ({ visible, onClose, onJobPosted }) => {
                     <Text style={styles.summaryLabel}>Hourly Rate</Text>
                     <Text style={styles.summaryValue}>
                       {formatCurrency(jobData.rate)}
+                    </Text>
+                  </View>
+                </View>
+
+                <View style={styles.summaryItem}>
+                  <View style={styles.summaryIconContainer}>
+                    <AlertTriangle size={16} color={jobData.urgent ? '#DC2626' : '#9CA3AF'} />
+                  </View>
+                  <View style={styles.summaryContent}>
+                    <Text style={styles.summaryLabel}>Urgency</Text>
+                    <Text style={styles.summaryValue}>
+                      {jobData.urgent ? 'Marked as urgent' : 'Standard priority'}
                     </Text>
                   </View>
                 </View>
@@ -939,8 +977,24 @@ const styles = StyleSheet.create({
   },
   noteText: {
     flex: 1,
-    fontSize: 12,
+    fontSize: 13,
     color: '#4B5563',
+    lineHeight: 18,
+  },
+  toggleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 12,
+    gap: 16,
+  },
+  toggleTextContainer: {
+    flex: 1,
+  },
+  toggleDescription: {
+    color: '#6B7280',
+    fontSize: 12,
+    marginTop: 4,
     lineHeight: 16,
   },
   suggestedSkillsContainer: {

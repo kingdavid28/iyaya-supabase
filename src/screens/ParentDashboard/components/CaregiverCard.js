@@ -1,3 +1,4 @@
+import { LinearGradient } from "expo-linear-gradient";
 import {
   Calendar,
   CheckCircle,
@@ -11,14 +12,11 @@ import {
 import PropTypes from "prop-types";
 import React, { useState } from "react";
 import { Image, StyleSheet, Text, TouchableOpacity, View } from "react-native";
-import { LinearGradient } from "expo-linear-gradient";
-import { Card } from '../../../shared/ui';
+import { Card, TrustScoreBadge } from '../../../shared/ui';
 
 import { formatAddress } from "../../../utils/addressUtils";
 import { getImageSource } from "../../../utils/imageUtils";
-import { userService } from "../../../services/userService";
 
-import { bookingService } from "../../../services/bookingService";
 import {
   colors,
   spacing,
@@ -50,6 +48,9 @@ const CaregiverCard = ({ caregiver = {}, onPress, onMessagePress, onViewReviews,
   const rating = typeof caregiver?.rating === "number" ? caregiver.rating : 0;
   const reviewCount =
     typeof caregiver?.reviewCount === "number" ? caregiver.reviewCount : 0;
+  const trustScoreSource = caregiver?.trustScore ?? caregiver?.verification?.trustScore;
+  const trustScore = Number.isFinite(Number(trustScoreSource)) ? Number(trustScoreSource) : 0;
+  const verified = Boolean(caregiver?.verified ?? caregiver?.verification?.verified);
 
   // Use centralized address formatting
   const getLocationString = (location) => {
@@ -158,7 +159,7 @@ const CaregiverCard = ({ caregiver = {}, onPress, onMessagePress, onViewReviews,
                 <Text style={[typography.subtitle1, caregiverCardStyles.nameText]}>
                   {name}
                 </Text>
-                {caregiver?.verified && (
+                {verified && (
                   <View style={caregiverCardStyles.verifiedBadge}>
                     <CheckCircle size={16} color={colors.surface} />
                   </View>
@@ -174,6 +175,14 @@ const CaregiverCard = ({ caregiver = {}, onPress, onMessagePress, onViewReviews,
                 <Star size={14} color={hasReviews ? colors.warning : colors.textSecondary} fill={hasReviews ? colors.warning : "transparent"} />
                 <Text style={caregiverCardStyles.ratingText}>{ratingLabel}</Text>
               </RatingComponent>
+
+              <TrustScoreBadge
+                trustScore={trustScore}
+                verified={verified}
+                size="small"
+                onPress={canViewReviews ? handleViewReviews : undefined}
+                style={caregiverCardStyles.trustBadgeSpacing}
+              />
 
               {locationText ? (
                 <View style={caregiverCardStyles.locationRow}>

@@ -1,9 +1,9 @@
-import React from 'react';
-import { View, Text, TouchableOpacity, Image } from 'react-native';
-
 import { Ionicons } from '@expo/vector-icons';
-import { formatAddress } from '../../utils';
+import React from 'react';
+import { Image, Text, TouchableOpacity, View } from 'react-native';
 import { getProfileImageUrl } from '../../../utils/imageUtils';
+import { formatAddress } from '../../utils';
+import TrustScoreBadge from '../TrustScoreBadge';
 
 const CaregiverCard = ({ caregiver, onPress, onMessage, onBook, onPressRatings, showActions = true }) => {
 
@@ -18,7 +18,9 @@ const CaregiverCard = ({ caregiver, onPress, onMessage, onBook, onPressRatings, 
     availability,
     skills,
     verified,
-    distance
+    distance,
+    trustScore,
+    verification,
   } = caregiver;
 
   const renderStars = (rating) => {
@@ -82,6 +84,12 @@ const CaregiverCard = ({ caregiver, onPress, onMessage, onBook, onPressRatings, 
                 <Text style={[styles.reviewText, { fontStyle: 'italic' }]}>New caregiver</Text>
               )}
             </TouchableOpacity>
+            <TrustScoreBadge
+              trustScore={trustScore ?? verification?.trustScore ?? 0}
+              verified={verified ?? verification?.verified ?? false}
+              size="small"
+              onPress={onPressRatings}
+            />
           </View>
         </View>
 

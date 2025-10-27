@@ -1,35 +1,33 @@
+import {
+  AlertTriangle,
+  Briefcase,
+  Calendar,
+  Clock,
+  Compass,
+  DollarSign,
+  Filter,
+  Target,
+  TrendingUp,
+  Users
+} from 'lucide-react-native';
 import React, { useCallback, useMemo, useState } from 'react';
 import {
-  View,
-  Text,
-  TouchableOpacity,
   Alert,
-  StyleSheet,
   FlatList,
   ScrollView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
 } from 'react-native';
 import { Chip } from 'react-native-paper';
 import {
-  MapPin,
-  Clock,
-  Users,
-  DollarSign,
-  Calendar,
-  Briefcase,
-  Target,
-  TrendingUp,
-  Compass,
-  AlertTriangle,
-  Filter,
-} from 'lucide-react-native';
-import { styles as dashboardStyles } from '../styles/CaregiverDashboard.styles';
-import SharedJobCard from '../../shared/ui/cards/JobCard';
-import {
-  SkeletonCard,
   SkeletonBlock,
+  SkeletonCard,
   SkeletonCircle,
   SkeletonPill
 } from '../../components/common/SkeletonPlaceholder';
+import { styles as dashboardStyles } from '../styles/CaregiverDashboard.styles';
 
 const localStyles = StyleSheet.create({
   screenContainer: { flex: 1 },
@@ -106,7 +104,7 @@ const localStyles = StyleSheet.create({
     minWidth: 80,
     justifyContent: 'center',
   },
-  urgentBadge: { backgroundColor: '#FEE2E2', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 999, marginLeft: 8 },
+  urgentBadge: { backgroundColor: '#FEE2E2', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 999, marginLeft: 8, alignItems: 'center', justifyContent: 'center' },
   urgentText: { color: '#DC2626', fontSize: 11, fontWeight: '700', letterSpacing: 0.3 },
   jobDetails: { marginBottom: 16, gap: 8 },
   jobDetailRow: {
@@ -231,7 +229,6 @@ export const CaregiverJobCard = ({ job, onApply, onView, hasApplied, style }) =>
 
   const allTags = useMemo(() => {
     const tags = [];
-    if (job?.urgent) tags.push('Urgent');
     if (job?.careType) tags.push(String(job.careType));
     if (Array.isArray(job?.requirements)) {
       tags.push(...job.requirements.filter(Boolean).map(String).slice(0, 4));

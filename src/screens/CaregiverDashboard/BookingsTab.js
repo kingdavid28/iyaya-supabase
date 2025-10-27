@@ -789,11 +789,46 @@ const CaregiverBookingsTabWithModal = ({ pendingContract, onPendingContractHandl
 
     try {
       const { contractService } = await import('../../services/supabase/contractService');
-      const result = await contractService.signContract(selectedContract.id, 'caregiver', {
-        signature,
-        signatureHash: btoa(signature),
-        ipAddress: null
-      });
+
+      let existing;
+      try {
+        existing = await contractService.getContractById(selectedContract.id);
+      } catch (error) {
+        if (error?.code === 'PGRST116' || error?.message?.includes('0 rows')) {
+          Alert.alert('Contract unavailable', 'This contract could not be found. Please refresh and try again.');
+          setContractModalVisible(false);
+          setSelectedContract(null);
+          setSelectedBookingForContract(null);
+          return;
+        }
+        throw error;
+      }
+
+      if (!existing) {
+        Alert.alert('Contract unavailable', 'This contract could not be found. Please refresh and try again.');
+        setContractModalVisible(false);
+        setSelectedContract(null);
+        setSelectedBookingForContract(null);
+        return;
+      }
+
+      let result;
+      try {
+        result = await contractService.signContract(existing.id, 'caregiver', {
+          signature,
+          signatureHash: btoa(signature),
+          ipAddress: null
+        });
+      } catch (error) {
+        if (error?.code === 'CONTRACT_NOT_FOUND') {
+          Alert.alert('Contract unavailable', 'This contract could not be found. Please refresh and try again.');
+          setContractModalVisible(false);
+          setSelectedContract(null);
+          setSelectedBookingForContract(null);
+          return;
+        }
+        throw error;
+      }
 
       if (result) {
         Alert.alert('Success', 'Contract signed successfully!');

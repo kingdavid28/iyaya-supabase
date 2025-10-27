@@ -127,7 +127,7 @@ const ReviewForm = ({
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    padding: 16,
+    padding: 5,
   },
   sectionTitle: {
     fontSize: 18,
@@ -171,11 +171,11 @@ const styles = StyleSheet.create({
   },
   buttonContainer: {
     flexDirection: 'row',
-    justifyContent: 'flex-end',
+    justifyContent: 'center',
     alignItems: 'center',
   },
   button: {
-    minWidth: 140,
+    minWidth: 14,
   },
 });
 

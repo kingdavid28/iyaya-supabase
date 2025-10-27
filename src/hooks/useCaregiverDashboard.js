@@ -1,11 +1,172 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
-import { useFocusEffect } from '@react-navigation/native';
-import { supabaseService } from '../services/supabase';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { supabase } from '../config/supabase';
+import { useAuth } from '../contexts/AuthContext';
+import { supabaseService } from '../services/supabase';
 import { reviewService } from '../services/supabase/reviewService';
 import { normalizeCaregiverReviewsForList } from '../utils/reviews';
-import { useAuth } from '../contexts/AuthContext';
-import { formatAddress } from '../utils/addressUtils';
+
+const EARTH_RADIUS_KM = 6371;
+
+const toFiniteNumber = (value) => {
+  const numeric = Number(value);
+  return Number.isFinite(numeric) ? numeric : null;
+};
+
+const extractCoordinates = (input) => {
+  if (!input) return null;
+
+  if (typeof input === 'string') {
+    const trimmed = input.trim();
+    if (!trimmed) return null;
+    try {
+      return extractCoordinates(JSON.parse(trimmed));
+    } catch (error) {
+      const parts = trimmed.split(',').map((part) => part.trim());
+      if (parts.length >= 2) {
+        const latitude = toFiniteNumber(parts[0]);
+        const longitude = toFiniteNumber(parts[1]);
+        if (latitude !== null && longitude !== null) {
+          return { latitude, longitude };
+        }
+      }
+      return null;
+    }
+  }
+
+  if (Array.isArray(input)) {
+    if (input.length >= 2) {
+      const latitude = toFiniteNumber(input[0]);
+      const longitude = toFiniteNumber(input[1]);
+      if (latitude !== null && longitude !== null) {
+        return { latitude, longitude };
+      }
+    }
+    return null;
+  }
+
+  if (typeof input === 'object') {
+    const coordinatesValue = Object.prototype.hasOwnProperty.call(input, 'coordinates')
+      ? extractCoordinates(input.coordinates)
+      : null;
+
+    if (coordinatesValue) {
+      return coordinatesValue;
+    }
+
+    const latitude = toFiniteNumber(input.latitude ?? input.lat ?? input.x ?? input[0]);
+    const longitude = toFiniteNumber(input.longitude ?? input.lng ?? input.lon ?? input.y ?? input[1]);
+
+    if (latitude !== null && longitude !== null) {
+      return { latitude, longitude };
+    }
+  }
+
+  return null;
+};
+
+const toRadians = (degrees) => (degrees * Math.PI) / 180;
+
+const calculateDistanceKm = (pointA, pointB) => {
+  if (!pointA || !pointB) return null;
+
+  const latitude1 = toFiniteNumber(pointA.latitude ?? pointA.lat);
+  const longitude1 = toFiniteNumber(pointA.longitude ?? pointA.lng ?? pointA.lon);
+  const latitude2 = toFiniteNumber(pointB.latitude ?? pointB.lat);
+  const longitude2 = toFiniteNumber(pointB.longitude ?? pointB.lng ?? pointB.lon);
+
+  if (latitude1 === null || longitude1 === null || latitude2 === null || longitude2 === null) {
+    return null;
+  }
+
+  const dLat = toRadians(latitude2 - latitude1);
+  const dLon = toRadians(longitude2 - longitude1);
+  const lat1Rad = toRadians(latitude1);
+  const lat2Rad = toRadians(latitude2);
+
+  const haversine =
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos(lat1Rad) * Math.cos(lat2Rad) * Math.sin(dLon / 2) * Math.sin(dLon / 2);
+
+  const c = 2 * Math.atan2(Math.sqrt(haversine), Math.sqrt(1 - haversine));
+  const distance = EARTH_RADIUS_KM * c;
+
+  return Number.isFinite(distance) ? distance : null;
+};
+
+const normalizeLocationTokens = (value) => {
+  if (!value) return [];
+
+  if (typeof value === 'string') {
+    return value
+      .split(',')
+      .map((segment) => segment.trim().toLowerCase())
+      .filter(Boolean);
+  }
+
+  if (Array.isArray(value)) {
+    return value.flatMap((entry) => normalizeLocationTokens(entry));
+  }
+
+  if (typeof value === 'object') {
+    const candidates = [value.formatted, value.city, value.province, value.street, value.region, value.state];
+    return normalizeLocationTokens(candidates);
+  }
+
+  return [];
+};
+
+const annotateJobWithProximity = (job, caregiverLocation, caregiverCoordinates) => {
+  if (!job || typeof job !== 'object') {
+    return job;
+  }
+
+  const existingDistance = toFiniteNumber(job.distance ?? job.distanceKm);
+  const jobCoordinates = extractCoordinates(
+    job.locationCoordinates ??
+      job.location_coordinates ??
+      job.coordinates ??
+      job.raw?.location_coordinates ??
+      job.raw?.coordinates ??
+      job?.locationDetails?.coordinates
+  );
+
+  let distanceKm = null;
+
+  if (jobCoordinates && caregiverCoordinates) {
+    distanceKm = calculateDistanceKm(jobCoordinates, caregiverCoordinates);
+  }
+
+  let isNearby = Boolean(job.isNearby);
+  let distanceValue = existingDistance;
+
+  if (Number.isFinite(distanceKm)) {
+    isNearby = distanceKm <= 10;
+    distanceValue = distanceKm;
+  } else if (Number.isFinite(distanceValue)) {
+    isNearby = isNearby || distanceValue <= 10;
+  } else {
+    const caregiverTokens = normalizeLocationTokens(caregiverLocation);
+    const jobTokens = normalizeLocationTokens(
+      job.location || job.address || job.raw?.location || job.raw?.address || job.familyLocation
+    );
+
+    if (caregiverTokens.length && jobTokens.some((token) => caregiverTokens.includes(token))) {
+      isNearby = true;
+      distanceValue = 5;
+    }
+  }
+
+  const roundedDistance = Number.isFinite(distanceValue)
+    ? Math.round(distanceValue * 10) / 10
+    : null;
+
+  return {
+    ...job,
+    distance: roundedDistance,
+    distanceKm: Number.isFinite(distanceKm) ? Math.round(distanceKm * 10) / 10 : job.distanceKm,
+    isNearby,
+  };
+};
 
 export const useCaregiverDashboard = () => {
   const { user } = useAuth();

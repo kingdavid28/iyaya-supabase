@@ -425,11 +425,45 @@ const BookingsTab = ({
     if (!selectedContract || !selectedBookingForContract) return;
 
     try {
-      const result = await contractService.signContract(selectedContract.id, 'parent', {
-        signature,
-        signatureHash: btoa(signature), // Simple hash for demo
-        ipAddress: null
-      });
+      let existing;
+      try {
+        existing = await contractService.getContractById(selectedContract.id);
+      } catch (error) {
+        if (error?.code === 'PGRST116' || error?.message?.includes('0 rows')) {
+          Alert.alert('Contract unavailable', 'This contract could not be found. Please refresh and try again.');
+          setContractModalVisible(false);
+          setSelectedContract(null);
+          setSelectedBookingForContract(null);
+          return;
+        }
+        throw error;
+      }
+
+      if (!existing) {
+        Alert.alert('Contract unavailable', 'This contract could not be found. Please refresh and try again.');
+        setContractModalVisible(false);
+        setSelectedContract(null);
+        setSelectedBookingForContract(null);
+        return;
+      }
+
+      let result;
+      try {
+        result = await contractService.signContract(existing.id, 'parent', {
+          signature,
+          signatureHash: btoa(signature), // Simple hash for demo
+          ipAddress: null
+        });
+      } catch (error) {
+        if (error?.code === 'CONTRACT_NOT_FOUND') {
+          Alert.alert('Contract unavailable', 'This contract could not be found. Please refresh and try again.');
+          setContractModalVisible(false);
+          setSelectedContract(null);
+          setSelectedBookingForContract(null);
+          return;
+        }
+        throw error;
+      }
 
       if (result) {
         // Update the contract in state

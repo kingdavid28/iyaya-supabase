@@ -110,13 +110,31 @@ export const useParentDashboard = () => {
         _id: caregiver.id,
         name: caregiver.name || 'Caregiver',
         rating: caregiver.rating || 4.5,
+        reviewCount: caregiver.reviewCount || 0,
         hourlyRate: caregiver.hourly_rate || 300,
         experience: caregiver.experience || '2+ years',
         skills: caregiver.skills || ['Childcare', 'First Aid'],
         location: caregiver.address || 'Cebu City',
         avatar: caregiver.profile_image,
+        profileImage: caregiver.profile_image,
         bio: caregiver.bio || 'Experienced caregiver',
-        createdAt: caregiver.created_at || new Date().toISOString()
+        createdAt: caregiver.created_at || new Date().toISOString(),
+        
+        // Trust score and verification data
+        trustScore: caregiver.trustScore || caregiver.verification?.trustScore || 0,
+        verified: Boolean(caregiver.verified || caregiver.verification?.verified),
+        verification: {
+          trustScore: caregiver.trustScore || caregiver.verification?.trustScore || 0,
+          verified: Boolean(caregiver.verified || caregiver.verification?.verified),
+          backgroundCheck: caregiver.verification?.backgroundCheck || false,
+          certifications: caregiver.verification?.certifications || [],
+          documentsVerified: caregiver.verification?.documentsVerified || false
+        },
+        
+        // Additional caregiver profile data for enhanced display
+        completedJobs: caregiver.completedJobs || 0,
+        responseRate: caregiver.responseRate || '0%',
+        hasCompletedJobs: caregiver.completedJobs > 0
       }));
 
       console.log('✅ Transformed caregivers:', transformedCaregivers.length);

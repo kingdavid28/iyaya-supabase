@@ -56,7 +56,7 @@ export class SupabaseServiceFacade {
   async getJobById(jobId) { return this.jobs.getJobById(jobId) }
 
   // === APPLICATION METHODS ===
-  async applyToJob(jobId, caregiverId, data) { return this.applications.applyToJob(jobId, caregiverId, data) }
+  async applyToJob(jobId, caregiverId, payload) { return this.applications.applyToJob(jobId, caregiverId, payload) }
   async getMyApplications(userId) { return this.applications.getMyApplications(userId) }
   async getJobApplications(jobId) { return this.applications.getJobApplications(jobId) }
   async getForJob(jobId) { return this.applications.getForJob(jobId) }

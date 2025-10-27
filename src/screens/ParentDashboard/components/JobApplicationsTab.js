@@ -1,15 +1,15 @@
-import React, { useMemo, useState } from 'react';
-import { View, Text, FlatList, TouchableOpacity, StyleSheet, RefreshControl, Image, Alert, Linking, ScrollView } from 'react-native';
 import { formatDistanceToNow } from 'date-fns';
-import { User, Briefcase, MapPin, Clock, MessageCircle, CheckCircle, XCircle } from 'lucide-react-native';
-import { colors, styles as sharedStyles } from '../../styles/ParentDashboard.styles';
-import { getProfileImageUrl } from '../../../utils/imageUtils';
+import { Briefcase, CheckCircle, Clock, MapPin, MessageCircle, User, XCircle } from 'lucide-react-native';
+import React, { useCallback, useMemo, useRef, useState } from 'react';
+import { Alert, FlatList, Image, Linking, RefreshControl, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import {
-  SkeletonCard,
   SkeletonBlock,
+  SkeletonCard,
   SkeletonCircle,
   SkeletonPill
 } from '../../../components/common/SkeletonPlaceholder';
+import { getProfileImageUrl } from '../../../utils/imageUtils';
+import { colors, styles as sharedStyles } from '../../styles/ParentDashboard.styles';
 
 const statusMeta = {
   pending: { label: 'Pending', color: colors.info, background: '#EEF2FF' },
@@ -28,6 +28,8 @@ const JobApplicationsTab = ({
   onUpdateStatus
 }) => {
   const [selectedFilter, setSelectedFilter] = useState('all');
+  const listRef = useRef(null);
+  const [pullRefreshing, setPullRefreshing] = useState(false);
 
   const sortedApplications = useMemo(() => {
     return [...applications].sort((a, b) => {
@@ -63,6 +65,21 @@ const JobApplicationsTab = ({
       </View>
     );
   };
+
+  const handleRefresh = useCallback(async () => {
+    if (pullRefreshing) return;
+    setPullRefreshing(true);
+    try {
+      await onRefresh?.();
+      requestAnimationFrame(() => {
+        listRef.current?.scrollToOffset({ offset: 0, animated: true });
+      });
+    } catch (error) {
+      console.warn('⚠️ JobApplicationsTab refresh failed:', error);
+    } finally {
+      setPullRefreshing(false);
+    }
+  }, [onRefresh, pullRefreshing]);
 
   const renderApplication = ({ item }) => {
     const caregiverImage = getProfileImageUrl({ profileImage: item.caregiverProfileImage, name: item.caregiverName });
@@ -128,10 +145,34 @@ const JobApplicationsTab = ({
             )}
           </View>
           <View style={styles.caregiverDetails}>
-            <Text style={styles.caregiverName}>{item.caregiverName || 'Caregiver'}</Text>
+            {Number.isFinite(Number(item.proposedRate)) && Number(item.proposedRate) > 0 ? (
+              <View style={styles.proposedRatePill}>
+                <Text style={styles.proposedRateLabel}>Proposed rate</Text>
+                <Text style={styles.proposedRateValue}>
+                  ₱{Number(item.proposedRate).toLocaleString('en-PH', {
+                    minimumFractionDigits: 2,
+                    maximumFractionDigits: 2
+                  })}
+                  <Text style={styles.proposedRateUnit}> / hr</Text>
+                </Text>
+              </View>
+            ) : null}
+            <Text
+              style={styles.caregiverName}
+              numberOfLines={1}
+              ellipsizeMode="tail"
+            >
+              {item.caregiverName || 'Caregiver'}
+            </Text>
             <View style={styles.appliedTime}>
               <Clock size={12} color={colors.textTertiary} />
-              <Text style={styles.appliedTimeText}>Applied {appliedAgo}</Text>
+              <Text
+                style={styles.appliedTimeText}
+                numberOfLines={1}
+                ellipsizeMode="tail"
+              >
+                Applied {appliedAgo}
+              </Text>
             </View>
           </View>
         </View>
@@ -172,8 +213,8 @@ const JobApplicationsTab = ({
                 style={[styles.decisionButton, styles.shortlistButton]}
                 onPress={() => safeUpdateStatus('shortlisted')}
               >
-                <Clock size={16} color={colors.secondary} />
-                <Text style={styles.decisionShortlistText}>Shortlist</Text>
+                <Clock size={16} color={colors.info} style={styles.decisionIcon} />
+                <Text style={styles.decisionShortlistText}>Short list</Text>
               </TouchableOpacity>
             )}
             <TouchableOpacity
@@ -270,11 +311,18 @@ const JobApplicationsTab = ({
       </View>
 
       <FlatList
+        ref={listRef}
+        style={styles.list}
         data={filteredApplications}
         keyExtractor={(item, index) => String(item.id || `${item.jobId || 'job'}-${item.caregiverId || index}`)}
         renderItem={renderApplication}
-        contentContainerStyle={filteredApplications.length === 0 ? styles.emptyContent : sharedStyles.jobsList}
-        refreshControl={onRefresh ? <RefreshControl refreshing={refreshing} onRefresh={onRefresh} /> : undefined}
+        contentContainerStyle={filteredApplications.length === 0 ? styles.emptyContent : styles.listContent}
+        refreshControl={onRefresh ? (
+          <RefreshControl
+            refreshing={Boolean(refreshing) || pullRefreshing}
+            onRefresh={handleRefresh}
+          />
+        ) : undefined}
         showsVerticalScrollIndicator={false}
         ListEmptyComponent={
           <View style={styles.emptyState}>
@@ -301,6 +349,9 @@ const JobApplicationsTab = ({
 };
 
 const styles = StyleSheet.create({
+  list: {
+    flex: 1,
+  },
   skeletonContainer: {
     padding: 20,
     gap: 16
@@ -352,6 +403,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     padding: 32
+  },
+  listContent: {
+    paddingHorizontal: 16,
+    paddingBottom: 16,
   },
   emptyState: {
     alignItems: 'center',
@@ -431,7 +486,8 @@ const styles = StyleSheet.create({
   },
   caregiverRow: {
     flexDirection: 'row',
-    alignItems: 'center',
+    alignItems: 'flex-start',
+    gap: 14,
     marginTop: 20
   },
   avatarContainer: {
@@ -456,18 +512,47 @@ const styles = StyleSheet.create({
   caregiverDetails: {
     flex: 1
   },
+  proposedRatePill: {
+    alignSelf: 'flex-start',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 999,
+    backgroundColor: '#EEF2FF',
+    borderWidth: 1,
+    borderColor: colors.info,
+    marginBottom: 8,
+    maxWidth: '100%'
+  },
+  proposedRateLabel: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: colors.info,
+    marginBottom: 2,
+  },
+  proposedRateValue: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: colors.text,
+  },
+  proposedRateUnit: {
+    fontSize: 12,
+    fontWeight: '500',
+    color: colors.textSecondary,
+  },
   caregiverName: {
     fontSize: 16,
     fontWeight: '600',
-    color: colors.text
+    color: colors.text,
+    maxWidth: '100%'
   },
   appliedTime: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginTop: 4
+    marginTop: 4,
+    gap: 6,
+    maxWidth: '100%'
   },
   appliedTimeText: {
-    marginLeft: 6,
     fontSize: 12,
     color: colors.textSecondary
   },
@@ -527,6 +612,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: 8,
     paddingVertical: 12,
+    paddingHorizontal: 14,
     borderRadius: 12,
     borderWidth: 1
   },
@@ -541,12 +627,21 @@ const styles = StyleSheet.create({
   },
   shortlistButton: {
     marginRight: 8,
-    borderColor: colors.secondary,
-    backgroundColor: colors.primaryLight
+    borderColor: colors.info,
+    backgroundColor: '#EEF4FF',
+    shadowColor: '#2563EB',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 4,
+    elevation: 2
+  },
+  decisionIcon: {
+    marginVertical: -1
   },
   decisionShortlistText: {
-    color: colors.secondary,
-    fontWeight: '600'
+    color: colors.info,
+    fontWeight: '700',
+    letterSpacing: 0.2
   },
   rejectButton: {
     borderColor: colors.error,

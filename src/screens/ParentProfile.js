@@ -331,6 +331,7 @@ const ParentProfile = ({ navigation }) => {
             style={styles.avatar}
             defaultIconSize={50}
             borderColor="#3b82f6"
+            imageScale={0.95}
           />
           <View style={styles.headerInfo}>
             <Text style={styles.name}>{safeText(profile.name || user?.name, 'No name')}</Text>
@@ -444,6 +445,7 @@ const ParentProfile = ({ navigation }) => {
                           size={120}
                           style={styles.profileImageEdit}
                           defaultIconSize={60}
+                          imageScale={0.95}
                         />
                         <View style={styles.imageOverlay}>
                           <Ionicons name="camera" size={20} color="white" />

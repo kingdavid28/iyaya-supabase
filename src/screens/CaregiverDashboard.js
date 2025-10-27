@@ -13,14 +13,14 @@ import { supabaseService } from '../services/supabase'
 import { reviewService } from '../services/supabase/reviewService'
 
 import {
-  FormInput,
-  ModalWrapper,
-  QuickAction,
-  QuickStat,
-  Button as SharedButton,
-  Card as SharedCard,
-  StatusBadge,
-  formatDate
+    FormInput,
+    ModalWrapper,
+    QuickAction,
+    QuickStat,
+    Button as SharedButton,
+    Card as SharedCard,
+    StatusBadge,
+    formatDate
 } from '../shared/ui'
 
 import { useCaregiverDashboard } from '../hooks/useCaregiverDashboard'
@@ -1099,7 +1099,10 @@ const CaregiverDashboard = () => {
       const response = await supabaseService.applications.applyToJob(
         jobId,
         user.id,
-        coverLetter || ''
+        {
+          message: coverLetter || '',
+          proposedRate,
+        }
       );
 
       if (response) {
@@ -2333,124 +2336,175 @@ const CaregiverDashboard = () => {
         </Modal>
       )}
 
-      {showApplicationDetails && selectedApplication && (
-        <Modal
-          visible={showApplicationDetails}
-          onRequestClose={() => setShowApplicationDetails(false)}
-          transparent
-          animationType="slide"
-        >
-          <View style={styles.modalOverlay}>
-            <View style={styles.applicationModal}>
-              <View style={styles.applicationModalHeader}>
-                <Text style={styles.applicationModalTitle}>Application Details</Text>
-                <Pressable
-                  onPress={() => setShowApplicationDetails(false)}
-                  style={styles.modalCloseButton}
+      {showApplicationDetails && selectedApplication && (() => {
+        const jobDetails = selectedApplication.job || {};
+        const jobTitle = jobDetails.title || selectedApplication.jobTitle || 'Childcare Position';
+        const familyLabel = jobDetails.family || selectedApplication.family || jobDetails.parentName || 'Family';
+        const appliedDateRaw = jobDetails.appliedDate || selectedApplication.appliedDate;
+        const appliedDateLabel = appliedDateRaw ? new Date(appliedDateRaw).toLocaleDateString() : null;
+        const scheduleLabel = jobDetails.schedule
+          || jobDetails.workingHours
+          || jobDetails.time
+          || (jobDetails.startTime && jobDetails.endTime ? `${jobDetails.startTime} - ${jobDetails.endTime}` : null)
+          || (jobDetails.start_time && jobDetails.end_time ? `${jobDetails.start_time} - ${jobDetails.end_time}` : null)
+          || 'Schedule to be discussed';
+        const resolvePesoLabel = (value) => {
+          if (value === null || value === undefined || value === '') return null;
+          const numeric = Number(value);
+          if (Number.isFinite(numeric)) {
+            return `₱${numeric.toLocaleString('en-PH', { minimumFractionDigits: 0 })}/hr`;
+          }
+          return typeof value === 'string' ? value : null;
+        };
+        const jobRateLabel = resolvePesoLabel(
+          jobDetails.hourlyRate ?? jobDetails.hourly_rate ?? jobDetails.rate ?? selectedApplication.hourlyRate
+        );
+        const proposedRateLabel = resolvePesoLabel(selectedApplication.proposedRate);
+        const locationLabel = jobDetails.location || selectedApplication.location || jobDetails.address;
+        const childrenSummaryLabel =
+          jobDetails.childrenSummary ||
+          selectedApplication.childrenSummary ||
+          (Array.isArray(jobDetails.children) && jobDetails.children.length
+            ? `${jobDetails.children.length} child${jobDetails.children.length > 1 ? 'ren' : ''}`
+            : null);
+        const messageBody = selectedApplication.coverLetter || selectedApplication.message;
+        const descriptionBody = jobDetails.description;
+        const requirementTags = Array.isArray(jobDetails.requirements)
+          ? jobDetails.requirements.filter(Boolean)
+          : [];
+        const statusLower = String(selectedApplication.status || '').toLowerCase();
+        const canMessageFamily = statusLower === 'accepted';
+        const infoTiles = [
+          appliedDateLabel && { icon: 'calendar-outline', label: 'Applied', value: appliedDateLabel },
+          scheduleLabel && { icon: 'time-outline', label: 'Schedule', value: scheduleLabel },
+          jobRateLabel && { icon: 'cash-outline', label: 'Job Rate', value: jobRateLabel },
+          proposedRateLabel && { icon: 'trending-up-outline', label: 'Your Proposed Rate', value: proposedRateLabel },
+          locationLabel && { icon: 'location-outline', label: 'Location', value: locationLabel },
+          childrenSummaryLabel && { icon: 'people-outline', label: 'Children', value: childrenSummaryLabel },
+        ].filter(Boolean);
+        const metaChips = [
+          locationLabel && { icon: 'location-outline', text: locationLabel },
+          appliedDateLabel && { icon: 'calendar-outline', text: `Applied ${appliedDateLabel}` },
+        ].filter(Boolean);
+
+        return (
+          <Modal
+            visible={showApplicationDetails}
+            onRequestClose={() => setShowApplicationDetails(false)}
+            transparent
+            animationType="slide"
+          >
+            <View style={styles.modalOverlay}>
+              <View style={styles.applicationModal}>
+                <ScrollView
+                  showsVerticalScrollIndicator={false}
+                  contentContainerStyle={styles.applicationModalScroll}
                 >
-                  <Ionicons name="close" size={24} color="#6B7280" />
-                </Pressable>
-              </View>
+                  <LinearGradient
+                    colors={['#4F46E5', '#7C3AED']}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 1 }}
+                    style={styles.applicationHeroGradient}
+                  >
+                    <View style={styles.applicationHeroTopRow}>
+                      <StatusBadge status={selectedApplication.status} showIcon style={styles.applicationStatusBadge} />
+                      <Pressable
+                        onPress={() => setShowApplicationDetails(false)}
+                        style={styles.modalCloseButton}
+                      >
+                        <Ionicons name="close" size={20} color="#E0E7FF" />
+                      </Pressable>
+                    </View>
 
-              <ScrollView style={styles.applicationFormContainer}>
-                <View style={styles.jobSummary}>
-                  <Text style={styles.jobSummaryTitle} numberOfLines={2}>
-                    {selectedApplication.job?.title || selectedApplication.jobTitle || 'Childcare Position'}
-                  </Text>
-                  <Text style={styles.jobSummaryFamily} numberOfLines={1}>
-                    {selectedApplication.job?.family || selectedApplication.family || 'Family'}
-                  </Text>
-                  <StatusBadge status={selectedApplication.status} />
-                </View>
+                    <View style={styles.applicationHeroContent}>
+                      <Text style={styles.applicationHeroTitle} numberOfLines={2}>{String(jobTitle)}</Text>
+                      <Text style={styles.applicationHeroSubtitle} numberOfLines={1}>{String(familyLabel)}</Text>
 
-                <View style={styles.applicationDetails}>
-                  {selectedApplication.job?.appliedDate || selectedApplication.appliedDate ? (
-                    <View style={styles.applicationDetailRow}>
-                      <Ionicons name="calendar" size={18} color="#6B7280" />
-                      <Text style={styles.applicationDetailText}>
-                        Applied: {new Date(selectedApplication.job?.appliedDate || selectedApplication.appliedDate).toLocaleDateString()}
-                      </Text>
+                      {metaChips.length > 0 && (
+                        <View style={styles.applicationHeroMetaRow}>
+                          {metaChips.map((chip, index) => (
+                            <View key={`application-meta-${index}`} style={styles.applicationHeroMetaPill}>
+                              <Ionicons name={chip.icon} size={14} color="#E0E7FF" />
+                              <Text style={styles.applicationHeroMetaText}>{String(chip.text)}</Text>
+                            </View>
+                          ))}
+                        </View>
+                      )}
                     </View>
-                  ) : null}
-                  <View style={styles.applicationDetailRow}>
-                    <Ionicons name="calendar" size={18} color="#6B7280" />
-                    <Text style={styles.applicationDetailText}>
-                      Schedule: {selectedApplication.job?.schedule || 'Schedule to be discussed'}
-                    </Text>
-                  </View>
-                  <View style={styles.applicationDetailRow}>
-                    <Ionicons name="cash" size={18} color="#6B7280" />
-                    <Text style={styles.applicationDetailText}>
-                      ₱{selectedApplication.job?.hourlyRate || selectedApplication.hourlyRate || 0}/hr
-                    </Text>
-                  </View>
-                  {(selectedApplication.job?.childrenSummary || selectedApplication.childrenSummary) && (
-                    <View style={styles.applicationDetailRow}>
-                      <Ionicons name="people" size={18} color="#6B7280" />
-                      <Text style={styles.applicationDetailText}>
-                        {selectedApplication.job?.childrenSummary || selectedApplication.childrenSummary}
-                      </Text>
-                    </View>
-                  )}
-                  {(selectedApplication.job?.location || selectedApplication.location) && (
-                    <View style={styles.applicationDetailRow}>
-                      <Ionicons name="location" size={18} color="#6B7280" />
-                      <Text style={styles.applicationDetailText}>
-                        {selectedApplication.job?.location || selectedApplication.location}
-                      </Text>
-                    </View>
-                  )}
-                  {selectedApplication.proposedRate && (
-                    <View style={styles.applicationDetailRow}>
-                      <Ionicons name="trending-up" size={18} color="#6B7280" />
-                      <Text style={styles.applicationDetailText}>
-                        Proposed Rate: ₱{selectedApplication.proposedRate}/hr
-                      </Text>
-                    </View>
-                  )}
-                  {(selectedApplication.coverLetter || selectedApplication.message) && (
-                    <View style={{ marginTop: 16 }}>
-                      <Text style={styles.inputLabel}>Message</Text>
-                      <View style={styles.coverLetterDisplay}>
-                        <Text style={styles.coverLetterText}>
-                          {selectedApplication.coverLetter || selectedApplication.message}
-                        </Text>
+                  </LinearGradient>
+
+                  <View style={styles.applicationModalBody}>
+                    {infoTiles.length > 0 && (
+                      <View style={styles.applicationInfoGrid}>
+                        {infoTiles.map((tile, index) => (
+                          <View key={`application-info-${index}`} style={styles.applicationInfoTile}>
+                            <Ionicons name={tile.icon} size={18} color="#4338CA" />
+                            <Text style={styles.applicationInfoLabel}>{tile.label}</Text>
+                            <Text style={styles.applicationInfoValue}>{String(tile.value)}</Text>
+                          </View>
+                        ))}
                       </View>
-                    </View>
-                  )}
-                  {selectedApplication.job?.description && (
-                    <View style={{ marginTop: 16 }}>
-                      <Text style={styles.inputLabel}>Job Description</Text>
-                      <View style={styles.coverLetterDisplay}>
-                        <Text style={styles.coverLetterText}>{selectedApplication.job.description}</Text>
-                      </View>
-                    </View>
-                  )}
-                </View>
-              </ScrollView>
+                    )}
 
-              <View style={styles.applicationModalActions}>
-                <Button
-                  mode="outlined"
-                  onPress={() => setShowApplicationDetails(false)}
-                  style={styles.cancelButton}
-                >
-                  Close
-                </Button>
-                {selectedApplication.status === 'accepted' && (
+                    {messageBody && (
+                      <View style={styles.applicationSection}>
+                        <Text style={styles.applicationSectionTitle}>Your Message</Text>
+                        <View style={styles.applicationSectionCard}>
+                          <Text style={styles.applicationSectionCardText}>{String(messageBody)}</Text>
+                        </View>
+                      </View>
+                    )}
+
+                    {descriptionBody && (
+                      <View style={styles.applicationSection}>
+                        <Text style={styles.applicationSectionTitle}>Job Description</Text>
+                        <View style={styles.applicationSectionCard}>
+                          <Text style={styles.applicationSectionCardText}>{String(descriptionBody)}</Text>
+                        </View>
+                      </View>
+                    )}
+
+                    {requirementTags.length > 0 && (
+                      <View style={styles.applicationSection}>
+                        <Text style={styles.applicationSectionTitle}>Requirements</Text>
+                        <View style={styles.applicationTagList}>
+                          {requirementTags.map((req, index) => (
+                            <View key={`application-tag-${index}`} style={styles.applicationTagChip}>
+                              <Text style={styles.applicationTagChipText}>{String(req)}</Text>
+                            </View>
+                          ))}
+                        </View>
+                      </View>
+                    )}
+                  </View>
+                </ScrollView>
+
+                <View style={styles.applicationModalActions}>
+                  <Button
+                    mode="outlined"
+                    onPress={() => setShowApplicationDetails(false)}
+                    style={styles.cancelButton}
+                  >
+                    Close
+                  </Button>
                   <Button
                     mode="contained"
                     style={styles.submitButton}
-                    onPress={() => handleMessageFamily(selectedApplication)}
+                    onPress={() => {
+                      if (!canMessageFamily) return;
+                      setShowApplicationDetails(false);
+                      handleMessageFamily(selectedApplication);
+                    }}
+                    disabled={!canMessageFamily}
                   >
-                    Message Family
+                    {canMessageFamily ? 'Message Family' : 'Message Unavailable'}
                   </Button>
-                )}
+                </View>
               </View>
             </View>
-          </View>
-        </Modal>
-      )}
+          </Modal>
+        );
+      })()}
 
       {showJobDetails && selectedJob && (
         <Modal

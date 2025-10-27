@@ -24,11 +24,19 @@ export class NotificationService extends SupabaseBase {
         created_at: new Date().toISOString()
       }
       
-      const { data, error } = await supabase
-        .from('notifications')
-        .insert([dbNotificationData])
-        .select()
-        .single()
+      const shouldReturnRecord = resolvedUserId === user.id
+
+      const response = shouldReturnRecord
+        ? await supabase
+            .from('notifications')
+            .insert([dbNotificationData])
+            .select()
+            .single()
+        : await supabase
+            .from('notifications')
+            .insert([dbNotificationData])
+
+      const { data, error } = response
       
       if (error) {
         // Handle RLS policy violations gracefully
@@ -39,9 +47,11 @@ export class NotificationService extends SupabaseBase {
         throw error
       }
       
-      console.log('✅ Notification created:', data)
+      if (data) {
+        console.log('✅ Notification created:', data)
+      }
       invalidateCache(`notification-counts:${resolvedUserId}`)
-      return data
+      return data ?? null
     } catch (error) {
       return this._handleError('createNotification', error)
     }

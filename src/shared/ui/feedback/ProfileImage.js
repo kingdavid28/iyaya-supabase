@@ -1,6 +1,6 @@
-import React, { useState, useMemo } from 'react';
-import { View, Image, StyleSheet } from 'react-native';
 import { User } from 'lucide-react-native';
+import React, { useMemo, useState } from 'react';
+import { Image, StyleSheet, View } from 'react-native';
 import { getImageSource } from '../../../utils/imageUtils';
 
 const ProfileImage = ({ 
@@ -9,7 +9,8 @@ const ProfileImage = ({
   style, 
   defaultIconSize = 40,
   borderColor = '#3b82f6',
-  borderWidth = 3 
+  borderWidth = 3,
+  imageScale = 1
 }) => {
   const [imageError, setImageError] = useState(false);
   
@@ -33,7 +34,7 @@ const ProfileImage = ({
       {imageSource && !imageError ? (
         <Image 
           source={imageSource}
-          style={[styles.image, imageSize]}
+          style={[styles.image, imageSize, imageScale !== 1 ? { transform: [{ scale: imageScale }] } : null]}
           onError={(error) => {
             // Reduce log noise - only log actual errors, not missing files
             const errorMessage = error?.nativeEvent?.error || error;

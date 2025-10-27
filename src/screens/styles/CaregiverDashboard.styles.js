@@ -1391,12 +1391,71 @@ export const styles = StyleSheet.create({
   // Application Modal Styles
   applicationModal: {
     backgroundColor: '#FFFFFF',
-    borderRadius: 20,
-    margin: 20,
-    maxHeight: '85%',
-    width: '90%',
+    borderRadius: 24,
+    margin: 18,
+    maxHeight: '88%',
+    width: '92%',
     alignSelf: 'center',
+    overflow: 'hidden',
     ...shadows.lg,
+  },
+  applicationModalScroll: {
+    paddingBottom: 24,
+  },
+  applicationHeroGradient: {
+    paddingHorizontal: 24,
+    paddingTop: 32,
+    paddingBottom: 28,
+  },
+  applicationHeroTopRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 20,
+  },
+  applicationStatusBadge: {
+    backgroundColor: 'rgba(255,255,255,0.18)',
+    borderRadius: 999,
+    paddingHorizontal: 14,
+    paddingVertical: 6,
+  },
+  applicationHeroContent: {
+    gap: 8,
+  },
+  applicationHeroTitle: {
+    fontSize: 22,
+    fontWeight: '700',
+    color: '#EEF2FF',
+  },
+  applicationHeroSubtitle: {
+    fontSize: 16,
+    color: 'rgba(224, 231, 255, 0.85)',
+  },
+  applicationHeroMetaRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 10,
+    marginTop: 10,
+  },
+  applicationHeroMetaPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 14,
+    backgroundColor: 'rgba(255,255,255,0.12)',
+    gap: 6,
+  },
+  applicationHeroMetaText: {
+    color: '#E0E7FF',
+    fontSize: 12,
+    fontWeight: '500',
+  },
+  applicationModalBody: {
+    paddingHorizontal: 24,
+    paddingTop: 24,
+    paddingBottom: 12,
+    gap: 24,
   },
   applicationModalHeader: {
     flexDirection: 'row',
@@ -1443,6 +1502,68 @@ export const styles = StyleSheet.create({
   },
   applicationFormContainer: {
     padding: 20,
+  },
+  applicationInfoGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 14,
+  },
+  applicationInfoTile: {
+    flexBasis: '48%',
+    backgroundColor: '#F5F5FF',
+    borderRadius: 18,
+    padding: 16,
+    gap: 6,
+    borderWidth: 1,
+    borderColor: '#E0E7FF',
+  },
+  applicationInfoLabel: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#4338CA',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  applicationInfoValue: {
+    fontSize: 15,
+    fontWeight: '500',
+    color: '#1F2937',
+  },
+  applicationSection: {
+    gap: 12,
+  },
+  applicationSectionTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#1F2937',
+  },
+  applicationSectionCard: {
+    backgroundColor: '#F9FAFB',
+    borderRadius: 16,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+  },
+  applicationSectionCardText: {
+    fontSize: 14,
+    lineHeight: 20,
+    color: '#374151',
+  },
+  applicationTagList: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  applicationTagChip: {
+    borderRadius: 999,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    backgroundColor: '#EEF2FF',
+  },
+  applicationTagChipText: {
+    fontSize: 12,
+    color: '#4338CA',
+    fontWeight: '500',
   },
   applicationInput: {
     borderWidth: 1,

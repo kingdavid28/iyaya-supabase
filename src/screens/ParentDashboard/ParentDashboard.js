@@ -672,11 +672,46 @@ const ParentDashboard = () => {
 
     try {
       const { contractService } = await import('../../services/supabase/contractService');
-      const result = await contractService.signContract(selectedContract.id, 'parent', {
-        signature,
-        signatureHash: btoa(signature), // Simple hash for demo
-        ipAddress: null
-      });
+
+      let existing;
+      try {
+        existing = await contractService.getContractById(selectedContract.id);
+      } catch (error) {
+        if (error?.code === 'PGRST116' || error?.message?.includes('0 rows')) {
+          Alert.alert('Contract unavailable', 'This contract could not be found. Please refresh and try again.');
+          toggleModal('contract', false);
+          setSelectedContract(null);
+          setSelectedBooking(null);
+          return;
+        }
+        throw error;
+      }
+
+      if (!existing) {
+        Alert.alert('Contract unavailable', 'This contract could not be found. Please refresh and try again.');
+        toggleModal('contract', false);
+        setSelectedContract(null);
+        setSelectedBooking(null);
+        return;
+      }
+
+      let result;
+      try {
+        result = await contractService.signContract(existing.id, 'parent', {
+          signature,
+          signatureHash: btoa(signature), // Simple hash for demo
+          ipAddress: null
+        });
+      } catch (error) {
+        if (error?.code === 'CONTRACT_NOT_FOUND') {
+          Alert.alert('Contract unavailable', 'This contract could not be found. Please refresh and try again.');
+          toggleModal('contract', false);
+          setSelectedContract(null);
+          setSelectedBooking(null);
+          return;
+        }
+        throw error;
+      }
 
       if (result) {
         Alert.alert('Success', 'Contract signed successfully!');
@@ -1111,6 +1146,7 @@ const ParentDashboard = () => {
             onJobPosted={handleJobPosted}
             loading={loading}
             setActiveTab={setActiveTab}
+            childrenList={children}
           />
         );
       case 'applications':
@@ -1156,6 +1192,19 @@ const ParentDashboard = () => {
 
                   return merged;
                 }));
+
+                if (status === 'accepted') {
+                  try {
+                    await supabaseService.applications.promoteApplication(applicationId);
+                  } catch (promotionError) {
+                    console.error('❌ Failed to promote application:', promotionError);
+                    Alert.alert(
+                      'Promotion Failed',
+                      promotionError?.message || 'The application was accepted, but promotion to booking did not complete. Please try again.'
+                    );
+                  }
+                }
+
                 await Promise.all([
                   fetchJobs(),
                   fetchBookings(),
@@ -1230,7 +1279,8 @@ const ParentDashboard = () => {
 
   return (
         <View style={styles.container}>
-          <Header
+          <View style={styles.contentContainer}>
+            <Header
             navigation={navigation}
             onProfilePress={() => toggleModal('profile', true)}
             onSignOut={signOut}
@@ -1292,6 +1342,7 @@ const ParentDashboard = () => {
             visible={modals.jobPosting}
             onClose={() => toggleModal('jobPosting', false)}
             onJobPosted={handleJobPosted}
+            childrenList={children}
           />
 
           <PaymentModal
@@ -1366,6 +1417,7 @@ const ParentDashboard = () => {
             onResend={handleContractResend}
             onDownloadPdf={handleDownloadPdf}
           />
+          </View>
         </View>
   );
 };

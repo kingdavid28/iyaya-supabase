@@ -179,9 +179,22 @@ class ContractService extends SupabaseBase {
         [`${columnPrefix}_signed_ip`]: ipAddress || null,
       }
 
-      const existing = await this.getContractById(contractId)
+      let existing
+      try {
+        existing = await this.getContractById(contractId)
+      } catch (error) {
+        if (error?.code === 'PGRST116' || error?.message?.includes('0 rows')) {
+          const notFoundError = new Error('Contract not found')
+          notFoundError.code = 'CONTRACT_NOT_FOUND'
+          throw notFoundError
+        }
+        throw error
+      }
+
       if (!existing) {
-        throw new Error('Contract not found')
+        const notFoundError = new Error('Contract not found')
+        notFoundError.code = 'CONTRACT_NOT_FOUND'
+        throw notFoundError
       }
 
       let nextStatus = existing.status
@@ -204,6 +217,12 @@ class ContractService extends SupabaseBase {
 
       if (error) throw error
 
+      if (!data) {
+        const notFoundError = new Error('Contract not found')
+        notFoundError.code = 'CONTRACT_NOT_FOUND'
+        throw notFoundError
+      }
+
       const normalized = this._normalizeContract(data)
       invalidateCache(`job_contracts:booking:${normalized.bookingId}`)
       invalidateCache(`job_contracts:user:${normalized.parentId}`)
@@ -217,6 +236,16 @@ class ContractService extends SupabaseBase {
 
       return normalized
     } catch (error) {
+      if (error?.code === 'CONTRACT_NOT_FOUND') {
+        throw error
+      }
+
+      if (error?.code === 'PGRST116' || error?.message?.includes('0 rows')) {
+        const notFoundError = new Error('Contract not found')
+        notFoundError.code = 'CONTRACT_NOT_FOUND'
+        throw notFoundError
+      }
+
       return this._handleError('signContract', error)
     }
   }
