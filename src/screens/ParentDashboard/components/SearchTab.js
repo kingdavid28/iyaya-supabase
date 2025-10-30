@@ -1,9 +1,11 @@
+import { LinearGradient } from 'expo-linear-gradient';
+import { Search, SlidersHorizontal } from 'lucide-react-native';
 import React from 'react';
-import { View, Text, FlatList, ActivityIndicator, RefreshControl, TextInput, TouchableOpacity, ScrollView } from 'react-native';
-import { SlidersHorizontal, Search } from 'lucide-react-native';
-import { styles, colors } from '../../styles/ParentDashboard.styles';
+import { ActivityIndicator, FlatList, RefreshControl, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { colors, styles } from '../../styles/ParentDashboard.styles';
 import CaregiverCard from './CaregiverCard';
-import { userService } from '../../../services/supabase';
+
+const PARENT_HEADER_GRADIENT = ['#f4a9daff', '#dcd8f0ff'];
 
 
 const SearchTab = ({
@@ -33,25 +35,32 @@ const SearchTab = ({
   return (
     <View style={[styles.caregiversContent, { flex: 1 }]}>
       {/* Header and Filter Button */}
-      <View style={searchTabStyles.headerContainer}>
-        <Text style={searchTabStyles.headerTitle}>Find iYaya</Text>
-        <TouchableOpacity 
-          style={[searchTabStyles.filterButton, activeFilters > 0 && searchTabStyles.filterButtonActive]}
-          onPress={onOpenFilter}
-        >
-          <SlidersHorizontal 
-            size={16} 
-            color="#db2777" 
-            style={searchTabStyles.filterIcon}
-          />
-          <Text style={searchTabStyles.filterText}>Filters</Text>
-          {activeFilters > 0 && (
-            <View style={searchTabStyles.filterBadge}>
-              <Text style={searchTabStyles.filterBadgeText}>{activeFilters}</Text>
-            </View>
-          )}
-        </TouchableOpacity>
-      </View>
+      <LinearGradient
+        colors={PARENT_HEADER_GRADIENT}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 0 }}
+        style={searchTabStyles.headerGradient}
+      >
+        <View style={searchTabStyles.headerContainer}>
+          <Text style={searchTabStyles.headerTitle}>Find iYaya</Text>
+          <TouchableOpacity 
+            style={[searchTabStyles.filterButton, activeFilters > 0 && searchTabStyles.filterButtonActive]}
+            onPress={onOpenFilter}
+          >
+            <SlidersHorizontal 
+              size={16} 
+              color="rgba(255,255,255,0.92)" 
+              style={searchTabStyles.filterIcon}
+            />
+            <Text style={searchTabStyles.filterText}>Filters</Text>
+            {activeFilters > 0 && (
+              <View style={searchTabStyles.filterBadge}>
+                <Text style={searchTabStyles.filterBadgeText}>{activeFilters}</Text>
+              </View>
+            )}
+          </TouchableOpacity>
+        </View>
+      </LinearGradient>
 
       {/* Search Bar */}
       <View style={searchTabStyles.searchContainer}>
@@ -145,29 +154,32 @@ const SearchTab = ({
 };
 
 const searchTabStyles = {
+  headerGradient: {
+    borderBottomLeftRadius: 24,
+    borderBottomRightRadius: 24,
+    paddingHorizontal: 16,
+    paddingVertical: 20,
+  },
   headerContainer: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    paddingVertical: 16,
-    backgroundColor: '#FFFFFF',
   },
   headerTitle: {
     fontSize: 24,
     fontWeight: 'bold',
-    color: '#1f2937',
+    color: '#FFFFFF',
   },
   filterButton: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 16,
     paddingVertical: 8,
-    borderWidth: 2,
-    borderColor: '#db2777',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.45)',
     borderRadius: 25,
     position: 'relative',
-    backgroundColor: '#FFFFFF',
+    backgroundColor: 'rgba(255,255,255,0.16)',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
@@ -175,8 +187,8 @@ const searchTabStyles = {
     elevation: 3,
   },
   filterButtonActive: {
-    backgroundColor: '#fdf2f8',
-    borderColor: '#be185d',
+    backgroundColor: 'rgba(255,255,255,0.28)',
+    borderColor: 'rgba(255,255,255,0.65)',
   },
   filterIcon: {
     marginRight: 6,
@@ -184,7 +196,7 @@ const searchTabStyles = {
   filterText: {
     fontSize: 14,
     fontWeight: '600',
-    color: '#db2777',
+    color: '#FFFFFF',
   },
   filterBadge: {
     position: 'absolute',
@@ -200,7 +212,7 @@ const searchTabStyles = {
     borderColor: '#FFFFFF',
   },
   filterBadgeText: {
-    color: 'white',
+    color: '#FFFFFF',
     fontSize: 12,
     fontWeight: 'bold',
   },

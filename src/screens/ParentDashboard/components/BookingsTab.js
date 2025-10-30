@@ -173,7 +173,8 @@ const BookingsTab = ({
   onMessageCaregiver,
   onOpenContract,
   navigation,
-  loading
+  loading,
+  refreshBookings
 }) => {
   const [contracts, setContracts] = React.useState({});
   const [contractsLoading, setContractsLoading] = React.useState(false);
@@ -473,6 +474,13 @@ const BookingsTab = ({
         }));
 
         Alert.alert('Success', 'Contract signed successfully!');
+
+        if (typeof refreshBookings === 'function') {
+          await refreshBookings();
+        }
+
+        await fetchContractsForBookings(bookings || []);
+
         setContractModalVisible(false);
         setSelectedContract(null);
         setSelectedBookingForContract(null);
@@ -481,7 +489,7 @@ const BookingsTab = ({
       console.error('Error signing contract:', error);
       Alert.alert('Error', 'Failed to sign contract. Please try again.');
     }
-  }, [selectedContract, selectedBookingForContract]);
+  }, [selectedContract, selectedBookingForContract, refreshBookings, fetchContractsForBookings, bookings]);
 
   const handleDownloadPdf = useCallback(async (contract) => {
     if (!contract) {

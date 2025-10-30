@@ -6,13 +6,13 @@ import { styles } from '../../styles/ParentDashboard.styles';
 // Privacy components temporarily disabled due to backend API not implemented
 import { usePrivacy } from '../../../components/features/privacy/PrivacyManager';
 import PrivacyNotificationModal from '../../../components/features/privacy/PrivacyNotificationModal';
-import { SettingsModal } from '../../../components/ui/modals/SettingsModal';
 import { RequestInfoModal } from '../../../components/ui/modals/RequestInfoModal';
+import { SettingsModal } from '../../../components/ui/modals/SettingsModal';
 
 // NotificationContext removed - using local state
 import { getCurrentSocketURL } from '../../../config/api';
 
-const Header = ({ navigation, onProfilePress, onSignOut, greetingName, onProfileEdit, profileName, profileImage, profileContact, profileLocation, setActiveTab }) => {
+const Header = ({ navigation, onProfilePress, onSignOut, greetingName, onProfileEdit, profileName, profileImage, profileContact, profileLocation, setActiveTab, tabNotificationCounts = {} }) => {
   // Use real privacy system
   const { pendingRequests, notifications } = usePrivacy();
 
@@ -24,6 +24,10 @@ const Header = ({ navigation, onProfilePress, onSignOut, greetingName, onProfile
   // Calculate real notification counts
   const unreadNotifications = notifications?.filter(n => !n.read)?.length || 0;
   const pendingRequestsCount = pendingRequests?.length || 0;
+
+  const messagesBadgeCount = tabNotificationCounts.messages || 0;
+  const alertsBadgeCount = Math.max(unreadNotifications, tabNotificationCounts.notifications || 0);
+  const privacyBadgeCount = unreadNotifications + pendingRequestsCount;
   
   // Handle image URI construction
   const getImageSource = () => {
@@ -45,7 +49,7 @@ const Header = ({ navigation, onProfilePress, onSignOut, greetingName, onProfile
   return (
     <View style={headerStyles.parentLikeHeaderContainer}>
       <LinearGradient
-        colors={["#ebc5dd", "#ccc8e8"]}
+        colors={['#ca85b1ff', '#a094f2ff']}
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 0 }}
         style={headerStyles.parentLikeHeaderGradient}
@@ -109,6 +113,13 @@ const Header = ({ navigation, onProfilePress, onSignOut, greetingName, onProfile
               onPress={() => setActiveTab('messages')}
             >
               <Ionicons name="chatbubble-ellipses-outline" size={22} color="#db2777" />
+              {messagesBadgeCount > 0 && (
+                <View style={headerStyles.notificationBadge}>
+                  <Text style={headerStyles.notificationBadgeText}>
+                    {messagesBadgeCount > 99 ? '99+' : messagesBadgeCount}
+                  </Text>
+                </View>
+              )}
             </Pressable>
             
             <Pressable 
@@ -116,13 +127,10 @@ const Header = ({ navigation, onProfilePress, onSignOut, greetingName, onProfile
               onPress={() => setShowNotifications(true)}
             >
               <Ionicons name="shield-outline" size={22} color="#db2777" />
-              {(unreadNotifications > 0 || pendingRequestsCount > 0) && (
+              {privacyBadgeCount > 0 && (
                 <View style={headerStyles.notificationBadge}>
                   <Text style={headerStyles.notificationBadgeText}>
-                    {unreadNotifications + pendingRequestsCount > 99 ? 
-                      '99+' : 
-                      unreadNotifications + pendingRequestsCount
-                    }
+                    {privacyBadgeCount > 99 ? '99+' : privacyBadgeCount}
                   </Text>
                 </View>
               )}
@@ -133,10 +141,10 @@ const Header = ({ navigation, onProfilePress, onSignOut, greetingName, onProfile
               onPress={() => setActiveTab('alerts')}
             >
               <Ionicons name="notifications-outline" size={22} color="#db2777" />
-              {(unreadNotifications > 0) && (
+              {alertsBadgeCount > 0 && (
                 <View style={headerStyles.notificationBadge}>
                   <Text style={headerStyles.notificationBadgeText}>
-                    {unreadNotifications > 99 ? '99+' : unreadNotifications}
+                    {alertsBadgeCount > 99 ? '99+' : alertsBadgeCount}
                   </Text>
                 </View>
               )}
@@ -204,8 +212,9 @@ const headerStyles = {
   },
   parentLikeHeaderGradient: {
     borderRadius: 16,
-    paddingHorizontal: 16,
+    paddingHorizontal: 10,
     marginTop: 30,
+    marginHorizontal: 5,
     paddingVertical: 4,
   },
   headerButton: {

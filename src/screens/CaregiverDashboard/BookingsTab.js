@@ -1,6 +1,8 @@
 import { Ionicons } from '@expo/vector-icons';
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { Alert, FlatList, Linking, ScrollView, Text, TouchableOpacity, View } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
+import * as Sharing from 'expo-sharing';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Alert, FlatList, ScrollView, Text, TouchableOpacity, View } from 'react-native';
 import {
   SkeletonBlock,
   SkeletonCard,
@@ -127,29 +129,40 @@ const BookingCard = React.memo(({ booking, onMessageFamily, onConfirmBooking, on
 
   return (
     <View style={bookingCardStyles.card}>
-      <View style={bookingCardStyles.header}>
-        <Text style={bookingCardStyles.familyName}>{booking.family || 'Family'}</Text>
-        <View style={[bookingCardStyles.statusBadge, { backgroundColor: getStatusColor(booking.status) }]}>
-          <Text style={bookingCardStyles.statusText}>{booking.status || 'Unknown'}</Text>
-        </View>
-      </View>
-      
-      <View style={bookingCardStyles.details}>
-        {detailChips.map(({ key, icon, text }) => (
-          <View key={key} style={bookingCardStyles.detailChip}>
-            <Ionicons name={icon} size={14} color="#2563EB" />
-            <Text style={bookingCardStyles.detailChipText} numberOfLines={1}>
-              {text}
-            </Text>
+      <LinearGradient
+        colors={['#667eea', '#764ba2']}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 0 }}
+        style={bookingCardStyles.headerGradient}
+      >
+        <View style={bookingCardStyles.headerContent}>
+          <Text style={bookingCardStyles.familyName}>{String(booking?.family ?? 'Family')}</Text>
+          <View style={bookingCardStyles.statusBadge}>
+            <Text style={bookingCardStyles.statusText}>{String(booking?.status ?? 'Unknown')}</Text>
           </View>
-        ))}
+        </View>
+      </LinearGradient>
+
+      <View style={bookingCardStyles.body}>
+        <View style={bookingCardStyles.details}>
+        {detailChips.map(({ key, icon, text }) => {
+          const displayText = text != null ? String(text) : '';
+          return (
+            <View key={key} style={bookingCardStyles.detailChip}>
+              <Ionicons name={icon} size={14} color="#2563EB" />
+              <Text style={bookingCardStyles.detailChipText} numberOfLines={1}>
+                {displayText}
+              </Text>
+            </View>
+          );
+        })}
       </View>
 
       {specialInstructions && (
         <View style={bookingCardStyles.instructionsContainer}>
           <Text style={bookingCardStyles.sectionLabel}>Special Instructions</Text>
           <Text style={bookingCardStyles.instructionsText} numberOfLines={3}>
-            {specialInstructions}
+            {String(specialInstructions)}
           </Text>
         </View>
       )}
@@ -161,7 +174,7 @@ const BookingCard = React.memo(({ booking, onMessageFamily, onConfirmBooking, on
             {contactChips.map(({ key, icon, text }) => (
               <View key={key} style={bookingCardStyles.contactChip}>
                 <Ionicons name={icon} size={14} color="#10B981" />
-                <Text style={bookingCardStyles.contactChipText} numberOfLines={1}>{text}</Text>
+                <Text style={bookingCardStyles.contactChipText} numberOfLines={1}>{String(text ?? '')}</Text>
               </View>
             ))}
           </View>
@@ -188,16 +201,22 @@ const BookingCard = React.memo(({ booking, onMessageFamily, onConfirmBooking, on
             />
           </View>
           <View style={bookingCardStyles.contractInfo}>
-            <Text style={bookingCardStyles.contractTitle}>{contractInfo.label}</Text>
-            <Text style={bookingCardStyles.contractSubtitle}>{contractInfo.action}</Text>
+            <Text style={bookingCardStyles.contractTitle}>
+              {String(contractInfo.label || 'No contract')}
+            </Text>
+            <Text style={bookingCardStyles.contractSubtitle}>
+              {String(contractInfo.action || '')}
+            </Text>
           </View>
         </View>
         <View style={bookingCardStyles.contractAction}>
-          <Text style={[
-            bookingCardStyles.contractActionText,
-            contractInfo.variant === 'success' && bookingCardStyles.contractActionTextDisabled
-          ]}>
-            {contractInfo.action === 'Create contract' ? 'Create' : 'View'}
+          <Text
+            style={[
+              bookingCardStyles.contractActionText,
+              contractInfo.variant === 'success' && bookingCardStyles.contractActionTextDisabled
+            ]}
+          >
+            {String(contractInfo.action === 'Create contract' ? 'Create' : 'View')}
           </Text>
           <Ionicons
             name="chevron-forward"
@@ -206,17 +225,21 @@ const BookingCard = React.memo(({ booking, onMessageFamily, onConfirmBooking, on
           />
         </View>
       </TouchableOpacity>
-      
+
       <View style={bookingCardStyles.footer}>
         <View style={bookingCardStyles.amountContainer}>
-          <Text style={bookingCardStyles.amount}>₱{totalAmount}</Text>
-          <Text style={bookingCardStyles.hourlyRate}>₱{hourlyRate || 300}/hr</Text>
+          <Text style={bookingCardStyles.amount}>
+            {`₱${totalAmount?.toLocaleString() || '0'}`}
+          </Text>
+          <Text style={bookingCardStyles.hourlyRate}>
+            {`₱${hourlyRate || 300}/hr`}
+          </Text>
         </View>
-        
+
         <View style={bookingCardStyles.actionButtons}>
           <View style={bookingCardStyles.actionRow}>
             {booking.status === 'pending' && (
-              <TouchableOpacity 
+              <TouchableOpacity
                 style={bookingCardStyles.confirmButton}
                 onPress={() => onConfirmBooking && onConfirmBooking(booking)}
               >
@@ -225,7 +248,7 @@ const BookingCard = React.memo(({ booking, onMessageFamily, onConfirmBooking, on
               </TouchableOpacity>
             )}
 
-            <TouchableOpacity 
+            <TouchableOpacity
               style={bookingCardStyles.detailsButton}
               onPress={() => onViewDetails && onViewDetails(booking)}
             >
@@ -235,7 +258,7 @@ const BookingCard = React.memo(({ booking, onMessageFamily, onConfirmBooking, on
           </View>
 
           <View style={bookingCardStyles.actionRow}>
-            <TouchableOpacity 
+            <TouchableOpacity
               style={bookingCardStyles.messageButton}
               onPress={() => onMessageFamily && onMessageFamily(booking)}
             >
@@ -246,42 +269,52 @@ const BookingCard = React.memo(({ booking, onMessageFamily, onConfirmBooking, on
         </View>
       </View>
     </View>
-  );
+  </View>
+);
 });
 
 const bookingCardStyles = {
   card: {
     backgroundColor: '#fff',
     borderRadius: 12,
-    padding: 16,
     marginBottom: 12,
+    marginHorizontal: 16,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
     shadowRadius: 4,
     elevation: 3,
+    overflow: 'hidden',
   },
-  header: {
+  headerGradient: {
+    padding: 16,
+  },
+  headerContent: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 12,
+  },
+  body: {
+    padding: 16,
   },
   familyName: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#111827',
+    color: '#FFFFFF',
     flex: 1,
   },
   statusBadge: {
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 999,
+    backgroundColor: 'rgba(255, 255, 255, 0.18)',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.35)',
   },
   statusText: {
     fontSize: 12,
     fontWeight: '600',
-    color: '#fff',
+    color: '#FFFFFF',
     textTransform: 'capitalize',
   },
   details: {
@@ -566,6 +599,7 @@ const BookingsTab = ({
   const [activeFilter, setActiveFilter] = useState('all');
   const [contracts, setContracts] = useState({});
   const [contractsLoading, setContractsLoading] = useState(false);
+  const contractsFetchKeyRef = useRef(null);
 
   const fetchContractsForBookings = useCallback(async (bookingList) => {
     if (!bookingList || bookingList.length === 0) return;
@@ -666,12 +700,50 @@ const BookingsTab = ({
 
   const listData = loading ? skeletonItems : visibleBookings;
 
+  useEffect(() => {
+    if (refreshing) {
+      contractsFetchKeyRef.current = null;
+    }
+  }, [refreshing]);
+
   // Fetch contracts when bookings change
   useEffect(() => {
-    if (visibleBookings.length > 0 && !contractsLoading) {
-      fetchContractsForBookings(visibleBookings);
+    if (!visibleBookings.length) {
+      contractsFetchKeyRef.current = null;
+      return;
     }
-  }, [visibleBookings, fetchContractsForBookings, contractsLoading]);
+
+    const bookingsKey = visibleBookings
+      .map((booking) => {
+        const id = booking?.id || booking?._id || '';
+        const updated = booking?.updated_at || booking?.updatedAt || booking?.modified_at || '';
+        return `${id}:${updated}`;
+      })
+      .join('|');
+
+    if (contractsFetchKeyRef.current === bookingsKey) {
+      return;
+    }
+
+    let cancelled = false;
+    contractsFetchKeyRef.current = bookingsKey;
+
+    const loadContracts = async () => {
+      try {
+        await fetchContractsForBookings(visibleBookings);
+      } catch (error) {
+        if (!cancelled) {
+          contractsFetchKeyRef.current = null;
+        }
+      }
+    };
+
+    loadContracts();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [visibleBookings, fetchContractsForBookings, refreshing]);
 
   return (
     <FlatList
@@ -860,20 +932,24 @@ const CaregiverBookingsTabWithModal = ({ pendingContract, onPendingContractHandl
 
     try {
       const { contractService } = await import('../../services/supabase/contractService');
-      const pdfData = await contractService.generateContractPdf(contract.id);
-      console.log('PDF generated:', pdfData);
-      if (pdfData?.url) {
-        await Linking.openURL(pdfData.url);
-        Alert.alert('Success', 'Contract PDF opened!');
+      const result = await contractService.generateContractPdf(contract.id, { autoDownload: true });
+
+      if (!result?.uri && !result?.url) {
+        throw new Error('Download did not return a file location.');
+      }
+
+      const fileUri = result.uri || result.url;
+
+      if (await Sharing.isAvailableAsync()) {
+        await Sharing.shareAsync(fileUri, { mimeType: 'application/pdf' });
+      } else if (Platform.OS === 'android') {
+        Alert.alert('Downloaded', `PDF saved at:\n${fileUri}`);
       } else {
-        Alert.alert('Success', 'Contract PDF downloaded!');
+        Alert.alert('Downloaded', 'PDF saved. Open it with a PDF viewer or Files app.');
       }
     } catch (error) {
       console.error('Error downloading PDF:', error);
-      Alert.alert(
-        'PDF Generation Unavailable',
-        'PDF downloads are not currently available, but your contract is still valid. You can view and sign contracts in the app.'
-      );
+      Alert.alert('Download failed', error instanceof Error ? error.message : String(error));
     }
   }, []);
 

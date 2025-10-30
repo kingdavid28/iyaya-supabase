@@ -140,6 +140,21 @@ export class BookingService extends SupabaseBase {
 
           return {
             ...bookingRest,
+            clientId: booking.parent ? {
+              _id: booking.parent.id || booking.parent_id,
+              id: booking.parent.id || booking.parent_id,
+              name: booking.parent?.name || 'Unknown Parent',
+              email: booking.parent?.email,
+              profileImage: booking.parent?.profile_image || null,
+              avatar: booking.parent?.profile_image || null
+            } : {
+              _id: booking.parent_id,
+              id: booking.parent_id,
+              name: 'Unknown Parent',
+              email: null,
+              profileImage: null,
+              avatar: null
+            },
             caregiverId: booking.caregiver ? {
               _id: booking.caregiver.id || booking.caregiver_id,
               id: booking.caregiver.id || booking.caregiver_id,
@@ -154,17 +169,6 @@ export class BookingService extends SupabaseBase {
               email: null,
               profileImage: null,
               avatar: null
-            },
-            clientId: booking.parent ? {
-              _id: booking.parent.id || booking.parent_id,
-              id: booking.parent.id || booking.parent_id,
-              name: booking.parent?.name || 'Unknown Parent',
-              email: booking.parent?.email
-            } : {
-              _id: booking.parent_id,
-              id: booking.parent_id,
-              name: 'Unknown Parent',
-              email: null
             },
             parentId: booking.parent_id,
             startTime: booking.start_time,

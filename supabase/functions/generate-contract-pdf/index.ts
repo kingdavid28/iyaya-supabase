@@ -4,6 +4,8 @@ import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.0'
 // @ts-ignore - pdf-lib is supported in the Edge Functions runtime via esm.sh
 import { PDFDocument, StandardFonts, rgb } from 'https://esm.sh/pdf-lib@1.17.1?dts'
+// @ts-ignore - fontkit adapter for pdf-lib custom fonts
+import fontkit from 'https://esm.sh/@pdf-lib/fontkit@1.1.1'
 
 // Deno global is available in Edge Functions runtime
 declare const Deno: any
@@ -29,6 +31,9 @@ interface ContractData {
   parent: any
   caregiver: any
 }
+
+const FONT_REGULAR_URL = Deno.env.get('PDF_FONT_REGULAR_URL') ?? null
+const FONT_BOLD_URL = Deno.env.get('PDF_FONT_BOLD_URL') ?? null
 
 serve(async (req: any) => {
   // Handle CORS preflight requests
@@ -128,6 +133,15 @@ serve(async (req: any) => {
   }
 })
 
+async function fetchFontBytes(url: string): Promise<Uint8Array> {
+  const response = await fetch(url)
+  if (!response.ok) {
+    throw new Error(`Failed to download font from ${url}: ${response.status}`)
+  }
+  const buffer = await response.arrayBuffer()
+  return new Uint8Array(buffer)
+}
+
 async function generateContractPdfDocument(contract: ContractData, includeSignatures: boolean, locale: string): Promise<Uint8Array> {
   const pdfDoc = await PDFDocument.create()
   const pageWidth = 595.28 // A4 width (points)
@@ -137,8 +151,22 @@ async function generateContractPdfDocument(contract: ContractData, includeSignat
   const margin = 50
   const maxWidth = pageWidth - margin * 2
 
-  const regularFont = await pdfDoc.embedFont(StandardFonts.Helvetica)
-  const boldFont = await pdfDoc.embedFont(StandardFonts.HelveticaBold)
+  let regularFont = await pdfDoc.embedFont(StandardFonts.Helvetica)
+  let boldFont = await pdfDoc.embedFont(StandardFonts.HelveticaBold)
+
+  if (FONT_REGULAR_URL && FONT_BOLD_URL) {
+    try {
+      pdfDoc.registerFontkit(fontkit)
+      const [regularFontBytes, boldFontBytes] = await Promise.all([
+        fetchFontBytes(FONT_REGULAR_URL),
+        fetchFontBytes(FONT_BOLD_URL)
+      ])
+      regularFont = await pdfDoc.embedFont(regularFontBytes, { subset: true })
+      boldFont = await pdfDoc.embedFont(boldFontBytes, { subset: true })
+    } catch (fontError) {
+      console.warn('⚠️ Custom PDF fonts unavailable, using standard fonts instead. Set PDF_FONT_REGULAR_URL and PDF_FONT_BOLD_URL with accessible .ttf files to enable custom fonts.', fontError?.message || fontError)
+    }
+  }
 
   const headingColor = rgb(14 / 255, 165 / 255, 233 / 255)
   const textColor = rgb(30 / 255, 41 / 255, 59 / 255)
@@ -175,8 +203,10 @@ async function generateContractPdfDocument(contract: ContractData, includeSignat
       lineSpacing = 6,
     } = options
 
+    const safeText = sanitizeText(text)
+
     ensureSpace(size + lineSpacing)
-    page.drawText(text, {
+    page.drawText(safeText, {
       x: margin + indent,
       y,
       font,
@@ -187,8 +217,10 @@ async function generateContractPdfDocument(contract: ContractData, includeSignat
   }
 
   const wrapText = (text: string, font: any, size: number, availableWidth: number) => {
-    const words = text.split(/\s+/).filter(Boolean)
+    const safeSource = sanitizeText(text)
+    const words = safeSource.split(/\s+/).filter(Boolean)
     const lines: string[] = []
+
     let currentLine = ''
 
     const maxLineWidth = Math.max(1, availableWidth)
@@ -351,6 +383,23 @@ async function generateContractPdfDocument(contract: ContractData, includeSignat
   return await pdfDoc.save()
 }
 
+function sanitizeText(input: string | number | null | undefined): string {
+  if (input === null || input === undefined) return ''
+
+  let safe = String(input)
+    .normalize('NFKD')
+    .replace(/\u20b1/gi, 'PHP ')
+    .replace(/[\u2013\u2014]/g, '-')
+    .replace(/\u2018|\u2019|\u201a|\u201b/g, "'")
+    .replace(/\u201c|\u201d|\u201e|\u201f/g, '"')
+    .replace(/\u00a0/g, ' ')
+
+  // Replace any remaining non-ASCII characters with a reasonable fallback
+  safe = safe.replace(/[^\x20-\x7E]/g, '')
+
+  return safe
+}
+
 function formatDateValue(dateString: string | null | undefined, locale: string, fallback: string): string {
   if (!dateString) return fallback
   try {
@@ -374,10 +423,10 @@ function formatCurrencyValue(amount: number | string | null | undefined, locale:
       minimumFractionDigits: 2,
       maximumFractionDigits: 2,
     }).format(safeAmount)
-    return `PHP ${formatted}`
+    return sanitizeText(`PHP ${formatted}`)
   } catch (error) {
     console.warn('⚠️ Failed to format currency, using fallback:', error)
-    return `PHP ${safeAmount.toFixed(2)}`
+    return sanitizeText(`PHP ${safeAmount.toFixed(2)}`)
   }
 }
 
@@ -394,7 +443,7 @@ function extractTermsList(terms: any): string[] {
   if (!terms) return DEFAULT_TERMS
 
   if (Array.isArray(terms)) {
-    const normalized = terms.map((term) => String(term)).filter(Boolean)
+    const normalized = terms.map((term) => sanitizeText(String(term))).filter(Boolean)
     return normalized.length ? normalized : DEFAULT_TERMS
   }
 
@@ -403,7 +452,9 @@ function extractTermsList(terms: any): string[] {
   }
 
   if (typeof terms === 'object') {
-    const entries = Object.entries(terms).map(([key, value]) => `${key}: ${typeof value === 'object' ? JSON.stringify(value) : String(value)}`)
+    const entries = Object.entries(terms).map(([key, value]) =>
+      sanitizeText(`${key}: ${typeof value === 'object' ? JSON.stringify(value) : String(value)}`)
+    )
     return entries.length ? entries : DEFAULT_TERMS
   }
 

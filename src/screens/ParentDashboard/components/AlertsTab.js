@@ -94,13 +94,40 @@ const AlertsTab = ({ navigation, onNavigateTab }) => {
     }
 
     const alertData = parseAlertData(alert.data);
-    const isContractCreated = alertData?.notificationType === 'contract_created' && alertData?.contractId;
+    const contractId = alertData?.contractId || alertData?.contract_id;
+    const bookingId = alertData?.bookingId || alertData?.booking_id;
+    const jobId = alertData?.jobId || alertData?.job_id;
+    const applicationId = alertData?.applicationId || alertData?.application_id;
+    const contractNotificationTypes = new Set([
+      'contract_created',
+      'contract_status',
+      'contract_signed',
+      'contract_active',
+      'contract_resent'
+    ]);
+    const isContractNotification = contractId && (
+      contractNotificationTypes.has(alertData?.notificationType) || alert.type === 'system'
+    );
 
-    if (isContractCreated) {
-      onNavigateTab?.('bookings', {
-        contractId: alertData.contractId,
-        bookingId: alertData.bookingId,
-        rawAlert: alert,
+    if (isContractNotification) {
+      const hasBooking = Boolean(bookingId);
+      const hasApplicationContext = Boolean(applicationId || jobId);
+      const notificationType = alertData?.notificationType;
+
+      let targetTab = 'applications';
+      if (hasBooking && ['contract_signed', 'contract_active'].includes(notificationType)) {
+        targetTab = 'bookings';
+      } else if (hasBooking && !hasApplicationContext) {
+        targetTab = 'bookings';
+      }
+
+      onNavigateTab?.(targetTab, {
+        contractId,
+        bookingId,
+        jobId,
+        applicationId,
+        notificationType,
+        rawAlert: alert
       });
       return;
     }
@@ -253,7 +280,7 @@ const AlertsTab = ({ navigation, onNavigateTab }) => {
     >
       <View style={styles.headerContainer}>
         <LinearGradient
-          colors={["#ebc5dd", "#ccc8e8"]}
+          colors={['#ca85b1ff', '#a094f2ff']}
           start={{ x: 0, y: 0 }}
           end={{ x: 1, y: 0 }}
           style={styles.headerGradient}

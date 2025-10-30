@@ -1,9 +1,13 @@
+import { LinearGradient } from 'expo-linear-gradient';
+import { Calendar, Clock, DollarSign, Edit2, MapPin, Trash2, Users } from 'lucide-react-native';
 import React from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, Alert } from 'react-native';
-import { Calendar, MapPin, Clock, DollarSign, Users, Edit2, Trash2, Check, MessageCircle } from 'lucide-react-native';
+import { Alert, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 
-import { StatusBadge } from '../../../shared/ui';
 import { supabaseService } from '../../../services/supabase';
+import { StatusBadge } from '../../../shared/ui';
+import { ChildrenDetailsSection } from '../../../shared/ui/modals/BookingDetailsModal';
+
+const PARENT_HEADER_GRADIENT = ['#ca85b1ff', '#a094f2ff'];
 
 // Design tokens matching dashboard
 const colors = {
@@ -123,42 +127,49 @@ const JobCard = ({ job, onUpdate, onEdit, setActiveTab }) => {
 
   return (
     <View style={styles.card}>
-      <View style={styles.cardHeader}>
-        <View style={styles.headerLeft}>
-          <View style={styles.statusContainer}>
-            <StatusBadge status={job.status} />
+      <LinearGradient
+        colors={PARENT_HEADER_GRADIENT}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 0 }}
+        style={styles.headerGradient}
+      >
+        <View style={styles.cardHeader}>
+          <View style={styles.headerLeft}>
+            <View style={styles.statusContainer}>
+              <StatusBadge status={job.status} />
+            </View>
+            <View style={styles.jobInfo}>
+              <Text style={styles.jobTitle} numberOfLines={2}>
+                {String(job.title || 'Job Title')}
+              </Text>
+              <Text style={styles.postedDate}>
+                {(() => {
+                  try {
+                    const d = job.createdAt?.toDate ? job.createdAt.toDate() : (job.createdAt ? new Date(job.createdAt) : null);
+                    return d ? `Posted ${d.toLocaleDateString()}` : 'Posted Recently';
+                  } catch {
+                    return 'Posted Recently';
+                  }
+                })()}
+              </Text>
+            </View>
           </View>
-          <View style={styles.jobInfo}>
-            <Text style={styles.jobTitle} numberOfLines={2}>
-              {String(job.title || 'Job Title')}
-            </Text>
-            <Text style={styles.postedDate}>
-              {(() => {
-                try {
-                  const d = job.createdAt?.toDate ? job.createdAt.toDate() : (job.createdAt ? new Date(job.createdAt) : null);
-                  return d ? `Posted ${d.toLocaleDateString()}` : 'Posted Recently';
-                } catch {
-                  return 'Posted Recently';
-                }
-              })()}
-            </Text>
-          </View>
+          
+          {(job.applicants?.length > 0 || job.applications_count > 0) && (
+            <TouchableOpacity 
+              style={styles.applicantsBadge}
+              onPress={handleViewApplicants}
+            >
+              <Users size={16} color="rgba(255,255,255,0.9)" />
+              <Text style={styles.applicantsText}>
+                {String(job.applicants?.length || job.applications_count || 0)}
+              </Text>
+            </TouchableOpacity>
+          )}
         </View>
-        
-        {(job.applicants?.length > 0 || job.applications_count > 0) && (
-          <TouchableOpacity 
-            style={styles.applicantsBadge}
-            onPress={handleViewApplicants}
-          >
-            <Users size={16} color={colors.info} />
-            <Text style={styles.applicantsText}>
-              {String(job.applicants?.length || job.applications_count || 0)}
-            </Text>
-          </TouchableOpacity>
-        )}
-      </View>
+      </LinearGradient>
       
-      <View>
+      <View style={styles.cardBody}>
         <View style={styles.jobMeta}>
           <View style={styles.metaGrid}>
             <View style={styles.metaItem}>
@@ -167,12 +178,12 @@ const JobCard = ({ job, onUpdate, onEdit, setActiveTab }) => {
                 {String(job.address || job.location || 'Location not specified')}
               </Text>
             </View>
-            
+
             <View style={styles.metaItem}>
               <DollarSign size={16} color={colors.success} />
               <Text style={styles.metaText}>₱{String(job.hourlyRate || job.rate || 'Negotiable')}/hr</Text>
             </View>
-            
+
             <View style={styles.metaItem}>
               <Calendar size={16} color={colors.primary} />
               <Text style={styles.metaText}>
@@ -180,15 +191,15 @@ const JobCard = ({ job, onUpdate, onEdit, setActiveTab }) => {
                 {job.endDate ? ` - ${formatDate(job.endDate)}` : ''}
               </Text>
             </View>
-            
+
             <View style={styles.metaItem}>
               <Clock size={16} color={colors.primary} />
               <Text style={styles.metaText} numberOfLines={1}>
                 {String(formatWorkingHours(job.workingHours || job.schedule || job.time))}
               </Text>
             </View>
-            
-            {(job.childrenCount || job.children?.length) && (
+
+            {(job.childrenCount || job.children?.length) ? (
               <View style={styles.metaItem}>
                 <Users size={16} color={colors.secondary} />
                 <Text style={styles.metaText}>
@@ -196,16 +207,16 @@ const JobCard = ({ job, onUpdate, onEdit, setActiveTab }) => {
                   {job.childrenAges ? ` (${String(job.childrenAges)})` : ''}
                 </Text>
               </View>
-            )}
-            
-            {job.requirements?.length > 0 && (
+            ) : null}
+
+            {job.requirements?.length > 0 ? (
               <View style={styles.metaItem}>
                 <Text style={styles.metaText} numberOfLines={1}>
                   {job.requirements.filter(Boolean).slice(0, 2).join(', ')}
                   {job.requirements.filter(Boolean).length > 2 ? '...' : ''}
                 </Text>
               </View>
-            )}
+            ) : null}
           </View>
         </View>
         
@@ -214,6 +225,12 @@ const JobCard = ({ job, onUpdate, onEdit, setActiveTab }) => {
             {String(job.description)}
           </Text>
         )}
+
+        <ChildrenDetailsSection
+          childrenDetails={job.childrenDetails || job.children}
+          sectionTitle="Children Details"
+          variant="compact"
+        />
       </View>
       
       <View style={styles.cardFooter}>
@@ -270,7 +287,6 @@ const styles = StyleSheet.create({
   card: {
     backgroundColor: colors.surface,
     borderRadius: 16,
-    padding: 20,
     marginBottom: 16,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
@@ -279,17 +295,23 @@ const styles = StyleSheet.create({
     elevation: 3,
     borderWidth: 1,
     borderColor: colors.borderLight,
+    overflow: 'hidden',
+  },
+  headerGradient: {
+    paddingHorizontal: 20,
+    paddingVertical: 16,
   },
   cardHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'flex-start',
-    marginBottom: 16,
+    gap: 12,
   },
   headerLeft: {
     flexDirection: 'row',
     alignItems: 'flex-start',
     flex: 1,
+    gap: 12,
   },
   statusContainer: {
     marginRight: 12,
@@ -300,29 +322,32 @@ const styles = StyleSheet.create({
   jobTitle: {
     fontSize: 18,
     fontWeight: '700',
-    color: colors.text,
+    color: colors.surface,
     marginBottom: 4,
     lineHeight: 24,
   },
   postedDate: {
     fontSize: 12,
-    color: colors.textTertiary,
+    color: 'rgba(255,255,255,0.85)',
   },
   applicantsBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: colors.primaryLight,
+    backgroundColor: 'rgba(255,255,255,0.18)',
     paddingHorizontal: 12,
     paddingVertical: 8,
     borderRadius: 20,
     borderWidth: 1,
-    borderColor: colors.primary,
+    borderColor: 'rgba(255,255,255,0.35)',
   },
   applicantsText: {
-    color: colors.info,
+    color: '#FFFFFF',
     fontWeight: '700',
     fontSize: 14,
     marginLeft: 6,
+  },
+  cardBody: {
+    padding: 20,
   },
   jobMeta: {
     marginBottom: 16,
@@ -358,10 +383,44 @@ const styles = StyleSheet.create({
     padding: 12,
     borderRadius: 8,
   },
+  childrenSection: {
+    marginTop: 12,
+  },
+  metaGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  metaItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.background,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 16,
+    minWidth: '45%',
+    flex: 1,
+  },
+  metaText: {
+    fontSize: 12,
+    color: colors.textSecondary,
+    marginLeft: 6,
+    fontWeight: '500',
+    flex: 1,
+  },
+  jobDescription: {
+    fontSize: 14,
+    color: colors.textSecondary,
+    lineHeight: 20,
+    marginBottom: 16,
+    backgroundColor: colors.background,
+    padding: 12,
+    borderRadius: 8,
+  },
   cardFooter: {
     borderTopWidth: 1,
     borderTopColor: colors.borderLight,
-    paddingTop: 16,
+    paddingTop: 1,
     gap: 12,
   },
   primaryActions: {
@@ -401,6 +460,7 @@ const styles = StyleSheet.create({
 
   deleteButton: {
     borderColor: colors.error,
+    marginBottom: 12,
     backgroundColor: colors.error + '10',
   },
   confirmButton: {

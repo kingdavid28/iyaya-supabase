@@ -1,3 +1,4 @@
+import { LinearGradient } from 'expo-linear-gradient';
 import {
   AlertTriangle,
   Briefcase,
@@ -19,6 +20,7 @@ import {
   Text,
   TouchableOpacity,
   View,
+  useWindowDimensions,
 } from 'react-native';
 import { Chip } from 'react-native-paper';
 import {
@@ -35,7 +37,7 @@ const localStyles = StyleSheet.create({
   summaryGrid: { flexDirection: 'row', flexWrap: 'wrap', marginBottom: 16, gap: 12 },
   summaryCard: {
     flexGrow: 1,
-    minWidth: '44%',
+    minWidth: '48%',
     backgroundColor: '#FFFFFF',
     borderRadius: 16,
     padding: 16,
@@ -47,19 +49,27 @@ const localStyles = StyleSheet.create({
     shadowRadius: 6,
     elevation: 2,
   },
+  summaryCardTablet: {
+    minWidth: '30%',
+    flexBasis: '30%',
+  },
+  summaryCardDesktop: {
+    minWidth: '22%',
+    flexBasis: '22%',
+  },
   summaryTitleRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 8, gap: 8 },
   summaryIconContainer: { marginBottom: 8 },
   summaryValue: { fontSize: 22, fontWeight: '700', color: '#111827' },
   summaryLabel: { fontSize: 13, color: '#6B7280' },
   filterSection: { marginBottom: 20 },
-  filterHeader: { flexDirection: 'column', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 },
+  filterHeader: { flexDirection: 'column', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12, gap: 8 },
+  filterHeaderWide: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', width: '100%' },
   filterHeaderTitle: { fontSize: 18, fontWeight: '600', color: '#111827' },
   filterAction: { flexDirection: 'row', alignItems: 'flex-end', marginVertical: 6, gap: 6 },
   filterActionText: { color: '#2563EB', fontSize: 14, fontWeight: '500' },
   jobCard: {
     backgroundColor: '#FFFFFF',
     borderRadius: 16,
-    padding: 16,
     marginBottom: 16,
     borderWidth: 1,
     borderColor: '#F3F4F6',
@@ -68,44 +78,85 @@ const localStyles = StyleSheet.create({
     shadowOpacity: 0.05,
     shadowRadius: 6,
     elevation: 2,
+    width: '100%',
+    overflow: 'hidden',
+  },
+  jobCardFullWidth: {
+    width: '100%',
+    alignSelf: 'stretch',
+  },
+  jobCardGrid: {
+    flex: 1,
+    maxWidth: '100%',
+    alignSelf: 'stretch',
+    marginHorizontal: 8,
+  },
+  jobHeaderGradient: {
+    padding: 16,
+  },
+  jobHeaderGradientContainer: {
+    borderRadius: 16,
+    overflow: 'hidden',
+  },
+  jobCardBody: {
+    padding: 16,
   },
   jobHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'flex-start',
-    marginBottom: 10,
-    gap: 10,
+    gap: 12,
+    flexWrap: 'wrap',
   },
   jobTitleWrapper: { flex: 1, minWidth: 0 },
   jobTitle: {
     fontSize: 16,
     fontWeight: '700',
-    color: '#1F2937',
+    color: '#FFFFFF',
     lineHeight: 22,
     flexShrink: 1,
   },
   jobMetaText: {
     marginTop: 4,
     fontSize: 12,
-    color: '#6B7280',
+    color: 'rgba(255, 255, 255, 0.85)',
     flexShrink: 1,
     lineHeight: 18,
+    flexBasis: '100%',
+  },
+  jobHeaderRight: {
+    alignItems: 'flex-end',
+    gap: 8,
   },
   statusPill: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 12,
+    paddingHorizontal: 14,
     paddingVertical: 6,
-    borderRadius: 16,
-    backgroundColor: '#ECFDF5',
+    borderRadius: 999,
+    backgroundColor: 'rgba(255, 255, 255, 0.18)',
     borderWidth: 1,
-    borderColor: '#D1FAE5',
+    borderColor: 'rgba(255, 255, 255, 0.35)',
     gap: 6,
     minWidth: 80,
     justifyContent: 'center',
   },
-  urgentBadge: { backgroundColor: '#FEE2E2', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 999, marginLeft: 8, alignItems: 'center', justifyContent: 'center' },
-  urgentText: { color: '#DC2626', fontSize: 11, fontWeight: '700', letterSpacing: 0.3 },
+  jobRateText: {
+    color: '#FFFFFF',
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  urgentBadge: {
+    backgroundColor: 'rgba(255, 255, 255, 0.18)',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 999,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.35)',
+  },
+  urgentText: { color: '#FFFFFF', fontSize: 11, fontWeight: '700', letterSpacing: 0.3 },
   jobDetails: { marginBottom: 16, gap: 8 },
   jobDetailRow: {
     flexDirection: 'row',
@@ -120,6 +171,12 @@ const localStyles = StyleSheet.create({
     flexWrap: 'wrap',
   },
   tagContainer: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginBottom: 12 },
+  listHeaderContainer: { width: '100%' },
+  listHeaderWide: { alignItems: 'stretch' },
+  listHeaderComponent: { paddingBottom: 16 },
+  listContentTablet: { paddingHorizontal: 24 },
+  listContentDesktop: { paddingHorizontal: 40 },
+  gridColumnWrapper: { flex: 1, justifyContent: 'space-between', paddingHorizontal: 8 },
   tagPill: {
     backgroundColor: '#F0F9FF',
     borderRadius: 12,
@@ -145,8 +202,17 @@ const localStyles = StyleSheet.create({
   listEmptyContainer: { alignItems: 'center', paddingVertical: 64, gap: 16 },
   emptyTitle: { fontSize: 18, fontWeight: '700', color: '#1F2937' },
   emptySubtitle: { fontSize: 14, color: '#6B7280', textAlign: 'center', paddingHorizontal: 32 },
-  appliedBadge: { marginTop: 8, alignSelf: 'flex-start', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 999, backgroundColor: '#E0F2FE', borderWidth: 1, borderColor: '#BAE6FD' },
-  appliedBadgeText: { fontSize: 11, fontWeight: '600', color: '#0369A1' },
+  appliedBadge: {
+    marginTop: 8,
+    alignSelf: 'flex-start',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 999,
+    backgroundColor: 'rgba(255, 255, 255, 0.18)',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.35)',
+  },
+  appliedBadgeText: { fontSize: 11, fontWeight: '600', color: '#FFFFFF' },
   metaFooter: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 12 },
   postedText: { fontSize: 12, color: '#9CA3AF' },
   chipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
@@ -254,93 +320,101 @@ export const CaregiverJobCard = ({ job, onApply, onView, hasApplied, style }) =>
     <View
       style={[
         styles.jobCard,
-        {
-          width: '100%',
-          maxWidth: 320,
-          alignSelf: 'stretch',
-          marginRight: 16,
-        },
+        styles.jobCardFullWidth,
         style,
       ]}
     >
-      <View style={styles.jobHeader}>
-        <View style={styles.jobTitleWrapper}>
-          <Text style={styles.jobTitle} numberOfLines={2}>{String(job?.title || 'Childcare Position')}</Text>
-          <Text style={styles.jobMetaText} numberOfLines={1}>
-            {String(job?.family || job?.familyName || 'Family')} · {String(job?.location || 'Location not specified')}
-          </Text>
-          {hasApplied && (
-            <View style={styles.appliedBadge}>
-              <Text style={styles.appliedBadgeText}>Applied</Text>
-            </View>
-          )}
-        </View>
-        <View>
-          <View style={styles.statusPill}>
-            <DollarSign size={16} color="#047857" />
-            <Text style={styles.summaryLabel}>{formatCurrency(job?.hourlyRate || job?.rate)}</Text>
+      <LinearGradient
+        colors={['#667eea', '#764ba2']}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 0 }}
+        style={styles.jobHeaderGradient}
+      >
+        <View style={styles.jobHeader}>
+          <View style={styles.jobTitleWrapper}>
+            <Text style={styles.jobTitle} numberOfLines={2}>{String(job?.title || 'Childcare Position')}</Text>
+            <Text style={styles.jobMetaText} numberOfLines={1}>
+              {String(job?.family || job?.familyName || 'Family')} · {String(job?.location || 'Location not specified')}
+            </Text>
+            {hasApplied && (
+              <View style={styles.appliedBadge}>
+                <Text style={styles.appliedBadgeText}>Applied</Text>
+              </View>
+            )}
           </View>
-          {job?.urgent && (
-            <View style={styles.urgentBadge}>
-              <Text style={styles.urgentText}>URGENT</Text>
+
+          <View style={styles.jobHeaderRight}>
+            <View style={styles.statusPill}>
+              <DollarSign size={16} color="#FFFFFF" />
+              <Text style={styles.jobRateText}>{formatCurrency(job?.hourlyRate || job?.rate)}</Text>
+            </View>
+
+            {job?.urgent && (
+              <View style={styles.urgentBadge}>
+                <Text style={styles.urgentText}>URGENT</Text>
+              </View>
+            )}
+          </View>
+        </View>
+      </LinearGradient>
+
+      <View style={styles.jobCardBody}>
+        <View style={styles.jobDetails}>
+          <View style={styles.jobDetailRow}>
+            <Users size={16} color="#6B7280" />
+            <Text style={styles.jobDetailText}>{String(childrenSummary)}</Text>
+          </View>
+          <View style={styles.jobDetailRow}>
+            <Clock size={16} color="#6B7280" />
+            <Text style={styles.jobDetailText}>
+              {String(job?.schedule || job?.time || job?.workingHours || 'Flexible schedule')}
+              {job?.startTime && job?.endTime ? ` (${String(job.startTime)} - ${String(job.endTime)})` : ''}
+            </Text>
+          </View>
+          {job?.date && (
+            <View style={styles.jobDetailRow}>
+              <Calendar size={16} color="#6B7280" />
+              <Text style={styles.jobDetailText}>{formatDateDisplay(job?.date)}</Text>
             </View>
           )}
         </View>
-      </View>
 
-      <View style={styles.jobDetails}>
-        <View style={styles.jobDetailRow}>
-          <Users size={16} color="#6B7280" />
-          <Text style={styles.jobDetailText}>{String(childrenSummary)}</Text>
-        </View>
-        <View style={styles.jobDetailRow}>
-          <Clock size={16} color="#6B7280" />
-          <Text style={styles.jobDetailText}>
-            {String(job?.schedule || job?.time || job?.workingHours || 'Flexible schedule')}
-            {job?.startTime && job?.endTime ? ` (${String(job.startTime)} - ${String(job.endTime)})` : ''}
-          </Text>
-        </View>
-        {job?.date && (
-          <View style={styles.jobDetailRow}>
-            <Calendar size={16} color="#6B7280" />
-            <Text style={styles.jobDetailText}>{formatDateDisplay(job?.date)}</Text>
+        {job?.description && (
+          <View>
+            <Text style={styles.jobDescription} numberOfLines={2}>
+              {String(job.description)}
+            </Text>
           </View>
         )}
-      </View>
 
-      {job?.description && (
-        <Text style={styles.jobDescription} numberOfLines={2}>
-          {String(job.description)}
-        </Text>
-      )}
+        {allTags.length > 0 && (
+          <View style={styles.tagContainer}>
+            {allTags.map((tag, index) => (
+              <View key={`${job?.id || job?._id}-${tag}-${index}`} style={styles.tagPill}>
+                <Text style={styles.tagText}>{String(tag)}</Text>
+              </View>
+            ))}
+          </View>
+        )}
 
-      {allTags.length > 0 && (
-        <View style={styles.tagContainer}>
-          {allTags.map((tag, index) => (
-            <View key={`${job?.id || job?._id}-${tag}-${index}`} style={styles.tagPill}>
-              <Text style={styles.tagText}>{String(tag)}</Text>
-            </View>
-          ))}
+        <View style={styles.jobActions}>
+          <TouchableOpacity style={styles.viewButton} onPress={() => onView?.(job)}>
+            <Text style={styles.viewButtonText}>View Details</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.applyButton, (applying || hasApplied) && styles.applyButtonDisabled]}
+            onPress={handleApply}
+            disabled={applying || hasApplied}
+          >
+            <Text style={styles.applyButtonText}>
+              {applying ? 'Applying…' : hasApplied ? 'Applied' : 'Apply Now'}
+            </Text>
+          </TouchableOpacity>
         </View>
-      )}
 
-      <View style={styles.jobActions}>
-        <TouchableOpacity style={styles.viewButton} onPress={() => onView?.(job)}>
-          <Text style={styles.viewButtonText}>View Details</Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={[styles.applyButton, (applying || hasApplied) && styles.applyButtonDisabled]}
-          onPress={handleApply}
-          disabled={applying || hasApplied}
-        >
-          <Text style={styles.applyButtonText}>
-            {applying ? 'Applying…' : hasApplied ? 'Applied' : 'Apply Now'}
-          </Text>
-        </TouchableOpacity>
-      </View>
-
-      <View style={styles.metaFooter}>
-        <Text style={styles.postedText}>Posted {getRelativeTime(job?.created_at || job?.createdAt || Date.now())}</Text>
+        <View style={styles.metaFooter}>
+          <Text style={styles.postedText}>Posted {getRelativeTime(job?.created_at || job?.createdAt || Date.now())}</Text>
+        </View>
       </View>
     </View>
   );
@@ -390,6 +464,11 @@ export default function JobsTab({
       { key: 'applied', label: 'Applied', value: appliedJobs, icon: Target, accent: '#7C3AED' },
     ];
   }, [applicationJobIds, jobs]);
+
+  const { width } = useWindowDimensions();
+  const isTablet = width >= 768;
+  const isLargeScreen = width >= 1024;
+  const numColumns = isLargeScreen ? 3 : isTablet ? 2 : 1;
 
   const filteredAndSortedJobs = useMemo(() => {
     const filtered = jobs.filter((job) => {
@@ -453,7 +532,14 @@ export default function JobsTab({
     <View>
       <View style={styles.summaryGrid}>
         {summaryMetrics.map(({ key, label, value, icon: Icon, accent }) => (
-          <View key={key} style={styles.summaryCard}>
+          <View
+            key={key}
+            style={[
+              styles.summaryCard,
+              isLargeScreen && styles.summaryCardDesktop,
+              isTablet && !isLargeScreen && styles.summaryCardTablet,
+            ]}
+          >
             <View style={styles.summaryIconContainer}>
               <Icon size={20} color={accent} />
             </View>
@@ -464,7 +550,7 @@ export default function JobsTab({
       </View>
 
       <View style={styles.filterSection}>
-        <View style={styles.filterHeader}>
+        <View style={[styles.filterHeader, (isTablet || isLargeScreen) && styles.filterHeaderWide]}>
           <Text style={styles.filterHeaderTitle}>Find the right job for you</Text>
           <TouchableOpacity style={styles.filterAction} onPress={handleSortChange}>
             <Filter size={16} color="#2563EB" />
@@ -500,8 +586,17 @@ export default function JobsTab({
     </View>
   ), [activeFilter, activeSort, handleFilterChange, handleSortChange, summaryMetrics]);
 
+
   const hasJobs = Array.isArray(jobs) && jobs.length > 0;
   const isLoading = loading && !hasJobs;
+
+  const contentStyle = [
+    styles.listContent,
+    isTablet && styles.listContentTablet,
+    isLargeScreen && styles.listContentDesktop,
+  ];
+
+  const listKey = useMemo(() => 'caregiver-jobs-list', []);
 
   if (isLoading) {
     return (
@@ -542,9 +637,11 @@ export default function JobsTab({
     <View style={styles.screenContainer}>
       <FlatList
         data={filteredAndSortedJobs}
+        key={listKey}
         keyExtractor={(item, index) => String(item?.id || item?._id || index)}
         renderItem={renderJobItem}
         ListHeaderComponent={listHeader}
+        ListHeaderComponentStyle={styles.listHeaderComponent}
         ListEmptyComponent={
           !isLoading
             ? () => (
@@ -559,7 +656,7 @@ export default function JobsTab({
               )
             : undefined
         }
-        contentContainerStyle={styles.listContent}
+        contentContainerStyle={contentStyle}
         refreshing={refreshing || isLoading}
         onRefresh={onRefresh}
         showsVerticalScrollIndicator={false}

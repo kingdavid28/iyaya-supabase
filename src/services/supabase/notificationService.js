@@ -67,14 +67,26 @@ export class NotificationService extends SupabaseBase {
           type: 'system',
           title: 'Contract Created',
           message: 'A new contract is ready for your review.',
-          data: { contractId: contract.id, bookingId: contract.bookingId, notificationType: 'contract_created' }
+          data: {
+            contractId: contract.id,
+            bookingId: contract.bookingId,
+            jobId: contract.metadata?.jobId || contract.metadata?.job_id || null,
+            applicationId: contract.metadata?.applicationId || contract.metadata?.application_id || null,
+            notificationType: 'contract_created'
+          }
         }),
         this.createNotification({
           user_id: contract.caregiverId,
           type: 'system',
           title: 'New Contract',
           message: 'A parent sent you a contract to review.',
-          data: { contractId: contract.id, bookingId: contract.bookingId, notificationType: 'contract_created' }
+          data: {
+            contractId: contract.id,
+            bookingId: contract.bookingId,
+            jobId: contract.metadata?.jobId || contract.metadata?.job_id || null,
+            applicationId: contract.metadata?.applicationId || contract.metadata?.application_id || null,
+            notificationType: 'contract_created'
+          }
         })
       ])
 
@@ -94,10 +106,17 @@ export class NotificationService extends SupabaseBase {
 
       await Promise.all(targets.map(userId => this.createNotification({
         user_id: userId,
-        type: 'contract_status',
+        type: 'system',
         title: 'Contract Updated',
         message: `Contract status changed to ${status}.`,
-        data: { contractId: contract.id, status }
+        data: {
+          contractId: contract.id,
+          bookingId: contract.bookingId,
+          jobId: contract.metadata?.jobId || contract.metadata?.job_id || null,
+          applicationId: contract.metadata?.applicationId || contract.metadata?.application_id || null,
+          status,
+          notificationType: 'contract_status'
+        }
       })))
 
       targets.forEach(userId => invalidateCache(`notification-counts:${userId}`))
@@ -116,10 +135,17 @@ export class NotificationService extends SupabaseBase {
 
       await this.createNotification({
         user_id: recipient,
-        type: 'contract_signed',
+        type: 'system',
         title: `${signer === 'parent' ? 'Parent' : 'Caregiver'} Signed`,
         message: `The ${signer} signed the contract for your booking.`,
-        data: { contractId: contract.id, bookingId: contract.bookingId, signer }
+        data: {
+          contractId: contract.id,
+          bookingId: contract.bookingId,
+          jobId: contract.metadata?.jobId || contract.metadata?.job_id || null,
+          applicationId: contract.metadata?.applicationId || contract.metadata?.application_id || null,
+          signer,
+          notificationType: 'contract_signed'
+        }
       })
 
       invalidateCache(`notification-counts:${recipient}`)
@@ -137,10 +163,17 @@ export class NotificationService extends SupabaseBase {
 
       await Promise.all(targets.map(userId => this.createNotification({
         user_id: userId,
-        type: 'contract_status',
+        type: 'system',
         title: 'Contract Active',
         message: 'Both parties signed the contract. You can now proceed with the job.',
-        data: { contractId: contract.id, bookingId: contract.bookingId, status: 'active' }
+        data: {
+          contractId: contract.id,
+          bookingId: contract.bookingId,
+          jobId: contract.metadata?.jobId || contract.metadata?.job_id || null,
+          applicationId: contract.metadata?.applicationId || contract.metadata?.application_id || null,
+          status: 'active',
+          notificationType: 'contract_active'
+        }
       })))
 
       targets.forEach(userId => invalidateCache(`notification-counts:${userId}`))
@@ -159,10 +192,17 @@ export class NotificationService extends SupabaseBase {
 
       await Promise.all(targets.map(userId => this.createNotification({
         user_id: userId,
-        type: 'contract_resent',
+        type: 'system',
         title: 'Contract Resent',
         message: 'A contract was resent for your attention.',
-        data: { contractId: contract.id, bookingId: contract.bookingId, actorId }
+        data: {
+          contractId: contract.id,
+          bookingId: contract.bookingId,
+          jobId: contract.metadata?.jobId || contract.metadata?.job_id || null,
+          applicationId: contract.metadata?.applicationId || contract.metadata?.application_id || null,
+          actorId,
+          notificationType: 'contract_resent'
+        }
       })))
 
       targets.forEach(userId => invalidateCache(`notification-counts:${userId}`))

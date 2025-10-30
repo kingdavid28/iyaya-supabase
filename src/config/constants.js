@@ -49,7 +49,9 @@ const getBaseHost = () => {
 };
 
 const baseHost = getBaseHost();
-console.log('🔗 Base host configuration:', baseHost);
+if (__DEV__) {
+  console.log('🔗 Base host configuration:', baseHost);
+}
 
 // API Configuration with enhanced timeout and retry settings
 export const API_CONFIG = {

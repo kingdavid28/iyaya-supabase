@@ -1,14 +1,14 @@
+import { Ionicons } from '@expo/vector-icons';
 import React from 'react';
 import {
-  View,
-  Text,
-  TouchableOpacity,
-  Modal,
-  ScrollView,
-  StyleSheet,
-  Alert
+    Alert,
+    Modal,
+    ScrollView,
+    StyleSheet,
+    Text,
+    TouchableOpacity,
+    View
 } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
 
 // Contract type definitions with templates
 export const CONTRACT_TYPES = {
@@ -85,9 +85,28 @@ const ContractTypeSelector = ({
   onSelectContractType,
   selectedType = null
 }) => {
+  const [pendingSelection, setPendingSelection] = React.useState(selectedType);
+
+  React.useEffect(() => {
+    if (visible) {
+      setPendingSelection(selectedType);
+    }
+  }, [visible, selectedType]);
+
   const handleSelectType = (contractType) => {
-    onSelectContractType(contractType);
-    onClose();
+    setPendingSelection(contractType);
+  };
+
+  const handleConfirmSelection = () => {
+    if (!pendingSelection) {
+      Alert.alert(
+        'Select a contract type',
+        'Please choose a contract type before continuing.'
+      );
+      return;
+    }
+
+    onSelectContractType?.(pendingSelection);
   };
 
   return (
@@ -114,56 +133,79 @@ const ContractTypeSelector = ({
               Select the type of employment contract that best fits your needs. Each option offers different terms and benefits.
             </Text>
 
-            {Object.values(CONTRACT_TYPES).map((contractType) => (
-              <TouchableOpacity
-                key={contractType.id}
-                style={[
-                  styles.contractOption,
-                  selectedType?.id === contractType.id && styles.contractOptionSelected
-                ]}
-                onPress={() => handleSelectType(contractType)}
-                activeOpacity={0.7}
-              >
-                <View style={styles.contractOptionHeader}>
-                  <View style={styles.contractOptionIcon}>
-                    <Ionicons
-                      name={contractType.icon}
-                      size={24}
-                      color={contractType.color}
-                    />
+            {Object.values(CONTRACT_TYPES).map((contractType) => {
+              const isSelected = pendingSelection?.id === contractType.id;
+
+              return (
+                <TouchableOpacity
+                  key={contractType.id}
+                  style={[
+                    styles.contractOption,
+                    isSelected && styles.contractOptionSelected
+                  ]}
+                  onPress={() => handleSelectType(contractType)}
+                  activeOpacity={0.7}
+                >
+                  <View style={styles.contractOptionHeader}>
+                    <View style={styles.contractOptionIcon}>
+                      <Ionicons
+                        name={contractType.icon}
+                        size={24}
+                        color={contractType.color}
+                      />
+                    </View>
+                    <View style={styles.contractOptionInfo}>
+                      <Text style={styles.contractOptionTitle}>{contractType.title}</Text>
+                      <Text style={styles.contractOptionSubtitle}>{contractType.subtitle}</Text>
+                    </View>
+                    {isSelected && (
+                      <Ionicons name="checkmark-circle" size={24} color={contractType.color} />
+                    )}
                   </View>
-                  <View style={styles.contractOptionInfo}>
-                    <Text style={styles.contractOptionTitle}>{contractType.title}</Text>
-                    <Text style={styles.contractOptionSubtitle}>{contractType.subtitle}</Text>
+                  <Text style={styles.contractOptionDescription}>
+                    {contractType.description}
+                  </Text>
+                  <View style={styles.termsPreview}>
+                    <Text style={styles.termsPreviewTitle}>Key Terms:</Text>
+                    {Object.entries(contractType.terms).slice(0, 3).map(([key, value]) => (
+                      <Text key={key} style={styles.termsPreviewItem}>
+                        • {key}: {value}
+                      </Text>
+                    ))}
+                    {Object.keys(contractType.terms).length > 3 && (
+                      <Text style={styles.termsPreviewMore}>
+                        +{Object.keys(contractType.terms).length - 3} more terms
+                      </Text>
+                    )}
                   </View>
-                  {selectedType?.id === contractType.id && (
-                    <Ionicons name="checkmark-circle" size={24} color={contractType.color} />
-                  )}
-                </View>
-                <Text style={styles.contractOptionDescription}>
-                  {contractType.description}
-                </Text>
-                <View style={styles.termsPreview}>
-                  <Text style={styles.termsPreviewTitle}>Key Terms:</Text>
-                  {Object.entries(contractType.terms).slice(0, 3).map(([key, value]) => (
-                    <Text key={key} style={styles.termsPreviewItem}>
-                      • {key}: {value}
-                    </Text>
-                  ))}
-                  {Object.keys(contractType.terms).length > 3 && (
-                    <Text style={styles.termsPreviewMore}>
-                      +{Object.keys(contractType.terms).length - 3} more terms
-                    </Text>
-                  )}
-                </View>
-              </TouchableOpacity>
-            ))}
+                </TouchableOpacity>
+              );
+            })}
           </ScrollView>
 
           <View style={styles.footer}>
-            <TouchableOpacity style={styles.cancelButton} onPress={onClose}>
-              <Text style={styles.cancelButtonText}>Cancel</Text>
-            </TouchableOpacity>
+            <View style={styles.footerButtons}>
+              <TouchableOpacity style={styles.cancelButton} onPress={onClose}>
+                <Text style={styles.cancelButtonText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[
+                  styles.continueButton,
+                  !pendingSelection && styles.continueButtonDisabled
+                ]}
+                onPress={handleConfirmSelection}
+                disabled={!pendingSelection}
+              >
+                <Text
+                  style={[
+                    styles.continueButtonText,
+                    !pendingSelection && styles.continueButtonTextDisabled
+                  ]}
+                >
+                  Continue
+                </Text>
+              </TouchableOpacity>
+            </View>
           </View>
         </View>
       </View>
@@ -292,16 +334,40 @@ const styles = StyleSheet.create({
     borderTopWidth: StyleSheet.hairlineWidth,
     borderTopColor: '#E5E7EB',
   },
+  footerButtons: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
   cancelButton: {
+    flex: 1,
     backgroundColor: '#F3F4F6',
     borderRadius: 12,
     paddingVertical: 12,
     alignItems: 'center',
+    marginRight: 12,
   },
   cancelButtonText: {
     fontSize: 16,
     fontWeight: '600',
     color: '#6B7280',
+  },
+  continueButton: {
+    flex: 1,
+    backgroundColor: '#4F46E5',
+    borderRadius: 12,
+    paddingVertical: 12,
+    alignItems: 'center',
+  },
+  continueButtonDisabled: {
+    backgroundColor: '#C7D2FE',
+  },
+  continueButtonText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#FFFFFF',
+  },
+  continueButtonTextDisabled: {
+    color: '#E0E7FF',
   },
 });
 

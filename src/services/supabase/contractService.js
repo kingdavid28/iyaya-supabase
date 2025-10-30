@@ -1,3 +1,5 @@
+import * as FileSystem from 'expo-file-system'
+import { Linking, Platform } from 'react-native'
 import { SupabaseBase, supabase } from './base'
 import { getCachedOrFetch, invalidateCache } from './cache'
 import { notificationService } from './notificationService'
@@ -68,6 +70,9 @@ class ContractService extends SupabaseBase {
       invalidateCache(`job_contracts:booking:${resolvedBookingId}`)
       invalidateCache(`job_contracts:user:${resolvedParentId}`)
       invalidateCache(`job_contracts:user:${resolvedCaregiverId}`)
+      invalidateCache(`bookings:parent:${resolvedParentId}`)
+      invalidateCache(`bookings:caregiver:${resolvedCaregiverId}`)
+      invalidateCache('bookings:')
 
       await notificationService.notifyContractCreated(this._normalizeContract(data))
 
@@ -155,6 +160,9 @@ class ContractService extends SupabaseBase {
       invalidateCache(`job_contracts:booking:${normalized.bookingId}`)
       invalidateCache(`job_contracts:user:${normalized.parentId}`)
       invalidateCache(`job_contracts:user:${normalized.caregiverId}`)
+      invalidateCache(`bookings:parent:${normalized.parentId}`)
+      invalidateCache(`bookings:caregiver:${normalized.caregiverId}`)
+      invalidateCache('bookings:')
 
       await notificationService.notifyContractStatusChange(normalized, status)
 
@@ -213,20 +221,36 @@ class ContractService extends SupabaseBase {
         .update(updatePayload)
         .eq('id', contractId)
         .select('*')
-        .single()
+        .maybeSingle()
 
-      if (error) throw error
+      if (error && !(error?.code === 'PGRST116' || error?.message?.includes('0 rows'))) {
+        throw error
+      }
 
-      if (!data) {
+      let normalized = data ? this._normalizeContract(data) : null
+
+      if (!normalized) {
+        try {
+          const refetched = await this.getContractById(contractId)
+          normalized = refetched || null
+        } catch (refetchError) {
+          if (!(refetchError?.code === 'PGRST116' || refetchError?.message?.includes('0 rows'))) {
+            throw refetchError
+          }
+        }
+      }
+
+      if (!normalized) {
         const notFoundError = new Error('Contract not found')
         notFoundError.code = 'CONTRACT_NOT_FOUND'
         throw notFoundError
       }
-
-      const normalized = this._normalizeContract(data)
       invalidateCache(`job_contracts:booking:${normalized.bookingId}`)
       invalidateCache(`job_contracts:user:${normalized.parentId}`)
       invalidateCache(`job_contracts:user:${normalized.caregiverId}`)
+      invalidateCache(`bookings:parent:${normalized.parentId}`)
+      invalidateCache(`bookings:caregiver:${normalized.caregiverId}`)
+      invalidateCache('bookings:')
 
       await notificationService.notifyContractSigned(normalized, signer)
 
@@ -266,61 +290,196 @@ class ContractService extends SupabaseBase {
   async generateContractPdf(contractId, options = {}) {
     try {
       this._validateId(contractId, 'Contract ID')
-      const payload = {
-        contractId,
-        includeSignatures: options.includeSignatures ?? true,
-        locale: options.locale || 'en-PH'
+
+      const {
+        data: { session },
+        error: sessionError
+      } = await supabase.auth.getSession()
+
+      if (sessionError) {
+        console.warn('⚠️ Unable to get Supabase session for PDF download:', sessionError)
       }
 
-      console.log('📝 Invoking PDF generation Edge Function:', PDF_FUNCTION_NAME, 'with payload:', payload)
+      const accessToken = session?.access_token
+      if (!accessToken) {
+        await this._ensureAuthenticated()
+        throw new Error('Authentication required to download contract PDF.')
+      }
 
-      // Get the Edge Function URL
       const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL || supabase.supabaseUrl
-      const functionUrl = `${supabaseUrl}/functions/v1/${PDF_FUNCTION_NAME}`
-      
-      console.log('📝 Invoking PDF generation at:', functionUrl)
-
-      // Call the Edge Function to ensure contract exists and we have access
-      const response = await fetch(functionUrl, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${supabase.supabaseKey || process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY}`,
-        },
-        body: JSON.stringify(payload),
-      })
-
-      if (!response.ok) {
-        const errorText = await response.text().catch(() => 'Unable to read error response')
-        console.error('❌ PDF generation failed:', response.status, errorText)
-        throw new Error('PDF generation is currently unavailable.')
+      if (!supabaseUrl) {
+        throw new Error('Supabase URL is not configured for PDF generation.')
       }
 
-      const anonKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY
+      const anonKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY || supabase.supabaseKey
       if (!anonKey) {
         throw new Error('Supabase anon key is not configured.')
       }
 
+      const includeSignatures = options.includeSignatures ?? true
+      const locale = options.locale || 'en-PH'
+      const autoDownload = options.autoDownload ?? true
+
       const queryParams = new URLSearchParams({
-        contractId: String(payload.contractId),
-        includeSignatures: String(payload.includeSignatures),
-        locale: String(payload.locale),
+        contractId: String(contractId),
+        includeSignatures: String(includeSignatures),
+        locale: String(locale),
       }).toString()
-      const contractUrl = `${functionUrl}?${queryParams}&apikey=${anonKey}`
+      const functionUrl = `${supabaseUrl}/functions/v1/${PDF_FUNCTION_NAME}?${queryParams}`
 
-      const contentType = response.headers.get('content-type') || 'application/pdf'
-      if (!contentType.includes('application/pdf')) {
-        console.warn('⚠️ Unexpected content-type from Edge Function:', contentType)
+      const headers = {
+        Authorization: `Bearer ${accessToken}`,
+        apikey: anonKey,
       }
 
-      console.log('✅ Contract PDF URL generated (GET)', contractUrl)
-      return {
-        success: true,
-        url: contractUrl,
-        contractId,
-        filename: `contract-${contractId}.pdf`,
-        contentType: 'application/pdf',
+      if (Platform?.OS === 'web' && typeof fetch === 'function') {
+        const response = await fetch(functionUrl, { headers })
+
+        if (!response.ok) {
+          const errorText = await response.text().catch(() => '')
+          throw new Error(errorText || 'Failed to download contract PDF. Please try again.')
+        }
+
+        const blob = await response.blob()
+        const filename = `contract-${contractId}-${Date.now()}.pdf`
+        const URLObject = (typeof window !== 'undefined' && window.URL)
+          ? window.URL
+          : (typeof globalThis !== 'undefined' ? globalThis.URL : undefined)
+
+        if (!URLObject?.createObjectURL) {
+          return {
+            success: true,
+            blob,
+            filename,
+            contractId,
+            contentType: response.headers?.get?.('content-type') || 'application/pdf',
+          }
+        }
+
+        const blobUrl = URLObject.createObjectURL(blob)
+        const revoke = () => {
+          try {
+            URLObject.revokeObjectURL(blobUrl)
+          } catch (error) {
+            console.warn('⚠️ Failed to revoke object URL:', error)
+          }
+        }
+
+        if (autoDownload) {
+          if (typeof document !== 'undefined') {
+            const link = document.createElement('a')
+            link.href = blobUrl
+            link.download = filename
+            link.style.display = 'none'
+            document.body.appendChild(link)
+            link.click()
+            document.body.removeChild(link)
+          } else if (typeof window !== 'undefined' && typeof window.open === 'function') {
+            window.open(blobUrl, '_blank', 'noopener,noreferrer')
+          }
+        }
+
+        setTimeout(revoke, 60_000)
+
+        return {
+          success: true,
+          uri: blobUrl,
+          url: blobUrl,
+          filename,
+          contractId,
+          contentType: 'application/pdf',
+          cleanup: revoke,
+        }
       }
+
+      if (FileSystem?.downloadAsync && (FileSystem.cacheDirectory || FileSystem.documentDirectory)) {
+        const baseDir = FileSystem.cacheDirectory || FileSystem.documentDirectory
+        const contractsDir = `${baseDir}contracts/`
+        try {
+          await FileSystem.makeDirectoryAsync(contractsDir, { intermediates: true })
+        } catch (dirError) {
+          const dirErrorMessage = dirError?.message || ''
+          if (!dirErrorMessage.includes('Directory exists')) {
+            console.warn('⚠️ Unable to ensure contracts directory:', dirError)
+          }
+        }
+
+        const filename = `contract-${contractId}-${Date.now()}.pdf`
+        const targetPath = `${contractsDir}${filename}`
+        const downloadResult = await FileSystem.downloadAsync(functionUrl, targetPath, { headers })
+
+        if (!downloadResult || (downloadResult.status && downloadResult.status >= 400)) {
+          throw new Error('Failed to download contract PDF. Please try again.')
+        }
+
+        return {
+          success: true,
+          uri: downloadResult.uri,
+          url: downloadResult.uri,
+          filename,
+          contractId,
+          contentType: 'application/pdf'
+        }
+      }
+
+      if (typeof fetch === 'function') {
+        const response = await fetch(functionUrl, { headers })
+        if (!response.ok) {
+          const errorText = await response.text().catch(() => '')
+          throw new Error(errorText || 'Failed to download contract PDF. Please try again.')
+        }
+
+        const buffer = await response.arrayBuffer()
+        const filename = `contract-${contractId}-${Date.now()}.pdf`
+
+        if (FileSystem?.writeAsStringAsync && (FileSystem.cacheDirectory || FileSystem.documentDirectory)) {
+          const targetPath = `${(FileSystem.cacheDirectory || FileSystem.documentDirectory)}contracts/`
+          try {
+            await FileSystem.makeDirectoryAsync(targetPath, { intermediates: true })
+          } catch (dirError) {
+            const dirErrorMessage = dirError?.message || ''
+            if (!dirErrorMessage.includes('Directory exists')) {
+              console.warn('⚠️ Unable to ensure contracts directory (fallback):', dirError)
+            }
+          }
+          const filePath = `${targetPath}${filename}`
+          const base64Data = Buffer.from(buffer).toString('base64')
+          await FileSystem.writeAsStringAsync(filePath, base64Data, { encoding: FileSystem.EncodingType.Base64 })
+
+          return {
+            success: true,
+            uri: filePath,
+            url: filePath,
+            filename,
+            contractId,
+            contentType: 'application/pdf',
+            note: 'Saved using fetch fallback'
+          }
+        }
+
+        if (autoDownload && Linking?.openURL) {
+          await Linking.openURL(functionUrl)
+          return {
+            success: true,
+            url: functionUrl,
+            filename,
+            contractId,
+            contentType: 'application/pdf',
+            note: 'Opened contract URL in external browser'
+          }
+        }
+
+        return {
+          success: true,
+          url: functionUrl,
+          filename,
+          contractId,
+          contentType: 'application/pdf',
+          note: 'Returned function URL for manual download'
+        }
+      }
+
+      throw new Error('PDF download is not supported on this platform yet. Try opening the contract in a web browser to download it.')
     } catch (error) {
       return this._handleError('generateContractPdf', error)
     }

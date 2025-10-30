@@ -1,4 +1,4 @@
-import { format, parseISO, isToday, isTomorrow, addDays, isDate } from 'date-fns';
+import { addDays, format, isDate, isToday, isTomorrow, parseISO } from 'date-fns';
 
 export const parseDate = (d) => {
   try {
@@ -23,6 +23,31 @@ export const parseDate = (d) => {
   } catch (_) {
     return null;
   }
+};
+
+export const normalizeTime = (value) => {
+  if (!value || typeof value !== 'string') return null;
+
+  const trimmed = value.trim();
+  if (!trimmed) return null;
+
+  // If value already includes AM/PM, return uppercase variant
+  if (/am|pm/i.test(trimmed)) {
+    return trimmed.replace(/\s+/g, ' ').toUpperCase();
+  }
+
+  const parts = trimmed.split(':');
+  const hours = parseInt(parts[0], 10);
+  const minutes = parts[1] !== undefined ? parseInt(parts[1], 10) : 0;
+
+  if (!Number.isFinite(hours) || hours < 0 || hours > 23) {
+    return trimmed;
+  }
+
+  const normalizedMinutes = Number.isFinite(minutes) ? minutes : 0;
+  const hh = String(hours).padStart(2, '0');
+  const mm = String(Math.max(0, Math.min(59, normalizedMinutes))).padStart(2, '0');
+  return `${hh}:${mm}`;
 };
 
 export const to12h = (hhmm) => {

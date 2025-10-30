@@ -1,6 +1,7 @@
 import { NavigationContainer } from "@react-navigation/native";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
-import React, { useEffect, useState } from "react";
+import * as SplashScreen from "expo-splash-screen";
+import React, { useEffect, useRef, useState } from "react";
 import { ActivityIndicator, View } from "react-native";
 
 // Core imports
@@ -54,7 +55,7 @@ const AppNavigatorWithAuth = () => {
   const { theme } = useThemeContext();
   const [onboardingChecked, setOnboardingChecked] = useState(false);
   const [showOnboarding, setShowOnboarding] = useState(false);
-  const [navigationRef, setNavigationRef] = useState(null);
+  const navigationRef = useRef(null);
 
   useEffect(() => {
     const checkOnboarding = async () => {
@@ -81,11 +82,22 @@ const AppNavigatorWithAuth = () => {
   }
 
   return (
-    <NavigationContainer 
+    <NavigationContainer
       theme={theme}
-      ref={setNavigationRef}
+      ref={navigationRef}
+      linking={{
+        prefixes: ['iyaya://'],
+        config: {
+          screens: {
+            ContractView: 'contract/:contractId',
+          },
+        },
+      }}
+      onReady={() => {
+        SplashScreen.hideAsync().catch(console.warn);
+      }}
     >
-      {navigationRef && <DeepLinkHandler navigation={navigationRef} />}
+      {navigationRef.current && <DeepLinkHandler navigation={navigationRef.current} />}
       <Stack.Navigator
         initialRouteName={
           showOnboarding

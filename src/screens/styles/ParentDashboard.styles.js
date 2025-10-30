@@ -1623,8 +1623,8 @@ bookingStatsContainer: {
   justifyContent: 'space-around',
   backgroundColor: colors.surface,
   borderRadius: 12,
-  padding: 16,
-  marginBottom: 16,
+  padding: 10,
+  marginBottom: 5,
   shadowColor: '#000',
   shadowOffset: { width: 0, height: 1 },
   shadowOpacity: 0.1,
@@ -1632,7 +1632,7 @@ bookingStatsContainer: {
   elevation: 2,
 },
 statNumber: {
-  fontSize: 18,
+  fontSize: 15,
   fontWeight: 'bold',
   color: colors.text,
   marginTop: 4,
@@ -1679,7 +1679,7 @@ emptyIcon: {
   marginBottom: 16,
 },
 emptySectionTitle: {
-  fontSize: 18,
+  fontSize: 12,
   fontWeight: '600',
   color: colors.text,
   marginBottom: 8,
@@ -1698,7 +1698,7 @@ emptyActionButton: {
 emptyActionButtonText: {
   color: colors.textInverse,
   fontWeight: '600',
-  fontSize: 16,
+  fontSize: 12,
 },
 
 // Application Management Styles

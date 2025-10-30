@@ -1,8 +1,8 @@
-import React, { createContext, useContext, useEffect, useMemo, useState, useRef, useCallback } from 'react'
-import { ActivityIndicator, View, Platform } from 'react-native'
-import Constants from 'expo-constants'
 import * as AuthSession from 'expo-auth-session'
+import Constants from 'expo-constants'
 import * as WebBrowser from 'expo-web-browser'
+import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react'
+import { ActivityIndicator, Platform, View } from 'react-native'
 import { supabase } from '../config/supabase'
 import { tokenManager } from '../utils/tokenManager'
 
@@ -261,8 +261,18 @@ export const AuthProvider = ({ children }) => {
     try {
       setError(null)
       setLoading(true)
+
+      await tokenManager.logout()
       const { error } = await supabase.auth.signOut()
-      if (error) throw error
+
+      if (error) {
+        const isMissingSession = error?.name === 'AuthSessionMissingError' || error?.message?.toLowerCase().includes('auth session missing')
+        if (!isMissingSession) {
+          throw error
+        }
+        console.warn('⚠️ Ignoring AuthSessionMissingError during sign out — no active session to clear.')
+      }
+
       setUser(null)
     } catch (err) {
       setError(err.message)

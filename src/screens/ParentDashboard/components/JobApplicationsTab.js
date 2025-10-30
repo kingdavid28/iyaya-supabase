@@ -1,12 +1,12 @@
 import { formatDistanceToNow } from 'date-fns';
-import { Briefcase, CheckCircle, Clock, MapPin, MessageCircle, User, XCircle } from 'lucide-react-native';
+import { Briefcase, CheckCircle, Clock, FileText, MapPin, MessageCircle, User, XCircle } from 'lucide-react-native';
 import React, { useCallback, useMemo, useRef, useState } from 'react';
 import { Alert, FlatList, Image, Linking, RefreshControl, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import {
-  SkeletonBlock,
-  SkeletonCard,
-  SkeletonCircle,
-  SkeletonPill
+    SkeletonBlock,
+    SkeletonCard,
+    SkeletonCircle,
+    SkeletonPill
 } from '../../../components/common/SkeletonPlaceholder';
 import { getProfileImageUrl } from '../../../utils/imageUtils';
 import { colors, styles as sharedStyles } from '../../styles/ParentDashboard.styles';
@@ -21,11 +21,13 @@ const statusMeta = {
 const JobApplicationsTab = ({
   applications = [],
   loading = false,
+  mutatingApplicationId = null,
   refreshing = false,
   onRefresh,
   onViewCaregiver,
   onMessageCaregiver,
-  onUpdateStatus
+  onUpdateStatus,
+  onOpenContract
 }) => {
   const [selectedFilter, setSelectedFilter] = useState('all');
   const listRef = useRef(null);
@@ -86,6 +88,9 @@ const JobApplicationsTab = ({
     const status = (item.status || '').toLowerCase();
     const applicationId = item.id || item._id;
     const jobId = item.jobId || item.job?.id || item.job_id;
+    const contractId = item.contractId || item.contract_id || item.contract?.id;
+    const bookingId = item.bookingId || item.booking_id || item.booking?.id;
+    const contractStatus = item.contractStatus || item.contract?.status || (contractId ? 'draft' : null);
     let appliedAgo = 'Recently';
     if (item.appliedAt || item.createdAt || item.updatedAt) {
       const rawDate = item.appliedAt || item.createdAt || item.updatedAt;
@@ -97,6 +102,7 @@ const JobApplicationsTab = ({
 
     const caregiverPhone = item.caregiverPhone || item.caregiver?.phone;
     const hasCaregiverPhone = Boolean(caregiverPhone);
+    const isMutating = mutatingApplicationId && String(mutatingApplicationId) === String(applicationId);
 
     const handleCallCaregiver = () => {
       if (!caregiverPhone) {
@@ -202,27 +208,67 @@ const JobApplicationsTab = ({
         {(status === 'pending' || status === 'shortlisted') && (
           <View style={styles.decisionRow}>
             <TouchableOpacity
-              style={[styles.decisionButton, styles.acceptButton]}
+              style={[styles.decisionButton, styles.acceptButton, isMutating && styles.decisionButtonDisabled]}
               onPress={() => safeUpdateStatus('accepted')}
+              disabled={isMutating}
             >
-              <CheckCircle size={16} color={colors.surface} />
-              <Text style={styles.decisionText}>Accept</Text>
+              {isMutating ? (
+                <Clock size={16} color={colors.surface} />
+              ) : (
+                <CheckCircle size={16} color={colors.surface} />
+              )}
+              <Text style={styles.decisionText}>{isMutating ? 'Updating…' : 'Accept'}</Text>
             </TouchableOpacity>
             {status === 'pending' && (
               <TouchableOpacity
-                style={[styles.decisionButton, styles.shortlistButton]}
+                style={[styles.decisionButton, styles.shortlistButton, isMutating && styles.decisionButtonDisabled]}
                 onPress={() => safeUpdateStatus('shortlisted')}
+                disabled={isMutating}
               >
                 <Clock size={16} color={colors.info} style={styles.decisionIcon} />
                 <Text style={styles.decisionShortlistText}>Short list</Text>
               </TouchableOpacity>
             )}
             <TouchableOpacity
-              style={[styles.decisionButton, styles.rejectButton]}
+              style={[styles.decisionButton, styles.rejectButton, isMutating && styles.decisionButtonDisabled]}
               onPress={() => safeUpdateStatus('rejected')}
+              disabled={isMutating}
             >
               <XCircle size={16} color={colors.error} />
               <Text style={styles.decisionRejectText}>Reject</Text>
+            </TouchableOpacity>
+          </View>
+        )}
+
+        {status === 'accepted' && (
+          <View style={styles.contractSection}>
+            <View style={styles.contractStatusRow}>
+              <FileText size={16} color={colors.info} />
+              <View style={styles.contractStatusTextGroup}>
+                <Text style={styles.contractStatusLabel}>Contract</Text>
+                <Text style={styles.contractStatusValue}>
+                  {contractId ? `Status: ${String(contractStatus || 'draft').replace(/_/g, ' ')}` : 'Not created yet'}
+                </Text>
+              </View>
+            </View>
+            <TouchableOpacity
+              style={[styles.reviewContractButton, !contractId && styles.reviewContractButtonDisabled]}
+              disabled={!contractId || isMutating}
+              onPress={() => {
+                if (!contractId) {
+                  Alert.alert('Contract unavailable', 'We could not locate a contract for this application yet. Please wait a moment or try refreshing.');
+                  return;
+                }
+                onOpenContract?.({
+                  contractId,
+                  bookingId,
+                  application: item
+                });
+              }}
+            >
+              <Text style={[styles.reviewContractButtonText, !contractId && styles.reviewContractButtonTextDisabled]}>
+                Review & Sign
+              </Text>
             </TouchableOpacity>
           </View>
         )}
@@ -616,6 +662,9 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     borderWidth: 1
   },
+  decisionButtonDisabled: {
+    opacity: 0.6
+  },
   acceptButton: {
     marginRight: 8,
     backgroundColor: colors.success,
@@ -651,10 +700,55 @@ const styles = StyleSheet.create({
     color: colors.error,
     fontWeight: '600'
   },
+  contractSection: {
+    marginTop: 16,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    borderRadius: 12,
+    backgroundColor: '#F5F3FF',
+    gap: 12,
+  },
+  contractStatusRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  contractStatusTextGroup: {
+    flex: 1,
+  },
+  contractStatusLabel: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: colors.info,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  contractStatusValue: {
+    fontSize: 14,
+    color: colors.textPrimary,
+    fontWeight: '500',
+  },
+  reviewContractButton: {
+    backgroundColor: colors.info,
+    paddingVertical: 12,
+    borderRadius: 10,
+    alignItems: 'center',
+  },
+  reviewContractButtonDisabled: {
+    backgroundColor: '#CBD5F5',
+  },
+  reviewContractButtonText: {
+    color: colors.surface,
+    fontWeight: '600',
+  },
+  reviewContractButtonTextDisabled: {
+    color: '#E0E7FF',
+  },
   followUpActions: {
     flexDirection: 'row',
-    marginTop: 12,
-    gap: 12
+    gap: 12,
+    marginTop: 16,
   },
   contactBtn: {
     flexDirection: 'row',

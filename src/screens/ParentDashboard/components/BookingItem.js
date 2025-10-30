@@ -1,18 +1,20 @@
+import { Ionicons } from '@expo/vector-icons';
+import { format } from 'date-fns';
+import { LinearGradient } from 'expo-linear-gradient';
 import React, { useMemo } from 'react';
 import {
-  View,
-  Text,
-  Image,
-  StyleSheet,
-  TouchableOpacity,
-  Linking,
   Alert,
-  Platform
+  Image,
+  Linking,
+  Platform,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View
 } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
-import { LinearGradient } from 'expo-linear-gradient';
-import { format } from 'date-fns';
 import { getPaymentActions } from '../../../utils/paymentUtils';
+
+const PARENT_HEADER_GRADIENT = ['#ca85b1ff', '#a094f2ff'];
 
 const BookingItem = ({
   booking,
@@ -260,7 +262,7 @@ const BookingItem = ({
   return (
     <View style={styles.container}>
       <LinearGradient
-        colors={['#f5f3ff', '#ede9fe']}
+        colors={PARENT_HEADER_GRADIENT}
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 0 }}
         style={styles.header}
@@ -276,25 +278,30 @@ const BookingItem = ({
                 />
               ) : (
                 <View style={styles.avatarFallback}>
-                  <Ionicons name="person" size={28} color="#9CA3AF" />
+                  <Ionicons name="person" size={28} color="#FFFFFF" />
                 </View>
               )}
             </View>
             <View style={styles.caregiverDetails}>
               <Text style={styles.caregiverName}>{caregiverName}</Text>
               <View style={styles.metaRow}>
-                <Ionicons name="calendar-outline" size={14} color="#6B7280" />
+                <Ionicons name="calendar-outline" size={14} color="rgba(255,255,255,0.8)" />
                 <Text style={styles.metaText}>{bookingDate}</Text>
               </View>
               {timeDisplay ? (
                 <View style={styles.metaRow}>
-                  <Ionicons name="time-outline" size={14} color="#6B7280" />
+                  <Ionicons name="time-outline" size={14} color="rgba(255,255,255,0.8)" />
                   <Text style={styles.metaText}>{timeDisplay}</Text>
                 </View>
               ) : null}
             </View>
           </View>
-          <View style={[styles.statusBadge, { backgroundColor: getStatusColor(booking?.status) }]}>
+          <View
+            style={[
+              styles.statusBadge,
+              { borderColor: 'rgba(255,255,255,0.45)' }
+            ]}
+          >
             <Text style={styles.statusText}>{getStatusText(booking?.status)}</Text>
           </View>
         </View>
@@ -518,7 +525,7 @@ const styles = StyleSheet.create({
   container: {
     backgroundColor: '#FFFFFF',
     borderRadius: 20,
-    marginHorizontal: 10,
+    marginHorizontal: 1,
     marginVertical: 12,
     borderWidth: 1,
     borderColor: '#E5E7EB',
@@ -530,8 +537,8 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
   },
   header: {
-    paddingHorizontal: 10,
-    paddingVertical: 8,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
   },
   headerContent: {
     flexDirection: 'row',
@@ -547,11 +554,13 @@ const styles = StyleSheet.create({
     width: 56,
     height: 56,
     borderRadius: 28,
-    backgroundColor: '#F3F4F6',
+    backgroundColor: 'rgba(255,255,255,0.2)',
     marginRight: 14,
     overflow: 'hidden',
     justifyContent: 'center',
     alignItems: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.3)',
   },
   avatarImage: {
     width: '100%',
@@ -562,6 +571,7 @@ const styles = StyleSheet.create({
     height: '100%',
     justifyContent: 'center',
     alignItems: 'center',
+    backgroundColor: 'rgba(255,255,255,0.2)',
   },
   caregiverDetails: {
     flex: 1,
@@ -569,7 +579,7 @@ const styles = StyleSheet.create({
   caregiverName: {
     fontSize: 18,
     fontWeight: '700',
-    color: '#1F2937',
+    color: '#FFFFFF',
     marginBottom: 4,
   },
   metaRow: {
@@ -579,14 +589,16 @@ const styles = StyleSheet.create({
   },
   metaText: {
     fontSize: 13,
-    color: '#4B5563',
-    marginLeft: 4,
+    color: 'rgba(255,255,255,0.82)',
+    marginLeft: 6,
   },
   statusBadge: {
-    paddingHorizontal: 5,
+    paddingHorizontal: 12,
     paddingVertical: 6,
-    borderRadius: 20,
+    borderRadius: 999,
     marginLeft: 12,
+    backgroundColor: 'rgba(255,255,255,0.18)',
+    borderWidth: 1,
   },
   statusText: {
     color: '#FFFFFF',
@@ -594,13 +606,14 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   content: {
-    paddingHorizontal: 10,
+    paddingHorizontal: 5,
     paddingVertical: 20,
     backgroundColor: '#FFFFFF',
   },
   amountRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
+    paddingHorizontal: 15,
     marginBottom: 16,
   },
   sectionLabel: {
@@ -755,13 +768,13 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: 8,
     marginBottom: 12,
-    paddingHorizontal: 4,
+    paddingHorizontal: 1,
   },
   secondaryActions: {
     flexDirection: 'row',
     gap: 8,
     marginBottom: 12,
-    paddingHorizontal: 4,
+    paddingHorizontal: 1,
     flexWrap: 'wrap',
   },
   viewDetailsButton: {
@@ -872,7 +885,7 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontSize: 13,
     fontWeight: '600',
-    marginLeft: 6,
+    marginLeft: 2,
   },
   paymentStatusButton: {
     flex: 1,
@@ -881,7 +894,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     paddingVertical: 12,
-    paddingHorizontal: 12,
+    paddingHorizontal: 5,
     borderRadius: 12,
     backgroundColor: '#22C55E',
     shadowColor: '#22C55E',
@@ -894,7 +907,7 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontSize: 13,
     fontWeight: '600',
-    marginLeft: 6,
+    marginLeft: 2,
   },
   cancelButton: {
   flex: 1,
@@ -903,7 +916,7 @@ const styles = StyleSheet.create({
   alignItems: 'center',
   justifyContent: 'center',
   paddingVertical: 12,
-  paddingHorizontal: 12,
+  paddingHorizontal: 5,
   borderRadius: 12,
   backgroundColor: '#EF4444',
   shadowColor: '#EF4444',
@@ -916,7 +929,7 @@ cancelButtonText: {
   color: '#FFFFFF',
   fontSize: 13,
   fontWeight: '600',
-  marginLeft: 6,
+  marginLeft: 2,
 },
   contractRow: {
     flexDirection: 'row',

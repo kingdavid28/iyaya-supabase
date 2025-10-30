@@ -193,6 +193,7 @@ export const useCaregiverDashboard = () => {
   const [jobs, setJobs] = useState([]);
   const [applications, setApplications] = useState([]);
   const [bookings, setBookings] = useState([]);
+  const [contracts, setContracts] = useState([]);
   const bookingsRef = useRef([]);
   const reviewsCacheRef = useRef([]);
   const [jobsLoading, setJobsLoading] = useState(false);
@@ -247,6 +248,19 @@ export const useCaregiverDashboard = () => {
     }
     bookingsRef.current = effectiveBookings;
 
+    if (!Array.isArray(effectiveReviews)) {
+      effectiveReviews = [];
+    }
+    reviewsCacheRef.current = effectiveReviews;
+
+    if (Array.isArray(bookingsList)) {
+      bookingsRef.current = bookingsList;
+      setBookings(bookingsList);
+    } else {
+      bookingsRef.current = [];
+      setBookings([]);
+    }
+
     if (fetchReviews || !Array.isArray(effectiveReviews) || effectiveReviews.length === 0) {
       try {
         const reviewsResponse = await reviewService.getReviews(user.id, 100, 0);
@@ -256,11 +270,6 @@ export const useCaregiverDashboard = () => {
         effectiveReviews = reviewsCacheRef.current || [];
       }
     }
-
-    if (!Array.isArray(effectiveReviews)) {
-      effectiveReviews = [];
-    }
-    reviewsCacheRef.current = effectiveReviews;
 
     const stats = computeStats(effectiveBookings, effectiveReviews);
 
@@ -392,11 +401,15 @@ export const useCaregiverDashboard = () => {
       const applications = await supabaseService.getMyApplications(user.id);
       console.log('📋 Applications from Supabase:', applications);
 
-      const normalized = applications.map(application => {
+      const normalized = applications.map((application) => {
         const job = application.jobs || {};
 
         const hourlyRateRaw = job?.hourly_rate ?? job?.hourlyRate ?? job?.rate ?? null;
         const hourlyRate = Number.isFinite(Number(hourlyRateRaw)) ? Number(hourlyRateRaw) : null;
+
+        const contractRecord = Array.isArray(application.contracts) && application.contracts.length
+          ? application.contracts[0]
+          : application.contract || null;
 
         const proposedRateRaw = application.proposed_rate ?? application.proposedRate ?? application.rate;
         const proposedRate = Number.isFinite(Number(proposedRateRaw)) ? Number(proposedRateRaw) : null;
@@ -418,6 +431,7 @@ export const useCaregiverDashboard = () => {
           : null);
 
         return {
+          ...application,
           id: application.id,
           _id: application.id,
           jobId: application.job_id,
@@ -436,7 +450,10 @@ export const useCaregiverDashboard = () => {
           schedule,
           childrenSummary,
           message: application.message || application.cover_letter || '',
-          job
+          job,
+          contractId: contractRecord?.id || application.contract_id || null,
+          contractStatus: contractRecord?.status || application.contract_status || null,
+          bookingId: application.booking_id || contractRecord?.booking_id || null
         };
       });
 
@@ -445,6 +462,19 @@ export const useCaregiverDashboard = () => {
     } catch (error) {
       console.error('Error fetching applications:', error);
       setApplications([]);
+    }
+  }, [user?.id, user?.role]);
+
+  const fetchContracts = useCallback(async () => {
+    if (!user?.id || user?.role !== 'caregiver') return;
+
+    try {
+      const { contractService } = await import('../services/supabase/contractService');
+      const list = await contractService.getContractsForUser(user.id, 'caregiver');
+      setContracts(Array.isArray(list) ? list : []);
+    } catch (error) {
+      console.error('❌ Error fetching contracts:', error);
+      setContracts([]);
     }
   }, [user?.id, user?.role]);
 
@@ -560,13 +590,15 @@ export const useCaregiverDashboard = () => {
       bookingsRef.current = normalized;
       setBookings(normalized);
       await updateProfileStats({ bookingsList: normalized, fetchReviews: false });
+      await fetchContracts();
     } catch (error) {
       console.error('❌ Error fetching bookings:', error);
       setBookings([]);
       bookingsRef.current = [];
+      setContracts([]);
       await updateProfileStats({ bookingsList: [], fetchReviews: false });
     }
-  }, [updateProfileStats, user?.id, user?.role]);
+  }, [fetchContracts, updateProfileStats, user?.id, user?.role]);
 
   // Load data only once on mount
   useEffect(() => {
@@ -575,7 +607,8 @@ export const useCaregiverDashboard = () => {
         loadProfile(),
         fetchJobs(),
         fetchApplications(),
-        fetchBookings()
+        fetchBookings(),
+        fetchContracts()
       ]).finally(() => setDataLoaded(true));
     }
   }, [user?.id, dataLoaded, loadProfile, fetchJobs, fetchApplications, fetchBookings]);
@@ -590,8 +623,9 @@ export const useCaregiverDashboard = () => {
     }
     if (activeTab === 'applications' && user?.id) {
       fetchApplications();
+      fetchContracts();
     }
-  }, [activeTab, fetchJobs, fetchBookings, fetchApplications, user?.id]);
+  }, [activeTab, fetchJobs, fetchBookings, fetchApplications, fetchContracts, user?.id]);
 
   return {
     activeTab,
@@ -602,10 +636,12 @@ export const useCaregiverDashboard = () => {
     applications,
     setApplications,
     bookings,
+    contracts,
     jobsLoading,
     loadProfile,
     fetchJobs,
     fetchApplications,
+    fetchContracts,
     fetchBookings,
     refreshStats,
     dataLoaded

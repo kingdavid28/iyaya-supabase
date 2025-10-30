@@ -1,40 +1,43 @@
 import { useHeaderHeight } from '@react-navigation/elements';
 import {
-    AlertCircle,
-    AlertTriangle,
-    Calendar,
-    Check,
-    Clock,
-    DollarSign,
-    MapPin,
-    Plus,
-    X
+  AlertCircle,
+  AlertTriangle,
+  Calendar,
+  Check,
+  Clock,
+  DollarSign,
+  MapPin,
+  Plus,
+  User,
+  X
 } from 'lucide-react-native';
 import React, { useEffect, useMemo, useState } from 'react';
 import {
-    Alert,
-    KeyboardAvoidingView,
-    Modal,
-    Platform,
-    ScrollView,
-    StyleSheet,
-    Switch,
-    Text,
-    TextInput,
-    TouchableOpacity,
-    View,
+  Alert,
+  KeyboardAvoidingView,
+  Modal,
+  Platform,
+  ScrollView,
+  StyleSheet,
+  Switch,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
 } from 'react-native';
 import { useAuth } from '../../../contexts/AuthContext';
 import jobService from '../../../services/jobService';
 import { getCurrentDeviceLocation } from '../../../utils/locationUtils';
 
 import {
-    SkeletonBlock,
-    SkeletonCard,
-    SkeletonCircle,
-    SkeletonPill
+  SkeletonBlock,
+  SkeletonCard,
+  SkeletonCircle,
+  SkeletonPill
 } from '../../../components/common/SkeletonPlaceholder';
+import CustomDateTimePicker from '../../../shared/ui/inputs/DateTimePicker';
 import SimpleDatePicker from '../../../shared/ui/inputs/SimpleDatePicker';
+import { formatTimeRange } from '../../../utils/dateUtils';
 
 const SUGGESTED_SKILLS = [
   'CPR Certified',
@@ -67,6 +70,8 @@ const JobPostingModal = ({ visible, onClose, onJobPosted, childrenList = [] }) =
     startDate: null,
     endDate: null,
     workingHours: '',
+    startTime: null,
+    endTime: null,
     requirements: [],
     children: [],
     status: 'open',
@@ -75,7 +80,20 @@ const JobPostingModal = ({ visible, onClose, onJobPosted, childrenList = [] }) =
     updatedAt: null,
     applicants: [],
     urgent: false,
+    requirementsInput: '',
   });
+
+  const normalizedChildren = useMemo(() => {
+    return childrenList.map((child) => ({
+      id: child.id || child._id,
+      name: child.name,
+      age: child.age,
+      allergies: child.allergies,
+      notes: child.notes,
+    }));
+  }, [childrenList]);
+
+  const hasChildrenRecords = normalizedChildren.length > 0;
 
   // Set parent ID when component mounts
   useEffect(() => {
@@ -102,6 +120,8 @@ const JobPostingModal = ({ visible, onClose, onJobPosted, childrenList = [] }) =
         startDate: null,
         endDate: null,
         workingHours: '',
+        startTime: null,
+        endTime: null,
         requirements: [],
         children: [],
         status: 'open',
@@ -110,6 +130,7 @@ const JobPostingModal = ({ visible, onClose, onJobPosted, childrenList = [] }) =
         updatedAt: null,
         applicants: [],
         urgent: false,
+        requirementsInput: '',
       });
       setErrors({});
     }
@@ -173,8 +194,17 @@ const JobPostingModal = ({ visible, onClose, onJobPosted, childrenList = [] }) =
     } 
     else if (step === 2) {
       if (!jobData.startDate) newErrors.startDate = 'Start date is required';
-      if (!jobData.workingHours) newErrors.workingHours = 'Working hours are required';
+      if (!jobData.startTime) newErrors.startTime = 'Start time is required';
+      if (!jobData.endTime) newErrors.endTime = 'End time is required';
       
+      if (jobData.startTime && jobData.endTime) {
+        const start = jobData.startTime instanceof Date ? jobData.startTime : new Date(jobData.startTime);
+        const end = jobData.endTime instanceof Date ? jobData.endTime : new Date(jobData.endTime);
+        if (start && end && end <= start) {
+          newErrors.endTime = 'End time must be after start time';
+        }
+      }
+
       // Validate end date if provided
       if (jobData.endDate && jobData.startDate) {
         const start = new Date(jobData.startDate);
@@ -183,16 +213,22 @@ const JobPostingModal = ({ visible, onClose, onJobPosted, childrenList = [] }) =
           newErrors.endDate = 'End date cannot be before start date';
         }
       }
+    } else if (step === 3) {
+      if (hasChildrenRecords && jobData.children.length === 0) {
+        newErrors.children = 'Please select at least one child';
+      }
     }
     
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
 
+  const totalSteps = hasChildrenRecords ? 4 : 3;
+
   const handleNext = () => {
     if (!validateStep()) return;
-    
-    if (step < 3) {
+
+    if (step < totalSteps) {
       setStep(step + 1);
     } else {
       handleSubmit();
@@ -223,6 +259,21 @@ const JobPostingModal = ({ visible, onClose, onJobPosted, childrenList = [] }) =
     }));
   };
 
+  const handleToggleChild = (child) => {
+    if (!child?.id) return;
+
+    setJobData(prev => {
+      const isSelected = prev.children?.some(selected => selected.id === child.id);
+
+      return {
+        ...prev,
+        children: isSelected
+          ? prev.children.filter(selected => selected.id !== child.id)
+          : [...(prev.children || []), child]
+      };
+    });
+  };
+
   const getCurrentLocation = async () => {
     try {
       setLocationLoading(true);
@@ -239,10 +290,22 @@ const JobPostingModal = ({ visible, onClose, onJobPosted, childrenList = [] }) =
     }
   };
 
+  const formatChildForPayload = (child) => ({
+    id: child?.id,
+    name: child?.name || '',
+    age: child?.age ?? null,
+    allergies: child?.allergies || '',
+    notes: child?.notes || '',
+  });
+
   const handleSubmit = async () => {
     try {
       setLoading(true);
       
+      const selectedChildren = (jobData.children || [])
+        .filter(child => child?.id)
+        .map(formatChildForPayload);
+
       // Prepare payload for backend
       const payload = {
         title: jobData.title.trim(),
@@ -253,7 +316,10 @@ const JobPostingModal = ({ visible, onClose, onJobPosted, childrenList = [] }) =
         startDate: jobData.startDate,
         endDate: jobData.endDate || undefined,
         workingHours: jobData.workingHours,
+        startTime: formatTimeForPayload(jobData.startTime) || undefined,
+        endTime: formatTimeForPayload(jobData.endTime) || undefined,
         requirements: jobData.requirements || [],
+        children: selectedChildren,
         parentId: user?.uid || user?.id,
         parentName: user?.displayName || user?.name || 'Parent',
         parentPhoto: user?.photoURL || user?.profileImage || user?.profile_image || null,
@@ -281,6 +347,8 @@ const JobPostingModal = ({ visible, onClose, onJobPosted, childrenList = [] }) =
         startDate: '',
         endDate: '',
         workingHours: '',
+        startTime: null,
+        endTime: null,
         requirements: [],
         children: [],
         status: 'open',
@@ -289,6 +357,7 @@ const JobPostingModal = ({ visible, onClose, onJobPosted, childrenList = [] }) =
         updatedAt: null,
         applicants: [],
         urgent: false,
+        requirementsInput: '',
       });
       setStep(1);
       setErrors({});
@@ -354,6 +423,37 @@ const JobPostingModal = ({ visible, onClose, onJobPosted, childrenList = [] }) =
       </SkeletonCard>
     </ScrollView>
   );
+
+  const formatTimeForPayload = (date) => {
+    if (!date) return '';
+    const d = date instanceof Date ? date : new Date(date);
+    if (Number.isNaN(d.getTime())) return '';
+    const hours = String(d.getHours()).padStart(2, '0');
+    const minutes = String(d.getMinutes()).padStart(2, '0');
+    return `${hours}:${minutes}`;
+  };
+
+  const formatTimeLabel = (date) => {
+    if (!date) return 'Select time';
+    try {
+      const d = date instanceof Date ? date : new Date(date);
+      return d.toLocaleTimeString('en-US', {
+        hour: 'numeric',
+        minute: '2-digit',
+        hour12: true
+      });
+    } catch {
+      return 'Select time';
+    }
+  };
+
+  const updateWorkingHours = (start, end) => {
+    if (!start || !end) return '';
+    const startStr = formatTimeForPayload(start);
+    const endStr = formatTimeForPayload(end);
+    if (!startStr || !endStr) return '';
+    return formatTimeRange(startStr, endStr);
+  };
 
   const renderStep = () => {
     switch (step) {
@@ -581,28 +681,113 @@ const JobPostingModal = ({ visible, onClose, onJobPosted, childrenList = [] }) =
               minimumDate={jobData.startDate ? new Date(jobData.startDate) : new Date()}
             />
 
-            <View>
+            <View style={styles.timePickerSection}>
               <Text style={styles.label}>Working Hours *</Text>
-              <View style={[styles.inputGroup, errors.workingHours && styles.inputError]}>
-                <Clock size={20} color="#6B7280" style={styles.inputIcon} />
-                <TextInput
-                  style={[styles.input, styles.inputWithIcon]}
-                  placeholder="e.g., 9:00 AM - 5:00 PM, Monday to Friday"
-                  value={jobData.workingHours}
-                  onChangeText={(text) => setJobData(prev => ({ ...prev, workingHours: text }))}
+              <View style={styles.timePickerRow}>
+                <CustomDateTimePicker
+                  mode="time"
+                  label="Start Time"
+                  value={jobData.startTime || null}
+                  onDateChange={(selected) => {
+                    setJobData((prev) => {
+                      const nextWorkingHours = updateWorkingHours(selected, prev.endTime);
+                      return {
+                        ...prev,
+                        startTime: selected,
+                        workingHours: nextWorkingHours || prev.workingHours,
+                      };
+                    });
+                    if (errors.startTime) {
+                      setErrors((prev) => ({ ...prev, startTime: undefined }));
+                    }
+                  }}
+                  placeholder="Select start"
+                  style={styles.timePickerField}
+                  textStyle={styles.timePickerText}
+                />
+                <CustomDateTimePicker
+                  mode="time"
+                  label="End Time"
+                  value={jobData.endTime || null}
+                  onDateChange={(selected) => {
+                    setJobData((prev) => {
+                      const nextWorkingHours = updateWorkingHours(prev.startTime, selected);
+                      return {
+                        ...prev,
+                        endTime: selected,
+                        workingHours: nextWorkingHours || prev.workingHours,
+                      };
+                    });
+                    if (errors.endTime) {
+                      setErrors((prev) => ({ ...prev, endTime: undefined }));
+                    }
+                  }}
+                  placeholder="Select end"
+                  style={styles.timePickerField}
+                  textStyle={styles.timePickerText}
+                  minimumDate={jobData.startTime || undefined}
                 />
               </View>
-              {errors.workingHours && <Text style={styles.errorText}>{errors.workingHours}</Text>}
+              {(errors.startTime || errors.endTime) && (
+                <Text style={styles.errorText}>
+                  {errors.startTime || errors.endTime}
+                </Text>
+              )}
             </View>
           </View>
         );
         
       case 3:
+        if (hasChildrenRecords) {
+          return (
+            <View style={styles.stepContainer}>
+              <Text style={styles.stepTitle}>Select Children</Text>
+              <Text style={styles.childrenSubtitle}>
+                Choose the children this job is intended for.
+              </Text>
+              
+              <View style={styles.childrenList}>
+                {normalizedChildren.map((child) => {
+                  const isSelected = jobData.children.some(selected => selected.id === child.id);
+                  return (
+                    <TouchableOpacity
+                      key={child.id}
+                      style={[styles.childCard, isSelected && styles.childCardSelected]}
+                      onPress={() => handleToggleChild(child)}
+                    >
+                      <View style={styles.childIconContainer}>
+                        <User size={16} color={isSelected ? '#FFFFFF' : '#4F46E5'} />
+                      </View>
+                      <View style={styles.childInfo}>
+                        <Text style={styles.childName}>{child.name}</Text>
+                        <Text style={styles.childMeta}>
+                          {child.age !== null && child.age !== undefined ? `Age ${child.age}` : 'Age not specified'}
+                        </Text>
+                        {(child.allergies || child.notes) && (
+                          <Text style={styles.childNotes}>
+                            {[child.allergies && `Allergies: ${child.allergies}`, child.notes].filter(Boolean).join(' • ')}
+                          </Text>
+                        )}
+                      </View>
+                      <View style={[styles.childCheckmark, isSelected && styles.childCheckmarkSelected]}>
+                        {isSelected && <Check size={16} color="#FFFFFF" />}
+                      </View>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+              
+              {errors.children && <Text style={styles.errorText}>{errors.children}</Text>}
+            </View>
+          );
+        }
+        // If no children but somehow reached step 3, fall through to review
+      case 4:
         return (
           <View style={styles.stepContainer}>
-            <Text style={styles.stepTitle}>Review & Post</Text>
+            <Text style={styles.stepTitle}>Review Job Post</Text>
             <Text style={styles.reviewDescription}>
-              Please review your job posting below. Your job will be visible to qualified caregivers in your area.
+              Please review all the details before posting your job.
             </Text>
 
             {/* Job Details Card */}
@@ -750,6 +935,43 @@ const JobPostingModal = ({ visible, onClose, onJobPosted, childrenList = [] }) =
               )}
             </View>
 
+            {/* Children Card (if applicable) */}
+            {hasChildrenRecords && (
+              <View style={styles.summaryCard}>
+                <View style={styles.summaryCardHeader}>
+                  <Text style={styles.summarySectionTitle}>Selected Children</Text>
+                  <TouchableOpacity 
+                    style={styles.editButton}
+                    onPress={() => setStep(3)}
+                  >
+                    <Text style={styles.editButtonText}>Edit</Text>
+                  </TouchableOpacity>
+                </View>
+
+                {jobData.children.length > 0 ? (
+                  <View style={styles.childrenSummary}>
+                    {jobData.children.map((child) => (
+                      <View key={child.id} style={styles.childSummaryItem}>
+                        <View style={styles.childSummaryIcon}>
+                          <User size={14} color="#4F46E5" />
+                        </View>
+                        <Text style={styles.childSummaryText}>
+                          {child.name} {child.age ? `(Age ${child.age})` : ''}
+                        </Text>
+                      </View>
+                    ))}
+                  </View>
+                ) : (
+                  <View style={styles.emptyState}>
+                    <AlertCircle size={24} color="#9CA3AF" />
+                    <Text style={styles.emptyStateText}>
+                      No children selected
+                    </Text>
+                  </View>
+                )}
+              </View>
+            )}
+
             {/* Final Note */}
             <View style={styles.finalNote}>
               <AlertCircle size={16} color="#6B7280" />
@@ -759,9 +981,6 @@ const JobPostingModal = ({ visible, onClose, onJobPosted, childrenList = [] }) =
             </View>
           </View>
         );
-                
-      default:
-        return null;
     }
   };
 
@@ -798,6 +1017,15 @@ const JobPostingModal = ({ visible, onClose, onJobPosted, childrenList = [] }) =
           )}
 
           <View style={styles.footerActions}>
+            {step > 1 && (
+              <TouchableOpacity
+                style={[styles.footerButton, styles.secondaryButton]}
+                onPress={handleBack}
+                disabled={loading}
+              >
+                <Text style={styles.secondaryButtonText}>Back</Text>
+              </TouchableOpacity>
+            )}
             <TouchableOpacity
               style={[styles.footerButton, styles.secondaryButton]}
               onPress={onClose}
@@ -811,7 +1039,7 @@ const JobPostingModal = ({ visible, onClose, onJobPosted, childrenList = [] }) =
               disabled={loading}
             >
               <Text style={styles.primaryButtonText}>
-                {step === 3 ? 'Post Job' : 'Continue'}
+                {step === totalSteps ? 'Post Job' : 'Continue'}
               </Text>
             </TouchableOpacity>
           </View>
@@ -1251,6 +1479,86 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     padding: 16,
+  },
+  childrenSubtitle: {
+    fontSize: 13,
+    color: '#4B5563',
+    lineHeight: 20,
+  },
+  childrenList: {
+    marginTop: 12,
+    gap: 12,
+  },
+  childCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    backgroundColor: '#FFFFFF',
+    padding: 12,
+    gap: 12,
+  },
+  childCardSelected: {
+    borderColor: '#4F46E5',
+    backgroundColor: '#EEF2FF',
+  },
+  childIconContainer: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: '#EEF2FF',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  childInfo: {
+    flex: 1,
+    gap: 4,
+  },
+  childName: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#111827',
+  },
+  childMeta: {
+    fontSize: 13,
+    color: '#6B7280',
+  },
+  childNotes: {
+    fontSize: 12,
+    color: '#6B7280',
+  },
+  childCheckmark: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: '#E5E7EB',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  childCheckmarkSelected: {
+    backgroundColor: '#4F46E5',
+  },
+  childrenSummary: {
+    gap: 8,
+  },
+  childSummaryItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingVertical: 8,
+  },
+  childSummaryIcon: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: '#EEF2FF',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  childSummaryText: {
+    fontSize: 14,
+    color: '#374151',
   },
 });
 

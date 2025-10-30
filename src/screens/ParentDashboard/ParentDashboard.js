@@ -1,7 +1,8 @@
 import { useNavigation } from '@react-navigation/native';
 import * as FileSystem from 'expo-file-system';
+import * as Sharing from 'expo-sharing';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { Alert, Linking, View } from 'react-native';
+import { Alert, Platform, View } from 'react-native';
 import { processImageForUpload } from '../../utils/imageUtils';
 
 // Core imports
@@ -11,6 +12,7 @@ import { useParentDashboard } from '../../hooks/useParentDashboard';
 
 // Supabase service import
 import { supabaseService } from '../../services/supabase';
+import { contractService } from '../../services/supabase/contractService';
 
 // Utility imports
 import { countActiveFilters } from '../../utils/caregiverUtils';
@@ -21,6 +23,7 @@ import { usePrivacy } from '../../components/features/privacy/PrivacyManager';
 import { useProfileData } from '../../components/features/privacy/ProfileDataManager';
 
 // Component imports
+import ContractTypeSelector, { CONTRACT_TYPES } from '../../components/modals/ContractTypeSelector';
 import AlertsTab from './components/AlertsTab';
 import BookingsTab from './components/BookingsTab';
 import Header from './components/Header';
@@ -61,6 +64,150 @@ const DEFAULT_CAREGIVER = {
   reviewCount: 0,
   hourlyRate: 0,
   rate: '₱0/hr'
+};
+
+const formatPesoRate = (value) => {
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric)) {
+    return null;
+  }
+
+  return `₱${numeric.toLocaleString('en-PH', {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2
+  })}`;
+};
+
+const summarizeChildrenFromApplication = (application) => {
+  const rawChildren =
+    application?.children ||
+    application?.selectedChildren ||
+    application?.selected_children ||
+    application?.job?.children ||
+    [];
+
+  if (!Array.isArray(rawChildren) || rawChildren.length === 0) {
+    return 'As agreed per booking';
+  }
+
+  const names = rawChildren
+    .map((child, index) => {
+      if (typeof child === 'string') {
+        return child;
+      }
+      if (child?.name) {
+        return child.name;
+      }
+      if (child?.child?.name) {
+        return child.child.name;
+      }
+      return `Child ${index + 1}`;
+    })
+    .filter(Boolean)
+    .slice(0, 5);
+
+  if (names.length === 0) {
+    return 'As agreed per booking';
+  }
+
+  return names.join(', ');
+};
+
+const resolveContractTemplate = (application) => {
+  const preferredType =
+    application?.preferredContractType ||
+    application?.contractType ||
+    application?.selectedContractType ||
+    application?.job?.contractType ||
+    application?.job?.preferredContractType ||
+    application?.job?.metadata?.contractType;
+
+  if (preferredType) {
+    const normalized = String(preferredType).toLowerCase();
+    const match = Object.values(CONTRACT_TYPES).find(
+      (type) =>
+        type.id.toLowerCase() === normalized ||
+        type.title.toLowerCase() === normalized
+    );
+
+    if (match) {
+      return match;
+    }
+  }
+
+  return CONTRACT_TYPES.STANDARD;
+};
+
+const buildPromotionContractTerms = (application, contractTemplateOverride = null) => {
+  const nowIso = new Date().toISOString();
+  const contractTemplate = contractTemplateOverride || resolveContractTemplate(application);
+
+  const jobTitle =
+    application?.jobTitle ||
+    application?.job?.title ||
+    application?.job?.jobTitle ||
+    'Childcare Services Engagement';
+
+  const jobLocation =
+    application?.jobLocation ||
+    application?.job?.location ||
+    application?.job?.address ||
+    'To be confirmed';
+
+  const schedule =
+    application?.preferredSchedule ||
+    application?.job?.schedule ||
+    application?.job?.time ||
+    'As agreed per booking';
+
+  const pesoRate = formatPesoRate(
+    application?.proposedRate ??
+      application?.job?.hourlyRate ??
+      application?.job?.hourly_rate ??
+      application?.job?.rate
+  );
+
+  const paymentTerms = pesoRate
+    ? `${pesoRate} per hour, payable upon completion of services`
+    : 'Payment upon completion of services';
+
+  const engagementNotes = (
+    application?.message ||
+    application?.job?.description ||
+    application?.job?.notes ||
+    ''
+  ).trim() || 'Refer to booking details for specific instructions.';
+
+  const contractOptionsSummary =
+    Object.values(CONTRACT_TYPES)
+      .map(({ title, subtitle, description }) => {
+        const base = subtitle ? `${title} — ${subtitle}` : title;
+        return `${base}: ${description}`;
+      })
+      .join(' | ') || `${contractTemplate.title}: ${contractTemplate.description}`;
+
+  const dynamicTerms = {
+    'Work Schedule': String(schedule),
+    'Payment Terms': paymentTerms,
+    'Job Title': String(jobTitle),
+    'Work Location': String(jobLocation),
+    'Children Covered': summarizeChildrenFromApplication(application),
+    'Hourly Rate Reference': pesoRate || 'To be determined with caregiver',
+    'Engagement Notes': engagementNotes
+  };
+
+  return {
+    contractType: contractTemplate.id,
+    contractTitle: contractTemplate.title,
+    ...contractTemplate.terms,
+    ...dynamicTerms,
+    'Contract Subtitle': contractTemplate.subtitle || contractTemplate.description || contractTemplate.title,
+    'Available Contract Templates': contractOptionsSummary,
+    createdAt: nowIso,
+    generatedAt: nowIso,
+    version: 1,
+    'Generated Via': 'application-promotion'
+  };
 };
 
 const ParentDashboard = () => {
@@ -125,11 +272,15 @@ const ParentDashboard = () => {
     payment: false,
     booking: false,
     bookingDetails: false,
-    contract: false
+    contract: false,
+    contractType: false
   });
 
   const [selectedBooking, setSelectedBooking] = useState(null);
   const [selectedContract, setSelectedContract] = useState(null);
+  const [selectedContractTemplate, setSelectedContractTemplate] = useState(null);
+  const [pendingApplicationForContract, setPendingApplicationForContract] = useState(null);
+  const [applicationsMutatingId, setApplicationsMutatingId] = useState(null);
 
   // Search and filter state
   const [searchQuery, setSearchQuery] = useState('');
@@ -216,6 +367,22 @@ const ParentDashboard = () => {
       [modalName]: isOpen !== null ? isOpen : !prev[modalName]
     }));
   }, []);
+
+  const openContractTypeSelector = useCallback((application) => {
+    setPendingApplicationForContract(application);
+    setSelectedContractTemplate(null);
+    toggleModal('contractType', true);
+  }, [toggleModal]);
+
+  const handleContractTemplateChosen = useCallback((contractType) => {
+    setSelectedContractTemplate(contractType);
+  }, []);
+
+  const closeContractTypeSelector = useCallback(() => {
+    toggleModal('contractType', false);
+    setSelectedContractTemplate(null);
+    setPendingApplicationForContract(null);
+  }, [toggleModal]);
 
   // Helper function to create caregiver object
   const createCaregiverObject = useCallback((caregiverData = null) => {
@@ -516,6 +683,29 @@ const ParentDashboard = () => {
     }
   }, [navigation, user]);
 
+  const handleCallCaregiver = useCallback((caregiver) => {
+    if (!caregiver) {
+      Alert.alert('No caregiver information', 'Caregiver details are missing.');
+      return;
+    }
+
+    const rawPhone = caregiver.phone || caregiver.contactPhone || caregiver?.user?.phone || caregiver?.caregiver?.phone;
+    if (!rawPhone) {
+      Alert.alert('No phone number', 'This caregiver has not provided a phone number.');
+      return;
+    }
+
+    const sanitized = String(rawPhone).replace(/[^0-9+]/g, '');
+    if (!sanitized) {
+      Alert.alert('Invalid phone number', 'Unable to place call with the provided number.');
+      return;
+    }
+
+    Linking.openURL(`tel:${sanitized}`).catch(() => {
+      Alert.alert('Unable to place call', 'Please try again later.');
+    });
+  }, []);
+
   const handleViewReviews = useCallback((caregiver) => {
     navigation.navigate('CaregiverReviews', {
       userId: user.id,
@@ -673,21 +863,56 @@ const ParentDashboard = () => {
     try {
       const { contractService } = await import('../../services/supabase/contractService');
 
-      let existing;
+      const bookingIdentifier = selectedBooking.id || selectedBooking._id || selectedContract.bookingId;
+      let existingContract = null;
+
       try {
-        existing = await contractService.getContractById(selectedContract.id);
+        existingContract = await contractService.getContractById(selectedContract.id);
       } catch (error) {
-        if (error?.code === 'PGRST116' || error?.message?.includes('0 rows')) {
+        const isNotFound = error?.code === 'PGRST116' || error?.message?.includes('0 rows');
+        console.warn('⚠️ Contract lookup failed before signing:', {
+          errorCode: error?.code,
+          errorMessage: error?.message,
+          bookingIdentifier,
+          selectedContractId: selectedContract.id,
+          selectedBookingId: selectedBooking.id || selectedBooking._id
+        });
+
+        if (!isNotFound) {
+          throw error;
+        }
+
+        // Attempt to recover by fetching the latest contract for this booking
+        if (bookingIdentifier) {
+          try {
+            const fallbackContracts = await contractService.getContractsByBooking(bookingIdentifier);
+            console.log('ℹ️ Fallback contract lookup result:', {
+              resultCount: Array.isArray(fallbackContracts) ? fallbackContracts.length : null,
+              bookingIdentifier
+            });
+            if (Array.isArray(fallbackContracts) && fallbackContracts.length > 0) {
+              existingContract = fallbackContracts[0];
+              setSelectedContract(existingContract);
+            }
+          } catch (fallbackError) {
+            console.warn('⚠️ Failed to load fallback contract list:', fallbackError);
+          }
+        }
+
+        if (!existingContract) {
+          console.warn('⚠️ Contract signing aborted after failed lookups.', {
+            bookingIdentifier,
+            selectedContractId: selectedContract.id
+          });
           Alert.alert('Contract unavailable', 'This contract could not be found. Please refresh and try again.');
           toggleModal('contract', false);
           setSelectedContract(null);
           setSelectedBooking(null);
           return;
         }
-        throw error;
       }
 
-      if (!existing) {
+      if (!existingContract) {
         Alert.alert('Contract unavailable', 'This contract could not be found. Please refresh and try again.');
         toggleModal('contract', false);
         setSelectedContract(null);
@@ -697,13 +922,19 @@ const ParentDashboard = () => {
 
       let result;
       try {
-        result = await contractService.signContract(existing.id, 'parent', {
+        result = await contractService.signContract(existingContract.id, 'parent', {
           signature,
           signatureHash: btoa(signature), // Simple hash for demo
           ipAddress: null
         });
       } catch (error) {
-        if (error?.code === 'CONTRACT_NOT_FOUND') {
+        console.error('❌ Contract signing failed:', {
+          errorCode: error?.code,
+          errorMessage: error?.message,
+          bookingIdentifier,
+          contractId: existingContract.id
+        });
+        if (error?.code === 'CONTRACT_NOT_FOUND' || error?.code === 'PGRST116' || error?.message?.includes('0 rows')) {
           Alert.alert('Contract unavailable', 'This contract could not be found. Please refresh and try again.');
           toggleModal('contract', false);
           setSelectedContract(null);
@@ -742,21 +973,70 @@ const ParentDashboard = () => {
   const handleDownloadPdf = useCallback(async (contract) => {
     if (!contract) return;
 
+    let cleanup;
+
     try {
       const { contractService } = await import('../../services/supabase/contractService');
-      const pdfData = await contractService.generateContractPdf(contract.id);
-      if (pdfData?.url) {
-        await Linking.openURL(pdfData.url);
-        Alert.alert('Success', 'Contract PDF opened!');
+      const result = await contractService.generateContractPdf(contract.id, { autoDownload: true });
+
+      cleanup = typeof result?.cleanup === 'function' ? result.cleanup : undefined;
+
+      if (!result?.uri && !result?.url) {
+        throw new Error('Download did not return a file location.');
+      }
+
+      const fileUri = result.uri || result.url;
+      const isFileUri = typeof fileUri === 'string' && fileUri.startsWith('file://');
+      const canShare = await Sharing.isAvailableAsync();
+
+      if (isFileUri && canShare) {
+        await Sharing.shareAsync(fileUri, { mimeType: 'application/pdf' });
+        return;
+      }
+
+      if (!isFileUri && typeof fileUri === 'string') {
+        let openedExternally = false;
+        try {
+          if (Linking?.canOpenURL) {
+            const canOpen = await Linking.canOpenURL(fileUri);
+            if (canOpen) {
+              await Linking.openURL(fileUri);
+              openedExternally = true;
+            }
+          }
+        } catch (linkError) {
+          console.warn('⚠️ Unable to open contract URL directly:', linkError);
+        }
+
+        Alert.alert(
+          'Download Link Ready',
+          'We were unable to save the PDF locally. Tap OK to copy the link and open it in your browser.',
+          [
+            {
+              text: 'Copy Link',
+              onPress: () => {
+                try {
+                  navigator.clipboard?.writeText?.(fileUri);
+                  Alert.alert('Link Copied', 'Paste the link into your browser to download the PDF.');
+                } catch (clipError) {
+                  console.warn('Clipboard unavailable:', clipError);
+                }
+              }
+            },
+            { text: 'OK', onPress: () => {} }
+          ]
+        );
+        return;
+      }
+
+      if (Platform.OS === 'android') {
+        Alert.alert('Downloaded', `PDF saved at:\n${fileUri}`);
       } else {
-        Alert.alert('Success', 'Contract PDF downloaded!');
+        Alert.alert('Downloaded', 'PDF saved. Open it with a PDF viewer or Files app.');
       }
     } catch (error) {
       console.error('Error downloading PDF:', error);
-      Alert.alert(
-        'PDF Generation Unavailable',
-        'PDF downloads are not currently available, but your contract is still valid. You can view and sign contracts in the app.'
-      );
+      Alert.alert('Download failed', error instanceof Error ? error.message : String(error));
     }
   }, []);
 
@@ -766,6 +1046,42 @@ const ParentDashboard = () => {
     setSelectedContract(contract);
     toggleModal('contract', true);
   }, [toggleModal]);
+
+  const openContractByIds = useCallback(async ({ contractId, bookingId, context = 'default' } = {}) => {
+    if (!contractId) {
+      Alert.alert('Contract unavailable', 'We could not identify the requested contract. Please refresh and try again.');
+      return;
+    }
+
+    try {
+      const [contract, booking] = await Promise.all([
+        contractService.getContractById(contractId),
+        bookingId ? supabaseService.bookings.getBookingById(bookingId, user?.id) : Promise.resolve(null)
+      ]);
+
+      if (!contract) {
+        Alert.alert('Contract unavailable', 'We could not load the contract details. Try refreshing or check again later.');
+        return;
+      }
+
+      let resolvedBooking = booking;
+
+      if (!resolvedBooking && contract.bookingId) {
+        try {
+          resolvedBooking = await supabaseService.bookings.getBookingById(contract.bookingId, user?.id);
+        } catch (fetchError) {
+          console.warn('⚠️ Failed to load booking for contract:', { contractId, context, error: fetchError });
+        }
+      }
+
+      setSelectedContract(contract);
+      setSelectedBooking(resolvedBooking || null);
+      toggleModal('contract', true);
+    } catch (error) {
+      console.error('❌ Failed to open contract by IDs:', { contractId, bookingId, context, error });
+      Alert.alert('Error', 'Failed to open contract. Please try again.');
+    }
+  }, [toggleModal, user?.id]);
 
   const openPaymentModal = useCallback((bookingId, paymentType = 'deposit') => {
     setPaymentData({
@@ -943,6 +1259,99 @@ const ParentDashboard = () => {
   const handleViewAllChildren = useCallback(() => {
     setShowAllChildren(prev => !prev);
   }, []);
+
+  const handleApplicationStatusUpdate = useCallback(async (applicationId, status, jobId, contractTemplateOverride = null) => {
+    if (!applicationId) {
+      Alert.alert('Error', 'Missing application identifier. Please refresh and try again.');
+      return;
+    }
+
+    const currentApplication = applications.find((application) =>
+      String(application.id || application._id) === String(applicationId)
+    ) || null;
+
+    const templateToUse = contractTemplateOverride || selectedContractTemplate;
+
+    if (status === 'accepted' && currentApplication && !templateToUse) {
+      openContractTypeSelector({ ...currentApplication });
+      setApplicationsMutatingId(null);
+      return;
+    }
+
+    if (contractTemplateOverride) {
+      setSelectedContractTemplate(contractTemplateOverride);
+    }
+
+    setApplicationsMutatingId(applicationId);
+
+    try {
+      const updated = await supabaseService.applications.updateApplicationStatus(applicationId, status, jobId);
+      setApplications((prev) => prev.map((application) => {
+        const matches = String(application.id || application._id) === String(applicationId);
+        if (!matches) return application;
+
+        const merged = {
+          ...application,
+          status,
+          updatedAt: new Date().toISOString()
+        };
+
+        if (updated && typeof updated === 'object') {
+          merged.status = updated.status || status;
+          merged.updatedAt = updated.updated_at || updated.updatedAt || merged.updatedAt;
+        }
+
+        return merged;
+      }));
+
+      if (status === 'accepted' && currentApplication) {
+        try {
+          const chosenTemplate = templateToUse || resolveContractTemplate(currentApplication);
+          const promotionResult = await supabaseService.applications.promoteApplication(applicationId, {
+            contractTerms: buildPromotionContractTerms(currentApplication, chosenTemplate)
+          });
+
+          if (promotionResult?.contractId) {
+            const { contractService } = await import('../../services/supabase/contractService');
+            try {
+              await contractService.getContractById(promotionResult.contractId);
+            } catch (prefetchError) {
+              console.warn('⚠️ Contract prefetch failed:', prefetchError?.message || prefetchError);
+            }
+          }
+        } catch (promotionError) {
+          console.error('❌ Failed to promote application:', promotionError);
+          Alert.alert(
+            'Promotion Failed',
+            promotionError?.message || 'The application was accepted, but promotion to booking did not complete. Please try again.'
+          );
+        }
+      }
+
+      await Promise.all([
+        fetchJobs(),
+        fetchBookings(),
+        fetchApplications()
+      ]);
+    } catch (error) {
+      console.error('❌ Failed to update application status:', error);
+      Alert.alert('Error', error?.message || 'Failed to update application status.');
+    } finally {
+      setApplicationsMutatingId(null);
+      setSelectedContractTemplate(null);
+      setPendingApplicationForContract(null);
+    }
+  }, [
+    applications,
+    selectedContractTemplate,
+    openContractTypeSelector,
+    fetchJobs,
+    fetchBookings,
+    fetchApplications,
+    resolveContractTemplate,
+    buildPromotionContractTerms,
+    supabaseService
+  ]);
 
   // Profile functions
   const handleSaveProfile = useCallback(async (imageUri = null) => {
@@ -1123,6 +1532,7 @@ const ParentDashboard = () => {
             onOpenContract={handleOpenContract}
             navigation={navigation}
             loading={loading}
+            refreshBookings={fetchBookings}
           />
         );
       case 'messages':
@@ -1154,6 +1564,7 @@ const ParentDashboard = () => {
           <JobApplicationsTab
             applications={applications}
             loading={applicationsLoading}
+            mutatingApplicationId={applicationsMutatingId}
             refreshing={refreshing}
             onRefresh={async () => {
               await fetchApplications();
@@ -1172,49 +1583,11 @@ const ParentDashboard = () => {
               }
               handleMessageCaregiver(caregiver);
             }}
-            onUpdateStatus={async (applicationId, status, jobId) => {
-              try {
-                const updated = await supabaseService.applications.updateApplicationStatus(applicationId, status, jobId);
-                setApplications((prev) => prev.map((application) => {
-                  const matches = String(application.id || application._id) === String(applicationId);
-                  if (!matches) return application;
-
-                  const merged = {
-                    ...application,
-                    status,
-                    updatedAt: new Date().toISOString()
-                  };
-
-                  if (updated && typeof updated === 'object') {
-                    merged.status = updated.status || status;
-                    merged.updatedAt = updated.updated_at || updated.updatedAt || merged.updatedAt;
-                  }
-
-                  return merged;
-                }));
-
-                if (status === 'accepted') {
-                  try {
-                    await supabaseService.applications.promoteApplication(applicationId);
-                  } catch (promotionError) {
-                    console.error('❌ Failed to promote application:', promotionError);
-                    Alert.alert(
-                      'Promotion Failed',
-                      promotionError?.message || 'The application was accepted, but promotion to booking did not complete. Please try again.'
-                    );
-                  }
-                }
-
-                await Promise.all([
-                  fetchJobs(),
-                  fetchBookings(),
-                  fetchApplications()
-                ]);
-              } catch (error) {
-                console.error('❌ Failed to update application status:', error);
-                Alert.alert('Error', error?.message || 'Failed to update application status.');
-              }
-            }}
+            onUpdateStatus={handleApplicationStatusUpdate}
+            onOpenContract={({ contractId, bookingId }) =>
+              openContractByIds({ contractId, bookingId, context: 'applications-tab' })
+            }
+            onCallCaregiver={handleCallCaregiver}
           />
         );
       case 'reviews':
@@ -1239,36 +1612,11 @@ const ParentDashboard = () => {
                 return;
               }
 
-              try {
-                const [{ contractService }] = await Promise.all([
-                  import('../../services/supabase/contractService'),
-                ]);
-
-                const [contract, booking] = await Promise.all([
-                  contractService.getContractById(metadata.contractId),
-                  metadata.bookingId
-                    ? supabaseService.bookings.getBookingById(metadata.bookingId, user?.id)
-                    : null,
-                ]);
-
-                if (contract) {
-                  setSelectedContract(contract);
-                  if (booking) {
-                    setSelectedBooking(booking);
-                  } else if (contract.bookingId) {
-                    const bookingRecord = await supabaseService.bookings.getBookingById(
-                      contract.bookingId,
-                      user?.id
-                    );
-                    if (bookingRecord) {
-                      setSelectedBooking(bookingRecord);
-                    }
-                  }
-                  toggleModal('contract', true);
-                }
-              } catch (error) {
-                console.error('❌ Failed to open contract from alert:', error);
-              }
+              await openContractByIds({
+                contractId: metadata.contractId,
+                bookingId: metadata.bookingId,
+                context: `alert-${tabId}`
+              });
             }}
           />
         );
@@ -1281,15 +1629,18 @@ const ParentDashboard = () => {
         <View style={styles.container}>
           <View style={styles.contentContainer}>
             <Header
-            navigation={navigation}
-            onProfilePress={() => toggleModal('profile', true)}
-            onSignOut={signOut}
-            greetingName={greetingName}
-            onProfileEdit={() => toggleModal('profile', true)}
-            profileName={profileForm.name}
-            profileImage={profileForm.image}
-            setActiveTab={setActiveTab}
-          />
+              navigation={navigation}
+              onProfilePress={() => toggleModal('profile', true)}
+              onSignOut={signOut}
+              greetingName={profile?.firstName || profile?.name}
+              onProfileEdit={() => toggleModal('profile', true)}
+              profileName={profile?.name}
+              profileImage={profile?.profileImage}
+              profileContact={profile?.email}
+              profileLocation={profile?.location}
+              setActiveTab={setActiveTab}
+              tabNotificationCounts={tabNotificationCounts}
+            />
           
           <NavigationTabs
             activeTab={activeTab}
@@ -1416,6 +1767,22 @@ const ParentDashboard = () => {
             onSign={handleContractSign}
             onResend={handleContractResend}
             onDownloadPdf={handleDownloadPdf}
+          />
+
+          <ContractTypeSelector
+            visible={modals.contractType}
+            onClose={closeContractTypeSelector}
+            onSelectContractType={(type) => {
+              handleContractTemplateChosen(type);
+              toggleModal('contractType', false);
+
+              if (pendingApplicationForContract?.id || pendingApplicationForContract?._id) {
+                const applicationId = pendingApplicationForContract.id || pendingApplicationForContract._id;
+                const jobId = pendingApplicationForContract.jobId || pendingApplicationForContract.job?.id || pendingApplicationForContract.job_id;
+                handleApplicationStatusUpdate(applicationId, 'accepted', jobId, type);
+              }
+            }}
+            selectedType={selectedContractTemplate}
           />
           </View>
         </View>

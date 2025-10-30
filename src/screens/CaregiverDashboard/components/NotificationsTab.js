@@ -1,32 +1,32 @@
 import {
-  Briefcase,
-  Calendar,
-  CheckCircle,
-  Clock,
-  DollarSign,
-  FileCheck2,
-  MessageCircle,
-  Star
+    Briefcase,
+    Calendar,
+    CheckCircle,
+    Clock,
+    DollarSign,
+    FileCheck2,
+    MessageCircle,
+    Star
 } from 'lucide-react-native';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
-  ActivityIndicator,
-  Alert,
-  Image,
-  Linking,
-  Modal,
-  RefreshControl,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TouchableOpacity,
-  View
+    ActivityIndicator,
+    Alert,
+    Image,
+    Linking,
+    Modal,
+    RefreshControl,
+    ScrollView,
+    StyleSheet,
+    Text,
+    TouchableOpacity,
+    View
 } from 'react-native';
 import {
-  SkeletonBlock,
-  SkeletonCard,
-  SkeletonCircle,
-  SkeletonPill
+    SkeletonBlock,
+    SkeletonCard,
+    SkeletonCircle,
+    SkeletonPill
 } from '../../../components/common/SkeletonPlaceholder';
 import { useAuth } from '../../../contexts/AuthContext';
 import { notificationService } from '../../../services/supabase';
@@ -173,17 +173,37 @@ const NotificationsTab = ({ navigation, onNavigateTab }) => {
     }
 
     // Handle contract notification
-    if (
-      notificationData?.notificationType === 'contract_created' &&
+    const isContractNotification =
       notificationData?.contractId &&
-      onNavigateTab
-    ) {
-      console.log('📄 Contract notification detected; routing to bookings tab');
-      onNavigateTab('bookings', {
+      ['contract_created', 'contract_status', 'contract_signed', 'contract_active', 'contract_resent'].includes(
+        notificationData?.notificationType
+      );
+
+    if (isContractNotification && onNavigateTab) {
+      const bookingId = notificationData.bookingId;
+      const hasApplicationContext = Boolean(
+        notificationData.applicationId ||
+        notificationData.application_id ||
+        notificationData.jobId ||
+        notificationData.job_id
+      );
+      const notificationType = notificationData.notificationType;
+      let targetTab = 'applications';
+
+      if (bookingId && ['contract_signed', 'contract_active'].includes(notificationType)) {
+        targetTab = 'bookings';
+      } else if (bookingId && !hasApplicationContext) {
+        targetTab = 'bookings';
+      }
+
+      console.log('📄 Contract notification detected; routing to', targetTab);
+      onNavigateTab(targetTab, {
         ...notification,
         data: notificationData,
         contractId: notificationData.contractId,
-        bookingId: notificationData.bookingId,
+        bookingId,
+        jobId: notificationData.jobId || notificationData.job_id,
+        applicationId: notificationData.applicationId || notificationData.application_id
       });
       return;
     }

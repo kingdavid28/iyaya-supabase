@@ -1,16 +1,17 @@
-import React, { useMemo, useState } from 'react';
-import { FlatList, ScrollView, View, Text, TouchableOpacity } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { EmptyState } from '../../shared/ui';
-import { styles } from '../styles/CaregiverDashboard.styles';
+import { LinearGradient } from 'expo-linear-gradient';
+import React, { useMemo, useState } from 'react';
+import { FlatList, ScrollView, Text, TouchableOpacity, View } from 'react-native';
 import {
-  SkeletonCard,
   SkeletonBlock,
+  SkeletonCard,
   SkeletonCircle,
   SkeletonPill
 } from '../../components/common/SkeletonPlaceholder';
+import { EmptyState } from '../../shared/ui';
+import { styles } from '../styles/CaregiverDashboard.styles';
 
-const ApplicationCard = React.memo(({ application, onViewJob, onWithdraw }) => {
+const ApplicationCard = React.memo(({ application, onViewJob, onWithdraw, onOpenContract }) => {
   const getStatusColor = (status) => {
     switch (status?.toLowerCase()) {
       case 'pending': return '#F59E0B';
@@ -31,8 +32,12 @@ const ApplicationCard = React.memo(({ application, onViewJob, onWithdraw }) => {
     }
   };
   const job = application?.job || {};
+  const statusColor = getStatusColor(application.status);
   const appliedDate = application?.appliedDate || application?.applied_at || application?.appliedAt || application?.created_at;
   const baseRateLabel = application?.hourlyRateLabel || (job?.hourly_rate ? `₱${Number(job.hourly_rate)}/hr` : null);
+  const contractStatusLabel = application?.contractId
+    ? `Status: ${String(application?.contractStatus || 'pending').replace(/_/g, ' ')}`
+    : 'Not created yet';
   const proposedRateLabel = application?.proposedRateLabel || null;
   const showProposedRate = Boolean(proposedRateLabel && proposedRateLabel !== baseRateLabel);
   const jobRateLabel = baseRateLabel || 'Rate not specified';
@@ -47,22 +52,30 @@ const ApplicationCard = React.memo(({ application, onViewJob, onWithdraw }) => {
 
   return (
     <View style={applicationCardStyles.card}>
-      <View style={applicationCardStyles.header}>
-        <View style={applicationCardStyles.jobInfo}>
-          <Text style={applicationCardStyles.jobTitle} numberOfLines={2}>
-            {job?.title || application?.jobTitle || application?.job_title || 'Job Position'}
-          </Text>
-          <Text style={applicationCardStyles.familyName}>
-            {job?.family || job?.familyName || application?.family || 'Family'} • {job?.location || application?.location || 'Location'}
-          </Text>
+      <LinearGradient
+        colors={['#667eea', '#764ba2']}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 0 }}
+        style={applicationCardStyles.headerGradient}
+      >
+        <View style={applicationCardStyles.header}>
+          <View style={applicationCardStyles.jobInfo}>
+            <Text style={applicationCardStyles.jobTitle} numberOfLines={2}>
+              {job?.title || application?.jobTitle || application?.job_title || 'Job Position'}
+            </Text>
+            <Text style={applicationCardStyles.familyName}>
+              {job?.family || job?.familyName || application?.family || 'Family'} • {job?.location || application?.location || 'Location'}
+            </Text>
+          </View>
+          <View style={applicationCardStyles.statusBadge}>
+            <Ionicons name={getStatusIcon(application.status)} size={14} color="#fff" />
+            <Text style={applicationCardStyles.statusText}>{application.status || 'Unknown'}</Text>
+          </View>
         </View>
-        <View style={[applicationCardStyles.statusBadge, { backgroundColor: getStatusColor(application.status) }]}>
-          <Ionicons name={getStatusIcon(application.status)} size={14} color="#fff" />
-          <Text style={applicationCardStyles.statusText}>{application.status || 'Unknown'}</Text>
-        </View>
-      </View>
-      
-      <View style={applicationCardStyles.details}>
+      </LinearGradient>
+
+      <View style={applicationCardStyles.body}>
+        <View style={applicationCardStyles.details}>
         <View style={applicationCardStyles.detailRow}>
           <Ionicons name="cash-outline" size={16} color="#6b7280" />
           <Text style={applicationCardStyles.detailText}>{jobRateLabel}</Text>
@@ -105,6 +118,37 @@ const ApplicationCard = React.memo(({ application, onViewJob, onWithdraw }) => {
           </Text>
         </View>
       )}
+
+      {normalizeStatus(application?.status) === 'accepted' && (
+        <View style={applicationCardStyles.contractSection}>
+          <View style={applicationCardStyles.contractInfoRow}>
+            <View style={applicationCardStyles.contractIconWrap}>
+              <Ionicons name="document-text-outline" size={16} color="#4F46E5" />
+            </View>
+            <View style={applicationCardStyles.contractCopy}>
+              <Text style={applicationCardStyles.contractLabel}>Contract</Text>
+              <Text style={applicationCardStyles.contractStatus}>{contractStatusLabel}</Text>
+            </View>
+          </View>
+          <TouchableOpacity
+            style={[applicationCardStyles.contractButton, !application?.contractId && applicationCardStyles.contractButtonDisabled]}
+            activeOpacity={application?.contractId ? 0.85 : 1}
+            disabled={!application?.contractId}
+            onPress={() => onOpenContract?.({
+              contractId: application?.contractId,
+              bookingId: application?.bookingId,
+              application
+            })}
+          >
+            <Ionicons name="create-outline" size={16} color={application?.contractId ? '#4F46E5' : '#9CA3AF'} />
+            <Text
+              style={[applicationCardStyles.contractButtonText, !application?.contractId && applicationCardStyles.contractButtonTextDisabled]}
+            >
+              Review & Sign
+            </Text>
+          </TouchableOpacity>
+        </View>
+      )}
       
       <View style={applicationCardStyles.footer}>
         <TouchableOpacity 
@@ -129,6 +173,7 @@ const ApplicationCard = React.memo(({ application, onViewJob, onWithdraw }) => {
         )}
       </View>
     </View>
+  </View>
   );
 });
 
@@ -136,19 +181,25 @@ const applicationCardStyles = {
   card: {
     backgroundColor: '#fff',
     borderRadius: 12,
-    padding: 16,
     marginBottom: 12,
+    marginHorizontal: 16,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
     shadowRadius: 4,
     elevation: 3,
+    overflow: 'hidden',
+  },
+  headerGradient: {
+    padding: 16,
+  },
+  body: {
+    padding: 16,
   },
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'flex-start',
-    marginBottom: 12,
     gap: 12,
   },
   jobInfo: {
@@ -157,20 +208,23 @@ const applicationCardStyles = {
   jobTitle: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#111827',
+    color: '#FFFFFF',
     marginBottom: 4,
   },
   familyName: {
     fontSize: 14,
-    color: '#6b7280',
+    color: 'rgba(255, 255, 255, 0.85)',
   },
   statusBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 999,
     gap: 4,
+    backgroundColor: 'rgba(255, 255, 255, 0.18)',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.35)',
   },
   statusText: {
     fontSize: 12,
@@ -210,6 +264,69 @@ const applicationCardStyles = {
     color: '#374151',
     fontStyle: 'italic',
     lineHeight: 18,
+  },
+  contractSection: {
+    marginTop: 12,
+    marginBottom: 12,
+    padding: 12,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#E0E7FF',
+    backgroundColor: '#EEF2FF',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 12,
+  },
+  contractInfoRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    flex: 1,
+  },
+  contractIconWrap: {
+    width: 34,
+    height: 34,
+    borderRadius: 10,
+    backgroundColor: '#E0E7FF',
+    alignItems: 'center',
+    justifyContent: 'center'
+  },
+  contractCopy: {
+    flex: 1,
+  },
+  contractLabel: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#312E81',
+    marginBottom: 2,
+  },
+  contractStatus: {
+    fontSize: 12,
+    color: '#4338CA',
+  },
+  contractButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#4F46E5',
+    backgroundColor: '#F5F3FF',
+    gap: 6,
+  },
+  contractButtonDisabled: {
+    borderColor: '#CBD5F5',
+    backgroundColor: '#E5E7F8',
+  },
+  contractButtonText: {
+    color: '#4F46E5',
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  contractButtonTextDisabled: {
+    color: '#9CA3AF',
   },
   footer: {
     flexDirection: 'row',
@@ -307,6 +424,7 @@ export default function ApplicationsTab({
   applications,
   onViewJob,
   onWithdrawApplication,
+  onOpenContract,
   refreshing = false,
   onRefresh,
   loading = false
@@ -356,6 +474,7 @@ export default function ApplicationsTab({
         application={item}
         onViewJob={onViewJob}
         onWithdraw={onWithdrawApplication}
+        onOpenContract={onOpenContract}
       />
     );
   };

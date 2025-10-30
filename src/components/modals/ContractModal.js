@@ -1,3 +1,4 @@
+import { Ionicons } from '@expo/vector-icons';
 import React, { useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
@@ -9,7 +10,6 @@ import {
   TouchableOpacity,
   View
 } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
 
 const formatDateTime = (value) => {
   if (!value) return null;
@@ -22,6 +22,17 @@ const formatDateTime = (value) => {
       hour: 'numeric',
       minute: '2-digit'
     });
+  } catch (error) {
+    return String(value);
+  }
+};
+
+const normalizeTermValue = (value) => {
+  if (value === null || value === undefined) return '';
+  if (typeof value === 'string') return value;
+  if (typeof value === 'number' || typeof value === 'boolean') return String(value);
+  try {
+    return JSON.stringify(value);
   } catch (error) {
     return String(value);
   }
@@ -51,13 +62,27 @@ const ContractModal = ({
 
   const termsEntries = useMemo(() => {
     if (!contract?.terms) return [];
-    if (Array.isArray(contract.terms)) return contract.terms;
-    if (typeof contract.terms === 'string') return [contract.terms];
-    if (typeof contract.terms === 'object') {
-      return Object.entries(contract.terms).map(([key, value]) => (
-        `${key}: ${typeof value === 'object' ? JSON.stringify(value) : value}`
-      ));
+
+    if (Array.isArray(contract.terms)) {
+      return contract.terms
+        .map((term) => normalizeTermValue(term))
+        .filter(Boolean);
     }
+
+    if (typeof contract.terms === 'string') {
+      return [contract.terms];
+    }
+
+    if (typeof contract.terms === 'object') {
+      return Object.entries(contract.terms)
+        .map(([key, value]) => {
+          const normalizedValue = normalizeTermValue(value);
+          if (!normalizedValue) return '';
+          return `${normalizeTermValue(key)}: ${normalizedValue}`;
+        })
+        .filter(Boolean);
+    }
+
     return [];
   }, [contract?.terms]);
 
@@ -136,7 +161,7 @@ const ContractModal = ({
                   {termsEntries.map((entry, index) => (
                     <View key={`term-${index}`} style={styles.termItem}>
                       <Ionicons name="checkmark-circle" size={16} color="#4F46E5" style={styles.termIcon} />
-                      <Text style={styles.termText}>{entry}</Text>
+                      <Text style={styles.termText}>{String(entry)}</Text>
                     </View>
                   ))}
                 </View>

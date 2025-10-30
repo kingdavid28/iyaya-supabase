@@ -127,9 +127,9 @@ const CaregiverCard = ({ caregiver = {}, onPress, onMessagePress, onViewReviews,
         style={caregiverCardStyles.wrapper}
       >
         <LinearGradient
-          colors={[colors.primaryLight, colors.primaryLighter]}
+          colors={['#ca85b1ff', '#a094f2ff']}
           start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 1 }}
+          end={{ x: 1, y: 0 }}
           style={caregiverCardStyles.gradientHeader}
         >
           <View style={caregiverCardStyles.headerRow}>
@@ -149,7 +149,7 @@ const CaregiverCard = ({ caregiver = {}, onPress, onMessagePress, onViewReviews,
                 />
               ) : (
                 <View style={caregiverCardStyles.avatarFallback}>
-                  <User size={32} color={colors.textTertiary} />
+                  <User size={32} color="#FFFFFF" />
                 </View>
               )}
             </View>
@@ -172,7 +172,7 @@ const CaregiverCard = ({ caregiver = {}, onPress, onMessagePress, onViewReviews,
                 accessibilityLabel={canViewReviews ? `View reviews for ${name}` : undefined}
                 onPress={canViewReviews ? handleViewReviews : undefined}
               >
-                <Star size={14} color={hasReviews ? colors.warning : colors.textSecondary} fill={hasReviews ? colors.warning : "transparent"} />
+                <Star size={14} color={hasReviews ? '#FDE68A' : 'rgba(255,255,255,0.9)'} fill={hasReviews ? '#FDE68A' : 'transparent'} />
                 <Text style={caregiverCardStyles.ratingText}>{ratingLabel}</Text>
               </RatingComponent>
 
@@ -186,7 +186,7 @@ const CaregiverCard = ({ caregiver = {}, onPress, onMessagePress, onViewReviews,
 
               {locationText ? (
                 <View style={caregiverCardStyles.locationRow}>
-                  <MapPin size={14} color={colors.textSecondary} />
+                  <MapPin size={14} color="rgba(255,255,255,0.85)" />
                   <Text style={caregiverCardStyles.locationText}>{locationText}</Text>
                 </View>
               ) : null}
@@ -292,7 +292,7 @@ CaregiverCard.propTypes = {
 const caregiverCardStyles = StyleSheet.create({
   card: {
     borderRadius: 22,
-    backgroundColor: colors.primaryLight,
+    backgroundColor: colors.secondaryLight,
     overflow: 'hidden',
     shadowColor: '#1F2937',
     shadowOffset: { width: 0, height: 8 },
@@ -302,11 +302,15 @@ const caregiverCardStyles = StyleSheet.create({
   },
   wrapper: {
     overflow: 'hidden',
+    backgroundColor: colors.secondaryLight,
   },
   gradientHeader: {
+    backgroundColor: colors.secondaryLight,
+    borderRadius: 22, 
+    height: 128,  
     paddingHorizontal: spacing.md,
-    paddingVertical: spacing.md,
-  },
+    paddingVertical: 8,
+  },  
   headerRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -316,7 +320,7 @@ const caregiverCardStyles = StyleSheet.create({
     width: 64,
     height: 64,
     borderRadius: 32,
-    backgroundColor: colors.surface,
+    backgroundColor: 'rgba(255,255,255,0.2)',
     padding: 4,
     marginRight: spacing.md,
     shadowColor: '#00000020',
@@ -324,6 +328,8 @@ const caregiverCardStyles = StyleSheet.create({
     shadowOpacity: 0.12,
     shadowRadius: 8,
     elevation: 3,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.35)',
   },
   avatarImage: {
     width: '100%',
@@ -333,7 +339,7 @@ const caregiverCardStyles = StyleSheet.create({
   avatarFallback: {
     flex: 1,
     borderRadius: 28,
-    backgroundColor: colors.primaryLight,
+    backgroundColor: 'rgba(255,255,255,0.2)',
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -350,7 +356,7 @@ const caregiverCardStyles = StyleSheet.create({
     color: colors.text,
   },
   verifiedBadge: {
-    backgroundColor: colors.success,
+    backgroundColor: 'rgba(16,185,129,0.85)',
     borderRadius: 12,
     paddingHorizontal: 6,
     paddingVertical: 4,
@@ -359,16 +365,19 @@ const caregiverCardStyles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     alignSelf: 'flex-start',
-    borderRadius: 12,
-    paddingHorizontal: spacing.xs + 2,
+    borderRadius: 999,
+    paddingHorizontal: spacing.sm,
     paddingVertical: 4,
     marginTop: spacing.xs,
-    backgroundColor: colors.surface,
+    backgroundColor: 'rgba(255,255,255,0.16)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.3)',
   },
   ratingText: {
     marginLeft: spacing.xs,
-    color: colors.primary,
+    color: '#FFFFFF',
     fontSize: 12,
+    fontWeight: '600',
   },
   locationRow: {
     flexDirection: 'row',
@@ -377,14 +386,14 @@ const caregiverCardStyles = StyleSheet.create({
   },
   locationText: {
     marginLeft: spacing.xs,
-    color: colors.textSecondary,
+    color: 'rgba(255,255,255,0.85)',
     fontSize: 12,
   },
   body: {
     paddingHorizontal: spacing.md,
     paddingBottom: spacing.lg,
     paddingTop: spacing.sm,
-    backgroundColor: colors.surface,
+    backgroundColor: colors.secondaryLight,
   },
   metaRow: {
     flexDirection: 'row',
@@ -455,7 +464,7 @@ const caregiverCardStyles = StyleSheet.create({
   },
   primaryButton: {
     marginTop: spacing.md,
-    backgroundColor: colors.primaryDark,
+    backgroundColor: colors.secondary,
     borderRadius: 16,
     flexDirection: 'row',
     alignItems: 'center',

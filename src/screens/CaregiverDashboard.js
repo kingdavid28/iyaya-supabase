@@ -1,45 +1,49 @@
-import { Ionicons } from '@expo/vector-icons'
-import { useNavigation, useRoute } from '@react-navigation/native'
-import { LinearGradient } from "expo-linear-gradient"
-import React, { Fragment, useCallback, useEffect, useMemo, useState } from "react"
-import { ActivityIndicator, Alert, Dimensions, Image, Linking, Modal, Platform, Pressable, RefreshControl, ScrollView, Text, TextInput, View } from "react-native"
-import { Button, Card } from "react-native-paper"
-import Toast from "../components/ui/feedback/Toast"
-import { SettingsModal } from '../components/ui/modals/SettingsModal'
-import { useAuth } from "../contexts/AuthContext"
-import { useHighlightRequest } from '../hooks/useHighlightRequest'
-import { useNotificationCounts } from '../hooks/useNotificationCounts'
-import { supabaseService } from '../services/supabase'
-import { reviewService } from '../services/supabase/reviewService'
+import { Ionicons } from '@expo/vector-icons';
+import { useFocusEffect, useNavigation, useRoute } from '@react-navigation/native';
+import { LinearGradient } from "expo-linear-gradient";
+import * as Linking from 'expo-linking';
+import * as Sharing from 'expo-sharing';
+import React, { Fragment, useCallback, useEffect, useMemo, useState } from "react";
+import { ActivityIndicator, Alert, Dimensions, Image, Modal, Platform, Pressable, Linking as RNLinking, RefreshControl, ScrollView, Text, TextInput, View } from "react-native";
+import { Button, Card } from "react-native-paper";
+import Toast from "../components/ui/feedback/Toast";
+import { SettingsModal } from '../components/ui/modals/SettingsModal';
+import { useAuth } from "../contexts/AuthContext";
+import { useHighlightRequest } from '../hooks/useHighlightRequest';
+import { useNotificationCounts } from '../hooks/useNotificationCounts';
+import { supabaseService } from '../services/supabase';
+import { reviewService } from '../services/supabase/reviewService';
 
 import {
-    FormInput,
-    ModalWrapper,
-    QuickAction,
-    QuickStat,
-    Button as SharedButton,
-    Card as SharedCard,
-    StatusBadge,
-    formatDate
-} from '../shared/ui'
+  FormInput,
+  ModalWrapper,
+  QuickAction,
+  QuickStat,
+  Button as SharedButton,
+  Card as SharedCard,
+  StatusBadge,
+  formatDate
+} from '../shared/ui';
+import { formatTimeRange } from '../utils/dateUtils';
 
-import { useCaregiverDashboard } from '../hooks/useCaregiverDashboard'
-import { BookingDetailsModal } from '../shared/ui/modals/BookingDetailsModal'
-import { RequestInfoModal } from '../shared/ui/modals/RequestInfoModal'
-import { normalizeCaregiverReviewsForList } from '../utils/reviews'
-import ApplicationsTab from './CaregiverDashboard/ApplicationsTab'
-import CaregiverBookingsTabWithModal from './CaregiverDashboard/BookingsTab'
-import CaregiverProfileSection from './CaregiverDashboard/components/CaregiverProfileSection'
-import MessagesTab from './CaregiverDashboard/components/MessagesTab'
-import NotificationsTab from './CaregiverDashboard/components/NotificationsTab'
-import JobsTab, { CaregiverJobCard } from './CaregiverDashboard/JobsTab'
-import { styles } from './styles/CaregiverDashboard.styles'
+import ContractModal from '../components/modals/ContractModal';
+import { useCaregiverDashboard } from '../hooks/useCaregiverDashboard';
+import { BookingDetailsModal } from '../shared/ui/modals/BookingDetailsModal';
+import { RequestInfoModal } from '../shared/ui/modals/RequestInfoModal';
+import { normalizeCaregiverReviewsForList } from '../utils/reviews';
+import ApplicationsTab from './CaregiverDashboard/ApplicationsTab';
+import CaregiverBookingsTabWithModal from './CaregiverDashboard/BookingsTab';
+import CaregiverProfileSection from './CaregiverDashboard/components/CaregiverProfileSection';
+import MessagesTab from './CaregiverDashboard/components/MessagesTab';
+import NotificationsTab from './CaregiverDashboard/components/NotificationsTab';
+import JobsTab, { CaregiverJobCard } from './CaregiverDashboard/JobsTab';
+import { styles } from './styles/CaregiverDashboard.styles';
 // Lines 27-42 - Added usePrivacy import
 import { usePrivacy } from '../components/features/privacy/PrivacyManager'; // ✅ Added this import
-import ReviewList from '../components/features/profile/ReviewList'
-import { ReviewForm } from '../components/forms/ReviewForm'
-import { PrivacyNotificationModal } from '../components/ui/modals/PrivacyNotificationModal'
-import RatingsReviewsModal from '../components/ui/modals/RatingsReviewsModal'
+import ReviewList from '../components/features/profile/ReviewList';
+import { ReviewForm } from '../components/forms/ReviewForm';
+import { PrivacyNotificationModal } from '../components/ui/modals/PrivacyNotificationModal';
+import RatingsReviewsModal from '../components/ui/modals/RatingsReviewsModal';
 
 // Add missing Skeleton components
 const SkeletonCard = ({ children, style }) => (
@@ -59,6 +63,37 @@ const SkeletonBlock = ({ width, height, style }) => (
 const SkeletonPill = ({ width, height, style }) => (
   <View style={[styles.dashboardSkeletonPill, { width, height }, style]} />
 );
+
+const formatPeso = (value) => {
+  const numeric = Number(value);
+  if (Number.isNaN(numeric)) return '₱0';
+  return `₱${numeric.toLocaleString('en-PH', { minimumFractionDigits: 0 })}`;
+};
+
+const buildJobScheduleLabel = ({ date, start_time, end_time, startTime, endTime, workingHours, schedule, time }) => {
+  if (schedule && typeof schedule === 'string') return schedule;
+  if (workingHours && typeof workingHours === 'string') return workingHours;
+  if (time && typeof time === 'string') return time;
+
+  const start = start_time || startTime;
+  const end = end_time || endTime;
+
+  if (!start && !end) return null;
+  return formatTimeRange(start, end);
+};
+
+const ensureString = (value, fallback = '') => {
+  if (value === null || value === undefined) return fallback;
+  if (typeof value === 'string') return value;
+  if (typeof value === 'number' || typeof value === 'boolean') return String(value);
+  if (Array.isArray(value)) return value.join(', ');
+  try {
+    const stringified = String(value);
+    return stringified === '[object Object]' ? fallback : stringified;
+  } catch {
+    return fallback;
+  }
+};
 
 function ApplicationCard({ application, onViewDetails, onMessage }) {
   const navigation = useNavigation();
@@ -392,6 +427,20 @@ function BookingCard({ booking, onMessage, onViewDetails, onConfirmAttendance })
     }
   };
 
+  const familyName = ensureString(booking.family, 'Family');
+  const bookingDateLabel = ensureString(formatDate(booking.date), 'Date not specified');
+  const statusLabel = ensureString(booking.status, 'Unknown');
+  const timeLabel = ensureString(booking.time, 'Time TBD');
+  const childrenCountNumeric = Number(booking?.children);
+  const safeChildrenCount = Number.isFinite(childrenCountNumeric) && childrenCountNumeric > 0
+    ? childrenCountNumeric
+    : 1;
+  const childrenLabel = `${safeChildrenCount} ${safeChildrenCount === 1 ? 'child' : 'children'}`;
+  const hourlyRateValue = booking?.hourlyRate ?? booking?.hourly_rate ?? null;
+  const showHourlyRate = hourlyRateValue !== null && hourlyRateValue !== undefined && hourlyRateValue !== '';
+  const hourlyLabel = `₱${ensureString(hourlyRateValue ?? 0)}/hr`;
+  const locationLabel = ensureString(booking.location, 'Location TBD');
+
   return (
     <View style={{
       backgroundColor: '#FFFFFF',
@@ -408,13 +457,13 @@ function BookingCard({ booking, onMessage, onViewDetails, onConfirmAttendance })
     }}>
       {/* Header with gradient */}
       <LinearGradient
-        colors={['#F8FAFC', '#F1F5F9']}
+        colors={['#667eea', '#764ba2']}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 0 }}
         style={{
           borderTopLeftRadius: 16,
           borderTopRightRadius: 16,
-          padding: 16,
-          borderBottomWidth: 1,
-          borderBottomColor: '#E2E8F0'
+          padding: 16
         }}
       >
         <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -422,34 +471,34 @@ function BookingCard({ booking, onMessage, onViewDetails, onConfirmAttendance })
             <Text style={{
               fontSize: 18,
               fontWeight: '700',
-              color: '#1E293B',
+              color: '#FFFFFF',
               marginBottom: 4
             }} numberOfLines={1}>
-              {booking.family || 'Family'}
+              {familyName}
             </Text>
             <Text style={{
               fontSize: 14,
-              color: '#64748B',
+              color: 'rgba(255, 255, 255, 0.85)',
               fontWeight: '500'
             }}>
-              {formatDate(booking.date)}
+              {bookingDateLabel}
             </Text>
           </View>
           <View style={{
-            backgroundColor: getStatusBgColor(booking.status),
+            backgroundColor: 'rgba(255, 255, 255, 0.18)',
             paddingHorizontal: 12,
             paddingVertical: 6,
             borderRadius: 20,
             borderWidth: 1,
-            borderColor: getStatusColor(booking.status) + '20'
+            borderColor: 'rgba(255, 255, 255, 0.35)'
           }}>
             <Text style={{
-              color: getStatusColor(booking.status),
+              color: '#FFFFFF',
               fontSize: 12,
               fontWeight: '600',
               textTransform: 'capitalize'
             }}>
-              {booking.status}
+              {statusLabel}
             </Text>
           </View>
         </View>
@@ -482,7 +531,7 @@ function BookingCard({ booking, onMessage, onViewDetails, onConfirmAttendance })
               color: '#475569',
               fontWeight: '500'
             }}>
-              {booking.time || 'Time TBD'}
+              {timeLabel}
             </Text>
           </View>
 
@@ -505,11 +554,11 @@ function BookingCard({ booking, onMessage, onViewDetails, onConfirmAttendance })
               color: '#475569',
               fontWeight: '500'
             }}>
-              {booking.children || 1} {(booking.children || 1) === 1 ? 'child' : 'children'}
+              {childrenLabel}
             </Text>
           </View>
 
-          {booking.hourlyRate && (
+          {showHourlyRate ? (
             <View style={{
               flexDirection: 'row',
               alignItems: 'center',
@@ -528,10 +577,10 @@ function BookingCard({ booking, onMessage, onViewDetails, onConfirmAttendance })
                 color: '#059669',
                 fontWeight: '600'
               }}>
-                ₱{booking.hourlyRate}/hr
+                {hourlyLabel}
               </Text>
             </View>
-          )}
+          ) : null}
         </View>
 
         {/* Location */}
@@ -557,7 +606,7 @@ function BookingCard({ booking, onMessage, onViewDetails, onConfirmAttendance })
               color: '#581C87',
               fontWeight: '500'
             }} numberOfLines={1}>
-              {booking.location}
+              {locationLabel}
             </Text>
             <Ionicons name="open-outline" size={16} color="#7C3AED" />
           </Pressable>
@@ -671,9 +720,9 @@ const CaregiverDashboard = () => {
   const {
     activeTab, setActiveTab,
     profile, setProfile,
-    jobs, applications, setApplications, bookings,
+    jobs, applications, setApplications, bookings, contracts,
     jobsLoading,
-    loadProfile, fetchJobs, fetchApplications, fetchBookings
+    loadProfile, fetchJobs, fetchApplications, fetchContracts, fetchBookings
   } = useCaregiverDashboard();
   const { pendingRequests } = usePrivacy();
   const { counts: notificationCounts } = useNotificationCounts();
@@ -693,6 +742,9 @@ const CaregiverDashboard = () => {
   const [selectedApplication, setSelectedApplication] = useState(null)
   const [showApplicationDetails, setShowApplicationDetails] = useState(false)
   const [pendingContractToOpen, setPendingContractToOpen] = useState(null)
+  const [contractModalVisible, setContractModalVisible] = useState(false)
+  const [selectedContract, setSelectedContract] = useState(null)
+  const [selectedContractBooking, setSelectedContractBooking] = useState(null)
   const [applicationSubmitting, setApplicationSubmitting] = useState(false)
   const [applicationForm, setApplicationForm] = useState({ coverLetter: '', proposedRate: '' })
   
@@ -814,6 +866,95 @@ const CaregiverDashboard = () => {
   const closeRatingsModal = useCallback(() => {
     setShowRatingsModal(false);
   }, []);
+
+  const openContractFromNotification = useCallback(async ({ contractId, bookingId, source = 'notification' }) => {
+    if (!contractId) {
+      return false;
+    }
+
+    try {
+      console.log('📄 Attempting to open contract from', source, { contractId, bookingId });
+
+      const [{ contractService }] = await Promise.all([
+        import('../services/supabase/contractService'),
+      ]);
+
+      const [contract, booking] = await Promise.all([
+        contractService.getContractById(contractId),
+        bookingId ? supabaseService.bookings.getBookingById(bookingId, user?.id) : null,
+      ]);
+
+      if (contract) {
+        setPendingContractToOpen({
+          contract,
+          booking: booking || null,
+        });
+
+        if (activeTab !== 'bookings') {
+          setActiveTab('bookings');
+        }
+
+        return true;
+      }
+
+      console.warn('⚠️ Contract not found while opening from', source, contractId);
+      Alert.alert('Contract Not Found', 'The contract could not be loaded. It may have been deleted.');
+    } catch (error) {
+      console.error('❌ Failed to open contract from', source, error);
+      Alert.alert('Error', 'Failed to load contract. Please try again later.');
+    }
+
+    return false;
+  }, [activeTab, setActiveTab, user?.id]);
+
+  useFocusEffect(
+    useCallback(() => {
+      const handleDeepLink = (event) => {
+        try {
+          const url = event?.url;
+          if (!url) return;
+
+          const parsed = Linking.parse(url);
+          const queryParams = parsed?.queryParams || {};
+          const contractId = queryParams.contractId || queryParams.contract || queryParams.contract_id;
+
+          if (!contractId) {
+            return;
+          }
+
+          const bookingId = queryParams.bookingId || queryParams.booking || queryParams.booking_id;
+
+          openContractFromNotification({
+            contractId,
+            bookingId,
+            source: 'deep-link',
+          });
+        } catch (linkError) {
+          console.warn('⚠️ Failed to handle caregiver dashboard deep link:', linkError);
+        }
+      };
+
+      const subscription = RNLinking.addEventListener('url', handleDeepLink);
+
+      RNLinking.getInitialURL()
+        .then((initialUrl) => {
+          if (initialUrl) {
+            handleDeepLink({ url: initialUrl });
+          }
+        })
+        .catch((initialUrlError) => {
+          console.warn('⚠️ Failed to get initial URL for caregiver dashboard:', initialUrlError);
+        });
+
+      return () => {
+        if (subscription?.remove) {
+          subscription.remove();
+        } else {
+          RNLinking.removeEventListener?.('url', handleDeepLink);
+        }
+      };
+    }, [openContractFromNotification])
+  );
 
   const preloadCaregiverReviews = useCallback(async () => {
     await fetchCaregiverReviews({ showSkeleton: false });
@@ -1247,6 +1388,122 @@ const CaregiverDashboard = () => {
       onHide={() => setToast((t) => ({ ...t, visible: false }))}
     />
   )
+
+  const handleOpenContractFromApplication = useCallback(async ({ contractId, bookingId }) => {
+    if (!contractId) {
+      Alert.alert('Contract unavailable', 'This application does not have an associated contract yet.');
+      return;
+    }
+
+    try {
+      const [{ contractService }] = await Promise.all([
+        import('../services/supabase/contractService')
+      ]);
+
+      const [contractData, bookingData] = await Promise.all([
+        contractService.getContractById(contractId),
+        bookingId ? supabaseService.bookings.getBookingById(bookingId, user?.id) : null
+      ]);
+
+      if (!contractData) {
+        Alert.alert('Contract unavailable', 'We could not load the contract. Please refresh and try again.');
+        return;
+      }
+
+      setSelectedContract(contractData);
+      setSelectedContractBooking(bookingData || null);
+      setContractModalVisible(true);
+    } catch (error) {
+      console.error('❌ Failed to open caregiver contract from applications tab:', error);
+      Alert.alert('Error', 'Failed to open contract. Please try again.');
+    }
+  }, [user?.id]);
+
+  const handleCloseContractModal = useCallback(() => {
+    setContractModalVisible(false);
+    setSelectedContract(null);
+    setSelectedContractBooking(null);
+  }, []);
+
+  const handleContractSignFromModal = useCallback(async ({ signature, acknowledged }) => {
+    if (!selectedContract) {
+      return;
+    }
+
+    try {
+      const [{ contractService }] = await Promise.all([
+        import('../services/supabase/contractService')
+      ]);
+
+      const contractRecord = await contractService.getContractById(selectedContract.id);
+      if (!contractRecord) {
+        Alert.alert('Contract unavailable', 'This contract could not be found. Please refresh and try again.');
+        handleCloseContractModal();
+        return;
+      }
+
+      await contractService.signContract(contractRecord.id, 'caregiver', {
+        signature,
+        signatureHash: btoa(signature),
+        ipAddress: null,
+        acknowledged
+      });
+
+      Alert.alert('Success', 'Contract signed successfully!');
+      handleCloseContractModal();
+      await Promise.all([
+        fetchApplications?.(),
+        fetchContracts?.(),
+        fetchBookings?.()
+      ]);
+    } catch (error) {
+      console.error('Error signing caregiver contract:', error);
+      Alert.alert('Error', error?.message || 'Failed to sign contract. Please try again.');
+    }
+  }, [fetchApplications, fetchBookings, fetchContracts, handleCloseContractModal, selectedContract]);
+
+  const handleResendContract = useCallback(async (contract) => {
+    if (!contract?.id) return;
+
+    try {
+      const [{ contractService }] = await Promise.all([
+        import('../services/supabase/contractService')
+      ]);
+      await contractService.resendContract(contract.id, user?.id);
+      Alert.alert('Success', 'Contract reminder sent!');
+    } catch (error) {
+      console.error('Error resending caregiver contract:', error);
+      Alert.alert('Error', 'Failed to send reminder. Please try again.');
+    }
+  }, [user?.id]);
+
+  const handleDownloadContractPdf = useCallback(async (contract) => {
+    if (!contract?.id) return;
+
+    try {
+      const [{ contractService }] = await Promise.all([
+        import('../services/supabase/contractService')
+      ]);
+      const result = await contractService.generateContractPdf(contract.id, { autoDownload: true });
+
+      if (!result?.uri && !result?.url) {
+        throw new Error('Download did not return a file location.');
+      }
+
+      const fileUri = result.uri || result.url;
+
+      if (await Sharing.isAvailableAsync()) {
+        await Sharing.shareAsync(fileUri, { mimeType: 'application/pdf' });
+      } else if (Platform.OS === 'android') {
+        Alert.alert('Downloaded', `PDF saved at:\n${fileUri}`);
+      } else {
+        Alert.alert('Downloaded', 'PDF saved. Open it with a PDF viewer or Files app.');
+      }
+    } catch (error) {
+      console.error('Error downloading caregiver contract PDF:', error);
+      Alert.alert('Download failed', error instanceof Error ? error.message : String(error));
+    }
+  }, []);
 
   const renderTopNav = () => {
     const pendingRequestsCount = pendingRequests?.length || 0;
@@ -2029,6 +2286,7 @@ const CaregiverDashboard = () => {
           console.log('🔍 Applications tab is active') ||
           <ApplicationsTab
             applications={applications}
+            onOpenContract={handleOpenContractFromApplication}
             onViewJob={(job, application) => {
               // Merge job data with application data for complete view
               const completeJobData = {
@@ -2110,48 +2368,16 @@ const CaregiverDashboard = () => {
               }
 
               if (payload.contractId) {
-                try {
-                  console.log('📄 Processing contract notification:', {
-                    contractId: payload.contractId,
-                    bookingId: payload.bookingId,
-                    tab: tabId
-                  });
+                const opened = await openContractFromNotification({
+                  contractId: payload.contractId,
+                  bookingId: payload.bookingId,
+                  source: 'notification-tab',
+                });
 
-                  const [{ contractService }] = await Promise.all([
-                    import('../services/supabase/contractService'),
-                  ]);
-
-                  const [contract, booking] = await Promise.all([
-                    contractService.getContractById(payload.contractId),
-                    payload.bookingId
-                      ? supabaseService.bookings.getBookingById(payload.bookingId, user?.id)
-                      : null,
-                  ]);
-
-                  console.log('📄 Contract and booking loaded:', {
-                    contractFound: !!contract,
-                    bookingFound: !!booking,
-                    contractId: contract?.id,
-                    bookingId: booking?.id
-                  });
-
-                  if (contract) {
-                    setPendingContractToOpen({
-                      contract,
-                      booking: booking || null,
-                    });
-                    if (tabId !== 'bookings') {
-                      setActiveTab('bookings');
-                    }
-                    console.log('✅ Contract notification stored for bookings tab to open');
-                  } else {
-                    console.warn('⚠️ Contract not found:', payload.contractId);
-                    Alert.alert('Contract Not Found', 'The contract could not be loaded. It may have been deleted.');
-                  }
-                } catch (error) {
-                  console.error('❌ Failed to open contract from caregiver notification:', error);
-                  Alert.alert('Error', 'Failed to load contract. Please try again later.');
+                if (!opened) {
+                  console.warn('⚠️ Contract navigation from notification did not succeed');
                 }
+
                 return;
               }
 
@@ -2517,62 +2743,105 @@ const CaregiverDashboard = () => {
           animationType="slide"
         >
           <View style={styles.modalOverlay}>
-            <View style={[styles.jobDetailsModal, { height: '50%' }]}>
+            <View style={styles.jobDetailsModal}>
               <ScrollView showsVerticalScrollIndicator={false}>
                 <View style={styles.jobDetailsContent}>
                   <View style={styles.jobDetailsHeader}>
                     <Text style={styles.jobDetailsTitle}>{String(selectedJob.title || 'Childcare Position')}</Text>
                     <Text style={styles.jobDetailsFamily}>{String(selectedJob.family || selectedJob.familyName || 'Family')}</Text>
                     {selectedJob.urgent && (
-                      <View style={styles.urgentBadge}>
-                        <Text style={styles.urgentText}>URGENT</Text>
+                      <View style={styles.jobDetailsPill}>
+                        <Ionicons name="flash" color="#DC2626" size={14} />
+                        <Text style={styles.jobDetailsPillText}>Urgent Need</Text>
                       </View>
                     )}
                   </View>
 
                   <View style={styles.jobDetailsInfo}>
                     <View style={styles.jobDetailsRow}>
-                      <Ionicons name="location" size={16} color="#6B7280" />
+                      <View style={styles.jobDetailsIcon}>
+                        <Ionicons name="location" size={16} color="#1D4ED8" />
+                      </View>
                       <Text style={styles.jobDetailsText}>{selectedJob.location || 'Location not specified'}</Text>
                     </View>
                     <View style={styles.jobDetailsRow}>
-                      <Ionicons name="calendar" size={16} color="#6B7280" />
+                      <View style={styles.jobDetailsIcon}>
+                        <Ionicons name="calendar" size={16} color="#1D4ED8" />
+                      </View>
                       <Text style={styles.jobDetailsText}>{selectedJob.date ? new Date(selectedJob.date).toLocaleDateString() : 'Date not specified'}</Text>
                     </View>
+                    {(() => {
+                      const scheduleLabel = buildJobScheduleLabel(selectedJob);
+                      if (!scheduleLabel) return null;
+                      return (
+                        <View style={styles.jobDetailsRow}>
+                          <View style={styles.jobDetailsIcon}>
+                            <Ionicons name="time" size={16} color="#1D4ED8" />
+                          </View>
+                          <Text style={styles.jobDetailsText}>{scheduleLabel}</Text>
+                        </View>
+                      );
+                    })()}
                     <View style={styles.jobDetailsRow}>
-                      <Ionicons name="time" size={16} color="#6B7280" />
-                      <Text style={styles.jobDetailsText}>
-                        {selectedJob.start_time || selectedJob.startTime || 'Start time'} - {selectedJob.end_time || selectedJob.endTime || 'End time'}
-                      </Text>
-                    </View>
-                    <View style={styles.jobDetailsRow}>
-                      <Ionicons name="cash" size={16} color="#059669" />
-                      <Text style={[styles.jobDetailsText, { color: '#059669', fontWeight: '600' }]}>₱{selectedJob.hourly_rate || selectedJob.hourlyRate || 0}/hr (Job Rate)</Text>
+                      <View style={styles.jobDetailsIcon}>
+                        <Ionicons name="cash" size={16} color="#059669" />
+                      </View>
+                      <Text style={[styles.jobDetailsText, { color: '#047857', fontWeight: '600' }]}> {formatPeso(selectedJob.hourly_rate || selectedJob.hourlyRate || 0)}/hr</Text>
                     </View>
                     {selectedJob.applicationData?.proposedRate && selectedJob.applicationData.proposedRate !== (selectedJob.hourly_rate || selectedJob.hourlyRate) && (
                       <View style={styles.jobDetailsRow}>
-                        <Ionicons name="trending-up" size={16} color="#3B82F6" />
-                        <Text style={[styles.jobDetailsText, { color: '#3B82F6', fontWeight: '600' }]}>₱{selectedJob.applicationData.proposedRate}/hr (Your Proposed Rate)</Text>
+                        <View style={styles.jobDetailsIcon}>
+                          <Ionicons name="trending-up" size={16} color="#3B82F6" />
+                        </View>
+                        <Text style={[styles.jobDetailsText, { color: '#3B82F6', fontWeight: '600' }]}>
+                          {formatPeso(selectedJob.applicationData.proposedRate)}/hr (Your proposed rate)
+                        </Text>
                       </View>
                     )}
+                    {(() => {
+                      const rawSchedule = buildJobScheduleLabel({
+                        workingHours: selectedJob.applicationData?.schedule,
+                        start_time: selectedJob.applicationData?.start_time,
+                        end_time: selectedJob.applicationData?.end_time,
+                        startTime: selectedJob.applicationData?.startTime,
+                        endTime: selectedJob.applicationData?.endTime,
+                      });
+                      if (!rawSchedule) return null;
+                      return (
+                        <View style={styles.jobDetailsRow}>
+                          <View style={styles.jobDetailsIcon}>
+                            <Ionicons name="calendar-outline" size={16} color="#0EA5E9" />
+                          </View>
+                          <Text style={[styles.jobDetailsText, { color: '#0EA5E9' }]}>
+                            {rawSchedule}
+                          </Text>
+                        </View>
+                      );
+                    })()}
                     {selectedJob.children?.length > 0 && (
                       <View style={styles.jobDetailsRow}>
-                        <Ionicons name="people" size={16} color="#6B7280" />
+                        <View style={styles.jobDetailsIcon}>
+                          <Ionicons name="people" size={16} color="#1D4ED8" />
+                        </View>
                         <Text style={styles.jobDetailsText}>
                           {selectedJob.children.length} child{selectedJob.children.length > 1 ? 'ren' : ''}
-                          {selectedJob.children.map(child => ` ${child.name} (${child.age})`).join(', ')}
+                          {selectedJob.children.map((child) => ` ${child.name} (${child.age})`).join(', ')}
                         </Text>
                       </View>
                     )}
                     {selectedJob.users?.email && (
                       <View style={styles.jobDetailsRow}>
-                        <Ionicons name="mail" size={16} color="#6B7280" />
+                        <View style={styles.jobDetailsIcon}>
+                          <Ionicons name="mail" size={16} color="#1D4ED8" />
+                        </View>
                         <Text style={styles.jobDetailsText}>{selectedJob.users.email}</Text>
                       </View>
                     )}
                     {selectedJob.users?.phone && (
                       <View style={styles.jobDetailsRow}>
-                        <Ionicons name="call" size={16} color="#6B7280" />
+                        <View style={styles.jobDetailsIcon}>
+                          <Ionicons name="call" size={16} color="#1D4ED8" />
+                        </View>
                         <Text style={styles.jobDetailsText}>{selectedJob.users.phone}</Text>
                       </View>
                     )}
@@ -2588,26 +2857,23 @@ const CaregiverDashboard = () => {
                   {selectedJob.children?.length > 0 && (
                     <View style={styles.jobDetailsSection}>
                       <Text style={styles.jobDetailsSectionTitle}>Children Information</Text>
-                      {selectedJob.children.map((child, index) => (
-                        <View key={index} style={styles.applicationStatusCard}>
-                          <Text style={styles.applicationStatusText}>{child.name} - Age {child.age}</Text>
-                          {child.allergies && (
-                            <Text style={styles.coverLetterText}>Allergies: {child.allergies}</Text>
-                          )}
-                          {child.preferences && (
-                            <Text style={styles.coverLetterText}>Notes: {child.preferences}</Text>
-                          )}
-                        </View>
-                      ))}
+                      <View style={styles.jobDetailsPillRow}>
+                        {selectedJob.children.map((child, index) => (
+                          <View key={index} style={styles.jobDetailsPill}>
+                            <Ionicons name="person" size={14} color="#4338CA" />
+                            <Text style={styles.jobDetailsPillText}>{child.name} · {child.age} yrs</Text>
+                          </View>
+                        ))}
+                      </View>
                     </View>
                   )}
 
                   {Array.isArray(selectedJob.requirements) && selectedJob.requirements.length > 0 && (
                     <View style={styles.jobDetailsRequirements}>
-                      <Text style={styles.jobDetailsRequirementsTitle}>Requirements</Text>
+                      <Text style={styles.jobDetailsRequirementsTitle}>Key Requirements</Text>
                       {selectedJob.requirements.map((req, idx) => (
                         <View key={idx} style={styles.jobDetailsRequirementRow}>
-                          <Ionicons name="checkmark-circle" size={14} color="#10B981" />
+                          <Ionicons name="checkmark-circle" size={18} color="#10B981" />
                           <Text style={styles.jobDetailsRequirementText}>{String(req)}</Text>
                         </View>
                       ))}
@@ -2663,9 +2929,9 @@ const CaregiverDashboard = () => {
                   <View style={styles.jobDetailsActions}>
                     <Button
                       mode="contained"
-                      onPress={() => { setShowJobDetails(false); setSelectedJob(null) }}
-                      style={styles.jobDetailsCloseButton}
-                      labelStyle={{ fontSize: 14 }}
+                      onPress={() => { setShowJobDetails(false); setSelectedJob(null); }}
+                      style={styles.jobDetailsPrimaryButton}
+                      labelStyle={styles.jobDetailsPrimaryLabel}
                     >
                       Close
                     </Button>
@@ -2908,6 +3174,18 @@ const CaregiverDashboard = () => {
           </View>
         </View>
       </Modal>
+      {ContractModal && contractModalVisible && selectedContract && (
+        <ContractModal
+          visible={contractModalVisible}
+          onClose={handleCloseContractModal}
+          contract={selectedContract}
+          booking={selectedContractBooking}
+          viewerRole="caregiver"
+          onSign={handleContractSignFromModal}
+          onResend={handleResendContract}
+          onDownloadPdf={handleDownloadContractPdf}
+        />
+      )}
     </Fragment>
   );
 }

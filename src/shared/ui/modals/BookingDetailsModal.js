@@ -1,8 +1,9 @@
 // @ts-nocheck
-import React from 'react';
-import { View, Text, ScrollView, Pressable, Linking, Alert, Platform, StyleSheet, Modal, SafeAreaView } from 'react-native';
-import { Calendar, Clock, MapPin, Phone, Mail, MessageCircle, Navigation, Star, Baby, AlertCircle, CheckCircle, X, User } from 'lucide-react-native';
+import { AlertCircle, Baby, Calendar, CheckCircle, Clock, Mail, MapPin, MessageCircle, Navigation, Phone, Star, User, X } from 'lucide-react-native';
 import PropTypes from 'prop-types';
+import React from 'react';
+import { Alert, Linking, Modal, Platform, Pressable, SafeAreaView, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { formatCurrency as formatCurrencyPHP } from '../../utils/currency';
 
 // Simple i18n helper - replace with proper i18n library in production
 const t = (key) => {
@@ -47,6 +48,11 @@ const parseNumber = (value) => {
   return isNaN(num) ? null : num;
 };
 
+const roundToTwo = (value) => {
+  if (typeof value !== 'number' || Number.isNaN(value)) return null;
+  return Number(value.toFixed(2));
+};
+
 const formatDateDisplay = (dateString) => {
   if (!dateString) return 'Date not specified';
   try {
@@ -63,21 +69,268 @@ const formatDateDisplay = (dateString) => {
 };
 
 const formatHours = (hours) => {
-  if (!hours) return '0 hours';
-  return `${hours} ${hours === 1 ? 'hour' : 'hours'}`;
+  const numericHours = typeof hours === 'number' ? hours : parseNumber(hours);
+  if (numericHours === null) return 'Not specified';
+  if (numericHours === 0) return '0 hours';
+  const displayHours = Number.isInteger(numericHours) ? numericHours : Number(numericHours.toFixed(2));
+  return `${displayHours} ${displayHours === 1 ? 'hour' : 'hours'}`;
 };
 
-const formatCurrency = (amount) => {
-  if (!amount && amount !== 0) return '—';
-  return new Intl.NumberFormat('en-US', {
-    style: 'currency',
-    currency: 'USD'
-  }).format(amount);
+const formatCurrencyDisplay = (amount) => {
+  const numericAmount = typeof amount === 'number' ? amount : parseNumber(amount);
+  if (numericAmount === null) return '—';
+  return formatCurrencyPHP(numericAmount);
 };
 
 const formatStatus = (status) => {
   if (!status) return 'Unknown';
   return status.charAt(0).toUpperCase() + status.slice(1).toLowerCase();
+};
+
+const normalizeChildEntry = (child, index) => {
+  if (!child) return null;
+
+  const name = child.name || child.firstName || child.childName || `Child ${index + 1}`;
+  const age = child.age ?? child.childAge ?? null;
+
+  return {
+    id: child.id || child._id || child.childId || child.child_id || `child-${index}`,
+    name,
+    age,
+    allergies: child.allergies || child.childAllergies || null,
+    preferences: child.preferences || null,
+    notes: child.notes || child.specialInstructions || child.special_instructions || null
+  };
+};
+
+const childSectionBaseStyles = StyleSheet.create({
+  container: {
+    marginTop: 16,
+    borderWidth: 1,
+    borderColor: '#e5e7eb',
+    borderRadius: 16,
+    padding: 16,
+    backgroundColor: '#ffffff'
+  },
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 12,
+    gap: 8
+  },
+  headerIcon: {
+    marginRight: 4
+  },
+  title: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#374151'
+  },
+  list: {
+    gap: 12
+  },
+  childCard: {
+    borderWidth: 1,
+    borderColor: '#f3f4f6',
+    borderRadius: 14,
+    padding: 12,
+    backgroundColor: '#f9fafb'
+  },
+  childHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8
+  },
+  childName: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#1f2937',
+    flex: 1,
+    marginRight: 8
+  },
+  childAge: {
+    fontSize: 12,
+    color: '#6b7280',
+    fontWeight: '600'
+  },
+  childDetails: {
+    gap: 8
+  },
+  detailRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 6
+  },
+  detailIcon: {
+    marginTop: 1
+  },
+  detailText: {
+    flex: 1,
+    color: '#4b5563',
+    fontSize: 12,
+    lineHeight: 18
+  }
+});
+
+const childSectionCompactStyles = StyleSheet.create({
+  container: {
+    marginTop: 12,
+    padding: 12,
+    borderRadius: 14
+  },
+  header: {
+    marginBottom: 8
+  },
+  title: {
+    fontSize: 14
+  },
+  list: {
+    gap: 10
+  },
+  childCard: {
+    borderRadius: 12,
+    padding: 10
+  },
+  childName: {
+    fontSize: 13
+  },
+  childAge: {
+    fontSize: 11
+  },
+  detailText: {
+    fontSize: 11,
+    lineHeight: 16
+  }
+});
+
+function ChildrenDetailsSection({
+  childrenDetails,
+  sectionTitle = 'Children Details',
+  variant = 'default',
+  showIcon = true,
+  showBorder = true
+}) {
+  const normalizedChildren = (Array.isArray(childrenDetails) ? childrenDetails : [])
+    .map((child, index) => normalizeChildEntry(child, index))
+    .filter(Boolean);
+
+  if (!normalizedChildren.length) return null;
+
+  const compact = variant === 'compact';
+  const stylesToUse = compact ? childSectionCompactStyles : childSectionBaseStyles;
+
+  return (
+    <View
+      style={[
+        childSectionBaseStyles.container,
+        compact && childSectionCompactStyles.container,
+        !showBorder && { borderWidth: 0 }
+      ]}
+    >
+      {sectionTitle ? (
+        <View style={[childSectionBaseStyles.header, compact && stylesToUse.header]}>
+          {showIcon && (
+            <Baby
+              size={compact ? 16 : 20}
+              color="#6b7280"
+              style={childSectionBaseStyles.headerIcon}
+            />
+          )}
+          <Text style={[childSectionBaseStyles.title, compact && stylesToUse.title]}>
+            {sectionTitle}
+          </Text>
+        </View>
+      ) : null}
+
+      <View style={[childSectionBaseStyles.list, compact && stylesToUse.list]}>
+        {normalizedChildren.map((child, index) => {
+          const ageLabel = child.age !== null && child.age !== undefined && child.age !== ''
+            ? String(child.age)
+            : '—';
+          const allergiesText = child.allergies !== null && child.allergies !== undefined && child.allergies !== ''
+            ? String(child.allergies)
+            : null;
+          const preferencesText = child.preferences !== null && child.preferences !== undefined && child.preferences !== ''
+            ? String(child.preferences)
+            : null;
+          const notesText = child.notes !== null && child.notes !== undefined && child.notes !== ''
+            ? String(child.notes)
+            : null;
+
+          return (
+            <View
+              key={child.id || `child-${index}`}
+              style={[childSectionBaseStyles.childCard, compact && stylesToUse.childCard]}
+            >
+              <View style={childSectionBaseStyles.childHeader}>
+                <Text
+                  style={[childSectionBaseStyles.childName, compact && stylesToUse.childName]}
+                  numberOfLines={1}
+                >
+                  {String(child.name)}
+                </Text>
+                <Text style={[childSectionBaseStyles.childAge, compact && stylesToUse.childAge]}>
+                  Age {ageLabel}
+                </Text>
+              </View>
+
+              {(allergiesText || preferencesText || notesText) && (
+                <View style={childSectionBaseStyles.childDetails}>
+                  {allergiesText ? (
+                    <View style={childSectionBaseStyles.detailRow}>
+                      <AlertCircle size={14} color="#dc2626" style={childSectionBaseStyles.detailIcon} />
+                      <Text
+                        style={[childSectionBaseStyles.detailText, compact && stylesToUse.detailText]}
+                        numberOfLines={2}
+                      >
+                        Allergies: {allergiesText}
+                      </Text>
+                    </View>
+                  ) : null}
+
+                  {preferencesText ? (
+                    <View style={childSectionBaseStyles.detailRow}>
+                      <Star size={14} color="#f59e0b" style={childSectionBaseStyles.detailIcon} />
+                      <Text
+                        style={[childSectionBaseStyles.detailText, compact && stylesToUse.detailText]}
+                        numberOfLines={2}
+                      >
+                        Preferences: {preferencesText}
+                      </Text>
+                    </View>
+                  ) : null}
+
+                  {notesText ? (
+                    <View style={childSectionBaseStyles.detailRow}>
+                      <MessageCircle size={14} color="#2563eb" style={childSectionBaseStyles.detailIcon} />
+                      <Text
+                        style={[childSectionBaseStyles.detailText, compact && stylesToUse.detailText]}
+                        numberOfLines={3}
+                      >
+                        Notes: {notesText}
+                      </Text>
+                    </View>
+                  ) : null}
+                </View>
+              )}
+            </View>
+          );
+        })}
+      </View>
+    </View>
+  );
+}
+
+ChildrenDetailsSection.propTypes = {
+  childrenDetails: PropTypes.oneOfType([
+    PropTypes.arrayOf(PropTypes.object),
+    PropTypes.object
+  ]),
+  sectionTitle: PropTypes.string,
+  variant: PropTypes.oneOf(['default', 'compact']),
+  showIcon: PropTypes.bool,
+  showBorder: PropTypes.bool
 };
 
 // Contact Info Component
@@ -257,15 +510,31 @@ export const BookingDetailsModal = ({
       parseNumber(booking.total_amount) ??
       parseNumber(booking.totalCost);
 
+    let totalHours = typeof rawTotalHours === 'number' ? roundToTwo(rawTotalHours) : null;
+    let hourlyRate = typeof rawHourlyRate === 'number' ? roundToTwo(rawHourlyRate) : null;
+    let totalAmount = typeof rawTotalAmount === 'number' ? roundToTwo(rawTotalAmount) : null;
+
+    if (totalHours === null && hourlyRate !== null && hourlyRate !== 0 && totalAmount !== null) {
+      totalHours = roundToTwo(totalAmount / hourlyRate);
+    }
+
+    if (hourlyRate === null && totalAmount !== null && totalHours !== null && totalHours !== 0) {
+      hourlyRate = roundToTwo(totalAmount / totalHours);
+    }
+
+    if (totalAmount === null && hourlyRate !== null && totalHours !== null) {
+      totalAmount = roundToTwo(hourlyRate * totalHours);
+    }
+
     return {
       ...booking,
       location: booking.location || booking.address || "Location not specified",
       address: booking.address || booking.location || "Address not provided",
       contactPhone: contactInfo.phone,
       contactEmail: contactInfo.email,
-      totalHours: rawTotalHours ?? 4,
-      totalAmount: rawTotalAmount ?? ((rawHourlyRate ?? 300) * (rawTotalHours ?? 4)),
-      hourlyRate: rawHourlyRate ?? 300,
+      totalHours: totalHours ?? null,
+      totalAmount: totalAmount ?? null,
+      hourlyRate: hourlyRate ?? null,
       requirements: booking.requirements || booking.skills || [],
       childrenDetails: processChildren(),
       specialInstructions: processSpecialInstructions(),
@@ -322,12 +591,12 @@ export const BookingDetailsModal = ({
   );
 
   const hourlyRateCurrency = React.useMemo(
-    () => formatCurrency(enhancedBooking.hourlyRate),
+    () => formatCurrencyDisplay(enhancedBooking.hourlyRate),
     [enhancedBooking.hourlyRate]
   );
 
   const totalAmountCurrency = React.useMemo(
-    () => formatCurrency(enhancedBooking.totalAmount),
+    () => formatCurrencyDisplay(enhancedBooking.totalAmount),
     [enhancedBooking.totalAmount]
   );
 
@@ -628,47 +897,10 @@ export const BookingDetailsModal = ({
                   </View>
                 </View>
 
-                {/* Children Details */}
-                {enhancedBooking.childrenDetails && enhancedBooking.childrenDetails.length > 0 && (
-                  <View style={styles.sectionBordered}>
-                    <View style={styles.sectionHeader}>
-                      <Baby size={20} color="#6b7280" />
-                      <Text style={styles.sectionTitle}>Children Details</Text>
-                    </View>
-                    <View style={styles.childrenList}>
-                      {enhancedBooking.childrenDetails.map((child, index) => (
-                        <View key={index} style={styles.childCard}>
-                          <View style={styles.childHeader}>
-                            <Text style={styles.childName}>{child.name || `Child ${index + 1}`}</Text>
-                            <Text style={styles.childAge}>Age {child.age || 'Unknown'}</Text>
-                          </View>
-                          
-                          <View style={styles.childDetails}>
-                            {child.preferences && (
-                              <View style={styles.childDetail}>
-                                <Text style={styles.childDetailLabel}>Preferences:</Text>
-                                <Text style={styles.childDetailValue}>{child.preferences}</Text>
-                              </View>
-                            )}
-                            {(child.specialInstructions || child.special_instructions || child.notes) && (
-                              <View style={styles.childDetail}>
-                                <Text style={styles.childDetailLabel}>Special Instructions:</Text>
-                                <Text style={styles.childDetailValue}>{child.specialInstructions || child.special_instructions || child.notes}</Text>
-                              </View>
-                            )}
-                            {child.allergies && child.allergies !== 'None' && (
-                              <View style={styles.allergyItem}>
-                                <AlertCircle size={16} color="#ef4444" />
-                                <Text style={styles.allergyLabel}>Allergies:</Text>
-                                <Text style={styles.allergyValue}>{child.allergies}</Text>
-                              </View>
-                            )}
-                          </View>
-                        </View>
-                      ))}
-                    </View>
-                  </View>
-                )}
+                <ChildrenDetailsSection
+                  childrenDetails={enhancedBooking.childrenDetails}
+                  sectionTitle="Children Details"
+                />
 
                 {/* Requirements */}
                 {enhancedBooking.requirements && enhancedBooking.requirements.length > 0 && (
@@ -1404,8 +1636,5 @@ const styles = StyleSheet.create({
   },
 });
 
-BookingDetailsModal.defaultProps = {
-  booking: {}
-};
-
+export { ChildrenDetailsSection };
 export default BookingDetailsModal;
