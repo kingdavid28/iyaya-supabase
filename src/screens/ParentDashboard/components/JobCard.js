@@ -386,37 +386,6 @@ const styles = StyleSheet.create({
   childrenSection: {
     marginTop: 12,
   },
-  metaGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-  },
-  metaItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: colors.background,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 16,
-    minWidth: '45%',
-    flex: 1,
-  },
-  metaText: {
-    fontSize: 12,
-    color: colors.textSecondary,
-    marginLeft: 6,
-    fontWeight: '500',
-    flex: 1,
-  },
-  jobDescription: {
-    fontSize: 14,
-    color: colors.textSecondary,
-    lineHeight: 20,
-    marginBottom: 16,
-    backgroundColor: colors.background,
-    padding: 12,
-    borderRadius: 8,
-  },
   cardFooter: {
     borderTopWidth: 1,
     borderTopColor: colors.borderLight,
