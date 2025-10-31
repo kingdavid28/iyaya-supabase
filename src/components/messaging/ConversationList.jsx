@@ -1,20 +1,18 @@
 // ConversationList.jsx - React Native Paper conversation list component
-import React, { useState, useEffect } from 'react';
+import { Clock, MessageCircle } from 'lucide-react-native';
+import React, { useEffect, useState } from 'react';
 import {
-  View,
-  FlatList,
-  TouchableOpacity,
-  StyleSheet,
+    FlatList,
+    StyleSheet,
+    TouchableOpacity,
+    View,
 } from 'react-native';
 import {
-  Card,
-  Text,
-  Avatar,
-  ActivityIndicator,
-  Chip,
-  Surface,
+    Avatar,
+    Chip,
+    Surface,
+    Text
 } from 'react-native-paper';
-import { MessageCircle, Clock } from 'lucide-react-native';
 import { useAuth } from '../../contexts/AuthContext';
 import { messagingService } from '../../services';
 import { ConversationListSkeleton } from './MessagingSkeletons';
@@ -84,12 +82,14 @@ const ConversationList = ({ onSelectConversation, selectedConversation, navigati
     if (onSelectConversation) {
       onSelectConversation(conversation);
     } else if (navigation) {
-      // Navigate to chat screen if no onSelectConversation provided
-      navigation.navigate('ChatScreen', {
+      navigation.navigate('Chat', {
         conversationId: conversation.id,
         recipientId: conversation.otherUserId,
         recipientName: conversation.recipientName,
         recipientAvatar: conversation.recipientAvatar,
+        targetUserId: conversation.otherUserId,
+        targetUserName: conversation.recipientName,
+        targetUserAvatar: conversation.recipientAvatar,
       });
     }
   };

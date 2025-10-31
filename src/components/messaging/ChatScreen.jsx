@@ -1,176 +1,222 @@
-// ChatScreen.jsx - Enhanced chat screen with Firebase messaging
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+// ChatScreen.jsx - Supabase-backed chat screen
+import { useNavigation, useRoute } from '@react-navigation/native';
+import { MoreVertical, Phone, Video } from 'lucide-react-native';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
-  View,
+  ActivityIndicator,
+  Alert,
   FlatList,
-  TextInput,
-  TouchableOpacity,
   KeyboardAvoidingView,
   Platform,
   StyleSheet,
-  Alert,
-  ActivityIndicator,
+  TouchableOpacity,
+  View,
 } from 'react-native';
-import { Text, Card, Button, Chip, Avatar, FAB } from 'react-native-paper';
-import {
-  Send,
-  Paperclip,
-  Image as ImageIcon,
-  MoreVertical,
-  Phone,
-  Video,
-  Search,
-} from 'lucide-react-native';
-import * as ImagePicker from 'expo-image-picker';
-import { useNavigation, useRoute } from '@react-navigation/native';
+import { Avatar, Text } from 'react-native-paper';
 import { useAuth } from '../../core/contexts/AuthContext';
-import { messagingService } from '../../services/MessagingService';
+import { messagingService, realtimeService } from '../../services';
+import MessageCard from './MessageCard';
 import MessageInput from './MessageInput';
 
+const mapMessageRecord = (record) => ({
+  id: record.id,
+  senderId: record.sender_id,
+  recipientId: record.recipient_id,
+  text: record.content,
+  timestamp: record.created_at,
+  status: record.read_at ? 'read' : 'sent',
+  type: record.attachment_url ? 'attachment' : 'text',
+  attachmentUrl: record.attachment_url || null,
+  attachmentName: record.attachment_name || null,
+})
+
 const ChatScreen = () => {
-  const navigation = useNavigation();
-  const route = useRoute();
-  const { user } = useAuth();
-  const flatListRef = useRef(null);
+  const navigation = useNavigation()
+  const route = useRoute()
+  const { user } = useAuth()
 
-  const { conversationId, recipientId, recipientName, recipientAvatar } = route.params || {};
+  const { conversationId, recipientId, recipientName, recipientAvatar } = route.params || {}
 
-  // Create conversation object for MessageInput
-  const conversation = conversationId ? {
-    id: conversationId,
-    otherUserId: recipientId,
-    recipientName,
-    recipientAvatar,
-  } : null;
+  const conversation = useMemo(() => {
+    if (!conversationId) return null
+    return {
+      id: conversationId,
+      otherUserId: recipientId,
+      recipientName,
+      recipientAvatar,
+    }
+  }, [conversationId, recipientAvatar, recipientId, recipientName])
 
-  // State
-  const [messages, setMessages] = useState([]);
-  const [loading, setLoading] = useState(false);
-  const [sending, setSending] = useState(false);
-  const [isTyping, setIsTyping] = useState(false);
-  const [typingUsers, setTypingUsers] = useState([]);
+  const [messages, setMessages] = useState([])
+  const [loading, setLoading] = useState(false)
+  const [sending, setSending] = useState(false)
+  const [typingUsers, setTypingUsers] = useState([])
 
-  // Load messages
+  const typingStateRef = useRef(false)
+  const flatListRef = useRef(null)
+
+  const userId = user?.id
+  const normalizedConversationId = conversation?.id
+
   useEffect(() => {
-    if (!conversationId) return;
+    if (!normalizedConversationId || !userId) return undefined
 
-    setLoading(true);
-    const unsubscribe = messagingService.listenToMessages(conversationId, (newMessages) => {
-      setMessages(newMessages);
-      setLoading(false);
-    });
+    let isMounted = true
+    setLoading(true)
 
-    // Listen to typing indicators
-    const typingUnsubscribe = messagingService.listenToTypingStatus(conversationId, (users) => {
-      setTypingUsers(users);
-    });
+    const loadMessages = async () => {
+      try {
+        const records = await messagingService.getMessages(normalizedConversationId)
+        if (!isMounted) return
+        const mapped = (records || []).map(mapMessageRecord)
+        setMessages(mapped)
+      } catch (error) {
+        console.error('Failed to load messages:', error)
+        if (isMounted) {
+          Alert.alert('Error', 'Unable to load messages right now.')
+        }
+      } finally {
+        if (isMounted) {
+          setLoading(false)
+        }
+      }
+    }
+
+    loadMessages()
+
+    const messageChannel = realtimeService.subscribeToMessages(normalizedConversationId, (payload) => {
+      if (payload.eventType !== 'INSERT') return
+      const nextMessage = mapMessageRecord(payload.new)
+
+      setMessages((prev) => {
+        const alreadyExists = prev.some((message) => message.id === nextMessage.id)
+        if (alreadyExists) return prev
+        return [...prev, nextMessage].sort(
+          (a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime(),
+        )
+      })
+    })
+
+    const detachTyping = realtimeService.joinTypingChannel(
+      normalizedConversationId,
+      userId,
+      (activeTypers) => {
+        if (!isMounted) return
+        const otherUsers = activeTypers.filter((id) => id !== userId)
+        setTypingUsers(otherUsers)
+      },
+    )
 
     return () => {
-      unsubscribe();
-      typingUnsubscribe();
-    };
-  }, [conversationId]);
-
-  // Handle sending message
-  const handleSendMessage = async (messageText) => {
-    if (sending) return;
-
-    setSending(true);
-    try {
-      const messageId = await messagingService.sendMessage(recipientId, messageText);
-      setIsTyping(false);
-
-      // Scroll to bottom
-      setTimeout(() => {
-        flatListRef.current?.scrollToEnd({ animated: true });
-      }, 100);
-    } catch (error) {
-      Alert.alert('Error', 'Failed to send message. Please try again.');
-      console.error('Send message error:', error);
-    } finally {
-      setSending(false);
+      isMounted = false
+      messageChannel?.unsubscribe?.()
+      detachTyping?.()
+      realtimeService.setTypingStatus(normalizedConversationId, userId, false)
     }
-  };
+  }, [normalizedConversationId, userId])
 
-  // Handle typing
-  const handleTyping = useCallback((text) => {
-    if (text.trim()) {
-      if (!isTyping) {
-        setIsTyping(true);
-        messagingService.setTypingStatus(conversationId, true);
-      }
-    } else {
-      if (isTyping) {
-        setIsTyping(false);
-        messagingService.setTypingStatus(conversationId, false);
-      }
-    }
-  }, [conversationId, isTyping]);
+  const handleSendMessage = useCallback(
+    async (messageText, attachment) => {
+      if (sending || !normalizedConversationId || !userId) return
 
-  // Handle image selection
-  const handleImagePick = async () => {
+      setSending(true)
+      try {
+        await messagingService.sendMessage(normalizedConversationId, userId, messageText, attachment)
+        typingStateRef.current = false
+        await realtimeService.setTypingStatus(normalizedConversationId, userId, false)
+
+        setTimeout(() => {
+          flatListRef.current?.scrollToEnd({ animated: true })
+        }, 100)
+      } catch (error) {
+        console.error('Send message error:', error)
+        Alert.alert('Error', error?.message || 'Failed to send message. Please try again.')
+      } finally {
+        setSending(false)
+      }
+    },
+    [normalizedConversationId, sending, userId],
+  )
+
+  const handleUploadAttachment = useCallback(
+    async (payload) => {
+      return messagingService.uploadAttachment(payload)
+    },
+    [],
+  )
+
+  const handleTyping = useCallback(
+    async (text) => {
+      if (!normalizedConversationId || !userId) return
+      const nextState = Boolean(text.trim())
+
+      if (typingStateRef.current === nextState) return
+      typingStateRef.current = nextState
+
+      await realtimeService.setTypingStatus(normalizedConversationId, userId, nextState)
+    },
+    [normalizedConversationId, userId],
+  )
+
+  const handleImagePick = useCallback(async () => {
     try {
       const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ImagePicker.MediaType.Images,
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
         allowsEditing: true,
         aspect: [4, 3],
         quality: 0.8,
-      });
+      })
 
       if (!result.canceled) {
-        // TODO: Upload image and send as message
-        Alert.alert('Info', 'Image sharing feature coming soon!');
+        Alert.alert('Info', 'Image sharing feature coming soon!')
       }
     } catch (error) {
-      Alert.alert('Error', 'Failed to pick image');
+      Alert.alert('Error', 'Failed to pick image')
     }
-  };
+  }, [])
 
-  // Render message
   const renderMessage = ({ item }) => (
     <MessageCard
       message={item}
-      isOwn={item.senderId === user?.id}
-      showAvatar={true}
-      senderName={item.senderId === user?.id ? 'You' : recipientName}
-      senderAvatar={item.senderId === user?.id ? null : recipientAvatar}
+      isOwn={item.senderId === userId}
+      showAvatar
+      senderName={item.senderId === userId ? 'You' : recipientName}
+      senderAvatar={item.senderId === userId ? null : recipientAvatar}
     />
-  );
+  )
 
-  // Render typing indicator
   const renderTypingIndicator = () => {
-    if (typingUsers.length === 0) return null;
+    if (typingUsers.length === 0) return null
+
+    const recipientTyping = typingUsers.includes(String(recipientId))
+    const message = recipientTyping ? `${recipientName} is typing...` : 'Someone is typing...'
 
     return (
       <View style={styles.typingContainer}>
-        <Text variant="caption" style={styles.typingText}>
-          {typingUsers.includes(recipientId) ? `${recipientName} is typing...` : 'Someone is typing...'}
+        <Text variant="bodySmall" style={styles.typingText}>
+          {message}
         </Text>
       </View>
-    );
-  };
+    )
+  }
 
-  // Render header
   const renderHeader = () => (
     <View style={styles.header}>
-      <TouchableOpacity
-        onPress={() => navigation.goBack()}
-        style={styles.backButton}
-      >
+      <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
         <Text>←</Text>
       </TouchableOpacity>
 
       <View style={styles.headerInfo}>
-        <Avatar.Image
-          size={40}
-          source={recipientAvatar ? { uri: recipientAvatar } : null}
+        <Avatar.Image 
+          size={40} 
+          source={recipientAvatar ? { uri: recipientAvatar } : require('../../../assets/default-avatar.png')} 
         />
         <View style={styles.headerText}>
           <Text variant="titleMedium" style={styles.recipientName}>
             {recipientName}
           </Text>
-          <Text variant="caption" style={styles.recipientStatus}>
-            {typingUsers.includes(recipientId) ? 'Typing...' : 'Online'}
+          <Text variant="bodySmall" style={styles.recipientStatus}>
+            {typingUsers.includes(String(recipientId)) ? 'Typing…' : 'Online'}
           </Text>
         </View>
       </View>
@@ -187,35 +233,45 @@ const ChatScreen = () => {
         </TouchableOpacity>
       </View>
     </View>
-  );
+  )
 
   if (loading) {
     return (
       <View style={styles.loadingContainer}>
         <ActivityIndicator size="large" />
         <Text variant="bodyMedium" style={styles.loadingText}>
-          Loading messages...
+          Loading messages…
         </Text>
       </View>
-    );
+    )
+  }
+
+  if (!conversation) {
+    return (
+      <View style={styles.loadingContainer}>
+        <Text variant="bodyMedium">No conversation selected.</Text>
+      </View>
+    )
   }
 
   return (
     <KeyboardAvoidingView
       style={styles.container}
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
     >
       {renderHeader()}
 
       <FlatList
         ref={flatListRef}
         data={messages}
-        keyExtractor={(item) => item.id || item.timestamp.toString()}
+        keyExtractor={(item) => item.id}
         renderItem={renderMessage}
         style={styles.messagesList}
         contentContainerStyle={styles.messagesContainer}
         showsVerticalScrollIndicator={false}
         onContentSizeChange={() => flatListRef.current?.scrollToEnd({ animated: true })}
+        onLayout={() => flatListRef.current?.scrollToEnd({ animated: true })}
       />
 
       {renderTypingIndicator()}
@@ -224,13 +280,13 @@ const ChatScreen = () => {
         conversation={conversation}
         disabled={loading || sending}
         onSendMessage={handleSendMessage}
-        onImagePick={handleImagePick}
         onTyping={handleTyping}
+        onUploadAttachment={handleUploadAttachment}
         placeholder="Type a message..."
       />
     </KeyboardAvoidingView>
-  );
-};
+  )
+}
 
 const styles = StyleSheet.create({
   container: {
@@ -286,6 +342,7 @@ const styles = StyleSheet.create({
   },
   messagesContainer: {
     paddingVertical: 8,
+    paddingHorizontal: 12,
   },
   typingContainer: {
     paddingHorizontal: 16,
@@ -295,41 +352,6 @@ const styles = StyleSheet.create({
     color: '#666',
     fontStyle: 'italic',
   },
-  inputContainer: {
-    flexDirection: 'row',
-    alignItems: 'flex-end',
-    padding: 16,
-    backgroundColor: '#fff',
-    borderTopWidth: 1,
-    borderTopColor: '#e0e0e0',
-  },
-  attachButton: {
-    padding: 12,
-    marginRight: 8,
-  },
-  textInput: {
-    flex: 1,
-    borderWidth: 1,
-    borderColor: '#e0e0e0',
-    borderRadius: 20,
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    maxHeight: 100,
-    backgroundColor: '#f5f5f5',
-  },
-  sendButton: {
-    backgroundColor: '#007AFF',
-    borderRadius: 20,
-    padding: 12,
-    marginLeft: 8,
-    justifyContent: 'center',
-    alignItems: 'center',
-    width: 44,
-    height: 44,
-  },
-  sendButtonDisabled: {
-    backgroundColor: '#ccc',
-  },
-});
+})
 
-export default ChatScreen;
+export default ChatScreen

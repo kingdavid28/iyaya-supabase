@@ -1,8 +1,8 @@
 // MessageCard.jsx - React Native Paper implementation
-import React from 'react';
-import { View, StyleSheet } from 'react-native';
-import { Card, Text, Chip, Avatar } from 'react-native-paper';
 import { format } from 'date-fns';
+import React from 'react';
+import { Image, Linking, Platform, StyleSheet, TouchableOpacity, View } from 'react-native';
+import { Avatar, Card, Text } from 'react-native-paper';
 
 const MessageCard = ({ message, isOwn, showAvatar = false, senderName, senderAvatar }) => {
   const formatTime = (timestamp) => {
@@ -26,6 +26,72 @@ const MessageCard = ({ message, isOwn, showAvatar = false, senderName, senderAva
     }
   };
 
+  const renderAttachment = () => {
+    if (!message.attachmentUrl) return null;
+
+    const isImage = message.attachmentType?.startsWith('image/');
+    
+    return (
+      <View style={styles.attachmentContainer}>
+        {isImage ? (
+          <Image
+            source={{ uri: message.attachmentUrl }}
+            style={styles.attachmentImage}
+            resizeMode="cover"
+          />
+        ) : (
+          <TouchableOpacity 
+            onPress={() => Linking.openURL(message.attachmentUrl)}
+            style={styles.attachmentButton}
+          >
+            <View style={[
+              styles.attachmentChip,
+              isOwn ? styles.ownAttachmentChip : styles.otherAttachmentChip
+            ]}>
+              <Text style={[styles.attachmentIcon, isOwn ? styles.ownText : styles.otherText]}>
+                📎
+              </Text>
+              <Text style={[
+                styles.attachmentText, 
+                isOwn ? styles.ownText : styles.otherText
+              ]}>
+                {message.attachmentName || 'Attachment'}
+              </Text>
+            </View>
+          </TouchableOpacity>
+        )}
+      </View>
+    );
+  };
+
+  const renderStatusIndicator = () => {
+    if (!isOwn || !message.status) return null;
+
+    return (
+      <View style={styles.statusContainer}>
+        <Text
+          variant="bodySmall"
+          style={[
+            styles.statusText,
+            { color: getStatusColor(message.status) }
+          ]}
+        >
+          {message.status}
+        </Text>
+        {(message.status === 'delivered' || message.status === 'read') && (
+          <Text style={[styles.checkIcon, { color: getStatusColor(message.status) }]}>
+            ✓✓
+          </Text>
+        )}
+        {message.status === 'sent' && (
+          <Text style={[styles.checkIcon, { color: getStatusColor(message.status) }]}>
+            ✓
+          </Text>
+        )}
+      </View>
+    );
+  };
+
   return (
     <View style={[
       styles.container,
@@ -34,7 +100,7 @@ const MessageCard = ({ message, isOwn, showAvatar = false, senderName, senderAva
       {showAvatar && !isOwn && (
         <Avatar.Image
           size={40}
-          source={senderAvatar ? { uri: senderAvatar } : null}
+          source={senderAvatar ? { uri: senderAvatar } : require('../../../assets/default-avatar.png')}
           style={styles.avatar}
         />
       )}
@@ -54,19 +120,26 @@ const MessageCard = ({ message, isOwn, showAvatar = false, senderName, senderAva
           isOwn ? styles.ownMessage : styles.otherMessage
         ]}>
           <Card.Content style={styles.cardContent}>
-            <Text
-              variant="bodyMedium"
-              style={[
-                styles.messageText,
-                isOwn ? styles.ownText : styles.otherText
-              ]}
-            >
-              {message.text}
-            </Text>
+            {/* Message Text */}
+            {message.text && (
+              <Text
+                variant="bodyMedium"
+                style={[
+                  styles.messageText,
+                  isOwn ? styles.ownText : styles.otherText
+                ]}
+              >
+                {message.text}
+              </Text>
+            )}
 
+            {/* Attachment */}
+            {renderAttachment()}
+
+            {/* Footer with timestamp and status */}
             <View style={styles.footer}>
               <Text
-                variant="caption"
+                variant="bodySmall"
                 style={[
                   styles.timestamp,
                   isOwn ? styles.ownTimestamp : styles.otherTimestamp
@@ -75,45 +148,30 @@ const MessageCard = ({ message, isOwn, showAvatar = false, senderName, senderAva
                 {formatTime(message.timestamp)}
               </Text>
 
-              {isOwn && message.status && (
-                <View style={styles.statusContainer}>
-                  <Text
-                    variant="caption"
-                    style={[
-                      styles.statusText,
-                      { color: getStatusColor(message.status) }
-                    ]}
-                  >
-                    {message.status}
-                  </Text>
-                  {message.status === 'delivered' && (
-                    <Text style={[styles.checkIcon, { color: getStatusColor(message.status) }]}>
-                      ✓✓
-                    </Text>
-                  )}
-                  {message.status === 'read' && (
-                    <Text style={[styles.checkIcon, { color: getStatusColor(message.status) }]}>
-                      ✓✓
-                    </Text>
-                  )}
-                </View>
-              )}
+              {renderStatusIndicator()}
             </View>
 
+            {/* Edited indicator */}
             {message.edited && (
-              <Text variant="caption" style={styles.editedText}>
+              <Text variant="bodySmall" style={styles.editedText}>
                 (edited)
               </Text>
             )}
           </Card.Content>
         </Card>
 
-        {message.type !== 'text' && (
-          <Text variant="caption" style={styles.messageType}>
+        {/* Message type indicator for non-text messages */}
+        {message.type !== 'text' && message.type && (
+          <Text variant="bodySmall" style={styles.messageType}>
             {message.type}
           </Text>
         )}
       </View>
+
+      {/* Spacer for alignment when showing avatar on other side */}
+      {showAvatar && isOwn && (
+        <View style={styles.avatarSpacer} />
+      )}
     </View>
   );
 };
@@ -121,9 +179,10 @@ const MessageCard = ({ message, isOwn, showAvatar = false, senderName, senderAva
 const styles = StyleSheet.create({
   container: {
     flexDirection: 'row',
-    alignItems: 'flex-end',
+    alignItems: 'flex-start',
     marginVertical: 4,
-    paddingHorizontal: 16,
+    paddingHorizontal: 10,
+    flex: 1,
   },
   ownContainer: {
     justifyContent: 'flex-end',
@@ -135,8 +194,12 @@ const styles = StyleSheet.create({
     marginRight: 8,
     marginBottom: 8,
   },
+  avatarSpacer: {
+    width: 40,
+    marginLeft: 8,
+  },
   bubbleContainer: {
-    maxWidth: '75%',
+    maxWidth: Platform.OS === 'android' ? '90%' : '75%',
     flexDirection: 'column',
   },
   ownBubble: {
@@ -149,6 +212,7 @@ const styles = StyleSheet.create({
     marginBottom: 4,
     fontWeight: '600',
     color: '#666',
+    marginLeft: 4,
   },
   messageCard: {
     elevation: 1,
@@ -166,6 +230,7 @@ const styles = StyleSheet.create({
   },
   messageText: {
     lineHeight: 20,
+    marginBottom: 4,
   },
   ownText: {
     color: '#FFFFFF',
@@ -212,6 +277,41 @@ const styles = StyleSheet.create({
     color: 'rgba(0, 0, 0, 0.4)',
     marginTop: 2,
     fontStyle: 'italic',
+    alignSelf: 'flex-start',
+    marginLeft: 4,
+  },
+  // Attachment styles
+  attachmentContainer: {
+    marginTop: 8,
+  },
+  attachmentImage: {
+    width: 200,
+    height: 160,
+    borderRadius: 12,
+  },
+  attachmentButton: {
+    alignSelf: 'flex-start',
+  },
+  attachmentChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 8,
+    borderRadius: 12,
+    backgroundColor: 'rgba(255,255,255,0.2)',
+  },
+  ownAttachmentChip: {
+    backgroundColor: 'rgba(255,255,255,0.3)',
+  },
+  otherAttachmentChip: {
+    backgroundColor: 'rgba(0,0,0,0.08)',
+  },
+  attachmentIcon: {
+    fontSize: 14,
+    marginRight: 6,
+  },
+  attachmentText: {
+    marginLeft: 6,
+    fontSize: 14,
   },
 });
 

@@ -1,183 +1,335 @@
-import React, { useState, useEffect, useRef } from 'react';
-import {
-  View,
-  Text,
-  StyleSheet,
-  ActivityIndicator,
-  KeyboardAvoidingView,
-  Platform,
-  TouchableOpacity,
-  FlatList,
-  TextInput,
-  Pressable,
-  Alert,
-} from 'react-native';
-import { useNavigation, useRoute } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
+import { useNavigation, useRoute } from '@react-navigation/native';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import {
+    ActivityIndicator,
+    Alert,
+    FlatList,
+    KeyboardAvoidingView,
+    Platform,
+    StyleSheet,
+    TouchableOpacity,
+    View,
+} from 'react-native';
+import { Avatar, Text } from 'react-native-paper';
+import MessageCard from '../components/messaging/MessageCard';
+import MessageInput from '../components/messaging/MessageInput';
 import { useAuth } from '../contexts/AuthContext';
-import { messagingAPI } from '../services';
-import { supabase } from '../config/supabase';
+import { messagingService, realtimeService } from '../services';
 
-export default function Chat() {
+const mapMessageRecord = (record) => ({
+  id: record.id,
+  senderId: record.sender_id,
+  recipientId: record.recipient_id,
+  text: record.content,
+  timestamp: record.created_at,
+  status: record.read_at ? 'read' : 'sent',
+  type: record.attachment_url ? 'attachment' : 'text',
+  attachmentUrl: record.attachment_url || null,
+  attachmentName: record.attachment_name || null,
+  attachmentType: record.attachment_type || null,
+  attachmentSize: record.attachment_size || null,
+});
+
+const Chat = () => {
   const { user } = useAuth();
   const navigation = useNavigation();
   const route = useRoute();
-  
-  // Extract parameters - works for both parent->caregiver and caregiver->parent
-  const { 
-    targetUserId, 
-    targetUserName, 
-    targetUserType,
-    caregiverId, 
+  const params = route.params || {};
+
+  const {
+    conversationId: initialConversationId,
+    recipientId,
+    recipientName,
+    recipientAvatar,
+    targetUserId,
+    targetUserName,
+    targetUserAvatar,
+    caregiverId,
     caregiverName,
     parentId,
-    parentName 
-  } = route.params || {};
+    parentName,
+    userId: routeUserId,
+    otherUserId: routeOtherUserId,
+    otherUserAvatar: routeOtherUserAvatar,
+  } = params;
 
-  // Determine the other participant
-  const otherUserId = targetUserId || caregiverId || parentId;
-  const otherUserName = targetUserName || caregiverName || parentName || 'User';
-  const otherUserType = targetUserType || (caregiverName ? 'Caregiver' : 'Parent');
+  const derivedOtherUserId = useMemo(
+    () =>
+      recipientId ??
+      targetUserId ??
+      routeOtherUserId ??
+      caregiverId ??
+      parentId ??
+      null,
+    [recipientId, targetUserId, routeOtherUserId, caregiverId, parentId],
+  );
 
+  const otherUserName =
+    recipientName || targetUserName || caregiverName || parentName || 'User';
+  const otherUserAvatar =
+    recipientAvatar || targetUserAvatar || routeOtherUserAvatar || null;
+
+  const currentUserId = user?.id || routeUserId || null;
+
+  const [conversation, setConversation] = useState(() =>
+    initialConversationId
+      ? {
+          id: initialConversationId,
+          otherUserId: derivedOtherUserId,
+          recipientName: otherUserName,
+          recipientAvatar: otherUserAvatar,
+        }
+      : null,
+  );
   const [messages, setMessages] = useState([]);
-  const [newMessage, setNewMessage] = useState('');
-  const [isLoading, setIsLoading] = useState(false);
-  const [conversationId, setConversationId] = useState(null);
-  const flatListRef = useRef();
+  const [loading, setLoading] = useState(true);
+  const [sending, setSending] = useState(false);
+  const [typingUsers, setTypingUsers] = useState([]);
+  const typingStateRef = useRef(false);
+  const flatListRef = useRef(null);
 
   useEffect(() => {
-    const initChat = async () => {
-      // Extract user ID from different possible formats with more debugging
-      let currentUserId = user?.id || user?.uid || user?.user_id || route.params?.userId;
-      
-      // If no user ID from context, try to get it directly from Supabase
+    if (initialConversationId || derivedOtherUserId) return;
+    Alert.alert('Error', 'Conversation details were not provided.');
+    navigation.goBack();
+  }, [derivedOtherUserId, initialConversationId, navigation]);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    const ensureConversation = async () => {
       if (!currentUserId) {
-        try {
-          const { data: { user: authUser } } = await supabase.auth.getUser();
-          currentUserId = authUser?.id;
-          console.log('🔍 Chat - Got user ID from Supabase auth:', currentUserId);
-        } catch (error) {
-          console.error('❌ Chat - Failed to get user from Supabase:', error);
+        Alert.alert('Error', 'Authentication required to open chat.');
+        navigation.goBack();
+        return;
+      }
+
+      if (conversation?.id) {
+        setConversation((prev) =>
+          prev
+            ? {
+                ...prev,
+                otherUserId: derivedOtherUserId ?? prev.otherUserId,
+                recipientName: otherUserName || prev.recipientName,
+                recipientAvatar: otherUserAvatar ?? prev.recipientAvatar,
+              }
+            : prev,
+        );
+        setLoading(false);
+        return;
+      }
+
+      if (!initialConversationId && !derivedOtherUserId) {
+        setLoading(false);
+        return;
+      }
+
+      try {
+        setLoading(true);
+        let resolvedId = initialConversationId;
+        if (!resolvedId) {
+          const conversationRecord = await messagingService.getOrCreateConversation(
+            currentUserId,
+            derivedOtherUserId,
+          );
+          resolvedId = conversationRecord?.id;
         }
-      }
-      
-      console.log('🔍 Chat useEffect - Full debug info:', {
-        user: user,
-        userKeys: user ? Object.keys(user) : 'no user',
-        userId: currentUserId,
-        otherUserId,
-        routeParams: route.params,
-        routeParamsKeys: route.params ? Object.keys(route.params) : 'no params'
-      });
-      
-      if (!currentUserId) {
-        console.error('❌ Missing current user ID:', { 
-          user,
-          userType: typeof user,
-          userKeys: user ? Object.keys(user) : 'no user',
-          routeUserId: route.params?.userId
-        });
-        Alert.alert('Error', 'Current user information not available. Please try logging out and back in.');
-        navigation.goBack();
-        return;
-      }
-      
-      if (!otherUserId) {
-        console.error('❌ Missing other user ID:', { 
-          otherUserId,
-          routeParams: route.params
-        });
-        Alert.alert('Error', 'Target user information not available');
-        navigation.goBack();
-        return;
-      }
 
-      try {
-        setIsLoading(true);
-        console.log('🚀 Creating conversation between:', currentUserId, 'and', otherUserId);
-        // Pass null as first parameter to let the service get current user from auth
-        const conversation = await messagingAPI.getOrCreateConversation(null, otherUserId);
-        setConversationId(conversation.id);
-        
-        const existingMessages = await messagingAPI.getMessages(conversation.id);
-        setMessages(existingMessages || []);
+        if (!resolvedId) {
+          throw new Error('Failed to open conversation.');
+        }
+
+        if (!isMounted) return;
+
+        setConversation({
+          id: resolvedId,
+          otherUserId: derivedOtherUserId,
+          recipientName: otherUserName,
+          recipientAvatar: otherUserAvatar,
+        });
       } catch (error) {
-        console.error('Error initializing chat:', error);
-        Alert.alert('Error', 'Failed to load chat');
+        console.error('Failed to initialize chat conversation:', error);
+        if (isMounted) {
+          Alert.alert('Error', error?.message || 'Failed to open chat.');
+          navigation.goBack();
+        }
       } finally {
-        setIsLoading(false);
+        if (isMounted) setLoading(false);
       }
     };
 
-    initChat();
-  }, [user, otherUserId, navigation, route.params]);
+    ensureConversation();
+    return () => {
+      isMounted = false;
+    };
+  }, [
+    conversation?.id,
+    currentUserId,
+    derivedOtherUserId,
+    initialConversationId,
+    navigation,
+    otherUserAvatar,
+    otherUserName,
+  ]);
 
-  const sendMessage = async () => {
-    let currentUserId = user?.id || user?.uid || user?.user_id || route.params?.userId;
-    
-    // If no user ID, try to get it directly from Supabase
-    if (!currentUserId) {
+  useEffect(() => {
+    if (!conversation?.id) return;
+
+    let isMounted = true;
+    setLoading(true);
+
+    const loadMessages = async () => {
       try {
-        const { data: { user: authUser } } = await supabase.auth.getUser();
-        currentUserId = authUser?.id;
+        const records = await messagingService.getMessages(conversation.id);
+        if (!isMounted) return;
+        const mapped = (records || [])
+          .map(mapMessageRecord)
+          .sort(
+            (a, b) =>
+              new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime(),
+          );
+        setMessages(mapped);
+        setTimeout(() => {
+          flatListRef.current?.scrollToEnd({ animated: true });
+        }, 100);
       } catch (error) {
-        console.error('Failed to get user for sending message:', error);
+        console.error('Failed to load messages:', error);
+        if (isMounted) Alert.alert('Error', 'Unable to load messages right now.');
+      } finally {
+        if (isMounted) setLoading(false);
       }
-    }
-    
-    if (!newMessage?.trim() || !conversationId || !currentUserId) return;
-
-    try {
-      await messagingAPI.sendMessage(conversationId, currentUserId, newMessage.trim());
-      setNewMessage('');
-      
-      // Refresh messages
-      const updatedMessages = await messagingAPI.getMessages(conversationId);
-      setMessages(updatedMessages || []);
-    } catch (error) {
-      console.error('Error sending message:', error);
-      Alert.alert('Error', 'Failed to send message. Please try again.');
-    }
-  };
-
-  const MessageItem = ({ message, isCurrentUser }) => {
-    const formatTime = (timestamp) => {
-      if (!timestamp) return '';
-      const date = new Date(timestamp);
-      return date.toLocaleTimeString('en-US', {
-        hour: '2-digit',
-        minute: '2-digit',
-        hour12: true
-      });
     };
 
-    return (
-      <View style={[
-        styles.messageContainer,
-        isCurrentUser ? styles.currentUserMessage : styles.otherUserMessage
-      ]}>
-        <View style={[
-          styles.messageBubble,
-          isCurrentUser ? styles.currentUserBubble : styles.otherUserBubble
-        ]}>
-          <Text style={[
-            styles.messageText,
-            isCurrentUser ? styles.currentUserText : styles.otherUserText
-          ]}>
-            {message.content || message.text || 'No message content'}
-          </Text>
-          <Text style={[
-            styles.messageTime,
-            isCurrentUser ? styles.currentUserTime : styles.otherUserTime
-          ]}>
-            {formatTime(message.created_at || message.timestamp)}
-          </Text>
-        </View>
-      </View>
-    );
-  };
+    loadMessages();
 
-  if (isLoading) {
+    const messageChannel = realtimeService.subscribeToMessages(
+      conversation.id,
+      (payload) => {
+        if (payload.eventType !== 'INSERT') return;
+        const nextMessage = mapMessageRecord(payload.new);
+        setMessages((prev) => {
+          if (prev.some((message) => message.id === nextMessage.id)) return prev;
+          return [...prev, nextMessage].sort(
+            (a, b) =>
+              new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime(),
+          );
+        });
+      },
+    );
+
+    let detachTyping;
+    if (currentUserId) {
+      detachTyping = realtimeService.joinTypingChannel(
+        conversation.id,
+        currentUserId,
+        (activeTypers) => {
+          if (!isMounted) return;
+          setTypingUsers(activeTypers.filter((id) => id !== currentUserId));
+        },
+      );
+    }
+
+    return () => {
+      isMounted = false;
+      messageChannel?.unsubscribe?.();
+      detachTyping?.();
+      if (currentUserId) {
+        realtimeService.setTypingStatus(conversation.id, currentUserId, false);
+      }
+    };
+  }, [conversation?.id, currentUserId]);
+
+  const handleSendMessage = useCallback(
+    async (messageText, attachment) => {
+      if (sending || !conversation?.id) return;
+      if (!currentUserId) {
+        Alert.alert('Error', 'Authentication required to send messages.');
+        return;
+      }
+
+      const content = messageText?.trim?.() || '';
+      if (!content && !attachment) {
+        return;
+      }
+
+      setSending(true);
+      try {
+        await messagingService.sendMessage(
+          conversation.id,
+          currentUserId,
+          content,
+          attachment,
+        );
+        typingStateRef.current = false;
+        await realtimeService.setTypingStatus(
+          conversation.id,
+          currentUserId,
+          false,
+        );
+        setTimeout(() => {
+          flatListRef.current?.scrollToEnd({ animated: true });
+        }, 100);
+      } catch (error) {
+        console.error('Send message error:', error);
+        Alert.alert('Error', error?.message || 'Failed to send message. Please try again.');
+      } finally {
+        setSending(false);
+      }
+    },
+    [conversation?.id, currentUserId, sending],
+  );
+
+  const handleUploadAttachment = useCallback(
+    async (payload) => {
+      if (!conversation?.id) {
+        Alert.alert('Error', 'Select a conversation before uploading attachments.');
+        return null;
+      }
+
+      try {
+        return await messagingService.uploadAttachment(payload);
+      } catch (error) {
+        console.error('Attachment upload error:', error);
+        Alert.alert('Error', error?.message || 'Failed to upload attachment.');
+        return null;
+      }
+    },
+    [conversation?.id],
+  );
+
+  const handleTyping = useCallback(
+    async (text) => {
+      if (!conversation?.id || !currentUserId) return;
+
+      const nextState = Boolean(text.trim());
+      if (typingStateRef.current === nextState) return;
+
+      typingStateRef.current = nextState;
+      try {
+        await realtimeService.setTypingStatus(
+          conversation.id,
+          currentUserId,
+          nextState,
+        );
+      } catch (error) {
+        console.warn('Typing status update failed:', error);
+      }
+    },
+    [conversation?.id, currentUserId],
+  );
+
+  const typingMessage = useMemo(() => {
+    if (!typingUsers.length) return null;
+    const includesRecipient =
+      derivedOtherUserId && typingUsers.includes(String(derivedOtherUserId));
+    if (includesRecipient && otherUserName) {
+      return `${otherUserName} is typing...`;
+    }
+    return 'Someone is typing...';
+  }, [derivedOtherUserId, otherUserName, typingUsers]);
+
+  if (loading && !messages.length) {
     return (
       <View style={styles.loadingContainer}>
         <ActivityIndicator size="large" color="#3B82F6" />
@@ -185,6 +337,24 @@ export default function Chat() {
       </View>
     );
   }
+
+  if (!conversation?.id) {
+    return (
+      <View style={styles.loadingContainer}>
+        <Text style={styles.loadingText}>No conversation selected.</Text>
+      </View>
+    );
+  }
+
+  const renderMessage = ({ item }) => (
+    <MessageCard
+      message={item}
+      isOwn={item.senderId === currentUserId}
+      showAvatar
+      senderName={item.senderId === currentUserId ? 'You' : otherUserName}
+      senderAvatar={item.senderId === currentUserId ? null : otherUserAvatar}
+    />
+  );
 
   return (
     <KeyboardAvoidingView
@@ -199,184 +369,116 @@ export default function Chat() {
         >
           <Ionicons name="arrow-back" size={24} color="#111827" />
         </TouchableOpacity>
-        <View style={styles.headerContent}>
-          <Text style={styles.headerTitle} numberOfLines={1}>
-            {otherUserName}
-          </Text>
-          <Text style={styles.subtitle}>{otherUserType}</Text>
+        <View style={styles.headerInfo}>
+          {otherUserAvatar ? (
+            <Avatar.Image size={40} source={{ uri: otherUserAvatar }} />
+          ) : (
+            <Avatar.Icon size={40} icon="account" />
+          )}
+          <View style={styles.headerText}>
+            <Text variant="titleMedium" style={styles.recipientName} numberOfLines={1}>
+              {otherUserName}
+            </Text>
+            <Text variant="bodySmall" style={styles.recipientStatus}>
+              {typingMessage || 'Online'}
+            </Text>
+          </View>
         </View>
       </View>
 
       <FlatList
         ref={flatListRef}
         data={messages}
-        renderItem={({ item }) => {
-          const currentUserId = user?.id || user?.uid || user?.user_id || route.params?.userId;
-          return (
-            <MessageItem
-              message={item}
-              isCurrentUser={item.sender_id === currentUserId}
-            />
-          );
-        }}
-        keyExtractor={(item, index) => item.id || `message-${index}`}
+        keyExtractor={(item, index) => item.id?.toString() || `message-${index}`}
+        renderItem={renderMessage}
         style={styles.messagesList}
-        contentContainerStyle={styles.messagesContent}
+        contentContainerStyle={styles.messagesContainer}
         showsVerticalScrollIndicator={false}
-        onContentSizeChange={() => {
-          if (messages.length > 0 && flatListRef.current) {
-            flatListRef.current.scrollToEnd({ animated: true });
-          }
-        }}
+        onContentSizeChange={() => flatListRef.current?.scrollToEnd({ animated: true })}
+        onLayout={() => flatListRef.current?.scrollToEnd({ animated: true })}
       />
 
-      <View style={styles.inputContainer}>
-        <TextInput
-          style={styles.messageInput}
-          value={newMessage}
-          onChangeText={setNewMessage}
-          placeholder="Type your message..."
-          multiline
-          maxLength={500}
-        />
-        <Pressable
-          style={[
-            styles.sendButton,
-            { opacity: newMessage?.trim() ? 1 : 0.5 }
-          ]}
-          onPress={sendMessage}
-          disabled={!newMessage?.trim()}
-        >
-          <Ionicons name="send" size={20} color="#FFFFFF" />
-        </Pressable>
-      </View>
+      {!!typingMessage && (
+        <View style={styles.typingContainer}>
+          <Text style={styles.typingText}>{typingMessage}</Text>
+        </View>
+      )}
+
+      <MessageInput
+        conversation={conversation}
+        disabled={loading || sending}
+        onSendMessage={handleSendMessage}
+        onTyping={handleTyping}
+        onUploadAttachment={handleUploadAttachment}
+        placeholder={`Message ${otherUserName}...`}
+      />
     </KeyboardAvoidingView>
   );
-}
+};
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#FFFFFF',
+    marginTop: 26,
+    marginBottom: 26,
+    backgroundColor: '#f5f5f5',
   },
   loadingContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#FFFFFF',
   },
   loadingText: {
-    marginTop: 12,
-    fontSize: 16,
-    color: '#6B7280',
+    marginTop: 16,
+    color: '#666',
   },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 12,
-    paddingHorizontal: 16,
+    padding: 16,
+    backgroundColor: '#fff',
     borderBottomWidth: 1,
-    borderBottomColor: '#E5E7EB',
-    backgroundColor: '#FFFFFF',
+    borderBottomColor: '#e0e0e0',
   },
   backButton: {
     padding: 8,
     marginRight: 8,
   },
-  headerContent: {
+  headerInfo: {
     flex: 1,
-    marginLeft: 8,
+    flexDirection: 'row',
+    alignItems: 'center',
   },
-  headerTitle: {
-    fontSize: 18,
+  headerText: {
+    marginLeft: 12,
+    flex: 1,
+  },
+  recipientName: {
     fontWeight: '600',
-    color: '#111827',
-    marginBottom: 2,
   },
-  subtitle: {
-    fontSize: 12,
-    color: '#6B7280',
+  recipientStatus: {
+    color: '#4CAF50',
+    marginTop: 2,
   },
   messagesList: {
     flex: 1,
   },
-  messagesContent: {
-    padding: 16,
+  messagesContainer: {
+    width: '100%',
+    paddingVertical: 8,
+    paddingHorizontal: 12,
   },
-  messageContainer: {
-    marginVertical: 4,
-  },
-  currentUserMessage: {
-    alignItems: 'flex-end',
-  },
-  otherUserMessage: {
-    alignItems: 'flex-start',
-  },
-  messageBubble: {
-    maxWidth: '80%',
-    padding: 12,
-    borderRadius: 18,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 2,
-    elevation: 1,
-  },
-  currentUserBubble: {
-    backgroundColor: '#3B82F6',
-    borderBottomRightRadius: 4,
-  },
-  otherUserBubble: {
-    backgroundColor: '#F3F4F6',
-    borderBottomLeftRadius: 4,
-  },
-  messageText: {
-    fontSize: 16,
-    lineHeight: 20,
-    marginBottom: 4,
-  },
-  currentUserText: {
-    color: '#FFFFFF',
-  },
-  otherUserText: {
-    color: '#374151',
-  },
-  messageTime: {
-    fontSize: 11,
-  },
-  currentUserTime: {
-    color: 'rgba(255, 255, 255, 0.7)',
-  },
-  otherUserTime: {
-    color: '#9CA3AF',
-  },
-  inputContainer: {
-    flexDirection: 'row',
-    alignItems: 'flex-end',
-    padding: 16,
-    backgroundColor: '#FFFFFF',
-    borderTopWidth: 1,
-    borderTopColor: '#E5E7EB',
-    gap: 12,
-  },
-  messageInput: {
-    flex: 1,
-    minHeight: 40,
-    maxHeight: 100,
+  typingContainer: {
     paddingHorizontal: 16,
-    paddingVertical: 10,
-    backgroundColor: '#F9FAFB',
-    borderRadius: 20,
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
-    fontSize: 16,
+    paddingVertical: 8,
+    backgroundColor: '#fff',
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: '#e0e0e0',
   },
-  sendButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: '#3B82F6',
-    justifyContent: 'center',
-    alignItems: 'center',
+  typingText: {
+    color: '#666',
+    fontStyle: 'italic',
   },
 });
+
+export default Chat;

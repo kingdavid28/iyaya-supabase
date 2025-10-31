@@ -1,5 +1,7 @@
+// src/services/supabase/messagingService.js
 import { SupabaseBase, supabase } from './base'
 import { getCachedOrFetch, invalidateCache } from './cache'
+import { ATTACHMENT_VALIDATION_DEFAULTS, validateUpload } from '../../utils/uploadValidation'
 
 export class MessagingService extends SupabaseBase {
   async getOrCreateConversation(participant1, participant2) {
@@ -15,16 +17,12 @@ export class MessagingService extends SupabaseBase {
       
       console.log('🔍 getOrCreateConversation called with:', { 
         participant1, 
-        participant2,
-        participant1Type: typeof participant1,
-        participant2Type: typeof participant2,
-        participant1String: String(participant1),
-        participant2String: String(participant2)
+        participant2
       });
       
       if (!participant1 || participant1 === 'undefined' || participant1 === 'null' || String(participant1) === 'undefined') {
         console.error('❌ Invalid participant1:', participant1);
-        throw new Error(`Participant 1 ID is required. Received: ${participant1} (${typeof participant1})`)
+        throw new Error(`Participant 1 ID is required. Received: ${participant1}`)
       }
       
       if (!participant2 || participant2 === 'undefined' || participant2 === 'null') {
@@ -44,11 +42,6 @@ export class MessagingService extends SupabaseBase {
       if (participant1 === participant2) {
         console.error('❌ Attempted to create conversation with same user ID:', { participant1, participant2 })
         throw new Error('Invalid conversation participants - cannot message yourself')
-      }
-      
-      if (!participant1 || !participant2) {
-        console.error('❌ Missing participant IDs:', { participant1, participant2 })
-        throw new Error('Both participant IDs are required for conversation')
       }
       
       const cacheKey = `conversations:${[participant1, participant2].sort().join('-')}`
@@ -135,7 +128,40 @@ export class MessagingService extends SupabaseBase {
     }
   }
 
-  async sendMessage(conversationId, senderId, content) {
+  async uploadAttachment({ conversationId, fileName, mimeType, size, base64 }) {
+    try {
+      await this._ensureAuthenticated()
+      this._validateId(conversationId, 'Conversation ID')
+
+      validateUpload({
+        size,
+        mimeType,
+        fileName,
+        ...ATTACHMENT_VALIDATION_DEFAULTS,
+      })
+
+      const { data, error } = await supabase.functions.invoke('upload-message-attachment', {
+        body: {
+          conversationId,
+          fileName,
+          mimeType,
+          size,
+          base64,
+        },
+      })
+
+      if (error) throw error
+      if (!data?.success) {
+        throw new Error(data?.error || 'Attachment upload failed.')
+      }
+
+      return data.attachment
+    } catch (error) {
+      return this._handleError('uploadAttachment', error)
+    }
+  }
+
+  async sendMessage(conversationId, senderId, content, attachment = null) {
     try {
       // Check authentication first
       const currentUser = await this._getCurrentUser()
@@ -168,8 +194,8 @@ export class MessagingService extends SupabaseBase {
       this._validateId(conversationId, 'Conversation ID')
       this._validateId(senderId, 'Sender ID')
       
-      if (!content?.trim()) {
-        throw new Error('Message content is required')
+      if (!attachment && !content?.trim()) {
+        throw new Error('Message content or attachment is required')
       }
 
       const { data: conversation, error: conversationError } = await supabase
@@ -184,15 +210,26 @@ export class MessagingService extends SupabaseBase {
         ? conversation.participant_2 
         : conversation.participant_1
 
+      const insertPayload = {
+        conversation_id: conversationId,
+        sender_id: senderId,
+        recipient_id: recipientId,
+        content: content?.trim() || '',
+        created_at: new Date().toISOString(),
+      }
+
+      // Add attachment data if provided
+      if (attachment) {
+        insertPayload.attachment_url = attachment.signedUrl || null
+        insertPayload.attachment_storage_path = attachment.storagePath || null
+        insertPayload.attachment_name = attachment.fileName || null
+        insertPayload.attachment_type = attachment.mimeType || null
+        insertPayload.attachment_size = attachment.size || null
+      }
+
       const { data, error } = await supabase
         .from('messages')
-        .insert([{
-          conversation_id: conversationId,
-          sender_id: senderId,
-          recipient_id: recipientId,
-          content: content.trim(),
-          created_at: new Date().toISOString()
-        }])
+        .insert([insertPayload])
         .select()
         .single()
 
@@ -315,6 +352,11 @@ export class MessagingService extends SupabaseBase {
         filter: `conversation_id=eq.${conversationId}`
       }, callback)
       .subscribe()
+  }
+
+  getAttachmentUrl(message) {
+    if (!message?.attachment_storage_path) return null
+    return message.attachment_url ?? null
   }
 }
 

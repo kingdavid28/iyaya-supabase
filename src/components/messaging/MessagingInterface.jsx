@@ -1,15 +1,14 @@
 // MessagingInterface.jsx - React Native Paper messaging interface component
-import React, { useState, useEffect } from 'react';
-import { View, StyleSheet, ScrollView, Alert } from 'react-native';
-import { Text, Surface, ActivityIndicator, Snackbar } from 'react-native-paper';
 import { useNavigation, useRoute } from '@react-navigation/native';
-import * as ImagePicker from 'expo-image-picker';
+import React, { useEffect, useState } from 'react';
+import { StyleSheet, View } from 'react-native';
+import { ActivityIndicator, Snackbar, Surface, Text } from 'react-native-paper';
+import { supabase } from '../../config/supabase';
 import { useAuth } from '../../contexts/AuthContext';
+import { messagingService } from '../../services';
 import ConversationList from './ConversationList';
 import MessageInput from './MessageInput';
 import MessageList from './MessageList';
-import { messagingService, realtimeService } from '../../services';
-import { supabase } from '../../config/supabase';
 
 const MessagingInterface = () => {
   const navigation = useNavigation();
@@ -112,12 +111,14 @@ const MessagingInterface = () => {
 
   const handleSelectConversation = (conversation) => {
     setSelectedConversation(conversation);
-    // Navigate to ChatScreen with conversation details
-    navigation.navigate('ChatScreen', {
+    navigation.navigate('Chat', {
       conversationId: conversation.id,
       recipientId: conversation.otherUserId,
       recipientName: conversation.recipientName,
       recipientAvatar: conversation.recipientAvatar,
+      targetUserId: conversation.otherUserId,
+      targetUserName: conversation.recipientName,
+      targetUserAvatar: conversation.recipientAvatar,
     });
   };
 

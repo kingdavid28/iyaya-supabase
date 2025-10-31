@@ -1,14 +1,14 @@
-import React, { useState, useEffect, useCallback } from 'react';
-import {
-  View,
-  Text,
-  FlatList,
-  TouchableOpacity,
-  StyleSheet,
-} from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { supabaseService } from '../../../services/supabase';
+import React, { useCallback, useEffect, useState } from 'react';
+import {
+    FlatList,
+    StyleSheet,
+    Text,
+    TouchableOpacity,
+    View,
+} from 'react-native';
 import { useAuth } from '../../../contexts/AuthContext';
+import { supabaseService } from '../../../services/supabase';
 
 // Base MessagesTab component with common functionality
 const BaseMessagesTab = ({
@@ -109,23 +109,18 @@ const BaseMessagesTab = ({
 
   // Role-specific conversation opening logic
   const openConversation = (conversation) => {
-    if (userRole === 'parent') {
-      navigation.navigate('ChatScreen', {
-        conversationId: conversation.id,
-        recipientId: conversation.participantId,
-        recipientName: conversation.participantName,
-        recipientAvatar: conversation.participantAvatar,
-        userRole: 'parent'
-      });
-    } else if (userRole === 'caregiver') {
-      navigation.navigate('ChatScreen', {
-        conversationId: conversation.id,
-        recipientId: conversation.participantId,
-        recipientName: conversation.participantName,
-        recipientAvatar: conversation.participantAvatar,
-        userRole: 'caregiver'
-      });
-    }
+    if (!conversation) return;
+
+    navigation.navigate('Chat', {
+      conversationId: conversation.id,
+      recipientId: conversation.participantId,
+      recipientName: conversation.participantName,
+      recipientAvatar: conversation.participantAvatar,
+      targetUserId: conversation.participantId,
+      targetUserName: conversation.participantName,
+      targetUserAvatar: conversation.participantAvatar,
+      userRole,
+    });
   };
 
   // Role-specific avatar rendering

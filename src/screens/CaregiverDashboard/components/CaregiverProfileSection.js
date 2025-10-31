@@ -42,7 +42,7 @@ const CaregiverProfileSection = ({ profile, activeTab }) => {
           <View style={styles.leftSection}>
             <ProfileImage
               imageUrl={profile?.profile_image || profile?.imageUrl || profile?.profileImage || profile?.image || profile?.photoUrl || user?.profileImage || user?.avatar}
-              size={80}
+              size={120}
               style={styles.profileImageContainer}
               borderColor="#3b82f6"
               defaultIconSize={40}
@@ -52,6 +52,9 @@ const CaregiverProfileSection = ({ profile, activeTab }) => {
             </Text>
             <View style={styles.profileDetails}>
               <Text style={styles.profileDetailText}>📧 {user?.email || 'No email'}</Text>
+              {(profile?.phone || profile?.contact_phone) && (
+              <Text style={styles.profileDetailText}>📱 {String(profile.phone || profile.contact_phone)}</Text>
+              )}
               <Text style={styles.profileDetailText}>📍 {displayLocation}</Text>
             </View>
           </View>

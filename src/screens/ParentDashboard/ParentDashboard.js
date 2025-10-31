@@ -2,7 +2,7 @@ import { useNavigation } from '@react-navigation/native';
 import * as FileSystem from 'expo-file-system';
 import * as Sharing from 'expo-sharing';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { Alert, Platform, View } from 'react-native';
+import { Alert, Platform, View, Text, Linking } from 'react-native'; // Added Text and Linking imports
 import { processImageForUpload } from '../../utils/imageUtils';
 
 // Core imports
@@ -30,11 +30,10 @@ import Header from './components/Header';
 import HomeTab from './components/HomeTab';
 import JobApplicationsTab from './components/JobApplicationsTab';
 import JobsTab from './components/JobsTab';
-import MessagesTab from './components/MessagesTab'; // Added missing import
+import MessagesTab from './components/MessagesTab';
 import NavigationTabs from './components/NavigationTabs';
 import ReviewsTab from './components/ReviewsTab';
 import SearchTab from './components/SearchTab';
-
 
 // Modal imports
 import ContractModal from '../../components/modals/ContractModal';
@@ -45,6 +44,7 @@ import FilterModal from './modals/FilterModal';
 import JobPostingModal from './modals/JobPostingModal';
 import PaymentModal from './modals/PaymentModal';
 import ProfileModal from './modals/ProfileModal';
+
 // Constants
 const DEFAULT_FILTERS = {
   availability: { availableNow: false, days: [] },
@@ -497,7 +497,7 @@ const ParentDashboard = () => {
         }
       ]
     );
-  }, [fetchChildren]);
+  }, [fetchChildren, user?.id]);
 
   const handleAddOrSaveChild = useCallback(async () => {
     const trimmedName = childForm.name.trim();
@@ -625,7 +625,7 @@ const ParentDashboard = () => {
 
       Alert.alert('Error', errorMessage);
     }
-  }, [childForm, children, fetchChildren, toggleModal]);
+  }, [childForm, children, fetchChildren, toggleModal, onRefresh, user?.id]);
 
   // Caregiver interaction functions
   const handleViewCaregiver = (caregiver) => {
@@ -1434,7 +1434,7 @@ const ParentDashboard = () => {
       console.error('Error saving profile:', error);
       Alert.alert('Error', 'Failed to update profile. Please try again.');
     }
-  }, [profileForm, toggleModal, loadProfile]);
+  }, [profileForm, toggleModal, loadProfile, user?.id]);
 
   // Render function for active tab
   const renderActiveTab = () => {
@@ -1621,171 +1621,175 @@ const ParentDashboard = () => {
           />
         );
       default:
-        return null;
+        return (
+          <View style={styles.defaultTab}>
+            <Text>Select a tab to get started</Text>
+          </View>
+        );
     }
   };
 
   return (
-        <View style={styles.container}>
-          <View style={styles.contentContainer}>
-            <Header
-              navigation={navigation}
-              onProfilePress={() => toggleModal('profile', true)}
-              onSignOut={signOut}
-              greetingName={profile?.firstName || profile?.name}
-              onProfileEdit={() => toggleModal('profile', true)}
-              profileName={profile?.name}
-              profileImage={profile?.profileImage}
-              profileContact={profile?.email}
-              profileLocation={profile?.location}
-              setActiveTab={setActiveTab}
-              tabNotificationCounts={tabNotificationCounts}
-            />
-          
-          <NavigationTabs
-            activeTab={activeTab}
-            setActiveTab={setActiveTab}
-            onProfilePress={() => toggleModal('profile', true)}
-            navigation={navigation}
-            tabNotificationCounts={tabNotificationCounts}
-          />
-          
-          {renderActiveTab()}
-          
-          {/* Modals */}
-          <ChildModal
-            visible={modals.child}
-            onClose={() => toggleModal('child', false)}
-            childName={childForm.name}
-            setChildName={(name) => setChildForm(prev => ({ ...prev, name }))}
-            childAge={childForm.age}
-            setChildAge={(age) => setChildForm(prev => ({ ...prev, age }))}
-            childAllergies={childForm.allergies}
-            setChildAllergies={(allergies) => setChildForm(prev => ({ ...prev, allergies }))}
-            childNotes={childForm.notes}
-            setChildNotes={(notes) => setChildForm(prev => ({ ...prev, notes }))}
-            onSave={handleAddOrSaveChild}
-            editing={!!childForm.editingId}
-          />
+    <View style={styles.container}>
+      <View style={styles.contentContainer}>
+        <Header
+          navigation={navigation}
+          onProfilePress={() => toggleModal('profile', true)}
+          onSignOut={signOut}
+          greetingName={profile?.firstName || profile?.name}
+          onProfileEdit={() => toggleModal('profile', true)}
+          profileName={profile?.name}
+          profileImage={profile?.profileImage}
+          profileContact={profile?.email}
+          profileLocation={profile?.location}
+          setActiveTab={setActiveTab}
+          tabNotificationCounts={tabNotificationCounts}
+        />
+      
+        <NavigationTabs
+          activeTab={activeTab}
+          setActiveTab={setActiveTab}
+          onProfilePress={() => toggleModal('profile', true)}
+          navigation={navigation}
+          tabNotificationCounts={tabNotificationCounts}
+        />
+        
+        {renderActiveTab()}
+        
+        {/* Modals */}
+        <ChildModal
+          visible={modals.child}
+          onClose={() => toggleModal('child', false)}
+          childName={childForm.name}
+          setChildName={(name) => setChildForm(prev => ({ ...prev, name }))}
+          childAge={childForm.age}
+          setChildAge={(age) => setChildForm(prev => ({ ...prev, age }))}
+          childAllergies={childForm.allergies}
+          setChildAllergies={(allergies) => setChildForm(prev => ({ ...prev, allergies }))}
+          childNotes={childForm.notes}
+          setChildNotes={(notes) => setChildForm(prev => ({ ...prev, notes }))}
+          onSave={handleAddOrSaveChild}
+          editing={!!childForm.editingId}
+        />
 
-          <ProfileModal
-            visible={modals.profile}
-            onClose={() => toggleModal('profile', false)}
-            profileName={profileForm.name}
-            setProfileName={(name) => setProfileForm(prev => ({ ...prev, name }))}
-            profileContact={profileForm.contact}
-            setProfileContact={(contact) => setProfileForm(prev => ({ ...prev, contact }))}
-            profileLocation={profileForm.location}
-            setProfileLocation={(location) => setProfileForm(prev => ({ ...prev, location }))}
-            profileImage={profileForm.image}
-            setProfileImage={(image) => setProfileForm(prev => ({ ...prev, image }))}
-            handleSaveProfile={handleSaveProfile}
-          />
+        <ProfileModal
+          visible={modals.profile}
+          onClose={() => toggleModal('profile', false)}
+          profileName={profileForm.name}
+          setProfileName={(name) => setProfileForm(prev => ({ ...prev, name }))}
+          profileContact={profileForm.contact}
+          setProfileContact={(contact) => setProfileForm(prev => ({ ...prev, contact }))}
+          profileLocation={profileForm.location}
+          setProfileLocation={(location) => setProfileForm(prev => ({ ...prev, location }))}
+          profileImage={profileForm.image}
+          setProfileImage={(image) => setProfileForm(prev => ({ ...prev, image }))}
+          handleSaveProfile={handleSaveProfile}
+        />
 
-          <FilterModal
-            visible={modals.filter}
-            onClose={() => toggleModal('filter', false)}
-            filters={filters}
-            onApplyFilters={handleApplyFilters}
-          />
+        <FilterModal
+          visible={modals.filter}
+          onClose={() => toggleModal('filter', false)}
+          filters={filters}
+          onApplyFilters={handleApplyFilters}
+        />
 
-          <JobPostingModal
-            visible={modals.jobPosting}
-            onClose={() => toggleModal('jobPosting', false)}
-            onJobPosted={handleJobPosted}
-            childrenList={children}
-          />
+        <JobPostingModal
+          visible={modals.jobPosting}
+          onClose={() => toggleModal('jobPosting', false)}
+          onJobPosted={handleJobPosted}
+          childrenList={children}
+        />
 
-          <PaymentModal
-            visible={modals.payment}
-            onClose={() => toggleModal('payment', false)}
-            bookingId={paymentData.bookingId}
-            amount={bookings.find(b => b._id === paymentData.bookingId)?.totalCost}
-            caregiverName={bookings.find(b => b._id === paymentData.bookingId)?.caregiver?.name}
-            bookingDate={bookings.find(b => b._id === paymentData.bookingId)?.date}
-            paymentType={bookings.find(b => b._id === paymentData.bookingId)?.status === 'completed' ? 'final_payment' : 'deposit'}
-            onPaymentSuccess={() => {
-              toggleModal('payment', false);
-              fetchBookings();
-            }}
-          />
+        <PaymentModal
+          visible={modals.payment}
+          onClose={() => toggleModal('payment', false)}
+          bookingId={paymentData.bookingId}
+          amount={bookings.find(b => b._id === paymentData.bookingId)?.totalCost}
+          caregiverName={bookings.find(b => b._id === paymentData.bookingId)?.caregiver?.name}
+          bookingDate={bookings.find(b => b._id === paymentData.bookingId)?.date}
+          paymentType={bookings.find(b => b._id === paymentData.bookingId)?.status === 'completed' ? 'final_payment' : 'deposit'}
+          onPaymentSuccess={() => {
+            toggleModal('payment', false);
+            fetchBookings();
+          }}
+        />
 
-          <BookingModal
-            visible={modals.booking}
-            onClose={() => toggleModal('booking', false)}
-            caregiver={selectedCaregiver}
-            childrenList={children}
-            onConfirm={handleBookingConfirm}
-          />
+        <BookingModal
+          visible={modals.booking}
+          onClose={() => toggleModal('booking', false)}
+          caregiver={selectedCaregiver}
+          childrenList={children}
+          onConfirm={handleBookingConfirm}
+        />
 
-          {modals.bookingDetails && selectedBooking && (
-            <BookingDetailsModal
-              visible={modals.bookingDetails}
-              booking={selectedBooking}
-              onClose={() => {
-                toggleModal('bookingDetails', false);
-                setSelectedBooking(null);
-              }}
-              onMessage={() => {
-                if (!selectedBooking?.caregiver) {
-                  Alert.alert('No caregiver information', 'Unable to message caregiver because details are missing.');
-                  return;
-                }
-
-                const caregiverTarget =
-                  selectedBooking.caregiver ||
-                  selectedBooking.caregiverId ||
-                  selectedBooking.assignedCaregiver ||
-                  selectedBooking.caregiverProfile ||
-                  null;
-
-                if (!caregiverTarget) {
-                  Alert.alert('No caregiver information', 'Unable to message caregiver because details are missing.');
-                  return;
-                }
-
-                toggleModal('bookingDetails', false);
-                handleMessageCaregiver(caregiverTarget);
-                setSelectedBooking(null);
-              }}
-              onGetDirections={() => handleGetDirections(selectedBooking)}
-              onCompleteBooking={() => handleCompleteBooking(selectedBooking)}
-              onCancelBooking={() => handleCancelBooking(selectedBooking)}
-            />
-          )}
-
-          <ContractModal
-            visible={modals.contract}
+        {modals.bookingDetails && selectedBooking && (
+          <BookingDetailsModal
+            visible={modals.bookingDetails}
+            booking={selectedBooking}
             onClose={() => {
-              toggleModal('contract', false);
-              setSelectedContract(null);
+              toggleModal('bookingDetails', false);
               setSelectedBooking(null);
             }}
-            contract={selectedContract}
-            booking={selectedBooking}
-            viewerRole="parent"
-            onSign={handleContractSign}
-            onResend={handleContractResend}
-            onDownloadPdf={handleDownloadPdf}
-          />
-
-          <ContractTypeSelector
-            visible={modals.contractType}
-            onClose={closeContractTypeSelector}
-            onSelectContractType={(type) => {
-              handleContractTemplateChosen(type);
-              toggleModal('contractType', false);
-
-              if (pendingApplicationForContract?.id || pendingApplicationForContract?._id) {
-                const applicationId = pendingApplicationForContract.id || pendingApplicationForContract._id;
-                const jobId = pendingApplicationForContract.jobId || pendingApplicationForContract.job?.id || pendingApplicationForContract.job_id;
-                handleApplicationStatusUpdate(applicationId, 'accepted', jobId, type);
+            onMessage={() => {
+              if (!selectedBooking?.caregiver) {
+                Alert.alert('No caregiver information', 'Unable to message caregiver because details are missing.');
+                return;
               }
+
+              const caregiverTarget =
+                selectedBooking.caregiver ||
+                selectedBooking.caregiverId ||
+                selectedBooking.assignedCaregiver ||
+                selectedBooking.caregiverProfile ||
+                null;
+
+              if (!caregiverTarget) {
+                Alert.alert('No caregiver information', 'Unable to message caregiver because details are missing.');
+                return;
+              }
+
+              toggleModal('bookingDetails', false);
+              handleMessageCaregiver(caregiverTarget);
+              setSelectedBooking(null);
             }}
-            selectedType={selectedContractTemplate}
+            onGetDirections={() => handleGetDirections(selectedBooking)}
+            onCompleteBooking={() => handleCompleteJob(selectedBooking)}
+            onCancelBooking={() => handleCancelBooking(selectedBooking)}
           />
-          </View>
-        </View>
+        )}
+
+        <ContractModal
+          visible={modals.contract}
+          onClose={() => {
+            toggleModal('contract', false);
+            setSelectedContract(null);
+            setSelectedBooking(null);
+          }}
+          contract={selectedContract}
+          booking={selectedBooking}
+          viewerRole="parent"
+          onSign={handleContractSign}
+          onResend={handleContractResend}
+          onDownloadPdf={handleDownloadPdf}
+        />
+
+        <ContractTypeSelector
+          visible={modals.contractType}
+          onClose={closeContractTypeSelector}
+          onSelectContractType={(type) => {
+            handleContractTemplateChosen(type);
+            toggleModal('contractType', false);
+
+            if (pendingApplicationForContract?.id || pendingApplicationForContract?._id) {
+              const applicationId = pendingApplicationForContract.id || pendingApplicationForContract._id;
+              const jobId = pendingApplicationForContract.jobId || pendingApplicationForContract.job?.id || pendingApplicationForContract.job_id;
+              handleApplicationStatusUpdate(applicationId, 'accepted', jobId, type);
+            }
+          }}
+          selectedType={selectedContractTemplate}
+        />
+      </View>
+    </View>
   );
 };
 

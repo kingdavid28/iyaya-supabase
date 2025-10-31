@@ -25,7 +25,7 @@ import ParentProfile from "../../screens/ParentProfile";
 
 // Chat screen imports
 import CaregiverReviewsScreen from "../../screens/CaregiverReviewsScreen";
-import ChatScreen from "../../screens/ChatScreen";
+import Chat from "../../screens/Chat";
 
 // Debug screen imports
 import FacebookAuthTest from "../../components/debug/FacebookAuthTest";
@@ -40,8 +40,6 @@ import JobSearchScreen from "../../screens/JobSearchScreen";
 import OnboardingScreen from "../../screens/OnboardingScreen";
 import PaymentConfirmationScreen from "../../screens/PaymentConfirmationScreen";
 import ProfileScreen from "../../screens/profile/ProfileScreen";
-
-import CaregiverChat from "../../screens/CaregiverChat";
 
 // Utils
 import DeepLinkHandler from "../../components/navigation/DeepLinkHandler";
@@ -140,8 +138,7 @@ const AppNavigatorWithAuth = () => {
         <Stack.Screen name="EmailVerificationPending" component={EmailVerificationPendingScreen} options={{ title: "Verify Your Email", headerShown: false }} />
         <Stack.Screen name="CaregiverProfileComplete" component={CaregiverProfileComplete} options={{ headerShown: false }} />
         <Stack.Screen name="ParentProfile" component={ParentProfile} options={{ title: "My Profile", headerBackTitle: "Back" }} />
-        <Stack.Screen name="Chat" component={ChatScreen} options={{ headerShown: false }} />
-        <Stack.Screen name="CaregiverChat" component={CaregiverChat} options={{ title: "Chat with Caregiver" }} />
+        <Stack.Screen name="Chat" component={Chat} options={{ headerShown: false }} />
         <Stack.Screen name="CaregiverReviews" component={CaregiverReviewsScreen} options={{ title: "Caregiver Reviews" }} />
         <Stack.Screen name="FacebookAuthTest" component={FacebookAuthTest} options={{ title: "Facebook Auth Test", headerShown: false }} />
         <Stack.Screen name="CaregiverProfile" component={CaregiverProfileComplete} options={{ title: "Caregiver Profile", headerBackTitle: "Back" }} />

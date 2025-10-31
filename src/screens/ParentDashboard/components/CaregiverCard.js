@@ -1,13 +1,13 @@
 import { LinearGradient } from "expo-linear-gradient";
 import {
-  Calendar,
-  CheckCircle,
-  Clock,
-  DollarSign,
-  MapPin,
-  MessageCircle,
-  Star,
-  User,
+    Calendar,
+    CheckCircle,
+    Clock,
+    DollarSign,
+    MapPin,
+    MessageCircle,
+    Star,
+    User,
 } from "lucide-react-native";
 import PropTypes from "prop-types";
 import React, { useState } from "react";
@@ -18,10 +18,10 @@ import { formatAddress } from "../../../utils/addressUtils";
 import { getImageSource } from "../../../utils/imageUtils";
 
 import {
-  colors,
-  spacing,
-  styles,
-  typography,
+    colors,
+    spacing,
+    styles,
+    typography,
 } from "../../styles/ParentDashboard.styles";
 
 /**
@@ -100,7 +100,7 @@ const CaregiverCard = ({ caregiver = {}, onPress, onMessagePress, onViewReviews,
   const displaySpecialties = specialties.slice(0, 3);
   const remainingSpecialties = specialties.length - displaySpecialties.length;
   const canMessage = typeof onMessagePress === "function";
-  const canViewReviews = caregiver?.hasCompletedJobs && typeof onViewReviews === "function";
+  const canViewReviews = typeof onViewReviews === "function" && hasReviews;
   const RatingComponent = canViewReviews ? TouchableOpacity : View;
 
   const handleMessagePress = () => {

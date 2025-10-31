@@ -91,7 +91,7 @@ const MobileProfileSection = ({ greetingName, profileImage, profileContact, prof
           <View style={styles.mobileLeftSection}>
             <ProfileImage 
               imageUrl={currentProfileImage}
-              size={80}
+              size={120}
               borderColor="#db2777"
               style={styles.mobileProfileImageContainer}
             />
