@@ -82,7 +82,7 @@ const Header = ({ navigation, onProfilePress, onSignOut, greetingName, onProfile
                           console.warn('Failed to load profile image:', errorMessage);
                         }
                       }}
-                      resizeMode="cover"
+                      resizeMode="contain"
                       defaultSource={Platform.OS === 'ios' ? 
                         require('../../../../assets/icon.png') : 
                         { uri: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==' }

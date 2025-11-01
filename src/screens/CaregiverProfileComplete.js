@@ -1,23 +1,22 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 
-import {
-  View,
-  Text,
-  ScrollView,
-  TouchableOpacity,
-  Image,
-  Alert,
-  RefreshControl,
-} from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import {
+    Image,
+    RefreshControl,
+    ScrollView,
+    Text,
+    TouchableOpacity,
+    View
+} from 'react-native';
 import { useAuth } from '../contexts/AuthContext';
 // Removed old import - using updated Supabase service
+import RatingsReviewsModal from '../components/ui/modals/RatingsReviewsModal';
 import { getCurrentSocketURL } from '../config/api';
 import { supabase } from '../config/supabase';
-import RatingsReviewsModal from '../components/ui/modals/RatingsReviewsModal';
 import { reviewService } from '../services';
 import { normalizeCaregiverReviewsForList } from '../utils/reviews';
-import { getRatingStats } from './CaregiverDashboard';
+import { getRatingStats } from './CaregiverDashboard/utils';
 
 const CaregiverProfileComplete = ({ navigation, route }) => {
   const { user } = useAuth();

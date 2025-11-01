@@ -2,16 +2,15 @@ import * as ImagePicker from "expo-image-picker";
 import { Camera, User, X } from "lucide-react-native";
 import React, { useState } from "react";
 import {
-  ActivityIndicator,
-  Alert,
-  Image,
-  Modal,
-  Text,
-  TouchableOpacity,
-  View,
-  ScrollView,
+    Alert,
+    Image,
+    Modal,
+    ScrollView,
+    Text,
+    TouchableOpacity,
+    View
 } from "react-native";
-import { ModalWrapper, FormInput, Button } from '../../../shared/ui';
+import { Button, FormInput } from '../../../shared/ui';
 
 const ProfileModal = ({
   visible,
@@ -134,6 +133,7 @@ const ProfileModal = ({
                   <Image
                     source={{ uri: tempImageUri || profileImage }}
                     style={profileModalStyles.profileImage}
+                    resizeMode="contain"
                   />
                 ) : (
                   <View style={profileModalStyles.defaultImage}>

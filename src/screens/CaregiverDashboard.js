@@ -12,25 +12,25 @@ import { useAuth } from "../contexts/AuthContext";
 import { useHighlightRequest } from '../hooks/useHighlightRequest';
 import { useNotificationCounts } from '../hooks/useNotificationCounts';
 import { supabaseService } from '../services/supabase';
+import { contractService } from '../services/supabase/contractService';
 import { reviewService } from '../services/supabase/reviewService';
 import CaregiverDashboardHeader from './CaregiverDashboard/CaregiverDashboardHeader';
 import CaregiverReviewsTab from './CaregiverDashboard/CaregiverReviewsTab';
 
 import {
-  FormInput,
-  ModalWrapper,
-  QuickAction,
-  QuickStat,
-  Button as SharedButton,
-  Card as SharedCard,
-  StatusBadge,
+    FormInput,
+    ModalWrapper,
+    QuickAction,
+    QuickStat,
+    Button as SharedButton,
+    Card as SharedCard,
+    StatusBadge,
 } from '../shared/ui';
 import {
-  buildJobScheduleLabel,
-  formatPeso,
-  getRatingStats
+    buildJobScheduleLabel,
+    formatPeso,
+    getRatingStats
 } from './CaregiverDashboard/utils';
-
 
 import ContractModal from '../components/modals/ContractModal';
 import { useCaregiverDashboard } from '../hooks/useCaregiverDashboard';
@@ -49,7 +49,6 @@ import { usePrivacy } from '../components/features/privacy/PrivacyManager'; //
 import { ReviewForm } from '../components/forms/ReviewForm';
 import { PrivacyNotificationModal } from '../components/ui/modals/PrivacyNotificationModal';
 import RatingsReviewsModal from '../components/ui/modals/RatingsReviewsModal';
-
 
 // =============================================================================
 // SKELETON COMPONENTS
@@ -73,11 +72,9 @@ const SkeletonPill = ({ width, height, style }) => (
   <View style={[styles.dashboardSkeletonPill, { width, height }, style]} />
 );
 
-
 // =============================================================================
 // REUSABLE COMPONENTS
 // =============================================================================
-
 
 const CaregiverDashboard = () => {
   const navigation = useNavigation()
@@ -105,7 +102,7 @@ const CaregiverDashboard = () => {
   const { counts: notificationCounts } = useNotificationCounts();
   
   // Debug notification counts
-  console.log('🔔 CaregiverDashboard notification counts:', notificationCounts);
+  console.log(' CaregiverDashboard notification counts:', notificationCounts);
   
   const [editProfileModalVisible, setEditProfileModalVisible] = useState(false)
   const [profileName, setProfileName] = useState("Ana Dela Cruz")
@@ -250,11 +247,7 @@ const CaregiverDashboard = () => {
     }
 
     try {
-      console.log('📄 Attempting to open contract from', source, { contractId, bookingId });
-
-      const [{ contractService }] = await Promise.all([
-        import('../services/supabase/contractService'),
-      ]);
+      console.log(' Attempting to open contract from', source, { contractId, bookingId });
 
       const [contract, booking] = await Promise.all([
         contractService.getContractById(contractId),
@@ -274,10 +267,10 @@ const CaregiverDashboard = () => {
         return true;
       }
 
-      console.warn('⚠️ Contract not found while opening from', source, contractId);
+      console.warn(' Contract not found while opening from', source, contractId);
       Alert.alert('Contract Not Found', 'The contract could not be loaded. It may have been deleted.');
     } catch (error) {
-      console.error('❌ Failed to open contract from', source, error);
+      console.error(' Failed to open contract from', source, error);
       Alert.alert('Error', 'Failed to load contract. Please try again later.');
     }
 
@@ -307,7 +300,7 @@ const CaregiverDashboard = () => {
             source: 'deep-link',
           });
         } catch (linkError) {
-          console.warn('⚠️ Failed to handle caregiver dashboard deep link:', linkError);
+          console.warn(' Failed to handle caregiver dashboard deep link:', linkError);
         }
       };
 
@@ -320,7 +313,7 @@ const CaregiverDashboard = () => {
           }
         })
         .catch((initialUrlError) => {
-          console.warn('⚠️ Failed to get initial URL for caregiver dashboard:', initialUrlError);
+          console.warn(' Failed to get initial URL for caregiver dashboard:', initialUrlError);
         });
 
       return () => {
@@ -376,7 +369,7 @@ const CaregiverDashboard = () => {
     const refreshProfileParam = route?.params?.refreshProfile;
     if (!refreshProfileParam) return;
 
-    console.log('🔄 CaregiverDashboard - Force refresh triggered by route params');
+    console.log(' CaregiverDashboard - Force refresh triggered by route params');
     loadProfile();
 
     if (navigation?.setParams) {
@@ -395,8 +388,8 @@ const CaregiverDashboard = () => {
   }
 
   const handleViewJob = (job) => {
-    console.log('📋 Viewing job:', job);
-    console.log('📋 Job data keys:', Object.keys(job || {}));
+    console.log(' Viewing job:', job);
+    console.log(' Job data keys:', Object.keys(job || {}));
     setSelectedJob(job)
     setShowJobDetails(true)
   }
@@ -629,11 +622,11 @@ const CaregiverDashboard = () => {
 
         if (parentId && parentId !== user?.id) {
           try {
-            console.log('🔗 Creating Supabase conversation for application:', { caregiverId: user.id, parentId });
+            console.log(' Creating Supabase conversation for application:', { caregiverId: user.id, parentId });
             await supabaseService.messaging.getOrCreateConversation(user.id, parentId);
-            console.log('✅ Supabase conversation created successfully');
+            console.log(' Supabase conversation created successfully');
           } catch (connectionError) {
-            console.warn('⚠️ Failed to create Supabase conversation:', connectionError.message);
+            console.warn(' Failed to create Supabase conversation:', connectionError.message);
             // Don't fail the application if conversation creation fails
           }
         }
@@ -684,7 +677,7 @@ const CaregiverDashboard = () => {
 
   const handleSaveProfile = async () => {
     try {
-      console.log('💾 Saving profile from dashboard...');
+      console.log(' Saving profile from dashboard...');
       const isCaregiver = ['caregiver'].includes(String(user?.role || '').toLowerCase())
       const numericRate = Number(profileHourlyRate)
       const payload = {
@@ -700,7 +693,7 @@ const CaregiverDashboard = () => {
         }
       }
       
-      console.log('💾 Dashboard payload:', payload);
+      console.log(' Dashboard payload:', payload);
       
       if (isCaregiver) {
         await supabaseService.user.updateProfile(user.id, payload);
@@ -713,7 +706,7 @@ const CaregiverDashboard = () => {
       showToast('Profile changes saved.', 'success')
       setEditProfileModalVisible(false)
     } catch (e) {
-      console.error('💾 Save profile failed:', e?.message || e)
+      console.error(' Save profile failed:', e?.message || e)
       Alert.alert('Save failed', e?.message || 'Could not save profile. Please try again.')
     }
   }
@@ -773,10 +766,6 @@ const CaregiverDashboard = () => {
     }
 
     try {
-      const [{ contractService }] = await Promise.all([
-        import('../services/supabase/contractService')
-      ]);
-
       const [contractData, bookingData] = await Promise.all([
         contractService.getContractById(contractId),
         bookingId ? supabaseService.bookings.getBookingById(bookingId, user?.id) : null
@@ -791,7 +780,7 @@ const CaregiverDashboard = () => {
       setSelectedContractBooking(bookingData || null);
       setContractModalVisible(true);
     } catch (error) {
-      console.error('❌ Failed to open caregiver contract from applications tab:', error);
+      console.error(' Failed to open caregiver contract from applications tab:', error);
       Alert.alert('Error', 'Failed to open contract. Please try again.');
     }
   }, [user?.id]);
@@ -808,10 +797,6 @@ const CaregiverDashboard = () => {
     }
 
     try {
-      const [{ contractService }] = await Promise.all([
-        import('../services/supabase/contractService')
-      ]);
-
       const contractRecord = await contractService.getContractById(selectedContract.id);
       if (!contractRecord) {
         Alert.alert('Contract unavailable', 'This contract could not be found. Please refresh and try again.');
@@ -843,9 +828,6 @@ const CaregiverDashboard = () => {
     if (!contract?.id) return;
 
     try {
-      const [{ contractService }] = await Promise.all([
-        import('../services/supabase/contractService')
-      ]);
       await contractService.resendContract(contract.id, user?.id);
       Alert.alert('Success', 'Contract reminder sent!');
     } catch (error) {
@@ -858,9 +840,6 @@ const CaregiverDashboard = () => {
     if (!contract?.id) return;
 
     try {
-      const [{ contractService }] = await Promise.all([
-        import('../services/supabase/contractService')
-      ]);
       const result = await contractService.generateContractPdf(contract.id, { autoDownload: true });
 
       if (!result?.uri && !result?.url) {
@@ -996,6 +975,37 @@ const CaregiverDashboard = () => {
   ]), []);
 
   const { ratingDisplay, subtitle: ratingStatSubtitle, ctaLabel: ratingStatCTA } = getRatingStats(profile);
+
+  const {
+    completedJobsCount,
+    completedJobsSubtitle,
+    trustScoreValue,
+    trustScoreSubtitle,
+  } = useMemo(() => {
+    const jobsCount = Number(profile?.completedJobs ?? 0);
+
+    const jobsSubtitle = jobsCount === 0
+      ? 'No jobs completed yet'
+      : jobsCount === 1
+        ? '1 job completed'
+        : `${jobsCount} jobs completed`;
+
+    const rawTrustScore =
+      profile?.verification?.trustScore ??
+      profile?.trustScore ??
+      0;
+
+    const trustScoreValue = Number(rawTrustScore) || 0;
+    const trustScoreSubtitle =
+      trustScoreValue > 0 ? 'Verified trust score' : 'Build your trust score';
+
+    return {
+      completedJobsCount: jobsCount,
+      completedJobsSubtitle: jobsSubtitle,
+      trustScoreValue,
+      trustScoreSubtitle,
+    };
+  }, [profile]);
 
   const filteredReviews = useMemo(() => {
     switch (reviewsFilter) {

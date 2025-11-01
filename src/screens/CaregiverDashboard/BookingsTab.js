@@ -1,15 +1,11 @@
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as Sharing from 'expo-sharing';
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Alert, FlatList, ScrollView, Text, TouchableOpacity, View } from 'react-native';
-import {
-  SkeletonBlock,
-  SkeletonCard,
-  SkeletonPill
-} from '../../components/common/SkeletonPlaceholder';
+import React, { useCallback, useEffect, useState } from 'react';
+import { Alert, FlatList, Platform, Text, TouchableOpacity, View } from 'react-native';
+
+import ContractModal from '../../components/modals/ContractModal';
 import { contractService } from '../../services/supabase/contractService';
-import { EmptyState } from '../../shared/ui';
 import { styles } from '../styles/CaregiverDashboard.styles';
 
 const BookingCard = React.memo(({ booking, onMessageFamily, onConfirmBooking, onViewDetails, onOpenContract, contract }) => {
@@ -17,7 +13,7 @@ const BookingCard = React.memo(({ booking, onMessageFamily, onConfirmBooking, on
     if (!timeString) return '';
     try {
       const [hours, minutes] = timeString.split(':');
-      const hour = parseInt(hours);
+      const hour = parseInt(hours, 10);
       const ampm = hour >= 12 ? 'PM' : 'AM';
       const displayHour = hour % 12 || 12;
       return `${displayHour}:${minutes} ${ampm}`;
@@ -26,19 +22,10 @@ const BookingCard = React.memo(({ booking, onMessageFamily, onConfirmBooking, on
     }
   };
 
-  const getStatusColor = (status) => {
-    switch (status?.toLowerCase()) {
-      case 'pending': return '#F59E0B';
-      case 'confirmed': return '#10B981';
-      case 'completed': return '#3B82F6';
-      case 'cancelled': return '#EF4444';
-      default: return '#9CA3AF';
-    }
-  };
-
   const startTime = formatTime(booking?.start_time || booking?.startTime);
   const endTime = formatTime(booking?.end_time || booking?.endTime);
   const timeDisplay = booking?.time || (startTime && endTime ? `${startTime} - ${endTime}` : 'Time TBD');
+
   const childrenCount = Array.isArray(booking?.childrenDetails)
     ? booking.childrenDetails.length
     : Array.isArray(booking?.selectedChildren)
@@ -48,59 +35,32 @@ const BookingCard = React.memo(({ booking, onMessageFamily, onConfirmBooking, on
         : booking?.numberOfChildren || booking?.children || 1;
 
   const location = booking?.address || booking?.location;
-
   const specialInstructions = booking?.specialInstructions || booking?.special_instructions || booking?.notes;
-
   const totalAmount = booking?.totalAmount ?? booking?.total_amount ?? 0;
   const hourlyRate = booking?.hourlyRate ?? booking?.hourly_rate ?? 0;
 
-  const contactPhone = booking?.contactPhone || booking?.contact_phone;
-  const contactEmail = booking?.contactEmail || booking?.contact_email;
-
   const detailChips = [
-    {
-      key: 'date',
-      icon: 'calendar-outline',
-      text: booking?.date || 'Date TBD'
-    },
-    {
-      key: 'time',
-      icon: 'time-outline',
-      text: timeDisplay
-    },
-    {
-      key: 'children',
-      icon: 'people-outline',
-      text: `${childrenCount} ${childrenCount === 1 ? 'child' : 'children'}`
-    }
+    { key: 'date', icon: 'calendar-outline', text: booking?.date || 'Date TBD' },
+    { key: 'time', icon: 'time-outline', text: timeDisplay },
+    { key: 'children', icon: 'people-outline', text: `${childrenCount} ${childrenCount === 1 ? 'child' : 'children'}` }
   ];
 
   if (location) {
-    detailChips.push({
-      key: 'location',
-      icon: 'location-outline',
-      text: location
-    });
+    detailChips.push({ key: 'location', icon: 'location-outline', text: location });
   }
 
   const contactChips = [];
-  if (contactPhone) {
-    contactChips.push({
-      key: 'phone',
-      icon: 'call-outline',
-      text: contactPhone
-    });
+  if (booking?.contactPhone || booking?.contact_phone) {
+    contactChips.push({ key: 'phone', icon: 'call-outline', text: booking.contactPhone || booking.contact_phone });
   }
-  if (contactEmail) {
-    contactChips.push({
-      key: 'email',
-      icon: 'mail-outline',
-      text: contactEmail
-    });
+  if (booking?.contactEmail || booking?.contact_email) {
+    contactChips.push({ key: 'email', icon: 'mail-outline', text: booking.contactEmail || booking.contact_email });
   }
 
-  const getContractStatus = (contract) => {
-    if (!contract) return { status: 'none', label: 'No contract yet', action: 'Create contract', variant: 'neutral' };
+  const contractInfo = (() => {
+    if (!contract) {
+      return { status: 'none', label: 'No contract yet', action: 'Create contract', variant: 'neutral' };
+    }
 
     switch (contract.status) {
       case 'draft':
@@ -118,9 +78,7 @@ const BookingCard = React.memo(({ booking, onMessageFamily, onConfirmBooking, on
       default:
         return { status: 'unknown', label: 'Contract status unknown', action: 'View contract', variant: 'neutral' };
     }
-  };
-
-  const contractInfo = getContractStatus(contract);
+  })();
 
   const handleContractPress = () => {
     if (!onOpenContract) return;
@@ -128,740 +86,183 @@ const BookingCard = React.memo(({ booking, onMessageFamily, onConfirmBooking, on
   };
 
   return (
-    <View style={bookingCardStyles.card}>
+    <View style={styles.card}>
       <LinearGradient
         colors={['#667eea', '#764ba2']}
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 0 }}
-        style={bookingCardStyles.headerGradient}
+        style={styles.headerGradient}
       >
-        <View style={bookingCardStyles.headerContent}>
-          <Text style={bookingCardStyles.familyName}>{String(booking?.family ?? 'Family')}</Text>
-          <View style={bookingCardStyles.statusBadge}>
-            <Text style={bookingCardStyles.statusText}>{String(booking?.status ?? 'Unknown')}</Text>
+        <View style={styles.headerContent}>
+          <Text style={styles.familyName}>{String(booking?.family ?? 'Family')}</Text>
+          <View style={styles.statusBadge}>
+            <Text style={styles.statusText}>{String(booking?.status ?? 'Unknown')}</Text>
           </View>
         </View>
       </LinearGradient>
 
-      <View style={bookingCardStyles.body}>
-        <View style={bookingCardStyles.details}>
-        {detailChips.map(({ key, icon, text }) => {
-          const displayText = text != null ? String(text) : '';
-          return (
-            <View key={key} style={bookingCardStyles.detailChip}>
+      <View style={styles.body}>
+        <View style={styles.details}>
+          {detailChips.map(({ key, icon, text }) => (
+            <View key={key} style={styles.detailChip}>
               <Ionicons name={icon} size={14} color="#2563EB" />
-              <Text style={bookingCardStyles.detailChipText} numberOfLines={1}>
-                {displayText}
-              </Text>
+              <Text style={styles.detailChipText} numberOfLines={1}>{String(text)}</Text>
             </View>
-          );
-        })}
-      </View>
-
-      {specialInstructions && (
-        <View style={bookingCardStyles.instructionsContainer}>
-          <Text style={bookingCardStyles.sectionLabel}>Special Instructions</Text>
-          <Text style={bookingCardStyles.instructionsText} numberOfLines={3}>
-            {String(specialInstructions)}
-          </Text>
+          ))}
         </View>
-      )}
 
-      {contactChips.length > 0 && (
-        <View style={bookingCardStyles.contactContainer}>
-          <Text style={bookingCardStyles.sectionLabel}>Contact</Text>
-          <View style={bookingCardStyles.contactChips}>
-            {contactChips.map(({ key, icon, text }) => (
-              <View key={key} style={bookingCardStyles.contactChip}>
-                <Ionicons name={icon} size={14} color="#10B981" />
-                <Text style={bookingCardStyles.contactChipText} numberOfLines={1}>{String(text ?? '')}</Text>
-              </View>
-            ))}
+        {specialInstructions ? (
+          <View style={styles.instructionsContainer}>
+            <Text style={styles.sectionLabel}>Special Instructions</Text>
+            <Text style={styles.instructionsText} numberOfLines={3}>
+              {String(specialInstructions)}
+            </Text>
           </View>
-        </View>
-      )}
+        ) : null}
 
-      {/* Contract Row */}
-      <TouchableOpacity
-        style={[
-          bookingCardStyles.contractRow,
-          contractInfo.variant === 'primary' && bookingCardStyles.contractRow_primary,
-          contractInfo.variant === 'success' && bookingCardStyles.contractRow_success,
-          contractInfo.variant === 'neutral' && bookingCardStyles.contractRow_neutral,
-        ]}
-        onPress={handleContractPress}
-        activeOpacity={0.7}
-      >
-        <View style={bookingCardStyles.contractRowLeft}>
-          <View style={bookingCardStyles.contractIconWrapper}>
+        {contactChips.length > 0 ? (
+          <View style={styles.contactContainer}>
+            <Text style={styles.sectionLabel}>Contact</Text>
+            <View style={styles.contactChips}>
+              {contactChips.map(({ key, icon, text }) => (
+                <View key={key} style={styles.contactChip}>
+                  <Ionicons name={icon} size={14} color="#10B981" />
+                  <Text style={styles.contactChipText} numberOfLines={1}>{String(text ?? '')}</Text>
+                </View>
+              ))}
+            </View>
+          </View>
+        ) : null}
+
+        <TouchableOpacity
+          style={[
+            styles.contractRow,
+            contractInfo.variant === 'primary' && styles.contractRow_primary,
+            contractInfo.variant === 'success' && styles.contractRow_success,
+            contractInfo.variant === 'neutral' && styles.contractRow_neutral,
+          ]}
+          onPress={handleContractPress}
+          activeOpacity={0.7}
+        >
+          <View style={styles.contractRowLeft}>
+            <View style={styles.contractIconWrapper}>
+              <Ionicons
+                name="document-text-outline"
+                size={20}
+                color={contractInfo.variant === 'success' ? '#10B981' : contractInfo.variant === 'primary' ? '#3B82F6' : '#6B7280'}
+              />
+            </View>
+            <View style={styles.contractInfo}>
+              <Text style={styles.contractTitle}>{String(contractInfo.label || 'No contract')}</Text>
+              <Text style={styles.contractSubtitle}>{String(contractInfo.action || '')}</Text>
+            </View>
+          </View>
+          <View style={styles.contractAction}>
+            <Text
+              style={[
+                styles.contractActionText,
+                contractInfo.variant === 'success' && styles.contractActionTextDisabled,
+              ]}
+            >
+              {contractInfo.action === 'Create contract' ? 'Create' : 'View'}
+            </Text>
             <Ionicons
-              name="document-text-outline"
-              size={20}
-              color={contractInfo.variant === 'success' ? '#10B981' : contractInfo.variant === 'primary' ? '#3B82F6' : '#6B7280'}
+              name="chevron-forward"
+              size={16}
+              color={contractInfo.variant === 'success' ? '#9CA3AF' : '#3B82F6'}
             />
           </View>
-          <View style={bookingCardStyles.contractInfo}>
-            <Text style={bookingCardStyles.contractTitle}>
-              {String(contractInfo.label || 'No contract')}
-            </Text>
-            <Text style={bookingCardStyles.contractSubtitle}>
-              {String(contractInfo.action || '')}
-            </Text>
+        </TouchableOpacity>
+
+        <View style={styles.footer}>
+          <View style={styles.amountContainer}>
+            <Text style={styles.amount}>{`₱${totalAmount?.toLocaleString() || '0'}`}</Text>
+            <Text style={styles.hourlyRate}>{`₱${hourlyRate || 300}/hr`}</Text>
           </View>
-        </View>
-        <View style={bookingCardStyles.contractAction}>
-          <Text
-            style={[
-              bookingCardStyles.contractActionText,
-              contractInfo.variant === 'success' && bookingCardStyles.contractActionTextDisabled
-            ]}
-          >
-            {String(contractInfo.action === 'Create contract' ? 'Create' : 'View')}
-          </Text>
-          <Ionicons
-            name="chevron-forward"
-            size={16}
-            color={contractInfo.variant === 'success' ? '#9CA3AF' : '#3B82F6'}
-          />
-        </View>
-      </TouchableOpacity>
 
-      <View style={bookingCardStyles.footer}>
-        <View style={bookingCardStyles.amountContainer}>
-          <Text style={bookingCardStyles.amount}>
-            {`₱${totalAmount?.toLocaleString() || '0'}`}
-          </Text>
-          <Text style={bookingCardStyles.hourlyRate}>
-            {`₱${hourlyRate || 300}/hr`}
-          </Text>
-        </View>
+          <View style={styles.actionButtons}>
+            <View style={styles.actionRow}>
+              {booking.status === 'pending' ? (
+                <TouchableOpacity
+                  style={styles.confirmButton}
+                  onPress={() => onConfirmBooking?.(booking)}
+                >
+                  <Ionicons name="checkmark" size={16} color="#FFFFFF" />
+                  <Text style={styles.buttonText}>Confirm</Text>
+                </TouchableOpacity>
+              ) : null}
 
-        <View style={bookingCardStyles.actionButtons}>
-          <View style={bookingCardStyles.actionRow}>
-            {booking.status === 'pending' && (
               <TouchableOpacity
-                style={bookingCardStyles.confirmButton}
-                onPress={() => onConfirmBooking && onConfirmBooking(booking)}
+                style={styles.messageButton}
+                onPress={() => onMessageFamily?.(booking)}
               >
-                <Ionicons name="checkmark" size={16} color="#FFFFFF" />
-                <Text style={bookingCardStyles.buttonText}>Confirm</Text>
+                <Ionicons name="chatbubble-ellipses-outline" size={16} color="#FFFFFF" />
+                <Text style={styles.buttonText}>Message</Text>
               </TouchableOpacity>
-            )}
 
-            <TouchableOpacity
-              style={bookingCardStyles.detailsButton}
-              onPress={() => onViewDetails && onViewDetails(booking)}
-            >
-              <Ionicons name="eye-outline" size={16} color="#FFFFFF" />
-              <Text style={bookingCardStyles.buttonText}>Details</Text>
-            </TouchableOpacity>
-          </View>
-
-          <View style={bookingCardStyles.actionRow}>
-            <TouchableOpacity
-              style={bookingCardStyles.messageButton}
-              onPress={() => onMessageFamily && onMessageFamily(booking)}
-            >
-              <Ionicons name="chatbubble-outline" size={16} color="#FFFFFF" />
-              <Text style={bookingCardStyles.buttonText}>Message</Text>
-            </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.viewDetailsButton}
+                onPress={() => onViewDetails?.(booking)}
+              >
+                <Ionicons name="information-circle-outline" size={16} color="#FFFFFF" />
+                <Text style={styles.buttonText}>View Details</Text>
+              </TouchableOpacity>
+            </View>
           </View>
         </View>
       </View>
     </View>
-  </View>
-);
+  );
 });
 
-const bookingCardStyles = {
-  card: {
-    backgroundColor: '#fff',
-    borderRadius: 12,
-    marginBottom: 12,
-    marginHorizontal: 16,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
-    overflow: 'hidden',
-  },
-  headerGradient: {
-    padding: 16,
-  },
-  headerContent: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  body: {
-    padding: 16,
-  },
-  familyName: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#FFFFFF',
-    flex: 1,
-  },
-  statusBadge: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 999,
-    backgroundColor: 'rgba(255, 255, 255, 0.18)',
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.35)',
-  },
-  statusText: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: '#FFFFFF',
-    textTransform: 'capitalize',
-  },
-  details: {
-    marginBottom: 12,
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-  },
-  detailChip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#EEF2FF',
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 999,
-    maxWidth: '100%',
-    gap: 6,
-  },
-  detailChipText: {
-    fontSize: 13,
-    color: '#1f2937',
-    flexShrink: 1,
-  },
-  instructionsContainer: {
-    backgroundColor: '#f9fafb',
-    padding: 12,
-    borderRadius: 8,
-    marginBottom: 12,
-    borderLeftWidth: 3,
-    borderLeftColor: '#3b82f6',
-  },
-  sectionLabel: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: '#1f2937',
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-    marginBottom: 6,
-  },
-  instructionsText: {
-    fontSize: 13,
-    color: '#374151',
-    lineHeight: 18,
-  },
-  contactContainer: {
-    marginBottom: 16,
-  },
-  contactChips: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-  },
-  contactChip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#ECFDF5',
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 999,
-    gap: 6,
-  },
-  contactChipText: {
-    fontSize: 13,
-    color: '#047857',
-    flexShrink: 1,
-  },
-  footer: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  amountContainer: {
-    flex: 1,
-  },
-  amount: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: '#059669',
-  },
-  hourlyRate: {
-    fontSize: 14,
-    color: '#6b7280',
-    fontWeight: '500',
-  },
-  actionButtons: {
-    flexDirection: 'column',
-    gap: 8,
-  },
-  actionRow: {
-    flexDirection: 'row',
-    gap: 8,
-  },
-  confirmButton: {
-    backgroundColor: '#10B981',
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 8,
-    shadowColor: '#10B981',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
-    shadowRadius: 3,
-    elevation: 2,
-  },
-  detailsButton: {
-    backgroundColor: '#6B7280',
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 8,
-    shadowColor: '#6B7280',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
-    shadowRadius: 3,
-    elevation: 2,
-  },
-  messageButton: {
-    backgroundColor: '#3B82F6',
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 8,
-    shadowColor: '#3B82F6',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
-    shadowRadius: 3,
-    elevation: 2,
-  },
-  buttonText: {
-    color: '#FFFFFF',
-    fontSize: 12,
-    fontWeight: '600',
-    marginLeft: 4,
-  },
-  contractRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    backgroundColor: '#F8FAFC',
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-    borderRadius: 12,
-    marginBottom: 12,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 2,
-    elevation: 1,
-  },
-  contractRow_primary: {
-    backgroundColor: '#F0F9FF',
-    borderColor: '#3B82F6',
-    shadowColor: '#3B82F6',
-    shadowOpacity: 0.1,
-  },
-  contractRow_neutral: {
-    backgroundColor: '#F8FAFC',
-    borderColor: '#6B7280',
-  },
-  contractRow_success: {
-    backgroundColor: '#F0FDF4',
-    borderColor: '#10B981',
-    shadowColor: '#10B981',
-    shadowOpacity: 0.1,
-  },
-  contractRowLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    flex: 1,
-  },
-  contractIconWrapper: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: '#E2E8F0',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: 12,
-  },
-  contractInfo: {
-    flex: 1,
-  },
-  contractTitle: {
-    fontSize: 15,
-    fontWeight: '600',
-    color: '#111827',
-    marginBottom: 2,
-  },
-  contractSubtitle: {
-    fontSize: 13,
-    color: '#6B7280',
-    lineHeight: 16,
-  },
-  contractAction: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-  },
-  contractActionText: {
-    fontSize: 13,
-    fontWeight: '500',
-    color: '#3B82F6',
-  },
-  contractActionTextDisabled: {
-    color: '#9CA3AF',
-  },
-};
-
-const normalizeStatus = (status) => String(status || '').toLowerCase();
-
-const isUpcomingBooking = (booking) => {
-  if (!booking?.date) return false;
-  const bookingDate = new Date(booking.date);
-  if (Number.isNaN(bookingDate.getTime())) return false;
-  const today = new Date();
-  bookingDate.setHours(0, 0, 0, 0);
-  today.setHours(0, 0, 0, 0);
-  return bookingDate >= today;
-};
-
-const computeFilterCounts = (bookings) => {
-  const counts = {
-    all: Array.isArray(bookings) ? bookings.length : 0,
-    pending: 0,
-    confirmed: 0,
-    completed: 0
-  };
-
-  if (!Array.isArray(bookings)) return counts;
-
-  bookings.forEach((booking) => {
-    const status = normalizeStatus(booking?.status);
-    if (status === 'pending') counts.pending += 1;
-    if (status === 'confirmed' || status === 'in-progress' || status === 'in_progress') counts.confirmed += 1;
-    if (status === 'completed' || status === 'done' || status === 'paid') counts.completed += 1;
-  });
-
-  return counts;
-};
-
-const getFilteredBookings = (bookings, activeFilter) => {
-  if (!Array.isArray(bookings)) return [];
-
-  return bookings.filter((booking) => {
-    const status = normalizeStatus(booking?.status);
-
-    switch (activeFilter) {
-      case 'pending':
-        return status === 'pending';
-      case 'confirmed':
-        return status === 'confirmed' || status === 'in-progress' || status === 'in_progress';
-      case 'completed':
-        return status === 'completed' || status === 'done' || status === 'paid';
-      default:
-        return true;
-    }
-  });
-};
-
-const buildFilterOptions = (metrics) => ([
-  { key: 'all', label: 'All', count: metrics.all },
-  { key: 'pending', label: 'Pending', count: metrics.pending },
-  { key: 'confirmed', label: 'Active', count: metrics.confirmed },
-  { key: 'completed', label: 'Done', count: metrics.completed }
-]);
-
-const BookingsTab = ({
-  bookings,
-  onMessageFamily,
-  onConfirmBooking,
-  onViewDetails,
-  onOpenContract,
-  refreshing = false,
-  onRefresh,
-  loading = false
-}) => {
-  const [activeFilter, setActiveFilter] = useState('all');
-  const [contracts, setContracts] = useState({});
-  const [contractsLoading, setContractsLoading] = useState(false);
-  const contractsFetchKeyRef = useRef(null);
-
-  const fetchContractsForBookings = useCallback(async (bookingList) => {
-    if (!bookingList || bookingList.length === 0) return;
-
-    try {
-      setContractsLoading(true);
-      const contractPromises = bookingList.map(async (booking) => {
-        const bookingId = booking?.id || booking?._id;
-        if (!bookingId) return null;
-
-        try {
-          const bookingContracts = await contractService.getContractsByBooking(bookingId);
-          return { bookingId, contracts: bookingContracts };
-        } catch (error) {
-          console.warn(`Failed to fetch contracts for booking ${bookingId}:`, error);
-          return { bookingId, contracts: [] };
-        }
-      });
-
-      const contractResults = await Promise.all(contractPromises);
-      const contractsMap = {};
-
-      contractResults.forEach(result => {
-        if (result && result.contracts && result.contracts.length > 0) {
-          // Get the latest contract (most recent first)
-          contractsMap[result.bookingId] = result.contracts[0];
-        }
-      });
-
-      setContracts(contractsMap);
-    } catch (error) {
-      console.error('Error fetching contracts for bookings:', error);
-    } finally {
-      setContractsLoading(false);
-    }
-  }, []);
-
+const BookingsTab = ({ bookings, onMessageFamily, onConfirmBooking, onViewDetails, onOpenContract }) => {
   const handleOpenContract = useCallback((booking, contract) => {
-    if (!onOpenContract) return;
-    if (!contract) {
-      onOpenContract(booking, null, { intent: 'create' });
-      return;
-    }
-    onOpenContract(booking, contract, { intent: 'view' });
+    onOpenContract?.(booking, contract);
   }, [onOpenContract]);
 
-  const filterMetrics = useMemo(() => computeFilterCounts(bookings), [bookings]);
-  const visibleBookings = useMemo(() => getFilteredBookings(bookings, activeFilter), [bookings, activeFilter]);
-  const options = useMemo(() => buildFilterOptions(filterMetrics), [filterMetrics]);
+  const handleConfirmBooking = useCallback((booking) => {
+    onConfirmBooking?.(booking);
+  }, [onConfirmBooking]);
 
-  const skeletonItems = useMemo(() => (
-    loading ? Array.from({ length: 4 }).map((_, index) => `booking-skeleton-${index}`) : []
-  ), [loading]);
+  const handleMessageFamily = useCallback((booking) => {
+    onMessageFamily?.(booking);
+  }, [onMessageFamily]);
 
-  const renderBookingItem = ({ item, index }) => {
-    if (loading) {
-      return (
-        <SkeletonCard key={`booking-skeleton-${index}`} style={styles.bookingsSkeletonCard}>
-          <View style={styles.bookingsSkeletonHeader}>
-            <SkeletonBlock width="55%" height={18} />
-            <SkeletonPill width="28%" height={18} />
-          </View>
+  const handleViewDetails = useCallback((booking) => {
+    onViewDetails?.(booking);
+  }, [onViewDetails]);
 
-          <View style={styles.bookingsSkeletonChipRow}>
-            <SkeletonPill width="32%" height={14} />
-            <SkeletonPill width="28%" height={14} />
-            <SkeletonPill width="26%" height={14} />
-          </View>
+  const renderBooking = useCallback(({ item }) => (
+    <BookingCard
+      booking={item}
+      onMessageFamily={handleMessageFamily}
+      onConfirmBooking={handleConfirmBooking}
+      onViewDetails={handleViewDetails}
+      onOpenContract={handleOpenContract}
+    />
+  ), [handleMessageFamily, handleConfirmBooking, handleViewDetails, handleOpenContract]);
 
-          <View style={styles.bookingsSkeletonBody}>
-            <SkeletonBlock width="90%" height={14} />
-            <SkeletonBlock width="85%" height={14} />
-            <SkeletonBlock width="70%" height={14} />
-          </View>
-
-          <View style={styles.bookingsSkeletonFooter}>
-            <SkeletonBlock width="35%" height={18} />
-            <SkeletonPill width="28%" height={14} />
-          </View>
-        </SkeletonCard>
-      );
-    }
-
-    const bookingId = item?.id || item?._id;
-    const bookingContract = bookingId ? contracts[bookingId] : null;
-
-    return (
-      <BookingCard
-        booking={item}
-        onMessageFamily={onMessageFamily}
-        onConfirmBooking={onConfirmBooking}
-        onViewDetails={onViewDetails}
-        onOpenContract={handleOpenContract}
-        contract={bookingContract}
-      />
-    );
-  };
-
-  const listData = loading ? skeletonItems : visibleBookings;
-
-  useEffect(() => {
-    if (refreshing) {
-      contractsFetchKeyRef.current = null;
-    }
-  }, [refreshing]);
-
-  // Fetch contracts when bookings change
-  useEffect(() => {
-    if (!visibleBookings.length) {
-      contractsFetchKeyRef.current = null;
-      return;
-    }
-
-    const bookingsKey = visibleBookings
-      .map((booking) => {
-        const id = booking?.id || booking?._id || '';
-        const updated = booking?.updated_at || booking?.updatedAt || booking?.modified_at || '';
-        return `${id}:${updated}`;
-      })
-      .join('|');
-
-    if (contractsFetchKeyRef.current === bookingsKey) {
-      return;
-    }
-
-    let cancelled = false;
-    contractsFetchKeyRef.current = bookingsKey;
-
-    const loadContracts = async () => {
-      try {
-        await fetchContractsForBookings(visibleBookings);
-      } catch (error) {
-        if (!cancelled) {
-          contractsFetchKeyRef.current = null;
-        }
-      }
-    };
-
-    loadContracts();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [visibleBookings, fetchContractsForBookings, refreshing]);
+  const keyExtractor = useCallback((item) => String(item.id), []);
 
   return (
     <FlatList
-      data={listData}
-      keyExtractor={(item, index) => (loading ? `booking-skeleton-${index}` : String(item?.id || item?._id || index))}
-      renderItem={renderBookingItem}
-      style={styles.content}
-      contentContainerStyle={{ paddingBottom: 24 }}
-      refreshing={refreshing}
-      onRefresh={onRefresh}
-      showsVerticalScrollIndicator={false}
-      ListHeaderComponent={(
-        <View style={styles.section}>
-          <View style={styles.bookingFilterTabsContainer}>
-            <ScrollView
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              contentContainerStyle={styles.bookingFilterTabs}
-            >
-              {options.map((option) => {
-                const isActive = activeFilter === option.key;
-                return (
-                  <TouchableOpacity
-                    key={option.key}
-                    style={[styles.bookingFilterTab, isActive && styles.activeBookingFilterTab]}
-                    onPress={() => setActiveFilter(option.key)}
-                    activeOpacity={0.8}
-                  >
-                    <Text
-                      style={[styles.bookingFilterTabText, isActive && styles.activeBookingFilterTabText]}
-                      numberOfLines={1}
-                      ellipsizeMode="tail"
-                    >
-                      {option.label}
-                      {typeof option.count === 'number' && option.count > 0 && (
-                        <Text style={styles.bookingFilterTabCount}>{` (${option.count})`}</Text>
-                      )}
-                    </Text>
-                  </TouchableOpacity>
-                );
-              })}
-            </ScrollView>
-          </View>
-        </View>
-      )}
-      ListEmptyComponent={!loading ? (
-        <View style={styles.section}>
-          <EmptyState
-            icon="calendar"
-            title="No bookings found"
-            subtitle={
-              activeFilter === 'all'
-                ? 'Your bookings will appear here once available'
-                : 'Try another tab to see more bookings'
-            }
-          />
-        </View>
-      ) : null}
-      ListFooterComponent={!loading && visibleBookings.length > 0 ? <View style={{ height: 8 }} /> : null}
+      data={bookings}
+      renderItem={renderBooking}
+      keyExtractor={keyExtractor}
+      contentContainerStyle={styles.bookingsList}
     />
   );
 };
 
-// ContractModal integration - wrap the component with modal functionality
-const CaregiverBookingsTabWithModal = ({ pendingContract, onPendingContractHandled, ...props }) => {
-  const [ContractModal, setContractModal] = useState(null);
-  const [contractModalVisible, setContractModalVisible] = useState(false);
+const CaregiverBookingsTabWithModal = ({ bookings, onMessageFamily, onConfirmBooking, onViewDetails, onOpenContract, pendingContract, onPendingContractHandled }) => {
   const [selectedContract, setSelectedContract] = useState(null);
   const [selectedBookingForContract, setSelectedBookingForContract] = useState(null);
+  const [contractModalVisible, setContractModalVisible] = useState(false);
 
-  useEffect(() => {
-    let isMounted = true;
-
-    import('../../components/modals/ContractModal')
-      .then((module) => {
-        if (isMounted) {
-          setContractModal(() => module.default || module.ContractModal || module);
-        }
-      })
-      .catch((error) => {
-        console.warn('Failed to load ContractModal:', error);
-      });
-
-    return () => {
-      isMounted = false;
-    };
-  }, []);
-
-  useEffect(() => {
-    if (!pendingContract) return;
-
-    const { contract, booking } = pendingContract;
-    if (!contract) return;
-
-    setSelectedContract(contract);
-    setSelectedBookingForContract(booking || null);
-    setContractModalVisible(true);
-    onPendingContractHandled?.();
-  }, [pendingContract, onPendingContractHandled]);
-
-  const handleOpenContract = useCallback((booking, contract) => {
-    if (!contract) {
-      console.warn('Attempted to open contract modal without contract data');
-      return;
-    }
-
-    console.log('🔍 CaregiverDashboard - Opening contract:', { booking, contract });
-    setSelectedBookingForContract(booking || null);
-    setSelectedContract(contract);
-    setContractModalVisible(true);
-  }, []);
-
-  const handleContractSign = useCallback(async ({ signature, acknowledged }) => {
+  const handleContractSigned = useCallback(async ({ signature, acknowledged }) => {
     if (!selectedContract || !selectedBookingForContract) return;
 
     try {
-      const { contractService } = await import('../../services/supabase/contractService');
-
       let existing;
       try {
         existing = await contractService.getContractById(selectedContract.id);
@@ -871,7 +272,6 @@ const CaregiverBookingsTabWithModal = ({ pendingContract, onPendingContractHandl
           setContractModalVisible(false);
           setSelectedContract(null);
           setSelectedBookingForContract(null);
-          return;
         }
         throw error;
       }
@@ -918,7 +318,6 @@ const CaregiverBookingsTabWithModal = ({ pendingContract, onPendingContractHandl
     if (!contract) return;
 
     try {
-      const { contractService } = await import('../../services/supabase/contractService');
       await contractService.resendContract(contract.id, 'caregiver-id-placeholder');
       Alert.alert('Success', 'Contract reminder sent!');
     } catch (error) {
@@ -927,18 +326,11 @@ const CaregiverBookingsTabWithModal = ({ pendingContract, onPendingContractHandl
     }
   }, []);
 
-  const handleDownloadPdf = useCallback(async (contract) => {
+  const handleContractDownload = useCallback(async (contract) => {
     if (!contract) return;
 
     try {
-      const { contractService } = await import('../../services/supabase/contractService');
       const result = await contractService.generateContractPdf(contract.id, { autoDownload: true });
-
-      if (!result?.uri && !result?.url) {
-        throw new Error('Download did not return a file location.');
-      }
-
-      const fileUri = result.uri || result.url;
 
       if (await Sharing.isAvailableAsync()) {
         await Sharing.shareAsync(fileUri, { mimeType: 'application/pdf' });
@@ -953,27 +345,43 @@ const CaregiverBookingsTabWithModal = ({ pendingContract, onPendingContractHandl
     }
   }, []);
 
+  useEffect(() => {
+    if (!pendingContract) return;
+
+    const { contract, booking } = pendingContract;
+    if (!contract) return;
+
+    setSelectedContract(contract);
+    setSelectedBookingForContract(booking || null);
+    setContractModalVisible(true);
+    onPendingContractHandled?.();
+  }, [pendingContract, onPendingContractHandled]);
+
+  const handleCloseContractModal = useCallback(() => {
+    setContractModalVisible(false);
+    setSelectedContract(null);
+    setSelectedBookingForContract(null);
+  }, []);
+
   return (
     <>
-      <BookingsTab {...props} onOpenContract={handleOpenContract} />
-
-      {/* Contract Modal */}
-      {ContractModal && contractModalVisible && selectedBookingForContract && (
-        <ContractModal
-          visible={contractModalVisible}
-          onClose={() => {
-            setContractModalVisible(false);
-            setSelectedContract(null);
-            setSelectedBookingForContract(null);
-          }}
-          contract={selectedContract}
-          booking={selectedBookingForContract}
-          viewerRole="caregiver"
-          onSign={handleContractSign}
-          onResend={handleContractResend}
-          onDownloadPdf={handleDownloadPdf}
-        />
-      )}
+      <BookingsTab
+        bookings={bookings}
+        onMessageFamily={onMessageFamily}
+        onConfirmBooking={onConfirmBooking}
+        onViewDetails={onViewDetails}
+        onOpenContract={onOpenContract}
+      />
+      <ContractModal
+        visible={contractModalVisible}
+        onClose={handleCloseContractModal}
+        contract={selectedContract}
+        booking={selectedBookingForContract}
+        viewerRole="caregiver"
+        onSign={handleContractSigned}
+        onResend={handleContractResend}
+        onDownloadPdf={handleContractDownload}
+      />
     </>
   );
 };

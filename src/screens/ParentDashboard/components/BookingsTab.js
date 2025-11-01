@@ -1,6 +1,7 @@
 import { Calendar, Clock, DollarSign, Plus } from 'lucide-react-native';
 import React, { useCallback, useEffect, useMemo, useRef } from 'react';
 import { ActivityIndicator, Alert, Animated, Easing, FlatList, Linking, RefreshControl, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import ContractModal from '../../../components/modals/ContractModal';
 import ContractTypeSelector from '../../../components/modals/ContractTypeSelector';
 import { BOOKING_STATUSES } from '../../../constants/bookingStatuses';
 import { supabase } from '../../../services/supabase/base';
@@ -703,16 +704,6 @@ const BookingsTab = ({
     }
   }, [filteredBookings, fetchContractsForBookings, contractsLoading]);
 
-  // Import ContractModal dynamically to avoid circular imports
-  const [ContractModal, setContractModal] = React.useState(null);
-
-  useEffect(() => {
-    import('../../../components/modals/ContractModal').then(module => {
-      setContractModal(() => module.default);
-    }).catch(error => {
-      console.warn('Failed to load ContractModal:', error);
-    });
-  }, []);
 
   const keyExtractor = useCallback((item, index) => item?._id || item?.id || `booking-${index}`, []);
 
@@ -818,7 +809,7 @@ const BookingsTab = ({
       />
 
       {/* Contract Modal */}
-      {ContractModal && contractModalVisible && selectedBookingForContract && (
+      {contractModalVisible && selectedBookingForContract && (
         <ContractModal
           visible={contractModalVisible}
           onClose={() => {

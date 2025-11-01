@@ -2,7 +2,7 @@ import { useNavigation } from '@react-navigation/native';
 import * as FileSystem from 'expo-file-system';
 import * as Sharing from 'expo-sharing';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { Alert, Platform, View, Text, Linking } from 'react-native'; // Added Text and Linking imports
+import { Alert, Linking, Platform, Text, View } from 'react-native'; // Added Text and Linking imports
 import { processImageForUpload } from '../../utils/imageUtils';
 
 // Core imports
@@ -15,7 +15,9 @@ import { supabaseService } from '../../services/supabase';
 import { contractService } from '../../services/supabase/contractService';
 
 // Utility imports
+import { childService } from '../../services/childService';
 import { countActiveFilters } from '../../utils/caregiverUtils';
+import { tokenManager } from '../../utils/tokenManager';
 import { styles } from '../styles/ParentDashboard.styles';
 
 // Privacy components
@@ -485,7 +487,6 @@ const ParentDashboard = () => {
           onPress: async () => {
             try {
               console.log('🗑️ Deleting child:', child);
-              const { childService } = await import('../../services/childService');
               await childService.deleteChild(child.id || child._id, user.id);
               await fetchChildren();
               Alert.alert('Success', 'Child deleted successfully!');
@@ -512,7 +513,6 @@ const ParentDashboard = () => {
 
     try {
       if (childForm.editingId) {
-        const { childService } = await import('../../services/childService');
         await childService.updateChild(childForm.editingId, childData, user.id);
       } else {
         // Check if child already exists before creating
@@ -530,7 +530,6 @@ const ParentDashboard = () => {
                 text: 'Update',
                 onPress: async () => {
                   try {
-                    const { childService } = await import('../../services/childService');
                     await childService.updateChild(existingChild._id || existingChild.id, childData, user.id);
                     await fetchChildren();
                     toggleModal('child', false);
@@ -550,7 +549,6 @@ const ParentDashboard = () => {
         // Try to create the child
         try {
           // Use childService with user.id from AuthContext
-          const { childService } = await import('../../services/childService');
           await childService.createChild(childData, user.id);
         } catch (createError) {
           // If creation fails due to "already exists", try to find and update existing child
@@ -569,7 +567,6 @@ const ParentDashboard = () => {
                     text: 'Update',
                     onPress: async () => {
                       try {
-                        const { childService } = await import('../../services/childService');
                         await childService.updateChild(existingChild._id || existingChild.id, childData, user.id);
                         await fetchChildren();
                         toggleModal('child', false);
@@ -861,8 +858,7 @@ const ParentDashboard = () => {
     if (!selectedContract || !selectedBooking) return;
 
     try {
-      const { contractService } = await import('../../services/supabase/contractService');
-
+      const { contractService } = contractService;
       const bookingIdentifier = selectedBooking.id || selectedBooking._id || selectedContract.bookingId;
       let existingContract = null;
 
@@ -961,7 +957,6 @@ const ParentDashboard = () => {
     if (!contract) return;
 
     try {
-      const { contractService } = await import('../../services/supabase/contractService');
       await contractService.resendContract(contract.id, user?.id);
       Alert.alert('Success', 'Contract reminder sent!');
     } catch (error) {
@@ -976,7 +971,6 @@ const ParentDashboard = () => {
     let cleanup;
 
     try {
-      const { contractService } = await import('../../services/supabase/contractService');
       const result = await contractService.generateContractPdf(contract.id, { autoDownload: true });
 
       cleanup = typeof result?.cleanup === 'function' ? result.cleanup : undefined;
@@ -1199,28 +1193,52 @@ const ParentDashboard = () => {
     toggleModal('jobPosting', true);
   }, [toggleModal]);
 
-  const handleCompleteJob = useCallback(async (jobId) => {
+  const handleCompleteJob = useCallback(async (jobOrBooking) => {
+    console.log('📋 handleCompleteJob called with:', jobOrBooking);
+    console.log('🔍 Booking ID:', jobOrBooking?.id);
+    console.log('🔍 Booking _id:', jobOrBooking?._id);
+    console.log('🔍 Booking jobId:', jobOrBooking?.jobId);
+    console.log('🔍 Booking job_id:', jobOrBooking?.job_id);
+    console.log('🔍 Booking job?.id:', jobOrBooking?.job?.id);
+    console.log('🔍 Type of booking:', typeof jobOrBooking);
+
+    const resolvedBookingId =
+      typeof jobOrBooking === 'object' && jobOrBooking !== null
+        ? jobOrBooking.id || jobOrBooking._id
+        : jobOrBooking;
+
+    if (!resolvedBookingId || (typeof resolvedBookingId !== 'string' && typeof resolvedBookingId !== 'number')) {
+      console.warn('❌ handleCompleteJob called without a valid booking ID', jobOrBooking);
+      Alert.alert('Error', 'Unable to determine which booking to update.');
+      return;
+    }
+
     Alert.alert(
-      'Complete Job',
-      'Mark this job as completed?',
+      'Complete Booking',
+      'Mark this booking as completed?',
       [
         { text: 'Cancel', style: 'cancel' },
         {
           text: 'Complete',
           onPress: async () => {
             try {
-              await supabaseService.updateJob(jobId, { status: 'completed' });
-              await fetchJobs();
-              Alert.alert('Success', 'Job marked as completed');
+              const result = await supabaseService.bookings.updateBookingStatus(resolvedBookingId, 'completed');
+
+              if (result?.error) {
+                throw result.error;
+              }
+
+              await fetchBookings();
+              Alert.alert('Success', 'Booking marked as completed');
             } catch (error) {
-              console.error('Error completing job:', error);
-              Alert.alert('Error', 'Failed to complete job');
+              console.error('Error completing booking:', error);
+              Alert.alert('Error', 'Failed to complete booking');
             }
           }
         }
       ]
     );
-  }, [fetchJobs]);
+  }, [fetchBookings]);
 
   const handleDeleteJob = useCallback(async (jobId) => {
     Alert.alert(
@@ -1312,7 +1330,7 @@ const ParentDashboard = () => {
           });
 
           if (promotionResult?.contractId) {
-            const { contractService } = await import('../../services/supabase/contractService');
+            const { contractService } = contractService;
             try {
               await contractService.getContractById(promotionResult.contractId);
             } catch (prefetchError) {
@@ -1404,7 +1422,6 @@ const ParentDashboard = () => {
         }
       }
 
-      const { tokenManager } = await import('../../utils/tokenManager');
       const freshToken = await tokenManager.getValidToken(true);
 
       if (!freshToken) {

@@ -13,34 +13,46 @@ export class SupabaseBase {
   }
 
   _handleError(method, error, throwError = true) {
-    const isNetworkError = error?.message?.includes('Network request timed out') || 
-                          error?.message?.includes('fetch') ||
-                          error?.code === 'NETWORK_ERROR'
-    
+    const errorMessage = typeof error === 'string' ? error : error?.message || ''
+    const normalizedMessage = (errorMessage || '').toLowerCase()
+    const isNetworkError =
+      normalizedMessage.includes('network request timed out') ||
+      normalizedMessage.includes('network connection lost') ||
+      normalizedMessage.includes('failed to fetch') ||
+      normalizedMessage.includes('fetch failed') ||
+      normalizedMessage.includes('gateway error') ||
+      error?.code === 'NETWORK_ERROR'
+
     if (isNetworkError) {
-      console.warn(`⚠️ Network error in ${method}:`, error.message)
-      if (throwError) throw new Error('Connection timeout. Please check your internet connection.')
+      console.warn(`⚠️ Network error in ${method}:`, errorMessage || error)
+      if (throwError) {
+        throw new Error('Network connection lost. Please check your internet connection and try again.')
+      }
       return null
     }
-    
+
     // Improved error logging with proper serialization
-    console.error(`❌ Error in ${method}:`, {
-      message: error?.message,
-      code: error?.code,
-      details: error?.details,
-      hint: error?.hint,
-      status: error?.status,
-      statusText: error?.statusText
-    })
-    
+    const serialized = typeof error === 'string'
+      ? { message: error }
+      : {
+          message: error?.message,
+          code: error?.code,
+          details: error?.details,
+          hint: error?.hint,
+          status: error?.status,
+          statusText: error?.statusText
+        }
+
+    console.error(`❌ Error in ${method}:`, serialized)
+
     // Log full error as string for better visibility
     try {
       console.error(`Full error: ${JSON.stringify(error, null, 2)}`)
     } catch (e) {
       console.error('Full error (non-serializable):', error)
     }
-    
-    if (throwError) throw error
+
+    if (throwError) throw (typeof error === 'string' ? new Error(error) : error)
     return null
   }
 

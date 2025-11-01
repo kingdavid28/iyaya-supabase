@@ -161,6 +161,7 @@ export const useParentDashboard = () => {
       const normalized = bookingsList.map((booking, idx) => ({
         id: booking.id || booking._id || idx + 1,
         _id: booking.id || booking._id,
+        jobId: booking.job_id || booking.jobId || booking.job?.id || null,
         parentId: booking.parent_id || booking.parentId,
         caregiver: booking.caregiverId || booking.caregiver,
         caregiverName: booking.caregiverId?.name || booking.caregiver?.name || booking.caregiver_name || 'Caregiver',

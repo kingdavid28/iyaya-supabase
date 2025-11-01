@@ -138,6 +138,7 @@ const CaregiverCard = ({ caregiver = {}, onPress, onMessagePress, onViewReviews,
                 <Image
                   source={getImageSource(avatar)}
                   style={caregiverCardStyles.avatarImage}
+                  resizeMode="contain"
                   accessible={false}
                   onError={(error) => {
                     const errorMessage = error?.nativeEvent?.error || error;

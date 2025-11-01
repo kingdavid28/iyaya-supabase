@@ -19,6 +19,7 @@ const SearchTab = ({
   onBookCaregiver,
   onMessageCaregiver,
   onViewCaregiver,
+  onViewReviews,
   onSearch,
   onOpenFilter,
   onQuickFilter,
@@ -120,6 +121,7 @@ const SearchTab = ({
               caregiver={item}
               onPress={() => onBookCaregiver(item)}
               onMessagePress={() => onMessageCaregiver(item)}
+              onViewReviews={onViewReviews ? () => onViewReviews(item) : undefined}
             />
           )}
           contentContainerStyle={styles.caregiversList}

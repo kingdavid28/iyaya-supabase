@@ -143,7 +143,7 @@ const JobApplicationsTab = ({
         <View style={styles.caregiverRow}>
           <View style={styles.avatarContainer}>
             {caregiverImage ? (
-              <Image source={{ uri: caregiverImage }} style={styles.avatarImage} />
+              <Image source={{ uri: caregiverImage }} style={styles.avatarImage} resizeMode="contain" />
             ) : (
               <View style={styles.avatarFallback}>
                 <User size={18} color={colors.textInverse} />

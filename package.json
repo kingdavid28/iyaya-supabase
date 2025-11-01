@@ -69,6 +69,7 @@
     "react-native-star-rating-widget": "^1.9.2",
     "react-native-svg": "15.12.1",
     "react-native-web": "^0.21.0",
+    "zustand": "^4.5.2",
     "react-native-worklets": "0.5.1",
     "socket.io-client": "^4.8.1",
     "typescript": "~5.9.2"

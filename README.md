@@ -285,3 +285,5 @@ This project is licensed under the MIT License.
 ## API Service Migration Roadmap
 
 `src/config/api.js` currently re-exports the consolidated service layer to ease migration from older modules. New features should import the specific service they need (e.g. `import { bookingsAPI } from '../services'`). As legacy code is updated, trim unused re-exports to keep bundles lean and dependencies explicit.
+
+
