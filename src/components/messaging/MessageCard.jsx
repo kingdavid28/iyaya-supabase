@@ -168,10 +168,6 @@ const MessageCard = ({ message, isOwn, showAvatar = false, senderName, senderAva
         )}
       </View>
 
-      {/* Spacer for alignment when showing avatar on other side */}
-      {showAvatar && isOwn && (
-        <View style={styles.avatarSpacer} />
-      )}
     </View>
   );
 };
@@ -193,10 +189,6 @@ const styles = StyleSheet.create({
   avatar: {
     marginRight: 8,
     marginBottom: 8,
-  },
-  avatarSpacer: {
-    width: 40,
-    marginLeft: 8,
   },
   bubbleContainer: {
     maxWidth: Platform.OS === 'android' ? '90%' : '75%',

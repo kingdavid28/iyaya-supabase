@@ -1,7 +1,7 @@
 import { Platform, StyleSheet } from 'react-native';
 import { shadows } from '../../utils/shadows';
 
-export const styles = StyleSheet.create({
+const baseStyles = {
   container: {
     flex: 1,
     backgroundColor: "#F4F7FC",
@@ -159,27 +159,11 @@ export const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    paddingVertical: 10,
-    borderRadius: 8,
   },
-  activeTab: {
-    backgroundColor: "#EFF6FF",
-  },
-  tabText: {
-    fontSize: 12,
-    fontWeight: "500",
-    color: "#6B7280",
-    marginLeft: 6,
-  },
-  activeTabText: {
-    color: "#2563EB",
-    fontWeight: "600",
-  },
-  // Parent-style horizontal top nav
   navContainer: {
     backgroundColor: '#FFFFFF',
     borderBottomWidth: 1,
-    borderBottomColor: '#e5e7eb',
+    borderBottomColor: '#E5E7EB',
   },
   navScroll: {
     paddingHorizontal: 20,
@@ -193,86 +177,136 @@ export const styles = StyleSheet.create({
     marginRight: 16,
     borderRadius: 20,
     borderWidth: 1,
-    borderColor: '#e5e7eb',
-    backgroundColor: '#ffffff',
+    borderColor: '#E5E7EB',
+    backgroundColor: '#FFFFFF',
     minWidth: 100,
   },
   navTabActive: {
-    backgroundColor: '#bed6fc',
-    borderColor: '#bed6fc',
+    backgroundColor: '#BED6FC',
+    borderColor: '#BED6FC',
   },
   navTabText: {
     marginLeft: 8,
     fontSize: 14,
     fontWeight: '500',
-    color: '#6b7280',
+    color: '#6B7280',
   },
   navTabTextActive: {
-    color: '#3b83f5',
+    color: '#3B83F5',
     fontWeight: '600',
   },
-  // Legacy styles for compatibility
-  navItem: {
+};
+
+// UPDATED: Enhanced section styles with better typography and spacing
+const sections = {
+  section: {
+    marginBottom: 28,
+    paddingHorizontal: 20,
+  },
+  sectionHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 16,
+    paddingHorizontal: 16,
+  },
+  sectionHeaderMain: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    marginRight: 16,
-    borderRadius: 20,
-    borderWidth: 1,
-    borderColor: '#e5e7eb',
-    backgroundColor: '#ffffff',
   },
-  activeNavItem: {
-    backgroundColor: '#bed6fc',
-    borderColor: '#bed6fc',
-  },
-  navText: {
+  sectionTitle: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: '#1F2937',
     marginLeft: 8,
-    fontSize: 14,
-    fontWeight: '500',
-    color: '#6b7280',
   },
-  activeNavText: {
-    color: '#3b83f5',
-  },
-  content: {
-    flex: 1,
-    paddingTop: 16,
-  },
-  searchBar: {
-    marginHorizontal: 16,
-    marginBottom: 16,
-    backgroundColor: "#FFFFFF",
-    borderRadius: 12,
-    elevation: 0,
-    height: 48,
-  },
-  searchInput: {
-    fontSize: 14,
-    color: "#111827",
-    paddingBottom: 0,
-    marginBottom: 0,
-  },
-  statsRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    paddingHorizontal: 16,
-    marginBottom: 16,
-  },
-  // New quick stats and actions grids
-  quickGrid: {
+  seeAllButton: {
     flexDirection: 'row',
-    flexWrap: 'wrap',
-    paddingHorizontal: 16,
-    marginBottom: 16,
-    gap: 12,
+    alignItems: 'center',
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 8,
   },
+  seeAllText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#3B82F6',
+    marginRight: 4,
+  },
+  horizontalScroll: {
+    marginTop: 12,
+    paddingLeft: 4,
+  },
+  
+  // UPDATED: Enhanced Profile Card with gradient and better styling
+  enhancedProfileCard: {
+    borderRadius: 16,
+    marginHorizontal: 16,
+    marginVertical: 8,
+    overflow: 'hidden',
+    elevation: 4,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+  },
+  enhancedProfileContent: {
+    padding: 20,
+  },
+  enhancedProfileHeader: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    marginBottom: 16,
+  },
+  enhancedProfileIcon: {
+    marginRight: 12,
+    marginTop: 2,
+  },
+  enhancedProfileText: {
+    flex: 1,
+  },
+  enhancedProfileTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#FFFFFF',
+    marginBottom: 4,
+  },
+  enhancedProfileDescription: {
+    fontSize: 14,
+    color: 'rgba(255, 255, 255, 0.9)',
+    lineHeight: 20,
+  },
+  enhancedProfileButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    paddingVertical: 12,
+    paddingHorizontal: 20,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.3)',
+  },
+  enhancedProfileButtonText: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: '600',
+    marginRight: 8,
+  },
+};
+
+const dashboard = {
   statsGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     paddingHorizontal: 16,
     marginBottom: 24,
+  },
+  quickGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    paddingHorizontal: 16,
+    marginBottom: 16,
     gap: 12,
   },
   actionGrid: {
@@ -365,220 +399,69 @@ export const styles = StyleSheet.create({
     fontSize: 12,
     color: '#6B7280',
   },
-  section: {
-    marginBottom: 10,
-    paddingHorizontal: 5,
-    paddingTop: 16,
-  },
-  promotionCard: {
-    borderRadius: 16,
-    borderWidth: 2,
-    marginBottom: 8,
-    ...shadows.md,
-  },
-  promotionCardContent: {
-    overflow: 'hidden',
-    borderRadius: 16,
-  },
-  promotionHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 16,
-  },
-  promotionIcon: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    backgroundColor: 'rgba(59, 130, 246, 0.1)',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: 16,
-  },
-  promotionContent: {
-    flex: 1,
-  },
-  promotionTitle: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: '#111827',
-    marginBottom: 4,
-    lineHeight: 20,
-  },
-  promotionDescription: {
-    fontSize: 14,
-    color: '#6B7280',
-    lineHeight: 18,
-  },
-  promotionButton: {
-    borderRadius: 12,
-    marginTop: 4,
-  },
-  jobsGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 2,
-  },
-  sectionHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-evenly',
-    alignItems: 'center',
-    marginBottom: 16,
-  },
-  sectionTitle: {
-    fontSize: 20,
-    fontWeight: '700',
-    color: '#111827',
-    lineHeight: 24,
-  },
-  seeAllText: {
-    color: '#3B82F6',
-    fontSize: 14,
-    fontWeight: '500',
-  },
-  horizontalScroll: {
-    paddingVertical: 8,
-    paddingLeft: 0,
-    paddingRight: 0,
-  },
-  jobCard: {
+};
+
+// UPDATED: Enhanced Application Cards with better styling
+const cards = {
+  // Enhanced Application Card Styles
+  enhancedApplicationCard: {
     backgroundColor: '#FFFFFF',
     borderRadius: 12,
+    padding: 16,
+    marginHorizontal: 16,
+    marginBottom: 12,
     elevation: 2,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.1,
     shadowRadius: 3,
-    marginVertical: 4,
+    borderWidth: 1,
+    borderColor: '#F3F4F6',
   },
-  jobCardHorizontal: {
-    width: 300,
-    marginRight: 16,
-    marginBottom: 4,
-    minHeight: 280,
-    padding: 0,
-  },
-  jobCardTablet: {
-    width: '31%',
-  },
-  jobHeader: {
+  applicationCardHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'flex-start',
-    marginBottom: 16,
+    marginBottom: 12,
   },
-  jobTitle: {
-    fontSize: 18,
+  applicationCardMain: {
+    flex: 1,
+    marginRight: 12,
+  },
+  applicationCardTitle: {
+    fontSize: 16,
     fontWeight: '600',
     color: '#1F2937',
-    marginBottom: 8,
-    lineHeight: 24,
-  },
-  jobMeta: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    flexWrap: 'wrap',
     marginBottom: 4,
   },
-  jobMetaText: {
+  applicationCardFamily: {
+    fontSize: 14,
+    color: '#6B7280',
+  },
+  applicationCardDetails: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 16,
+    flexWrap: 'wrap',
+  },
+  applicationDetailItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginRight: 16,
+    marginBottom: 4,
+  },
+  applicationDetailTextInline: {
     fontSize: 12,
     color: '#6B7280',
     marginLeft: 4,
-    marginRight: 12,
   },
-  jobMetaIcon: {
-    marginLeft: 12,
-    marginRight: 4,
-  },
-  urgentBadge: {
-    backgroundColor: '#FEE2E2',
-    borderRadius: 4,
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    alignSelf: 'flex-start',
-  },
-  urgentBadgeText: {
-    color: '#DC2626',
-    fontSize: 10,
-    fontWeight: '600',
-  },
-  jobDetails: {
-    marginBottom: 16,
-    gap: 8,
-  },
-  jobDetailRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 6,
-  },
-  jobDetailText: {
-    fontSize: 13,
-    color: '#4B5563',
-    marginLeft: 8,
-  },
-  requirementsContainer: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    marginBottom: 16,
-    gap: 6,
-  },
-  requirementTag: {
-    backgroundColor: '#EFF6FF',
-    borderRadius: 16,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderWidth: 1,
-    borderColor: '#DBEAFE',
-  },
-  requirementText: {
-    fontSize: 12,
-    color: '#2563EB',
-    fontWeight: '500',
-  },
-  moreRequirementsText: {
-    fontSize: 12,
-    color: '#9CA3AF',
-    alignSelf: 'center',
-  },
-  jobFooter: {
-    flexDirection: 'column',
-    paddingTop: 16,
-    borderTopWidth: 1,
-    borderTopColor: '#F3F4F6',
-    gap: 12,
-  },
-  postedDate: {
-    fontSize: 12,
-    color: '#9CA3AF',
-  },
-  jobActionButtons: {
+  applicationCardActions: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    gap: 12,
+    alignItems: 'center',
   },
-  secondaryButton: {
-    flex: 1,
-    borderColor: '#D1D5DB',
-    borderRadius: 8,
-    height: 40,
-  },
-  secondaryButtonText: {
-    color: '#374151',
-    fontSize: 13,
-    fontWeight: '500',
-  },
-  primaryButton: {
-    flex: 1,
-    backgroundColor: '#2563EB',
-    borderRadius: 8,
-    height: 40,
-  },
-  primaryButtonText: {
-    color: '#FFFFFF',
-    fontSize: 13,
-    fontWeight: '500',
-  },
+  
+  // Original styles kept for compatibility
   applicationCard: {
     marginBottom: 12,
     borderRadius: 12,
@@ -626,7 +509,7 @@ export const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 6,
   },
-  applicationDetailText: {
+  applicationDetailTextList: {
     fontSize: 13,
     color: '#4B5563',
     marginLeft: 8,
@@ -758,116 +641,253 @@ export const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#FFFFFF',
   },
-  profileSection: {
+  dashboardBookingCard: {
+    marginHorizontal: 16,
     marginBottom: 16,
-    borderRadius: 12,
-    ...shadows.sm,
+    borderRadius: 16,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    overflow: 'hidden',
+    ...shadows.md,
   },
-  profileSectionHeader: {
+  dashboardBookingHeader: {
+    padding: 16,
+  },
+  dashboardBookingHeaderContent: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 16,
   },
-  profileSectionTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#111827',
+  dashboardBookingTitleContainer: {
+    flex: 1,
+    marginRight: 12,
   },
-  profileSectionContent: {
-    padding: 16,
-  },
-  profileSectionText: {
-    fontSize: 14,
-    color: '#4B5563',
-    lineHeight: 20,
-  },
-  // Settings components styles
-  settingsContainer: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 12,
-    marginHorizontal: 16,
-    marginBottom: 16,
-    ...shadows.sm,
-  },
-  settingsHeader: {
-    padding: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: '#F3F4F6',
-  },
-  settingsTitle: {
+  dashboardBookingTitle: {
     fontSize: 18,
     fontWeight: '700',
-    color: '#111827',
+    color: '#FFFFFF',
   },
-  reviewsList: {
-    flex: 1,
+  dashboardBookingSubtitle: {
+    marginTop: 4,
+    fontSize: 13,
+    color: 'rgba(255, 255, 255, 0.85)',
   },
-  reviewsListContent: {
+  dashboardBookingStatusBadge: {
+    paddingHorizontal: 12,
     paddingVertical: 4,
+    borderRadius: 999,
+    backgroundColor: 'rgba(255, 255, 255, 0.25)',
   },
-  reviewsSummaryGrid: {
-    flexDirection: 'row',
-    gap: 12,
-    marginBottom: 16,
+  dashboardBookingStatusText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#FFFFFF',
+    textTransform: 'capitalize',
   },
-  reviewsSummaryCard: {
-    flex: 1,
-    borderRadius: 14,
+  dashboardBookingContent: {
     padding: 16,
-    backgroundColor: '#F8FAFC',
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    ...shadows.xs,
+    gap: 16,
   },
-  reviewsSummaryLabel: {
+  dashboardBookingMetaRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  dashboardBookingMetaChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 999,
+    backgroundColor: '#EEF2FF',
+  },
+  dashboardBookingMetaText: {
     fontSize: 13,
     color: '#1F2937',
+    flexShrink: 1,
+  },
+  dashboardBookingLocation: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 12,
+    backgroundColor: '#F8FAFC',
+  },
+  dashboardBookingLocationText: {
+    flex: 1,
+    fontSize: 13,
+    color: '#1E3A8A',
+  },
+  dashboardBookingActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  dashboardBookingSecondaryButton: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    paddingVertical: 10,
+    borderRadius: 12,
+    backgroundColor: '#F3F4F6',
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+  },
+  dashboardBookingSecondaryText: {
+    fontSize: 14,
     fontWeight: '600',
+    color: '#1F2937',
   },
-  reviewsSummaryMetric: {
-    fontSize: 24,
-    fontWeight: '700',
-    color: '#111827',
-    marginTop: 8,
+  dashboardBookingPrimaryButton: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    paddingVertical: 10,
+    borderRadius: 12,
+    backgroundColor: '#2563EB',
   },
-  reviewsSummaryIconWrap: {
+  dashboardBookingPrimaryText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#FFFFFF',
+  },
+  dashboardBookingConfirmButton: {
+    marginTop: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    paddingVertical: 12,
+    borderRadius: 12,
+    backgroundColor: '#059669',
+  },
+  dashboardBookingConfirmText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#FFFFFF',
+  },
+};
+
+// UPDATED: Enhanced button styles for application cards
+const buttons = {
+  editProfileButton: {
     width: 36,
     height: 36,
     borderRadius: 18,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 12,
+    backgroundColor: "#F3F4F6",
+    justifyContent: "center",
+    alignItems: "center",
   },
-  reviewsSummaryValueRow: {
+  secondaryButton: {
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#D1D5DB',
+  },
+  secondaryButtonText: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: '#374151',
+  },
+  primaryButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginTop: 10,
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    borderRadius: 8,
+    backgroundColor: '#3B82F6',
   },
-  reviewsSummaryValue: {
-    fontSize: 28,
-    fontWeight: '700',
-    color: '#111827',
+  primaryButtonDisabled: {
+    backgroundColor: '#9CA3AF',
+    opacity: 0.6,
   },
-  reviewsEmptyCard: {
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
-    borderRadius: 12,
-    padding: 24,
+  primaryButtonText: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: '#FFFFFF',
+    marginLeft: 4,
+  },
+};
+
+const textBlocks = {
+  profileInfo: {
+    flex: 1,
+  },
+  profileName: {
+    fontSize: 18,
+    fontWeight: "600",
+    color: "#111827",
+    marginBottom: 4,
+  },
+  ratingContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginBottom: 4,
+  },
+  ratingText: {
+    fontSize: 14,
+    color: "#6B7280",
+    marginLeft: 4,
+  },
+  profileDetail: {
+    fontSize: 14,
+    color: "#6B7280",
+  },
+  profileAge: {
+    fontSize: 14,
+    color: '#6b7280',
+    marginBottom: 2,
+  },
+  profileContact: {
+    fontSize: 14,
+    color: '#6b7280',
+    marginBottom: 2,
+  },
+};
+
+const modals = {
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#F9FAFB',
   },
-  reviewsEmptyTitle: {
-    marginTop: 12,
-    fontSize: 16,
+};
+
+const notification = {
+  urgentBadge: {
+    backgroundColor: '#FEE2E2',
+    borderRadius: 4,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    alignSelf: 'flex-start',
+  },
+  urgentBadgeText: {
+    color: '#DC2626',
+    fontSize: 10,
     fontWeight: '600',
-    color: '#111827',
   },
-  reviewsEmptySubtitle: {
-    marginTop: 8,
-    fontSize: 13,
+};
+
+const stateStyles = {
+  loadingContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 32,
+  },
+  loadingText: {
+    fontSize: 14,
     color: '#6B7280',
-    textAlign: 'center',
+    marginTop: 12,
   },
   settingLabel: {
     fontSize: 16,
@@ -1315,17 +1335,6 @@ export const styles = StyleSheet.create({
     alignItems: 'center',
   },
   // Loading states
-  loadingContainer: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 32,
-  },
-  loadingText: {
-    fontSize: 14,
-    color: '#6B7280',
-    marginTop: 12,
-    fontWeight: '500',
-  },
   dashboardSkeletonContainer: {
     padding: 20,
     gap: 16,
@@ -1404,66 +1413,67 @@ export const styles = StyleSheet.create({
   },
   applicationHeroGradient: {
     paddingHorizontal: 20,
-    paddingTop: 20,
-    paddingBottom: 16,
+    paddingTop: 16,
+    paddingBottom: 18,
+    borderBottomLeftRadius: 24,
+    borderBottomRightRadius: 24,
   },
   applicationHeroTopRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 12,
+    alignItems: 'flex-start',
+    gap: 12,
+    marginBottom: 10,
   },
   applicationStatusBadge: {
-    backgroundColor: 'rgba(255,255,255,0.18)',
-    borderRadius: 999,
-    paddingHorizontal: 12,
-    paddingVertical: 4,
+    alignSelf: 'flex-start',
   },
   applicationHeroContent: {
-    gap: 6,
+    flex: 1,
+    gap: 8,
   },
   applicationHeroTitle: {
-    fontSize: 20,
-    lineHeight: 26,
+    fontSize: 19,
+    lineHeight: 24,
     fontWeight: '700',
-    color: '#EEF2FF',
+    color: '#F8FAFF',
   },
   applicationHeroSubtitle: {
-    fontSize: 14,
+    fontSize: 13,
     color: 'rgba(224, 231, 255, 0.85)',
   },
   applicationHeroMetaRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 8,
-    marginTop: 8,
+    gap: 2,
+    marginTop: 10,
   },
   applicationHeroMetaPill: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 12,
-    backgroundColor: 'rgba(255,255,255,0.12)',
+    paddingHorizontal: 12,
+    paddingVertical: 2,
+    borderRadius: 999,
+    backgroundColor: 'rgba(255,255,255,0.16)',
     gap: 6,
   },
   applicationHeroMetaText: {
     color: '#E0E7FF',
-    fontSize: 11,
+    fontSize: 12,
     fontWeight: '500',
     letterSpacing: 0.2,
   },
   applicationModalBody: {
-    paddingHorizontal: 24,
-    paddingTop: 24,
+    paddingHorizontal: 20,
+    paddingTop: 10,
     paddingBottom: 12,
-    gap: 24,
+    gap: 10,
   },
   applicationModalHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    padding: 20,
+    padding: 18,
     borderBottomWidth: 1,
     borderBottomColor: '#F3F4F6',
   },
@@ -1473,15 +1483,17 @@ export const styles = StyleSheet.create({
     color: '#111827',
   },
   modalCloseButton: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: '#F3F4F6',
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    backgroundColor: 'rgba(255,255,255,0.18)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.25)',
     alignItems: 'center',
     justifyContent: 'center',
   },
   jobSummary: {
-    padding: 20,
+    padding: 10,
     backgroundColor: '#F8FAFC',
     borderBottomWidth: 1,
     borderBottomColor: '#F3F4F6',
@@ -1512,10 +1524,11 @@ export const styles = StyleSheet.create({
   },
   applicationInfoTile: {
     flexBasis: '48%',
+    minWidth: 120,
     backgroundColor: '#F5F5FF',
-    borderRadius: 18,
+    borderRadius: 16,
     padding: 16,
-    gap: 6,
+    gap: 8,
     borderWidth: 1,
     borderColor: '#E0E7FF',
   },
@@ -1532,7 +1545,7 @@ export const styles = StyleSheet.create({
     color: '#1F2937',
   },
   applicationSection: {
-    gap: 12,
+    gap: 5,
   },
   applicationSectionTitle: {
     fontSize: 16,
@@ -2368,4 +2381,16 @@ export const styles = StyleSheet.create({
     color: '#374151',
     marginBottom: 4,
   },
+};
+
+export const styles = StyleSheet.create({
+  ...baseStyles,
+  ...sections, // UPDATED: Now includes enhanced profile card and section header styles
+  ...dashboard,
+  ...cards,
+  ...buttons,
+  ...textBlocks,
+  ...modals,
+  ...notification,
+  ...stateStyles,
 });

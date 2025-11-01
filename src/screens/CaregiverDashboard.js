@@ -4,8 +4,8 @@ import { LinearGradient } from "expo-linear-gradient";
 import * as Linking from 'expo-linking';
 import * as Sharing from 'expo-sharing';
 import React, { Fragment, useCallback, useEffect, useMemo, useState } from "react";
-import { ActivityIndicator, Alert, Dimensions, Image, Modal, Platform, Pressable, Linking as RNLinking, RefreshControl, ScrollView, Text, TextInput, View } from "react-native";
-import { Button, Card } from "react-native-paper";
+import { ActivityIndicator, Alert, Dimensions, Modal, Platform, Pressable, Linking as RNLinking, RefreshControl, ScrollView, Text, TextInput, View } from "react-native";
+import { Button } from "react-native-paper";
 import Toast from "../components/ui/feedback/Toast";
 import { SettingsModal } from '../components/ui/modals/SettingsModal';
 import { useAuth } from "../contexts/AuthContext";
@@ -13,6 +13,8 @@ import { useHighlightRequest } from '../hooks/useHighlightRequest';
 import { useNotificationCounts } from '../hooks/useNotificationCounts';
 import { supabaseService } from '../services/supabase';
 import { reviewService } from '../services/supabase/reviewService';
+import CaregiverDashboardHeader from './CaregiverDashboard/CaregiverDashboardHeader';
+import CaregiverReviewsTab from './CaregiverDashboard/CaregiverReviewsTab';
 
 import {
   FormInput,
@@ -22,9 +24,13 @@ import {
   Button as SharedButton,
   Card as SharedCard,
   StatusBadge,
-  formatDate
 } from '../shared/ui';
-import { formatTimeRange } from '../utils/dateUtils';
+import {
+  buildJobScheduleLabel,
+  formatPeso,
+  getRatingStats
+} from './CaregiverDashboard/utils';
+
 
 import ContractModal from '../components/modals/ContractModal';
 import { useCaregiverDashboard } from '../hooks/useCaregiverDashboard';
@@ -39,13 +45,16 @@ import NotificationsTab from './CaregiverDashboard/components/NotificationsTab';
 import JobsTab, { CaregiverJobCard } from './CaregiverDashboard/JobsTab';
 import { styles } from './styles/CaregiverDashboard.styles';
 // Lines 27-42 - Added usePrivacy import
-import { usePrivacy } from '../components/features/privacy/PrivacyManager'; // ✅ Added this import
-import ReviewList from '../components/features/profile/ReviewList';
+import { usePrivacy } from '../components/features/privacy/PrivacyManager'; // 
 import { ReviewForm } from '../components/forms/ReviewForm';
 import { PrivacyNotificationModal } from '../components/ui/modals/PrivacyNotificationModal';
 import RatingsReviewsModal from '../components/ui/modals/RatingsReviewsModal';
 
-// Add missing Skeleton components
+
+// =============================================================================
+// SKELETON COMPONENTS
+// =============================================================================
+
 const SkeletonCard = ({ children, style }) => (
   <View style={[styles.dashboardSkeletonCard, style]}>
     {children}
@@ -64,643 +73,11 @@ const SkeletonPill = ({ width, height, style }) => (
   <View style={[styles.dashboardSkeletonPill, { width, height }, style]} />
 );
 
-const formatPeso = (value) => {
-  const numeric = Number(value);
-  if (Number.isNaN(numeric)) return '₱0';
-  return `₱${numeric.toLocaleString('en-PH', { minimumFractionDigits: 0 })}`;
-};
 
-const buildJobScheduleLabel = ({ date, start_time, end_time, startTime, endTime, workingHours, schedule, time }) => {
-  if (schedule && typeof schedule === 'string') return schedule;
-  if (workingHours && typeof workingHours === 'string') return workingHours;
-  if (time && typeof time === 'string') return time;
+// =============================================================================
+// REUSABLE COMPONENTS
+// =============================================================================
 
-  const start = start_time || startTime;
-  const end = end_time || endTime;
-
-  if (!start && !end) return null;
-  return formatTimeRange(start, end);
-};
-
-const ensureString = (value, fallback = '') => {
-  if (value === null || value === undefined) return fallback;
-  if (typeof value === 'string') return value;
-  if (typeof value === 'number' || typeof value === 'boolean') return String(value);
-  if (Array.isArray(value)) return value.join(', ');
-  try {
-    const stringified = String(value);
-    return stringified === '[object Object]' ? fallback : stringified;
-  } catch {
-    return fallback;
-  }
-};
-
-function ApplicationCard({ application, onViewDetails, onMessage }) {
-  const navigation = useNavigation();
-  const job = application.job || {};
-
-  const getStatusColor = (status) => {
-    switch (status?.toLowerCase()) {        
-      case 'pending': return '#F59E0B';
-      case 'accepted': return '#10B981';  
-      case 'rejected': return '#EF4444';
-      case 'withdrawn': return '#6B7280'; 
-      default: return '#9CA3AF';
-    }   
-  };
-
-  const getStatusText = (status) => {
-    switch (status?.toLowerCase()) {
-      case 'pending': return 'Pending';
-      case 'accepted': return 'Accepted';
-      case 'rejected': return 'Rejected';
-      case 'withdrawn': return 'Withdrawn';
-      default: return status || 'Unknown';
-    }
-  };
-
-  const resolveChildrenSummary = () => {
-    if (job.childrenSummary) return job.childrenSummary;
-    if (Array.isArray(job.children) && job.children.length) {
-      const ages = job.childrenAges ? ` (${job.childrenAges})` : '';
-      return `${job.children.length} child${job.children.length > 1 ? 'ren' : ''}${ages}`;
-    }
-    if (job.childrenCount) {
-      const ages = job.childrenAges ? ` (${job.childrenAges})` : '';
-      return `${job.childrenCount} child${job.childrenCount > 1 ? 'ren' : ''}${ages}`;
-    }
-    return 'Child details available';
-  };
-
-  const resolveSchedule = () => {
-    if (job.schedule) return job.schedule;
-    if (job.workingHours) return job.workingHours;
-    if (job.time) return job.time;
-    if (job.startTime && job.endTime) return `${job.startTime} - ${job.endTime}`;
-    if (job.start_time && job.end_time) return `${job.start_time} - ${job.end_time}`;
-    return 'Schedule to be discussed';
-  };
-
-  const appliedDate = application.appliedDate || application.applied_at;
-  const formattedAppliedDate = appliedDate ? new Date(appliedDate).toLocaleDateString() : null;
-
-  const detailItems = [
-    {
-      icon: 'people',
-      text: resolveChildrenSummary(),
-      backgroundColor: '#F8FAFC',
-      color: '#374151'
-    },
-    {
-      icon: 'cash',
-      text: `₱${application.hourlyRate || job.hourly_rate || job.hourlyRate || job.rate || 0}/hr`,
-      backgroundColor: '#F0FDF4',
-      color: '#047857'
-    },
-    job.location || job.address ? {
-      icon: 'location',
-      text: job.location || job.address,
-      backgroundColor: '#FEF7FF',
-      color: '#7C3AED'
-    } : null,
-    {
-      icon: 'time',
-      text: resolveSchedule(),
-      backgroundColor: '#FFF7ED',
-      color: '#EA580C'
-    },
-    formattedAppliedDate ? {
-      icon: 'calendar',
-      text: `Applied ${formattedAppliedDate}`,
-      backgroundColor: '#E0F2FE',
-      color: '#0EA5E9'
-    } : null,
-  ].filter(Boolean);
-
-  return (
-    <View style={{
-      backgroundColor: '#FFFFFF',
-      borderRadius: 16,
-      marginVertical: 8,
-      marginHorizontal: 16,
-      shadowColor: '#000',
-      shadowOffset: { width: 0, height: 4 },
-      shadowOpacity: 0.1,
-      shadowRadius: 8,
-      elevation: 5,
-      overflow: 'hidden',
-      minHeight: 280
-    }}>
-      {/* Header with gradient */}
-      <LinearGradient
-        colors={['#667eea', '#764ba2']}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 0 }}
-        style={{
-          paddingHorizontal: 16,
-          paddingVertical: 16,
-        }}
-      >
-        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-          <View style={{ flex: 1 }}>
-            <Text style={{
-              fontSize: 18,
-              fontWeight: '700',
-              color: '#FFFFFF',
-              marginBottom: 4
-            }} numberOfLines={1}>
-              {application.jobTitle || application.job?.title || 'Job Application'}
-            </Text>
-            <Text style={{
-              fontSize: 14,
-              color: 'rgba(255, 255, 255, 0.9)',
-              fontWeight: '500'
-            }}>
-              {application.family || application.job?.family || application.job?.parentName || 'Family'}
-            </Text>
-          </View>
-          <View style={{
-            backgroundColor: getStatusColor(application.status),
-            paddingHorizontal: 12,
-            paddingVertical: 6,
-            borderRadius: 20,
-            marginLeft: 12,
-          }}>
-            <Text style={{
-              color: '#FFFFFF',
-              fontSize: 12,
-              fontWeight: '600',
-            }}>
-              {getStatusText(application.status)}
-            </Text>
-          </View>
-        </View>
-      </LinearGradient>
-
-      {/* Content */}
-      <View style={{ padding: 16, flex: 1 }}>
-        <View style={{ gap: 10, marginBottom: 18 }}>
-          {detailItems.map((item, index) => (
-            <View
-              key={`${item.icon}-${index}`}
-              style={{
-                flexDirection: 'row',
-                alignItems: 'center',
-                backgroundColor: item.backgroundColor,
-                paddingHorizontal: 12,
-                paddingVertical: 10,
-                borderRadius: 16,
-              }}
-            >
-              <Ionicons name={item.icon} size={16} color={item.color} />
-              <Text
-                style={{
-                  marginLeft: 10,
-                  fontSize: 13,
-                  color: item.color,
-                  fontWeight: '500',
-                  flex: 1,
-                  lineHeight: 18,
-                }}
-                numberOfLines={2}
-              >
-                {item.text}
-              </Text>
-            </View>
-          ))}
-        </View>
-
-        {/* Job Details */}
-        {job?.description && (
-          <View style={{
-            backgroundColor: '#F9FAFB',
-            padding: 12,
-            borderRadius: 8,
-            marginBottom: 12,
-          }}>
-            <Text style={{
-              fontSize: 12,
-              color: '#6B7280',
-              fontWeight: '600',
-              marginBottom: 4,
-            }}>
-              Job Description:
-            </Text>
-            <Text style={{
-              fontSize: 14,
-              color: '#374151',
-              lineHeight: 20,
-            }} numberOfLines={3}>
-              {job.description}
-            </Text>
-          </View>
-        )}
-
-        {/* Cover Letter Preview */}
-        {(application.coverLetter || application.message) && (
-          <View style={{
-            backgroundColor: '#F0F9FF',
-            padding: 12,
-            borderRadius: 8,
-            marginBottom: 16,
-          }}>
-            <Text style={{
-              fontSize: 12,
-              color: '#0369A1',
-              fontWeight: '600',
-              marginBottom: 4,
-            }}>
-              Your Message:
-            </Text>
-            <Text style={{
-              fontSize: 14,
-              color: '#0C4A6E',
-              lineHeight: 20,
-            }} numberOfLines={3}>
-              {application.coverLetter || application.message || 'No message provided'}
-            </Text>
-          </View>
-        )}
-
-        {/* Actions */}
-        <View style={{ flexDirection: 'row', gap: 8, marginTop: 'auto' }}>
-          <Pressable
-            onPress={() => {
-              if (!onViewDetails) return;
-              const enriched = {
-                ...application,
-                coverLetter: application.coverLetter || application.message || '',
-                message: application.message || application.coverLetter || '',
-                job: {
-                  ...job,
-                  title: job.title || application.jobTitle || application.job_title,
-                  description: job.description || application.job?.description,
-                  location: job.location || job.address || application.location,
-                  schedule: resolveSchedule(),
-                  childrenSummary: resolveChildrenSummary(),
-                  hourlyRate: application.hourlyRate || job.hourly_rate || job.hourlyRate || job.rate,
-                  appliedDate: formattedAppliedDate,
-                },
-              };
-              onViewDetails(enriched);
-            }}
-            style={{
-              flex: 1,
-              backgroundColor: '#F8FAFC',
-              paddingVertical: 12,
-              paddingHorizontal: 16,
-              borderRadius: 12,
-              alignItems: 'center',
-              borderWidth: 1,
-              borderColor: '#CBD5E1'
-            }}
-          >
-            <Text style={{
-              color: '#475569',
-              fontSize: 14,
-              fontWeight: '600'
-            }}>
-              Details
-            </Text>
-          </Pressable>
-
-          {application.status === 'accepted' && (
-            <Pressable
-              onPress={() => onMessage && onMessage(application)}
-              style={{
-                flex: 1,
-                backgroundColor: '#3B82F6',
-                paddingVertical: 12,
-                paddingHorizontal: 16,
-                borderRadius: 12,
-                alignItems: 'center',
-                shadowColor: '#3B82F6',
-                shadowOffset: { width: 0, height: 2 },
-                shadowOpacity: 0.2,
-                shadowRadius: 4,
-                elevation: 3
-              }}
-            >
-              <Text style={{
-                color: '#FFFFFF',
-                fontSize: 14,
-                fontWeight: '600'
-              }}>
-                Message
-              </Text>
-            </Pressable>
-          )}
-        </View>
-      </View>
-    </View>
-  )
-}
-
-function BookingCard({ booking, onMessage, onViewDetails, onConfirmAttendance }) {
-  const handleLocationPress = () => {
-    if (booking.location) {
-      const mapsUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(booking.location)}`;
-      Linking.openURL(mapsUrl).catch(err => {
-        console.error('Error opening maps:', err);
-        Alert.alert('Error', 'Could not open maps. Please check if you have a maps app installed.');
-      });
-    }
-  };
-
-  const getStatusColor = (status) => {
-    switch (status) {
-      case 'pending': return '#F59E0B';
-      case 'confirmed': return '#10B981';
-      case 'completed': return '#3B82F6';
-      case 'cancelled': return '#EF4444';
-      default: return '#6B7280';
-    }
-  };
-
-  const getStatusBgColor = (status) => {
-    switch (status) {
-      case 'pending': return '#FEF3C7';
-      case 'confirmed': return '#D1FAE5';
-      case 'completed': return '#DBEAFE';
-      case 'cancelled': return '#FEE2E2';
-      default: return '#F3F4F6';
-    }
-  };
-
-  const familyName = ensureString(booking.family, 'Family');
-  const bookingDateLabel = ensureString(formatDate(booking.date), 'Date not specified');
-  const statusLabel = ensureString(booking.status, 'Unknown');
-  const timeLabel = ensureString(booking.time, 'Time TBD');
-  const childrenCountNumeric = Number(booking?.children);
-  const safeChildrenCount = Number.isFinite(childrenCountNumeric) && childrenCountNumeric > 0
-    ? childrenCountNumeric
-    : 1;
-  const childrenLabel = `${safeChildrenCount} ${safeChildrenCount === 1 ? 'child' : 'children'}`;
-  const hourlyRateValue = booking?.hourlyRate ?? booking?.hourly_rate ?? null;
-  const showHourlyRate = hourlyRateValue !== null && hourlyRateValue !== undefined && hourlyRateValue !== '';
-  const hourlyLabel = `₱${ensureString(hourlyRateValue ?? 0)}/hr`;
-  const locationLabel = ensureString(booking.location, 'Location TBD');
-
-  return (
-    <View style={{
-      backgroundColor: '#FFFFFF',
-      borderRadius: 16,
-      marginVertical: 8,
-      marginHorizontal: 16,
-      shadowColor: '#000',
-      shadowOffset: { width: 0, height: 2 },
-      shadowOpacity: 0.1,
-      shadowRadius: 8,
-      elevation: 4,
-      borderWidth: 1,
-      borderColor: '#F1F5F9'
-    }}>
-      {/* Header with gradient */}
-      <LinearGradient
-        colors={['#667eea', '#764ba2']}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 0 }}
-        style={{
-          borderTopLeftRadius: 16,
-          borderTopRightRadius: 16,
-          padding: 16
-        }}
-      >
-        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-          <View style={{ flex: 1 }}>
-            <Text style={{
-              fontSize: 18,
-              fontWeight: '700',
-              color: '#FFFFFF',
-              marginBottom: 4
-            }} numberOfLines={1}>
-              {familyName}
-            </Text>
-            <Text style={{
-              fontSize: 14,
-              color: 'rgba(255, 255, 255, 0.85)',
-              fontWeight: '500'
-            }}>
-              {bookingDateLabel}
-            </Text>
-          </View>
-          <View style={{
-            backgroundColor: 'rgba(255, 255, 255, 0.18)',
-            paddingHorizontal: 12,
-            paddingVertical: 6,
-            borderRadius: 20,
-            borderWidth: 1,
-            borderColor: 'rgba(255, 255, 255, 0.35)'
-          }}>
-            <Text style={{
-              color: '#FFFFFF',
-              fontSize: 12,
-              fontWeight: '600',
-              textTransform: 'capitalize'
-            }}>
-              {statusLabel}
-            </Text>
-          </View>
-        </View>
-      </LinearGradient>
-
-      {/* Content */}
-      <View style={{ padding: 16 }}>
-        {/* Details Grid */}
-        <View style={{ 
-          flexDirection: 'row', 
-          flexWrap: 'wrap',
-          marginBottom: 16
-        }}>
-          <View style={{
-            flexDirection: 'row',
-            alignItems: 'center',
-            backgroundColor: '#F8FAFC',
-            paddingHorizontal: 12,
-            paddingVertical: 8,
-            borderRadius: 12,
-            marginRight: 8,
-            marginBottom: 8,
-            borderWidth: 1,
-            borderColor: '#E2E8F0'
-          }}>
-            <Ionicons name="time" size={16} color="#3B82F6" />
-            <Text style={{
-              marginLeft: 6,
-              fontSize: 13,
-              color: '#475569',
-              fontWeight: '500'
-            }}>
-              {timeLabel}
-            </Text>
-          </View>
-
-          <View style={{
-            flexDirection: 'row',
-            alignItems: 'center',
-            backgroundColor: '#F8FAFC',
-            paddingHorizontal: 12,
-            paddingVertical: 8,
-            borderRadius: 12,
-            marginRight: 8,
-            marginBottom: 8,
-            borderWidth: 1,
-            borderColor: '#E2E8F0'
-          }}>
-            <Ionicons name="people" size={16} color="#10B981" />
-            <Text style={{
-              marginLeft: 6,
-              fontSize: 13,
-              color: '#475569',
-              fontWeight: '500'
-            }}>
-              {childrenLabel}
-            </Text>
-          </View>
-
-          {showHourlyRate ? (
-            <View style={{
-              flexDirection: 'row',
-              alignItems: 'center',
-              backgroundColor: '#F0FDF4',
-              paddingHorizontal: 12,
-              paddingVertical: 8,
-              borderRadius: 12,
-              marginBottom: 8,
-              borderWidth: 1,
-              borderColor: '#BBF7D0'
-            }}>
-              <Ionicons name="cash" size={16} color="#059669" />
-              <Text style={{
-                marginLeft: 6,
-                fontSize: 13,
-                color: '#059669',
-                fontWeight: '600'
-              }}>
-                {hourlyLabel}
-              </Text>
-            </View>
-          ) : null}
-        </View>
-
-        {/* Location */}
-        {booking.location && (
-          <Pressable 
-            onPress={handleLocationPress}
-            style={{
-              flexDirection: 'row',
-              alignItems: 'center',
-              backgroundColor: '#FEF7FF',
-              padding: 12,
-              borderRadius: 12,
-              marginBottom: 16,
-              borderWidth: 1,
-              borderColor: '#E9D5FF'
-            }}
-          >
-            <Ionicons name="location" size={18} color="#7C3AED" />
-            <Text style={{
-              flex: 1,
-              marginLeft: 8,
-              fontSize: 14,
-              color: '#581C87',
-              fontWeight: '500'
-            }} numberOfLines={1}>
-              {locationLabel}
-            </Text>
-            <Ionicons name="open-outline" size={16} color="#7C3AED" />
-          </Pressable>
-        )}
-
-        {/* Actions */}
-        {(booking.status === 'pending' || booking.status === 'confirmed') && (
-          <View style={{ flexDirection: 'row', gap: 8, marginTop: 8 }}>
-            {booking.status === 'pending' && (
-              <Pressable
-                onPress={() => onConfirmAttendance && onConfirmAttendance(booking)}
-                style={{
-                  flex: 1,
-                  backgroundColor: '#10B981',
-                  paddingVertical: 12,
-                  paddingHorizontal: 16,
-                  borderRadius: 12,
-                  alignItems: 'center',
-                  shadowColor: '#10B981',
-                  shadowOffset: { width: 0, height: 2 },
-                  shadowOpacity: 0.2,
-                  shadowRadius: 4,
-                  elevation: 3
-                }}
-              >
-                <Text style={{
-                  color: '#FFFFFF',
-                  fontSize: 14,
-                  fontWeight: '600'
-                }}>
-                  Confirm
-                </Text>
-              </Pressable>
-            )}
-
-            {booking.status === 'confirmed' && (
-              <Pressable
-                onPress={() => onMessage && onMessage(booking)}
-                style={{
-                  flex: 1,
-                  backgroundColor: '#3B82F6',
-                  paddingVertical: 12,
-                  paddingHorizontal: 16,
-                  borderRadius: 12,
-                  alignItems: 'center',
-                  shadowColor: '#3B82F6',
-                  shadowOffset: { width: 0, height: 2 },
-                  shadowOpacity: 0.2,
-                  shadowRadius: 4,
-                  elevation: 3
-                }}
-              >
-                <Text style={{
-                  color: '#FFFFFF',
-                  fontSize: 14,
-                  fontWeight: '600'
-                }}>
-                  Message
-                </Text>
-              </Pressable>
-            )}
-          </View>
-        )}
-
-      </View>
-    </View>
-  )
-}
-
-export const getRatingStats = (profile) => {
-  const rawProfileRating = Number(profile?.rating)
-  const profileRating = Number.isFinite(rawProfileRating) ? rawProfileRating : 0
-  const rawReviewCount = Number.isFinite(Number(profile?.reviewCount))
-    ? Number(profile?.reviewCount)
-    : Number.isFinite(Number(profile?.reviews))
-      ? Number(profile?.reviews)
-      : 0
-  const profileReviewCount = Math.max(0, rawReviewCount)
-  const ratingStatValue = profileReviewCount > 0 ? profileRating.toFixed(1) : "—"
-  const ratingStatSubtitle = profileReviewCount === 0
-    ? "No reviews yet"
-    : profileReviewCount === 1
-      ? "1 review"
-      : `${profileReviewCount} reviews`
-  const ratingStatCTA = profileReviewCount > 0 ? "See feedback" : "Build reputation"
-
-  return {
-    rating: profileRating,
-    ratingDisplay: ratingStatValue,
-    reviewCount: profileReviewCount,
-    subtitle: ratingStatSubtitle,
-    ctaLabel: ratingStatCTA
-  }
-}
 
 const CaregiverDashboard = () => {
   const navigation = useNavigation()
@@ -1869,139 +1246,51 @@ const CaregiverDashboard = () => {
     }
   }, [handleCloseReviewModal, refreshCaregiverReviews, selectedReview, showToast, user?.id]);
 
-  const renderHeader = () => {
-    const pendingRequestsCount = pendingRequests?.length || 0;
-    const totalUnread = notificationCounts.notifications + pendingRequestsCount;
-    
-    return (
-      <View style={styles.parentLikeHeaderContainer}>
-        <LinearGradient
-          colors={['#667eea', '#764ba2']}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 0 }}
-          style={styles.parentLikeHeaderGradient}
-        >
-          <View style={styles.headerTop}>
-            <View style={[styles.logoContainer, { flexDirection: 'column', alignItems: 'center' }]}>
-              <Image source={require('../../assets/icon.png')} style={[styles.logoImage, { marginBottom: 6 }]} />
-              
-              <View style={styles.headerBadge}>
-                <Text style={styles.headerBadgeText}>I am a Caregiver</Text>
-              </View>
-            </View>
-            <View style={styles.headerActions}>
-              <Pressable 
-                style={styles.headerButton}
-                onPress={() => setActiveTab('messages')}
-              >
-                <Ionicons name="chatbubble-ellipses-outline" size={22} color="#FFFFFF" />
-              </Pressable>
-              
-              <Pressable
-                style={[styles.headerButton, { position: 'relative' }]}
-                onPress={() => setShowNotifications(true)}
-              >
-                <Ionicons name="shield-outline" size={22} color="#FFFFFF" />
-                {totalUnread > 0 && (
-                  <View style={styles.notificationBadge}>
-                    <Text style={styles.notificationBadgeText}>
-                      {totalUnread > 9 ? '9+' : totalUnread}
-                    </Text>
-                  </View>
-                )}
-              </Pressable>
-
-              <Pressable
-                style={[styles.headerButton, { position: 'relative' }]}
-                onPress={() => setActiveTab('notifications')}
-              >
-                <Ionicons name="notifications-outline" size={22} color="#FFFFFF" />
-                {notificationCounts.notifications > 0 && (
-                  <View style={styles.notificationBadge}>
-                    <Text style={styles.notificationBadgeText}>
-                      {notificationCounts.notifications > 9 ? '9+' : notificationCounts.notifications}
-                    </Text>
-                  </View>
-                )}
-              </Pressable>
-              
-              <Pressable 
-                style={styles.headerButton} 
-                onPress={() => setShowRequestModal(true)}
-              >
-                <Ionicons name="mail-outline" size={22} color="#FFFFFF" />
-              </Pressable>
-              
-              <Pressable 
-                style={styles.headerButton} 
-                onPress={() => setShowSettings(true)}
-              >
-                <Ionicons name="settings-outline" size={22} color="#FFFFFF" />
-              </Pressable>
-              
-              <Pressable 
-                style={styles.headerButton} 
-                onPress={() => {
-                  try {
-                    // Combine user data with profile data for complete profile view
-                    const completeProfile = {
-                      ...profile,
-                      name: profile?.name || user?.name,
-                      bio: profile?.bio || user?.bio,
-                      profileImage: profile?.profileImage || profile?.profile_image || user?.profile_image,
-                      skills: profile?.skills || user?.skills || [],
-                      hourlyRate: profile?.hourlyRate || user?.hourly_rate,
-                      experience: profile?.experience || { description: user?.experience },
-                      certifications: profile?.certifications || user?.certifications || [],
-                      availability: profile?.availability || user?.availability || { days: [] },
-                      ageCareRanges: profile?.ageCareRanges || user?.ageCareRanges || [],
-                      emergencyContacts: profile?.emergencyContacts || user?.emergencyContacts || []
-                    };
-                    
-                    navigation.navigate('CaregiverProfileComplete', { 
-                      profile: completeProfile 
-                    });
-                  } catch (error) {
-                    console.error('Profile navigation error:', error);
-                    Alert.alert('Navigation Error', 'Failed to open profile. Please try again.');
-                  }
-                }}
-              >
-                <Ionicons name="person-outline" size={22} color="#FFFFFF" />
-              </Pressable>
-              
-              <Pressable 
-                style={styles.headerButton} 
-                onPress={async () => {
-                  try {
-                    console.log('🚪 Caregiver logout initiated...');
-                    if (onLogout) {
-                      console.log('Using onLogout prop');
-                      await onLogout();
-                    } else {
-                      console.log('Using signOut from AuthContext');
-                      await signOut();
-                    }
-                    console.log('✅ Logout completed');
-                  } catch (error) {
-                    console.error('❌ Logout error:', error);
-                    Alert.alert('Logout Error', 'Failed to logout. Please try again.');
-                  }
-                }}
-              >
-                <Ionicons name="log-out-outline" size={22} color="#FFFFFF" />
-              </Pressable>
-            </View>
-          </View>
-        </LinearGradient>
-      </View>
-    )
-  }
-
   return (
     <Fragment>
       <View style={styles.container}>
-      {renderHeader()}
+      <CaregiverDashboardHeader
+  notificationCounts={notificationCounts}
+  pendingRequests={pendingRequests}
+  onNavigateMessages={() => setActiveTab('messages')}
+  onOpenPrivacyRequests={() => setShowNotifications(true)}
+  onNavigateNotifications={() => setActiveTab('notifications')}
+  onOpenRequestModal={() => setShowRequestModal(true)}
+  onOpenSettings={() => setShowSettings(true)}
+  onNavigateProfile={() => {
+    try {
+      const completeProfile = {
+        ...profile,
+        name: profile?.name || user?.name,
+        bio: profile?.bio || user?.bio,
+        profileImage: profile?.profileImage || profile?.profile_image || user?.profile_image,
+        skills: profile?.skills || user?.skills || [],
+        hourlyRate: profile?.hourlyRate || user?.hourly_rate,
+        experience: profile?.experience || { description: user?.experience },
+        certifications: profile?.certifications || user?.certifications || [],
+        availability: profile?.availability || user?.availability || { days: [] },
+        ageCareRanges: profile?.ageCareRanges || user?.ageCareRanges || [],
+        emergencyContacts: profile?.emergencyContacts || user?.emergencyContacts || []
+      };
+
+      navigation.navigate('CaregiverProfileComplete', {
+        profile: completeProfile,
+      });
+    } catch (error) {
+      console.error('Profile navigation error:', error);
+      Alert.alert('Navigation Error', 'Failed to open profile. Please try again.');
+    }
+  }}
+  onLogout={async () => {
+    console.log('🚪 Caregiver logout initiated…');
+    if (onLogout) {
+      await onLogout();
+    } else {
+      await signOut();
+    }
+    console.log('✅ Logout completed');
+  }}
+/>
       {renderTopNav()}
 
       <View style={{ flex: 1 }}>
@@ -2070,124 +1359,140 @@ const CaregiverDashboard = () => {
             >
               <CaregiverProfileSection profile={profile} activeTab={activeTab} />
 
-            <View style={styles.statsGrid}>
-              <QuickStat
-                icon="star"
-                value={ratingDisplay}
-                label="Rating"
-                color="#F59E0B"
-                bgColor="#FEF3C7"
-                styles={styles}
-                onPress={openRatingsModal}
-                subtitle={ratingStatSubtitle}
-                ctaLabel={ratingStatCTA}
-                accessibilityHint="Shows detailed caregiver ratings and reviews"
-              />
-              <QuickStat
-                icon="briefcase"
-                value={profile?.completedJobs || "0"}
-                label="Jobs Done"
-                color="#10B981"
-                bgColor="#D1FAE5"
-                styles={styles}
-              />
-              <QuickStat
-                icon="chatbubble"
-                value={profile?.responseRate || "0%"}
-                label="Response Rate"
-                color="#3B82F6"
-                bgColor="#DBEAFE"
-                styles={styles}
-              />
-              <QuickStat
-                icon="checkmark-circle"
-                value={profile?.verification?.trustScore || "0"}
-                label="Trust Score"
-                color="#8B5CF6"
-                bgColor="#EDE9FE"
-                styles={styles}
-              />
-            </View>
-
-            <View style={styles.actionGrid}>
-              <QuickAction
-                icon="search"
-                label="Find Jobs"
-                gradientColors={["#3B82F6", "#2563EB"]}
-                onPress={() => {
-                  setActiveTab('jobs')
-                  fetchJobs()
-                }}
-                styles={styles}
-              />
-              <QuickAction
-                icon="calendar"
-                label="Bookings"
-                gradientColors={["#22C55E", "#16A34A"]}
-                onPress={() => setActiveTab('bookings')}
-                styles={styles}
-              />
-
-              <QuickAction
-                icon="document-text"
-                label="Applications"
-                gradientColors={["#fb7185", "#ef4444"]}
-                onPress={() => setActiveTab('applications')}
-                styles={styles}
-              />
-              <QuickAction
-                icon="chatbubbles"
-                label="Messages"
-                gradientColors={["#8B5CF6", "#7C3AED"]}
-                onPress={() => setActiveTab('messages')}
-                styles={styles}
-              />
-            </View>
-
-
-
-            <View style={styles.section}>
-              <Card style={[styles.promotionCard, { backgroundColor: '#f0f9ff', borderColor: '#3b82f6' }]}>
-                <Card.Content style={styles.promotionCardContent}>
-                  <View style={styles.promotionHeader}>
-                    <View style={styles.promotionIcon}>
-                      <Ionicons name="star" size={20} color="#3b82f6" />
-                    </View>
-                    <View style={styles.promotionContent}>
-                      <Text style={styles.promotionTitle}>Complete Your Enhanced Profile</Text>
-                      <Text style={styles.promotionDescription}>
-                        Add documents, certifications, and portfolio to get more bookings
-                      </Text>
-                    </View>
-                  </View>
-                  <Button
-                    mode="contained"
-                    onPress={() => {
-                      try {
-                        navigation.navigate('EnhancedCaregiverProfileWizard', { isEdit: true, existingProfile: profile });
-                      } catch (error) {
-                        console.error('Navigation error:', error);
-                        Alert.alert('Navigation Error', 'Failed to open profile wizard. Please try again.');
-                      }
-                    }}
-                    style={[styles.promotionButton, { backgroundColor: '#3b82f6' }]}
-                    labelStyle={{ color: '#ffffff' }}
-                    icon="arrow-right"
-                  >
-                    Complete Profile
-                  </Button>
-                </Card.Content>
-              </Card>
-            </View>
-
-            <View style={styles.section}>
-              <View style={styles.sectionHeader}>
-                <Text style={styles.sectionTitle}>Recommended Jobs</Text>
-                <Pressable onPress={() => setActiveTab('jobs')}>
-                  <Text style={styles.seeAllText}>See All</Text>
-                </Pressable>
+              <View style={styles.statsGrid}>
+                <QuickStat
+                  icon="star"
+                  value={ratingDisplay}
+                  label="Rating"
+                  color="#F59E0B"
+                  bgColor="#FEF3C7"
+                  styles={styles}
+                  subtitle={ratingStatSubtitle}
+                  ctaLabel={ratingStatCTA}
+                  accessibilityHint="Shows detailed caregiver ratings and reviews"
+                  showArrow
+                />
+                <QuickStat
+                  icon="briefcase"
+                  value={String(completedJobsCount)}
+                  label="Jobs Done"
+                  color="#10B981"
+                  bgColor="#D1FAE5"
+                  styles={styles}
+                  subtitle={completedJobsSubtitle}
+                  showTrend={completedJobsCount > 0}
+                />
+                <QuickStat
+                  icon="chatbubble"
+                  value={profile?.responseRate || "0%"}
+                  label="Response Rate"
+                  color="#3B82F6"
+                  bgColor="#DBEAFE"
+                  styles={styles}
+                  showTrend={Number.parseInt(String(profile?.responseRate || '0').replace(/[^\d]/g, ''), 10) > 0}
+                />
+                <QuickStat
+                  icon="checkmark-circle"
+                  value={trustScoreValue > 0 ? String(trustScoreValue) : '—'}
+                  label="Trust Score"
+                  color="#8B5CF6"
+                  bgColor="#EDE9FE"
+                  styles={styles}
+                  subtitle={trustScoreSubtitle}
+                  showBadge={profile?.verification?.verified}
+                />
               </View>
-              {jobsLoading ? (
+
+              <View style={styles.actionGrid}>
+                <QuickAction
+                  icon="search"
+                  label="Find Jobs"
+                  gradientColors={["#3B82F6", "#2563EB"]}
+                  onPress={() => {
+                    setActiveTab('jobs')
+                    fetchJobs()
+                  }}
+                  styles={styles}
+                />
+                <QuickAction
+                  icon="calendar"
+                  label="Bookings"
+                  gradientColors={["#22C55E", "#16A34A"]}
+                  onPress={() => setActiveTab('bookings')}
+                  styles={styles}
+                />
+
+                <QuickAction
+                  icon="document-text"
+                  label="Applications"
+                  gradientColors={["#fb7185", "#ef4444"]}
+                  onPress={() => setActiveTab('applications')}
+                  styles={styles}
+                />
+                <QuickAction
+                  icon="chatbubbles"
+                  label="Messages"
+                  gradientColors={["#8B5CF6", "#7C3AED"]}
+                  onPress={() => setActiveTab('messages')}
+                  styles={styles}
+                />
+              </View>
+
+              <View style={styles.section}>
+                <LinearGradient
+                  colors={['#667eea', '#764ba2']}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 1 }}
+                  style={styles.enhancedProfileCard}
+                >
+                  <View style={styles.enhancedProfileContent}>
+                    <View style={styles.enhancedProfileHeader}>
+                      <View style={styles.enhancedProfileIcon}>
+                        <Ionicons name="sparkles" size={24} color="#FFFFFF" />
+                      </View>
+                      <View style={styles.enhancedProfileText}>
+                        <Text style={styles.enhancedProfileTitle}>Complete Your Enhanced Profile</Text>
+                        <Text style={styles.enhancedProfileDescription}>
+                          Add documents, certifications, and portfolio to stand out and get more bookings
+                        </Text>
+                      </View>
+                    </View>
+                    <Pressable
+                      style={styles.enhancedProfileButton}
+                      onPress={() => {
+                        try {
+                          navigation.navigate('EnhancedCaregiverProfileWizard', {
+                            isEdit: true,
+                            existingProfile: profile,
+                          });
+                        } catch (error) {
+                          console.error('Navigation error:', error);
+                          Alert.alert('Navigation Error', 'Failed to open profile wizard. Please try again.');
+                        }
+                      }}
+                    >
+                      <Text style={styles.enhancedProfileButtonText}>Complete Profile</Text>
+                      <Ionicons name="arrow-forward" size={16} color="#FFFFFF" />
+                    </Pressable>
+                  </View>
+                </LinearGradient>
+              </View>
+
+              <View style={styles.section}>
+                <View style={styles.sectionHeader}>
+                  <View style={styles.sectionHeaderMain}>
+                    <Ionicons name="briefcase" size={20} color="#1F2937" />
+                    <Text style={styles.sectionTitle}>Recommended Jobs</Text>
+                  </View>
+                  <Pressable
+                    style={styles.seeAllButton}
+                    onPress={() => setActiveTab('jobs')}
+                  >
+                    <Text style={styles.seeAllText}>See All</Text>
+                    <Ionicons name="chevron-forward" size={16} color="#3B82F6" />
+                  </Pressable>
+                </View>
+                {jobsLoading ? (
                 <View style={styles.loadingContainer}>
                   <ActivityIndicator size="small" color="#3B82F6" />
                   <Text style={styles.loadingText}>Loading jobs...</Text>
@@ -2234,36 +1539,192 @@ const CaregiverDashboard = () => {
 
             <View style={styles.section}>
               <View style={styles.sectionHeader}>
-                <Text style={styles.sectionTitle}>Recent Applications</Text>
-                <Pressable onPress={() => setActiveTab("applications")}>
+                <View style={styles.sectionHeaderMain}>
+                  <Ionicons name="document-text" size={20} color="#1F2937" />
+                  <Text style={styles.sectionTitle}>Recent Applications</Text>
+                </View>
+                <Pressable
+                  style={styles.seeAllButton}
+                  onPress={() => setActiveTab("applications")}
+                >
                   <Text style={styles.seeAllText}>View All</Text>
+                  <Ionicons name="chevron-forward" size={16} color="#3B82F6" />
                 </Pressable>
               </View>
               {(applications || []).slice(0, 2).map((application, index) => (
-                <ApplicationCard
-                  key={application.id || index}
-                  application={application}
-                  onViewDetails={handleViewApplication}
-                  onMessage={handleMessageFamily}
-                />
+                <View key={application.id || index} style={styles.enhancedApplicationCard}>
+                  <View style={styles.applicationCardHeader}>
+                    <View style={styles.applicationCardMain}>
+                      <Text style={styles.applicationCardTitle} numberOfLines={1}>
+                        {application.jobTitle || application.job?.title || 'Childcare Position'}
+                      </Text>
+                      <Text style={styles.applicationCardFamily}>
+                        {application.family || application.job?.family || 'Family'}
+                      </Text>
+                    </View>
+                    <StatusBadge
+                      status={application.status}
+                      style={styles.applicationStatusBadge}
+                    />
+                  </View>
+
+                  <View style={styles.applicationCardDetails}>
+                    <View style={styles.applicationDetailItem}>
+                      <Ionicons name="calendar-outline" size={14} color="#6B7280" />
+                      <Text style={styles.applicationDetailTextInline}>
+                        Applied {application.appliedDate ? new Date(application.appliedDate).toLocaleDateString() : 'Recently'}
+                      </Text>
+                    </View>
+                    {application.proposedRate && (
+                      <View style={styles.applicationDetailItem}>
+                        <Ionicons name="cash-outline" size={14} color="#6B7280" />
+                        <Text style={styles.applicationDetailTextInline}>
+                          ₱{application.proposedRate}/hr
+                        </Text>
+                      </View>
+                    )}
+                  </View>
+
+                  <View style={styles.applicationCardActions}>
+                    <Pressable
+                      style={styles.secondaryButton}
+                      onPress={() => handleViewApplication(application)}
+                    >
+                      <Text style={styles.secondaryButtonText}>View Details</Text>
+                    </Pressable>
+                    <Pressable
+                      style={[
+                        styles.primaryButton,
+                        application.status !== 'accepted' && styles.primaryButtonDisabled,
+                      ]}
+                      onPress={() => handleMessageFamily(application)}
+                      disabled={application.status !== 'accepted'}
+                    >
+                      <Ionicons name="chatbubble-outline" size={16} color="#FFFFFF" />
+                      <Text style={styles.primaryButtonText}>Message</Text>
+                    </Pressable>
+                  </View>
+                </View>
               ))}
             </View>
 
             <View style={styles.section}>
               <View style={styles.sectionHeader}>
-                <Text style={styles.sectionTitle}>Upcoming Bookings</Text>
-                <Pressable onPress={() => setActiveTab('bookings')}>
+                <View style={styles.sectionHeaderMain}>
+                  <Ionicons name="calendar" size={20} color="#1F2937" />
+                  <Text style={styles.sectionTitle}>Upcoming Bookings</Text>
+                </View>
+                <Pressable
+                  style={styles.seeAllButton}
+                  onPress={() => setActiveTab('bookings')}
+                >
                   <Text style={styles.seeAllText}>See All</Text>
+                  <Ionicons name="chevron-forward" size={16} color="#3B82F6" />
                 </Pressable>
               </View>
-              {(bookings || []).slice(0, 2).map((booking, index) => (
-                <BookingCard
-                  key={booking.id || index}
-                  booking={booking}
-                  onMessage={handleBookingMessage}
-                  onConfirmAttendance={handleConfirmAttendance}
-                />
-              ))}
+              {(bookings || []).slice(0, 2).map((booking, index) => {
+                const bookingId = booking?.id || booking?._id;
+                const status = String(booking?.status || 'Unknown');
+                const statusLower = status.toLowerCase();
+                const familyName = booking?.family || booking?.familyName || 'Family';
+                const bookingDate = booking?.date ? new Date(booking.date).toLocaleDateString() : 'Date TBD';
+                const startTime = booking?.start_time || booking?.startTime;
+                const endTime = booking?.end_time || booking?.endTime;
+                const formattedTime = booking?.time ||
+                  (startTime && endTime ? `${startTime} - ${endTime}` : startTime || endTime || 'Time TBD');
+                const childrenCount = booking?.children || booking?.numberOfChildren || booking?.childrenCount;
+                const childrenLabel = `${childrenCount || 1} ${(childrenCount || 1) === 1 ? 'child' : 'children'}`;
+                const locationLabel = booking?.location || booking?.address;
+                const hourlyRate = booking?.hourlyRate || booking?.hourly_rate;
+                const rateLabel = hourlyRate ? `${formatPeso(hourlyRate)}/hr` : null;
+
+                return (
+                  <View key={bookingId || index} style={styles.dashboardBookingCard}>
+                    <LinearGradient
+                      colors={['#667eea', '#764ba2']}
+                      start={{ x: 0, y: 0 }}
+                      end={{ x: 1, y: 0 }}
+                      style={styles.dashboardBookingHeader}
+                    >
+                      <View style={styles.dashboardBookingHeaderContent}>
+                        <View style={styles.dashboardBookingTitleContainer}>
+                          <Text style={styles.dashboardBookingTitle} numberOfLines={1}>
+                            {familyName}
+                          </Text>
+                          <Text style={styles.dashboardBookingSubtitle}>{bookingDate}</Text>
+                        </View>
+                        <View
+                          style={[styles.dashboardBookingStatusBadge, styles[`dashboardBookingStatus_${statusLower}`]]}
+                        >
+                          <Text style={styles.dashboardBookingStatusText}>{status}</Text>
+                        </View>
+                      </View>
+                    </LinearGradient>
+
+                    <View style={styles.dashboardBookingContent}>
+                      <View style={styles.dashboardBookingMetaRow}>
+                        <View style={styles.dashboardBookingMetaChip}>
+                          <Ionicons name="time-outline" size={14} color="#2563EB" />
+                          <Text style={styles.dashboardBookingMetaText}>{formattedTime}</Text>
+                        </View>
+                        <View style={styles.dashboardBookingMetaChip}>
+                          <Ionicons name="people-outline" size={14} color="#10B981" />
+                          <Text style={styles.dashboardBookingMetaText}>{childrenLabel}</Text>
+                        </View>
+                        {rateLabel ? (
+                          <View style={styles.dashboardBookingMetaChip}>
+                            <Ionicons name="cash-outline" size={14} color="#059669" />
+                            <Text style={styles.dashboardBookingMetaText}>{rateLabel}</Text>
+                          </View>
+                        ) : null}
+                      </View>
+
+                      {locationLabel ? (
+                        <Pressable
+                          style={styles.dashboardBookingLocation}
+                          onPress={() => handleGetDirections(booking)}
+                        >
+                          <Ionicons name="location-outline" size={16} color="#7C3AED" />
+                          <Text style={styles.dashboardBookingLocationText} numberOfLines={1}>
+                            {locationLabel}
+                          </Text>
+                          <Ionicons name="open-outline" size={16} color="#7C3AED" />
+                        </Pressable>
+                      ) : null}
+
+                      <View style={styles.dashboardBookingActions}>
+                        <Pressable
+                          style={styles.dashboardBookingSecondaryButton}
+                          onPress={() => {
+                            setSelectedBooking(booking);
+                            setShowBookingDetails(true);
+                          }}
+                        >
+                          <Ionicons name="eye-outline" size={16} color="#1F2937" />
+                          <Text style={styles.dashboardBookingSecondaryText}>Details</Text>
+                        </Pressable>
+                        <Pressable
+                          style={styles.dashboardBookingPrimaryButton}
+                          onPress={() => handleBookingMessage(booking)}
+                        >
+                          <Ionicons name="chatbubble-outline" size={16} color="#FFFFFF" />
+                          <Text style={styles.dashboardBookingPrimaryText}>Message</Text>
+                        </Pressable>
+                      </View>
+
+                      {statusLower === 'pending' ? (
+                        <Pressable
+                          style={styles.dashboardBookingConfirmButton}
+                          onPress={() => handleConfirmAttendance(booking)}
+                        >
+                          <Ionicons name="checkmark" size={16} color="#FFFFFF" />
+                          <Text style={styles.dashboardBookingConfirmText}>Confirm Attendance</Text>
+                        </Pressable>
+                      ) : null}
+                    </View>
+                  </View>
+                );
+              })}
             </View>
             </ScrollView>
           )
@@ -2355,7 +1816,22 @@ const CaregiverDashboard = () => {
           />
         )}
 
-        {activeTab === 'reviews' && renderReviewsTab()}
+        {activeTab === 'reviews' && (
+  <CaregiverReviewsTab
+    reviews={reviewsSorted}
+    loading={reviewsLoading}
+    refreshing={refreshingReviews}
+    currentUserId={user?.id}
+    onRefresh={refreshCaregiverReviews}
+    onEditReview={(review) => {
+      setSelectedReview(review);
+      setShowReviewForm(true);
+    }}
+    onOpenRatings={openRatingsModal}
+    onRequestHighlight={handleGeneralHighlightRequest}
+    highlightRequestSending={highlightRequestSending}
+  />
+)}
 
         {activeTab === 'notifications' && (
           <NotificationsTab
@@ -2601,11 +2077,9 @@ const CaregiverDashboard = () => {
         const statusLower = String(selectedApplication.status || '').toLowerCase();
         const canMessageFamily = statusLower === 'accepted';
         const infoTiles = [
-          appliedDateLabel && { icon: 'calendar-outline', label: 'Applied', value: appliedDateLabel },
           scheduleLabel && { icon: 'time-outline', label: 'Schedule', value: scheduleLabel },
           jobRateLabel && { icon: 'cash-outline', label: 'Job Rate', value: jobRateLabel },
           proposedRateLabel && { icon: 'trending-up-outline', label: 'Your Proposed Rate', value: proposedRateLabel },
-          locationLabel && { icon: 'location-outline', label: 'Location', value: locationLabel },
           childrenSummaryLabel && { icon: 'people-outline', label: 'Children', value: childrenSummaryLabel },
         ].filter(Boolean);
         const metaChips = [
@@ -2622,26 +2096,13 @@ const CaregiverDashboard = () => {
           >
             <View style={styles.modalOverlay}>
               <View style={styles.applicationModal}>
-                <ScrollView
-                  showsVerticalScrollIndicator={false}
-                  contentContainerStyle={styles.applicationModalScroll}
+                <LinearGradient
+                  colors={['#4F46E5', '#7C3AED']}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 1 }}
+                  style={styles.applicationHeroGradient}
                 >
-                  <LinearGradient
-                    colors={['#4F46E5', '#7C3AED']}
-                    start={{ x: 0, y: 0 }}
-                    end={{ x: 1, y: 1 }}
-                    style={styles.applicationHeroGradient}
-                  >
-                    <View style={styles.applicationHeroTopRow}>
-                      <StatusBadge status={selectedApplication.status} showIcon style={styles.applicationStatusBadge} />
-                      <Pressable
-                        onPress={() => setShowApplicationDetails(false)}
-                        style={styles.modalCloseButton}
-                      >
-                        <Ionicons name="close" size={20} color="#E0E7FF" />
-                      </Pressable>
-                    </View>
-
+                  <View style={styles.applicationHeroTopRow}>
                     <View style={styles.applicationHeroContent}>
                       <Text style={styles.applicationHeroTitle} numberOfLines={2}>{String(jobTitle)}</Text>
                       <Text style={styles.applicationHeroSubtitle} numberOfLines={1}>{String(familyLabel)}</Text>
@@ -2657,8 +2118,19 @@ const CaregiverDashboard = () => {
                         </View>
                       )}
                     </View>
-                  </LinearGradient>
 
+                    <StatusBadge
+                      status={selectedApplication.status}
+                      showIcon
+                      style={styles.applicationStatusBadge}
+                    />
+                  </View>
+                </LinearGradient>
+
+                <ScrollView
+                  showsVerticalScrollIndicator={false}
+                  contentContainerStyle={styles.applicationModalScroll}
+                >
                   <View style={styles.applicationModalBody}>
                     {infoTiles.length > 0 && (
                       <View style={styles.applicationInfoGrid}>

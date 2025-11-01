@@ -1,14 +1,25 @@
 import { Ionicons } from '@expo/vector-icons';
 import React, { useCallback, useEffect, useState } from 'react';
 import {
-    FlatList,
-    StyleSheet,
-    Text,
-    TouchableOpacity,
-    View,
+  FlatList,
+  Image,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
 } from 'react-native';
 import { useAuth } from '../../../contexts/AuthContext';
 import { supabaseService } from '../../../services/supabase';
+import { sanitizeImageUri } from '../../../utils';
+
+const getValidImageUri = (uri) => {
+  if (typeof uri !== 'string') return null;
+  const trimmed = uri.trim();
+  if (!trimmed || trimmed.toLowerCase() === 'null' || trimmed.toLowerCase() === 'undefined') {
+    return null;
+  }
+  return trimmed;
+};
 
 // Base MessagesTab component with common functionality
 const BaseMessagesTab = ({
@@ -42,23 +53,23 @@ const BaseMessagesTab = ({
         return;
       }
       const data = await supabaseService.getConversations(user.id);
-      
-      // Transform data to match expected format
-      const transformedData = data.map(conv => {
-        const otherParticipant = conv.participant_1 === user.id ? conv.participant_2 : conv.participant_1;
-        const otherUser = conv.participant_1 === user.id ? conv.participant2 : conv.participant1;
-        
+
+      const transformedData = data.map((conv) => {
+        const otherParticipantId = conv.participant_1 === user.id ? conv.participant_2 : conv.participant_1;
+        const otherUser = conv.otherParticipant || {};
+        const participantAvatar = sanitizeImageUri(otherUser.profile_image);
+
         return {
           id: conv.id,
-          participantId: otherParticipant,
-          participantName: otherUser?.name || 'User',
-          participantAvatar: otherUser?.profile_image,
-          lastMessage: 'Start a conversation',
+          participantId: otherParticipantId,
+          participantName: otherUser.name || 'User',
+          participantAvatar,
+          lastMessage: conv.last_message_preview || 'Start a conversation',
           lastMessageTime: conv.last_message_at,
-          unreadCount: 0
+          unreadCount: conv.unread_count || 0,
         };
       });
-      
+
       setConversations(transformedData);
     } catch (error) {
       console.error('Error loading conversations:', error);

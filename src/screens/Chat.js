@@ -2,20 +2,30 @@ import { Ionicons } from '@expo/vector-icons';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
-    ActivityIndicator,
-    Alert,
-    FlatList,
-    KeyboardAvoidingView,
-    Platform,
-    StyleSheet,
-    TouchableOpacity,
-    View,
+  ActivityIndicator,
+  Alert,
+  FlatList,
+  KeyboardAvoidingView,
+  Platform,
+  StyleSheet,
+  TouchableOpacity,
+  View,
 } from 'react-native';
 import { Avatar, Text } from 'react-native-paper';
 import MessageCard from '../components/messaging/MessageCard';
 import MessageInput from '../components/messaging/MessageInput';
 import { useAuth } from '../contexts/AuthContext';
 import { messagingService, realtimeService } from '../services';
+import { sanitizeImageUri } from '../utils';
+
+const getValidImageUri = (uri) => {
+  if (typeof uri !== 'string') return null;
+  const trimmed = uri.trim();
+  if (!trimmed || trimmed.toLowerCase() === 'null' || trimmed.toLowerCase() === 'undefined') {
+    return null;
+  }
+  return trimmed;
+};
 
 const mapMessageRecord = (record) => ({
   id: record.id,
@@ -65,20 +75,27 @@ const Chat = () => {
     [recipientId, targetUserId, routeOtherUserId, caregiverId, parentId],
   );
 
-  const otherUserName =
+  const fallbackOtherUserName =
     recipientName || targetUserName || caregiverName || parentName || 'User';
-  const otherUserAvatar =
-    recipientAvatar || targetUserAvatar || routeOtherUserAvatar || null;
+
+  const initialOtherUserAvatar = useMemo(
+    () => sanitizeImageUri(recipientAvatar || targetUserAvatar || routeOtherUserAvatar),
+    [recipientAvatar, targetUserAvatar, routeOtherUserAvatar],
+  );
 
   const currentUserId = user?.id || routeUserId || null;
+
+  const [otherUserDisplayName, setOtherUserDisplayName] = useState(fallbackOtherUserName);
+  const [resolvedOtherUserAvatar, setResolvedOtherUserAvatar] = useState(initialOtherUserAvatar);
+  const [avatarLoading, setAvatarLoading] = useState(false);
 
   const [conversation, setConversation] = useState(() =>
     initialConversationId
       ? {
           id: initialConversationId,
           otherUserId: derivedOtherUserId,
-          recipientName: otherUserName,
-          recipientAvatar: otherUserAvatar,
+          recipientName: fallbackOtherUserName,
+          recipientAvatar: initialOtherUserAvatar,
         }
       : null,
   );
@@ -111,8 +128,8 @@ const Chat = () => {
             ? {
                 ...prev,
                 otherUserId: derivedOtherUserId ?? prev.otherUserId,
-                recipientName: otherUserName || prev.recipientName,
-                recipientAvatar: otherUserAvatar ?? prev.recipientAvatar,
+                recipientName: fallbackOtherUserName || prev.recipientName,
+                recipientAvatar: initialOtherUserAvatar ?? prev.recipientAvatar,
               }
             : prev,
         );
@@ -145,8 +162,8 @@ const Chat = () => {
         setConversation({
           id: resolvedId,
           otherUserId: derivedOtherUserId,
-          recipientName: otherUserName,
-          recipientAvatar: otherUserAvatar,
+          recipientName: fallbackOtherUserName,
+          recipientAvatar: initialOtherUserAvatar,
         });
       } catch (error) {
         console.error('Failed to initialize chat conversation:', error);
@@ -169,8 +186,8 @@ const Chat = () => {
     derivedOtherUserId,
     initialConversationId,
     navigation,
-    otherUserAvatar,
-    otherUserName,
+    fallbackOtherUserName,
+    initialOtherUserAvatar,
   ]);
 
   useEffect(() => {
@@ -323,11 +340,11 @@ const Chat = () => {
     if (!typingUsers.length) return null;
     const includesRecipient =
       derivedOtherUserId && typingUsers.includes(String(derivedOtherUserId));
-    if (includesRecipient && otherUserName) {
-      return `${otherUserName} is typing...`;
+    if (includesRecipient && fallbackOtherUserName) {
+      return `${fallbackOtherUserName} is typing...`;
     }
     return 'Someone is typing...';
-  }, [derivedOtherUserId, otherUserName, typingUsers]);
+  }, [derivedOtherUserId, fallbackOtherUserName, typingUsers]);
 
   if (loading && !messages.length) {
     return (
@@ -351,8 +368,8 @@ const Chat = () => {
       message={item}
       isOwn={item.senderId === currentUserId}
       showAvatar
-      senderName={item.senderId === currentUserId ? 'You' : otherUserName}
-      senderAvatar={item.senderId === currentUserId ? null : otherUserAvatar}
+      senderName={item.senderId === currentUserId ? 'You' : fallbackOtherUserName}
+      senderAvatar={item.senderId === currentUserId ? null : initialOtherUserAvatar}
     />
   );
 
@@ -370,14 +387,14 @@ const Chat = () => {
           <Ionicons name="arrow-back" size={24} color="#111827" />
         </TouchableOpacity>
         <View style={styles.headerInfo}>
-          {otherUserAvatar ? (
-            <Avatar.Image size={40} source={{ uri: otherUserAvatar }} />
+          {initialOtherUserAvatar ? (
+            <Avatar.Image size={40} source={{ uri: initialOtherUserAvatar }} />
           ) : (
             <Avatar.Icon size={40} icon="account" />
           )}
           <View style={styles.headerText}>
             <Text variant="titleMedium" style={styles.recipientName} numberOfLines={1}>
-              {otherUserName}
+              {fallbackOtherUserName}
             </Text>
             <Text variant="bodySmall" style={styles.recipientStatus}>
               {typingMessage || 'Online'}
@@ -410,7 +427,7 @@ const Chat = () => {
         onSendMessage={handleSendMessage}
         onTyping={handleTyping}
         onUploadAttachment={handleUploadAttachment}
-        placeholder={`Message ${otherUserName}...`}
+        placeholder={`Message ${fallbackOtherUserName}...`}
       />
     </KeyboardAvoidingView>
   );

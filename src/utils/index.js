@@ -1,13 +1,26 @@
 // utils/index.js - Centralized utility exports
 export * from './auth';
-export * from './validation';
 export * from './errorHandler';
 export * from './logger';
 export * from './notificationUtils';
+export * from './validation';
 
 // Re-export commonly used utilities
-export { default as logger } from './logger';
 export { default as errorHandler } from './errorHandler';
+export { default as logger } from './logger';
+
+export const sanitizeImageUri = (uri) => {
+  if (typeof uri !== 'string') return null;
+  const trimmed = uri.trim();
+  if (!trimmed) return null;
+
+  const lower = trimmed.toLowerCase();
+  if (lower === 'null' || lower === 'undefined' || lower === 'false') {
+    return null;
+  }
+
+  return trimmed;
+};
 
 // Export utility functions that might be used across the app
 export const formatDate = (date) => {

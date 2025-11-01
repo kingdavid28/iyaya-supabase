@@ -188,7 +188,13 @@ export const useCaregiverDashboard = () => {
     profileImage: null,
     imageUrl: null,
     image: null,
-    verification: null
+    trustScore: 0,
+    verification: {
+      trustScore: 0,
+      verified: false,
+      status: 'pending',
+      updatedAt: null,
+    },
   });
   const [jobs, setJobs] = useState([]);
   const [applications, setApplications] = useState([]);
@@ -332,7 +338,11 @@ export const useCaregiverDashboard = () => {
         hourly_rate: userProfile?.hourly_rate,
         skills: userProfile?.skills || [],
         experience: userProfile?.experience,
-        
+        trustScore: userProfile?.trustScore ?? userProfile?.trust_score,
+        verificationStatus: userProfile?.verificationStatus ?? userProfile?.verification_status,
+        verified: userProfile?.verified,
+        verificationUpdatedAt: userProfile?.verificationUpdatedAt ?? userProfile?.verification_updated_at,
+
         // Caregiver profile data (if exists)
         ...(caregiverProfile && {
           hourly_rate: caregiverProfile.hourly_rate || userProfile?.hourly_rate,
@@ -340,28 +350,57 @@ export const useCaregiverDashboard = () => {
           certifications: caregiverProfile.certifications || [],
           availability: caregiverProfile.availability,
           background_check_status: caregiverProfile.background_check_status,
+          trustScore: caregiverProfile.trustScore ?? caregiverProfile.trust_score,
+          verificationStatus: caregiverProfile.verificationStatus ?? caregiverProfile.verification_status,
+          verificationUpdatedAt: caregiverProfile.verificationUpdatedAt ?? caregiverProfile.verification_updated_at,
+          verified: caregiverProfile.verified ?? caregiverProfile.is_verified,
         })
       };
 
-      setProfile(prev => ({
-        ...prev,
-        name: combinedProfile.name || prev.name,
-        email: combinedProfile.email || prev.email,
-        phone: combinedProfile.phone || prev.phone,
-        location: combinedProfile.location || prev.location,
-        address: combinedProfile.address || prev.address,
-        profileImage: combinedProfile.profile_image || prev.profileImage,
-        hourlyRate: combinedProfile.hourly_rate || prev.hourlyRate,
-        experience: combinedProfile.experience || prev.experience,
-        bio: combinedProfile.bio || prev.bio,
-        skills: combinedProfile.skills || prev.skills || [],
-        certifications: combinedProfile.certifications || prev.certifications || [],
-        availability: combinedProfile.availability || prev.availability,
-        rating: prev.rating,
-        reviews: prev.reviews,
-        completedJobs: prev.completedJobs,
-        responseRate: prev.responseRate,
-      }));
+      setProfile(prev => {
+        const trustScoreRaw = combinedProfile.trustScore ?? prev.verification?.trustScore ?? prev.trustScore ?? 0;
+        const numericTrustScore = Number.isFinite(Number(trustScoreRaw)) ? Number(trustScoreRaw) : Number(prev.trustScore ?? 0);
+
+        const verificationStatus = combinedProfile.verificationStatus ?? prev.verification?.status ?? null;
+        const isVerifiedFlag = typeof combinedProfile.verified === 'boolean'
+          ? Boolean(combinedProfile.verified)
+          : (typeof verificationStatus === 'string' && verificationStatus.toLowerCase() === 'verified')
+            || Boolean(prev.verification?.verified);
+
+        const verification = {
+          trustScore: numericTrustScore,
+          status: verificationStatus || (isVerifiedFlag ? 'verified' : prev.verification?.status ?? 'pending'),
+          verified: isVerifiedFlag,
+          updatedAt: combinedProfile.verificationUpdatedAt
+            ?? prev.verification?.updatedAt
+            ?? null,
+        };
+
+        return {
+          ...prev,
+          name: combinedProfile.name || prev.name,
+          email: combinedProfile.email || prev.email,
+          phone: combinedProfile.phone || prev.phone,
+          location: combinedProfile.location || prev.location,
+          address: combinedProfile.address || prev.address,
+          profileImage: combinedProfile.profile_image || prev.profileImage,
+          hourlyRate: combinedProfile.hourly_rate || prev.hourlyRate,
+          experience: combinedProfile.experience || prev.experience,
+          bio: combinedProfile.bio || prev.bio,
+          skills: combinedProfile.skills || prev.skills || [],
+          certifications: combinedProfile.certifications || prev.certifications || [],
+          availability: combinedProfile.availability || prev.availability,
+          rating: prev.rating,
+          reviews: prev.reviews,
+          completedJobs: prev.completedJobs,
+          responseRate: prev.responseRate,
+          trustScore: numericTrustScore,
+          verification: {
+            ...prev.verification,
+            ...verification,
+          },
+        };
+      });
 
       await updateProfileStats({ fetchReviews: true });
 
