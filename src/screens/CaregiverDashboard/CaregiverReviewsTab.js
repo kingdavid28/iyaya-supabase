@@ -1,7 +1,7 @@
-import React, { useCallback, useMemo, useState } from 'react';
-import { ActivityIndicator, Pressable, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
+import React, { useCallback, useMemo, useState } from 'react';
+import { ActivityIndicator, Pressable, Text, View } from 'react-native';
 
 import ReviewList from '../../components/features/profile/ReviewList';
 import { styles } from '../styles/CaregiverDashboard.styles';
@@ -76,16 +76,17 @@ const CaregiverReviewsTab = ({
     }
   }, [activeFilter, sortedReviews]);
 
-  const fiveStarShare = useMemo(() => {
-    if (!totalReviews) return 0;
+  const fiveStarStats = useMemo(() => {
     const bucket = ratingDistribution.find((item) => item.rating === 5);
-    return Math.round(((bucket?.count || 0) / totalReviews) * 100);
+    const count = bucket?.count ?? 0;
+    const share = totalReviews ? Math.round((count / totalReviews) * 100) : 0;
+    return { share, count };
   }, [ratingDistribution, totalReviews]);
 
-  const commentShare = useMemo(() => {
-    if (!totalReviews) return 0;
-    const withComments = sortedReviews.filter((review) => review?.comment?.trim()).length;
-    return Math.round((withComments / totalReviews) * 100);
+  const commentStats = useMemo(() => {
+    const count = sortedReviews.filter((review) => review?.comment?.trim()).length;
+    const share = totalReviews ? Math.round((count / totalReviews) * 100) : 0;
+    return { share, count };
   }, [sortedReviews, totalReviews]);
 
   const reviewSummaryItems = useMemo(
@@ -95,24 +96,36 @@ const CaregiverReviewsTab = ({
         label: 'Highlights collected',
         value: String(totalReviews || 0),
         icon: 'people-circle-outline',
-        accent: '#1D4ED8'
+        accent: '#1D4ED8',
+        detail: totalReviews
+          ? `${totalReviews} ${totalReviews === 1 ? 'family' : 'families'} shared feedback`
+          : 'Invite families to leave a review',
+        detailIcon: 'people-outline'
       },
       {
         id: 'five-star',
         label: '5★ share',
-        value: totalReviews ? `${fiveStarShare}%` : '—',
+        value: totalReviews ? `${fiveStarStats.share}%` : '—',
         icon: 'star-outline',
-        accent: '#F59E0B'
+        accent: '#F59E0B',
+        detail: totalReviews
+          ? `${fiveStarStats.count} five-star ${fiveStarStats.count === 1 ? 'review' : 'reviews'}`
+          : 'No five-star ratings yet',
+        detailIcon: 'star'
       },
       {
         id: 'stories',
         label: 'Reviews with notes',
-        value: totalReviews ? `${commentShare}%` : '—',
+        value: totalReviews ? `${commentStats.share}%` : '—',
         icon: 'chatbubble-ellipses-outline',
-        accent: '#10B981'
+        accent: '#10B981',
+        detail: totalReviews
+          ? `${commentStats.count} highlight${commentStats.count === 1 ? '' : 's'} with stories`
+          : 'Awaiting family stories',
+        detailIcon: 'document-text-outline'
       }
     ],
-    [commentShare, fiveStarShare, totalReviews]
+    [commentStats.count, commentStats.share, fiveStarStats.count, fiveStarStats.share, totalReviews]
   );
 
   const handleSelectFilter = useCallback((filterId) => {
@@ -236,6 +249,19 @@ const CaregiverReviewsTab = ({
               </View>
               <Text style={styles.reviewsSummaryLabel}>{item.label}</Text>
               <Text style={styles.reviewsSummaryMetric}>{item.value}</Text>
+              {item.detail ? (
+                <View style={styles.reviewsSummaryValueRow}>
+                  {item.detailIcon ? (
+                    <Ionicons
+                      name={item.detailIcon}
+                      size={16}
+                      color={item.accent}
+                      style={styles.reviewsSummaryDetailIcon}
+                    />
+                  ) : null}
+                  <Text style={styles.reviewsSummaryDetailText}>{item.detail}</Text>
+                </View>
+              ) : null}
             </View>
           ))}
         </View>

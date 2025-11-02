@@ -1153,6 +1153,61 @@ const stateStyles = {
   reviewsFilterPillTextActive: {
     color: '#1D4ED8',
   },
+  reviewsSummaryGrid: {
+    flexDirection: 'row',
+    gap: 12,
+    marginBottom: 16,
+  },
+  reviewsSummaryCard: {
+    flex: 1,
+    borderRadius: 14,
+    padding: 16,
+    backgroundColor: '#F8FAFC',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    ...shadows.xs,
+  },
+  reviewsSummaryLabel: {
+    fontSize: 13,
+    color: '#1F2937',
+    fontWeight: '600',
+  },
+  reviewsSummaryMetric: {
+    fontSize: 24,
+    fontWeight: '700',
+    color: '#111827',
+    marginTop: 8,
+  },
+  reviewsSummaryIconWrap: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 12,
+  },
+  reviewsSummaryValueRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    flexWrap: 'wrap',
+    gap: 6,
+    marginTop: 10,
+  },
+  reviewsSummaryValue: {
+    fontSize: 28,
+    fontWeight: '700',
+    color: '#111827',
+  },
+  reviewsSummaryDetailIcon: {
+    marginTop: 2,
+  },
+  reviewsSummaryDetailText: {
+    flex: 1,
+    fontSize: 12,
+    fontWeight: '500',
+    color: '#4B5563',
+    lineHeight: 16,
+  },
   reviewsBreakdownCard: {
     marginTop: 16,
     padding: 16,

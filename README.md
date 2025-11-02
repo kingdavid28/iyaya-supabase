@@ -287,3 +287,29 @@ This project is licensed under the MIT License.
 `src/config/api.js` currently re-exports the consolidated service layer to ease migration from older modules. New features should import the specific service they need (e.g. `import { bookingsAPI } from '../services'`). As legacy code is updated, trim unused re-exports to keep bundles lean and dependencies explicit.
 
 
+Based on the package.json and file structure, here are key performance optimization recommendations for your React Native/Expo app:
+
+Bundle Analysis:
+Run npm run analyze-bundle to identify large dependencies
+Look for opportunities to lazy load components
+Immediate Optimizations:
+Upgrade Expo to latest version (current: 54.0.21)
+Consider replacing axios with native fetch since you're on React Native 0.81.5
+Check if all Expo modules are actually used (several image-related ones)
+Performance Monitoring:
+The src/utils/performanceMonitor.js suggests you already have monitoring - review its findings
+Check src/utils/performance.js for existing optimization patterns
+Image Handling:
+Review src/utils/imageUtils.js and related files for optimization opportunities
+Implement proper image caching and resizing
+State Management:
+You're using Zustand (good choice) - ensure proper selectors are used to prevent unnecessary re-renders
+Network Calls:
+Review src/utils/networkConfig.js for API call optimizations
+Implement request deduplication where possible
+Would you like me to investigate any of these areas in more depth? For example:
+
+Analyze a specific performance bottleneck
+Review the performance monitoring implementation
+Optimize image handling further
+Let me know which area you'd like to focus on first.
