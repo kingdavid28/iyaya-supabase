@@ -1,7 +1,28 @@
 // src/services/supabase/messagingService.js
-import { SupabaseBase, supabase } from './base'
-import { getCachedOrFetch, invalidateCache } from './cache'
-import { ATTACHMENT_VALIDATION_DEFAULTS, validateUpload } from '../../utils/uploadValidation'
+import { ATTACHMENT_VALIDATION_DEFAULTS, validateUpload } from '../../utils/uploadValidation';
+import { SupabaseBase, supabase } from './base';
+import { getCachedOrFetch, invalidateCache } from './cache';
+
+const MESSAGE_SELECT_FIELDS = `
+  id,
+  conversation_id,
+  sender_id,
+  recipient_id,
+  content,
+  message_type,
+  attachment_url,
+  attachment_storage_path,
+  attachment_name,
+  attachment_type,
+  attachment_size,
+  read_at,
+  created_at,
+  updated_at,
+  edited_at,
+  deleted_at
+`
+
+const ATTACHMENT_BUCKET = 'message-attachments';
 
 export class MessagingService extends SupabaseBase {
   async getOrCreateConversation(participant1, participant2) {
@@ -14,17 +35,17 @@ export class MessagingService extends SupabaseBase {
           console.log('🔄 Using current auth user as participant1:', participant1);
         }
       }
-      
-      console.log('🔍 getOrCreateConversation called with:', { 
-        participant1, 
+
+      console.log('🔍 getOrCreateConversation called with:', {
+        participant1,
         participant2
       });
-      
+
       if (!participant1 || participant1 === 'undefined' || participant1 === 'null' || String(participant1) === 'undefined') {
         console.error('❌ Invalid participant1:', participant1);
         throw new Error(`Participant 1 ID is required. Received: ${participant1}`)
       }
-      
+
       if (!participant2 || participant2 === 'undefined' || participant2 === 'null') {
         const currentUser = await this._getCurrentUser()
         if (!currentUser) {
@@ -35,15 +56,15 @@ export class MessagingService extends SupabaseBase {
         }
         participant2 = currentUser.id
       }
-      
+
       this._validateId(participant1, 'Participant 1 ID')
       this._validateId(participant2, 'Participant 2 ID')
-      
+
       if (participant1 === participant2) {
         console.error('❌ Attempted to create conversation with same user ID:', { participant1, participant2 })
         throw new Error('Invalid conversation participants - cannot message yourself')
       }
-      
+
       const cacheKey = `conversations:${[participant1, participant2].sort().join('-')}`
       const conversation = await getCachedOrFetch(cacheKey, async () => {
         const { data, error } = await supabase
@@ -105,7 +126,7 @@ export class MessagingService extends SupabaseBase {
           }
           throw error
         }
-        
+
         const conversations = await Promise.all((data || []).map(async (conv) => {
           const otherParticipantId = conv.participant_1 === userId ? conv.participant_2 : conv.participant_1
           const { data: otherUser } = await supabase
@@ -113,13 +134,13 @@ export class MessagingService extends SupabaseBase {
             .select('id, name, profile_image')
             .eq('id', otherParticipantId)
             .single()
-          
+
           return {
             ...conv,
             otherParticipant: otherUser || { id: otherParticipantId, name: 'User', profile_image: null }
           }
         }))
-        
+
         return conversations
       }, 30 * 1000)
     } catch (error) {
@@ -175,7 +196,7 @@ export class MessagingService extends SupabaseBase {
         senderId = currentUser.id
         console.log('🔄 Using current auth user as sender:', senderId)
       }
-      
+
       // Handle different conversation ID formats
       if (typeof conversationId === 'object' && conversationId !== null) {
         if (conversationId.id) {
@@ -190,11 +211,12 @@ export class MessagingService extends SupabaseBase {
       } else if (!conversationId) {
         throw new Error('Conversation ID is required')
       }
-      
+
       this._validateId(conversationId, 'Conversation ID')
       this._validateId(senderId, 'Sender ID')
-      
-      if (!attachment && !content?.trim()) {
+
+      const trimmedContent = content?.trim() || ''
+      if (!attachment && !trimmedContent) {
         throw new Error('Message content or attachment is required')
       }
 
@@ -206,15 +228,20 @@ export class MessagingService extends SupabaseBase {
 
       if (conversationError) throw conversationError
 
-      const recipientId = conversation.participant_1 === senderId 
-        ? conversation.participant_2 
+      const recipientId = conversation.participant_1 === senderId
+        ? conversation.participant_2
         : conversation.participant_1
 
       const insertPayload = {
         conversation_id: conversationId,
         sender_id: senderId,
         recipient_id: recipientId,
-        content: content?.trim() || '',
+        content: trimmedContent,
+        message_type: attachment
+          ? attachment.mimeType?.startsWith('image/')
+            ? 'image'
+            : 'file'
+          : 'text',
         created_at: new Date().toISOString(),
       }
 
@@ -230,7 +257,7 @@ export class MessagingService extends SupabaseBase {
       const { data, error } = await supabase
         .from('messages')
         .insert([insertPayload])
-        .select()
+        .select(MESSAGE_SELECT_FIELDS)
         .single()
 
       if (error) throw error
@@ -245,6 +272,32 @@ export class MessagingService extends SupabaseBase {
       return data
     } catch (error) {
       return this._handleError('sendMessage', error)
+    }
+  }
+
+  async getAttachmentSignedUrl(storagePath, ttlSeconds = 60 * 10) {
+    try {
+      if (!storagePath || typeof storagePath !== 'string') {
+        return null
+      }
+
+      const normalizedPath = storagePath.replace(/^\/+/, '')
+      if (!normalizedPath) {
+        return null
+      }
+
+      const { data, error } = await supabase.storage
+        .from(ATTACHMENT_BUCKET)
+        .createSignedUrl(normalizedPath, ttlSeconds)
+
+      if (error) {
+        throw error
+      }
+
+      return data?.signedUrl ?? null
+    } catch (error) {
+      console.warn('Failed to generate attachment signed URL:', error?.message || error)
+      return null
     }
   }
 
@@ -263,14 +316,14 @@ export class MessagingService extends SupabaseBase {
         const conversation = await this.getOrCreateConversation(participant1, participant2)
         conversationId = conversation.id
       }
-      
+
       this._validateId(conversationId, 'Conversation ID')
-      
+
       const cacheKey = `messages:${conversationId}:${limit}`
       return await getCachedOrFetch(cacheKey, async () => {
         const { data, error } = await supabase
           .from('messages')
-          .select('*')
+          .select(MESSAGE_SELECT_FIELDS)
           .eq('conversation_id', conversationId)
           .order('created_at', { ascending: true })
           .limit(limit)
@@ -285,7 +338,6 @@ export class MessagingService extends SupabaseBase {
 
   async markMessagesAsRead(conversationId, userId) {
     try {
-      // Get current user if userId is missing
       if (!userId || userId === 'undefined' || userId === 'null') {
         const currentUser = await this._getCurrentUser()
         if (!currentUser?.id) {
@@ -294,7 +346,7 @@ export class MessagingService extends SupabaseBase {
         }
         userId = currentUser.id
       }
-      
+
       if (typeof conversationId === 'object' && conversationId !== null) {
         if (conversationId.id) {
           conversationId = conversationId.id
@@ -304,25 +356,149 @@ export class MessagingService extends SupabaseBase {
           throw new Error('Invalid conversation object - missing id property')
         }
       }
-      
+
       this._validateId(conversationId, 'Conversation ID')
       this._validateId(userId, 'User ID')
-      
-      supabase
+
+      const { data, error } = await supabase
         .from('messages')
         .update({ read_at: new Date().toISOString() })
         .eq('conversation_id', conversationId)
         .eq('recipient_id', userId)
         .is('read_at', null)
-        .then(({ error }) => {
-          if (error) console.warn('Error marking messages as read:', error)
-        })
+        .select('id')
 
-      invalidateCache(`messages:${conversationId}`)
-      return { success: true }
+      if (error) {
+        console.warn('Error marking messages as read:', error)
+        return { success: false }
+      }
+
+      if (data?.length) {
+        invalidateCache(`messages:${conversationId}`)
+      }
+      return { success: true, updated: data?.length ?? 0 }
     } catch (error) {
       console.warn('markMessagesAsRead error:', error.message)
       return { success: false }
+    }
+  }
+
+  async updateMessage(messageId, userId, { content, attachment } = {}) {
+    try {
+      if (!userId || userId === 'undefined' || userId === 'null') {
+        const currentUser = await this._getCurrentUser()
+        if (!currentUser?.id) {
+          throw new Error('Authentication required to update messages')
+        }
+        userId = currentUser.id
+      }
+
+      this._validateId(messageId, 'Message ID')
+      this._validateId(userId, 'User ID')
+
+      const payload = {
+        edited_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      }
+
+      if (typeof content === 'string') {
+        payload.content = content
+        payload.message_type = content.trim() ? 'text' : payload.message_type
+      }
+
+      if (attachment === null) {
+        payload.attachment_url = null
+        payload.attachment_storage_path = null
+        payload.attachment_name = null
+        payload.attachment_type = null
+        payload.attachment_size = null
+        payload.message_type = 'text'
+      } else if (attachment) {
+        payload.attachment_url = attachment.signedUrl || null
+        payload.attachment_storage_path = attachment.storagePath || null
+        payload.attachment_name = attachment.fileName || null
+        payload.attachment_type = attachment.mimeType || null
+        payload.attachment_size = attachment.size || null
+        payload.message_type = attachment.mimeType?.startsWith('image/') ? 'image' : 'file'
+      }
+
+      if (!('content' in payload) && !('attachment_url' in payload)) {
+        throw new Error('No updates provided for message')
+      }
+
+      const { data, error } = await supabase
+        .from('messages')
+        .update(payload)
+        .eq('id', messageId)
+        .is('deleted_at', null)
+        .select(MESSAGE_SELECT_FIELDS)
+        .single()
+
+      if (error) throw error
+
+      invalidateCache('conversations:')
+      invalidateCache(`messages:${data.conversation_id}`)
+      return data
+    } catch (error) {
+      return this._handleError('updateMessage', error)
+    }
+  }
+
+  async deleteMessage(messageId, userId, { hardDelete = false } = {}) {
+    try {
+      if (!userId || userId === 'undefined' || userId === 'null') {
+        const currentUser = await this._getCurrentUser()
+        if (!currentUser?.id) {
+          throw new Error('Authentication required to delete messages')
+        }
+        userId = currentUser.id
+      }
+
+      this._validateId(messageId, 'Message ID')
+      this._validateId(userId, 'User ID')
+
+      if (hardDelete) {
+        const { data, error } = await supabase
+          .from('messages')
+          .delete()
+          .eq('id', messageId)
+          .select('conversation_id')
+          .single()
+
+        if (error) throw error
+
+        invalidateCache('conversations:')
+        invalidateCache(`messages:${data.conversation_id}`)
+        return { success: true, deleted: true }
+      }
+
+      const updates = {
+        content: '',
+        attachment_url: null,
+        attachment_storage_path: null,
+        attachment_name: null,
+        attachment_type: null,
+        attachment_size: null,
+        message_type: 'system',
+        deleted_at: new Date().toISOString(),
+        edited_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      }
+
+      const { data, error } = await supabase
+        .from('messages')
+        .update(updates)
+        .eq('id', messageId)
+        .select(MESSAGE_SELECT_FIELDS)
+        .single()
+
+      if (error) throw error
+
+      invalidateCache('conversations:')
+      invalidateCache(`messages:${data.conversation_id}`)
+      return data
+    } catch (error) {
+      return this._handleError('deleteMessage', error)
     }
   }
 
@@ -340,13 +516,13 @@ export class MessagingService extends SupabaseBase {
         throw new Error('Invalid conversation object - missing id property')
       }
     }
-    
+
     this._validateId(conversationId, 'Conversation ID')
-    
+
     return supabase
       .channel(`messages:${conversationId}`)
       .on('postgres_changes', {
-        event: 'INSERT',
+        event: '*',
         schema: 'public',
         table: 'messages',
         filter: `conversation_id=eq.${conversationId}`

@@ -28,6 +28,7 @@ import WelcomeScreen from "../../screens/WelcomeScreen";
 import EmailVerificationScreen from "../../screens/EmailVerificationScreen";
 
 // Chat screen imports
+import Chat from "../../screens/Chat";
 import CaregiverReviewsScreen from "../../screens/CaregiverReviewsScreen";
 
 // Debug screen imports
@@ -67,7 +68,6 @@ const ParentAuthLazy = React.lazy(() => import("../../screens/ParentAuth"));
 const CaregiverAuthLazy = React.lazy(() => import("../../screens/CaregiverAuth"));
 const ParentProfileLazy = React.lazy(() => import("../../screens/ParentProfile"));
 const ProfileScreenLazy = React.lazy(() => import("../../screens/profile/ProfileScreen"));
-const ChatLazy = React.lazy(() => import("../../screens/Chat"));
 const BookingManagementLazy = React.lazy(() => import("../../screens/BookingManagementScreen"));
 const AvailabilityManagementLazy = React.lazy(() => import("../../screens/AvailabilityManagementScreen"));
 const ChildrenManagementLazy = React.lazy(() => import("../../screens/ChildrenManagementScreen"));
@@ -80,7 +80,6 @@ const ParentAuthScreen = withSuspense(ParentAuthLazy, AuthFlowSkeleton);
 const CaregiverAuthScreen = withSuspense(CaregiverAuthLazy, AuthFlowSkeleton);
 const ParentProfileScreen = withSuspense(ParentProfileLazy, ProfileScreenSkeleton);
 const ProfileScreenWithFallback = withSuspense(ProfileScreenLazy, ProfileScreenSkeleton);
-const ChatScreen = withSuspense(ChatLazy, MessagingScreenSkeleton);
 const BookingManagementScreen = withSuspense(BookingManagementLazy, ManagementScreenSkeleton);
 const AvailabilityManagementScreen = withSuspense(AvailabilityManagementLazy, ManagementScreenSkeleton);
 const ChildrenManagementScreen = withSuspense(ChildrenManagementLazy, ManagementScreenSkeleton);
@@ -178,7 +177,7 @@ const AppNavigatorWithAuth = () => {
         <Stack.Screen name="EmailVerificationPending" component={EmailVerificationPendingScreen} options={{ title: "Verify Your Email", headerShown: false }} />
         <Stack.Screen name="CaregiverProfileComplete" component={CaregiverProfileComplete} options={{ headerShown: false }} />
         <Stack.Screen name="ParentProfile" component={ParentProfileScreen} options={{ title: "My Profile", headerBackTitle: "Back" }} />
-        <Stack.Screen name="Chat" component={ChatScreen} options={{ headerShown: false }} />
+        <Stack.Screen name="Chat" component={Chat} options={{ headerShown: false }} />
         <Stack.Screen name="CaregiverReviews" component={CaregiverReviewsScreen} options={{ title: "Caregiver Reviews" }} />
         <Stack.Screen name="FacebookAuthTest" component={FacebookAuthTest} options={{ title: "Facebook Auth Test", headerShown: false }} />
         <Stack.Screen name="CaregiverProfile" component={CaregiverProfileComplete} options={{ title: "Caregiver Profile", headerBackTitle: "Back" }} />

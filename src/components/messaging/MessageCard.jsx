@@ -1,10 +1,37 @@
 // MessageCard.jsx - React Native Paper implementation
+import { Ionicons } from '@expo/vector-icons';
 import { format } from 'date-fns';
-import React from 'react';
-import { Image, Linking, Platform, StyleSheet, TouchableOpacity, View } from 'react-native';
+import React, { useState } from 'react';
+import {
+    Alert,
+    Image,
+    Linking,
+    Modal,
+    Platform,
+    ScrollView,
+    Share,
+    StyleSheet,
+    TouchableOpacity,
+    View
+} from 'react-native';
 import { Avatar, Card, Text } from 'react-native-paper';
 
-const MessageCard = ({ message, isOwn, showAvatar = false, senderName, senderAvatar }) => {
+const MessageCard = ({
+  message,
+  isOwn,
+  showAvatar = false,
+  senderName,
+  senderAvatar,
+  onLongPress,
+  isEditing = false,
+  onRefreshAttachmentUrl,
+}) => {
+  const [attachmentViewerVisible, setAttachmentViewerVisible] = useState(false);
+
+  const isDeleted = message.deleted || message.messageType === 'system';
+  const bodyText = isDeleted ? 'This message was deleted' : (message.text || '');
+  const showEditedMarker = message.edited && !isDeleted;
+
   const formatTime = (timestamp) => {
     try {
       return format(new Date(timestamp), 'HH:mm');
@@ -26,23 +53,129 @@ const MessageCard = ({ message, isOwn, showAvatar = false, senderName, senderAva
     }
   };
 
+  const ensureAttachmentUrl = async () => {
+    if (typeof onRefreshAttachmentUrl === 'function') {
+      const refreshed = await onRefreshAttachmentUrl(message);
+      if (refreshed) {
+        return refreshed;
+      }
+    }
+    return message.attachmentUrl;
+  };
+
+  const handleDownload = async () => {
+    try {
+      const url = await ensureAttachmentUrl();
+      if (!url) {
+        Alert.alert('Attachment unavailable', 'Unable to access this attachment right now.');
+        return;
+      }
+      await Linking.openURL(url);
+    } catch (error) {
+      Alert.alert('Error', 'Failed to download attachment');
+    }
+  };
+
+  const handleShare = async () => {
+    try {
+      const url = await ensureAttachmentUrl();
+      if (!url) {
+        Alert.alert('Attachment unavailable', 'Unable to share this attachment right now.');
+        return;
+      }
+      await Share.share({ url });
+    } catch (error) {
+      Alert.alert('Error', 'Failed to share attachment');
+    }
+  };
+
+  const AttachmentViewer = ({ message, onClose }) => {
+    return (
+      <Modal
+        visible={attachmentViewerVisible}
+        onRequestClose={onClose}
+        animationType="fade"
+        statusBarTranslucent
+      >
+        <View style={styles.viewerContainer}>
+          <TouchableOpacity style={styles.closeButton} onPress={onClose}>
+            <Ionicons name="close" size={24} color="white" />
+          </TouchableOpacity>
+          <ScrollView
+            maximumZoomScale={5}
+            minimumZoomScale={1}
+            contentContainerStyle={styles.viewerContent}
+          >
+            {message.attachmentType?.startsWith('image/') ? (
+              <Image
+                source={{ uri: message.attachmentUrl }}
+                style={styles.viewerImage}
+                resizeMode="contain"
+              />
+            ) : (
+              <View style={styles.fileViewer}>
+                <Ionicons name="document" size={64} color="#666" />
+                <Text style={styles.fileName}>
+                  {message.attachmentName || 'Attachment'}
+                </Text>
+                <Text style={styles.fileSize}>
+                  {message.attachmentSize ? `${message.attachmentSize} bytes` : 'Unknown size'}
+                </Text>
+              </View>
+            )}
+          </ScrollView>
+          <View style={styles.viewerActions}>
+            <TouchableOpacity style={styles.actionButton} onPress={handleDownload}>
+              <Ionicons name="download" size={24} color="white" />
+              <Text style={styles.actionText}>Download</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.actionButton} onPress={handleShare}>
+              <Ionicons name="share" size={24} color="white" />
+              <Text style={styles.actionText}>Share</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+    );
+  };
+
   const renderAttachment = () => {
-    if (!message.attachmentUrl) return null;
+    if (!message.attachmentUrl || isDeleted) return null;
 
     const isImage = message.attachmentType?.startsWith('image/');
-    
+
     return (
       <View style={styles.attachmentContainer}>
         {isImage ? (
-          <Image
-            source={{ uri: message.attachmentUrl }}
-            style={styles.attachmentImage}
-            resizeMode="cover"
-          />
+          <TouchableOpacity
+            onPress={async () => {
+              const url = await ensureAttachmentUrl();
+              if (!url) {
+                Alert.alert('Attachment unavailable', 'Unable to preview this attachment right now.');
+                return;
+              }
+              setAttachmentViewerVisible(true);
+            }}
+            activeOpacity={0.7}
+          >
+            <Image
+              source={{ uri: message.attachmentUrl }}
+              style={styles.attachmentImage}
+              resizeMode="cover"
+            />
+          </TouchableOpacity>
         ) : (
-          <TouchableOpacity 
-            onPress={() => Linking.openURL(message.attachmentUrl)}
+          <TouchableOpacity
+            onPress={async () => {
+              const url = await ensureAttachmentUrl();
+              if (!url) {
+                Alert.alert('Attachment unavailable', 'Unable to preview this attachment right now.');
+                return;
+              }
+              setAttachmentViewerVisible(true);
+            }}
             style={styles.attachmentButton}
+            activeOpacity={0.7}
           >
             <View style={[
               styles.attachmentChip,
@@ -52,7 +185,7 @@ const MessageCard = ({ message, isOwn, showAvatar = false, senderName, senderAva
                 📎
               </Text>
               <Text style={[
-                styles.attachmentText, 
+                styles.attachmentText,
                 isOwn ? styles.ownText : styles.otherText
               ]}>
                 {message.attachmentName || 'Attachment'}
@@ -93,10 +226,27 @@ const MessageCard = ({ message, isOwn, showAvatar = false, senderName, senderAva
   };
 
   return (
-    <View style={[
-      styles.container,
-      isOwn ? styles.ownContainer : styles.otherContainer
-    ]}>
+    <TouchableOpacity
+      onLongPress={isDeleted ? undefined : onLongPress}
+      onPress={
+        !isDeleted && message.attachmentUrl
+          ? async () => {
+              const url = await ensureAttachmentUrl();
+              if (!url) {
+                Alert.alert('Attachment unavailable', 'Unable to preview this attachment right now.');
+                return;
+              }
+              setAttachmentViewerVisible(true);
+            }
+          : undefined
+      }
+      activeOpacity={0.7}
+      style={[
+        styles.container,
+        isOwn ? styles.ownContainer : styles.otherContainer,
+        isEditing && styles.editingContainer,
+      ]}
+    >
       {showAvatar && !isOwn && (
         <Avatar.Image
           size={40}
@@ -115,28 +265,29 @@ const MessageCard = ({ message, isOwn, showAvatar = false, senderName, senderAva
           </Text>
         )}
 
-        <Card style={[
-          styles.messageCard,
-          isOwn ? styles.ownMessage : styles.otherMessage
-        ]}>
+        <Card
+          style={[
+            styles.messageCard,
+            isOwn ? styles.ownMessage : styles.otherMessage,
+            isDeleted && styles.deletedMessageCard,
+          ]}
+        >
           <Card.Content style={styles.cardContent}>
-            {/* Message Text */}
-            {message.text && (
-              <Text
-                variant="bodyMedium"
-                style={[
-                  styles.messageText,
-                  isOwn ? styles.ownText : styles.otherText
-                ]}
-              >
-                {message.text}
-              </Text>
+            <Text
+              variant="bodyMedium"
+              style={[
+                styles.messageText,
+                isOwn ? styles.ownText : styles.otherText,
+                isDeleted && styles.deletedText,
+              ]}
+            >
+              {bodyText}
+            </Text>
+            {!isDeleted && renderAttachment()}
+            {showEditedMarker && (
+              <Text style={styles.editedTag}>(edited)</Text>
             )}
 
-            {/* Attachment */}
-            {renderAttachment()}
-
-            {/* Footer with timestamp and status */}
             <View style={styles.footer}>
               <Text
                 variant="bodySmall"
@@ -150,25 +301,23 @@ const MessageCard = ({ message, isOwn, showAvatar = false, senderName, senderAva
 
               {renderStatusIndicator()}
             </View>
-
-            {/* Edited indicator */}
-            {message.edited && (
-              <Text variant="bodySmall" style={styles.editedText}>
-                (edited)
-              </Text>
-            )}
           </Card.Content>
         </Card>
 
         {/* Message type indicator for non-text messages */}
-        {message.type !== 'text' && message.type && (
+        {!isDeleted && message.type !== 'text' && message.type && (
           <Text variant="bodySmall" style={styles.messageType}>
             {message.type}
           </Text>
         )}
       </View>
 
-    </View>
+      {/* Attachment Viewer Modal */}
+      <AttachmentViewer
+        message={message}
+        onClose={() => setAttachmentViewerVisible(false)}
+      />
+    </TouchableOpacity>
   );
 };
 
@@ -216,13 +365,24 @@ const styles = StyleSheet.create({
   otherMessage: {
     backgroundColor: '#E5E5E5',
   },
+  deletedMessageCard: {
+    backgroundColor: '#F5F5F5',
+  },
   cardContent: {
     padding: 12,
     paddingBottom: 8,
   },
   messageText: {
     lineHeight: 20,
-    marginBottom: 4,
+  },
+  deletedText: {
+    fontStyle: 'italic',
+    color: '#6B7280',
+  },
+  editedTag: {
+    marginTop: 4,
+    fontSize: 12,
+    color: '#9CA3AF',
   },
   ownText: {
     color: '#FFFFFF',
@@ -252,25 +412,16 @@ const styles = StyleSheet.create({
   },
   statusText: {
     fontSize: 11,
-    marginRight: 2,
   },
   checkIcon: {
     fontSize: 12,
     fontWeight: 'bold',
-  },
-  editedText: {
-    fontSize: 10,
-    color: 'rgba(0, 0, 0, 0.4)',
-    marginTop: 2,
-    fontStyle: 'italic',
   },
   messageType: {
     fontSize: 10,
     color: 'rgba(0, 0, 0, 0.4)',
     marginTop: 2,
     fontStyle: 'italic',
-    alignSelf: 'flex-start',
-    marginLeft: 4,
   },
   // Attachment styles
   attachmentContainer: {
@@ -304,6 +455,73 @@ const styles = StyleSheet.create({
   attachmentText: {
     marginLeft: 6,
     fontSize: 14,
+  },
+  // Attachment Viewer styles
+  viewerContainer: { 
+    flex: 1, 
+    backgroundColor: 'black',
+    paddingTop: Platform.OS === 'ios' ? 50 : 30,
+  },
+  closeButton: { 
+    position: 'absolute', 
+    top: Platform.OS === 'ios' ? 50 : 30, 
+    right: 20, 
+    zIndex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    borderRadius: 20,
+    padding: 5,
+  },
+  viewerContent: { 
+    flex: 1, 
+    justifyContent: 'center', 
+    alignItems: 'center' 
+  },
+  viewerImage: { 
+    width: '100%', 
+    height: '100%' 
+  },
+  fileViewer: { 
+    alignItems: 'center', 
+    padding: 20,
+    backgroundColor: 'rgba(255,255,255,0.1)',
+    borderRadius: 12,
+    margin: 20,
+  },
+  fileName: { 
+    color: 'white', 
+    fontSize: 18, 
+    marginTop: 10,
+    textAlign: 'center',
+  },
+  fileSize: { 
+    color: '#ccc', 
+    fontSize: 14, 
+    marginTop: 5 
+  },
+  viewerActions: { 
+    flexDirection: 'row', 
+    justifyContent: 'space-around', 
+    padding: 20,
+    backgroundColor: 'rgba(0,0,0,0.7)',
+  },
+  actionButton: { 
+    flexDirection: 'row', 
+    alignItems: 'center', 
+    backgroundColor: '#333', 
+    padding: 12, 
+    borderRadius: 8,
+    minWidth: 120,
+    justifyContent: 'center',
+  },
+  actionText: { 
+    color: 'white', 
+    marginLeft: 8,
+    fontSize: 16,
+  },
+  editingContainer: {
+    borderWidth: 1,
+    borderColor: '#2563EB',
+    borderRadius: 20,
   },
 });
 

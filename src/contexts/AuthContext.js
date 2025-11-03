@@ -111,12 +111,12 @@ export const AuthProvider = ({ children }) => {
         email: authUser.email,
         authUserKeys: Object.keys(authUser)
       })
-      
+
       const { data, error } = await supabase
         .from('users')
         .select('*')
         .eq('id', authUser.id)
-      
+
       if (error) {
         console.error('❌ Error fetching user profile:', {
           message: error?.message,
@@ -127,17 +127,17 @@ export const AuthProvider = ({ children }) => {
         })
         return { ...authUser, role: 'parent' } // Default role
       }
-      
+
       const profile = data && data.length > 0 ? data[0] : null
       console.log('👤 User profile found:', profile)
-      
+
       const userWithProfile = {
         ...authUser,
         role: profile?.role || 'parent',
         name: profile?.name || authUser.user_metadata?.name,
         profile
       }
-      
+
       console.log('✅ Final user object:', {
         id: userWithProfile.id,
         email: userWithProfile.email,
@@ -154,6 +154,95 @@ export const AuthProvider = ({ children }) => {
         error: err
       })
       return { ...authUser, role: 'parent' } // Default role
+    }
+  }
+
+  const ensureUserProfileExists = async (authUser, roleHint) => {
+    try {
+      if (!authUser?.id) {
+        console.warn('⚠️ Cannot ensure profile without auth user ID')
+        return null
+      }
+
+      const { data: existingProfile, error: selectError } = await supabase
+        .from('users')
+        .select('*')
+        .eq('id', authUser.id)
+        .maybeSingle()
+
+      if (selectError && selectError.code !== 'PGRST116') {
+        console.error('❌ Failed to check existing profile:', selectError)
+        return null
+      }
+
+      if (existingProfile) {
+        console.log('ℹ️ Profile already exists for user:', authUser.id)
+        return existingProfile
+      }
+
+      const serviceRoleKey = process.env.EXPO_PUBLIC_SUPABASE_SERVICE_ROLE_KEY
+      const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL
+
+      if (!serviceRoleKey || !supabaseUrl) {
+        console.warn('⚠️ Service role key or Supabase URL missing; cannot create profile automatically')
+        return null
+      }
+
+      const role = roleHint || authUser.user_metadata?.role || 'parent'
+      const firstName = authUser.user_metadata?.first_name
+        || authUser.user_metadata?.given_name
+        || authUser.user_metadata?.firstName
+        || null
+      const lastName = authUser.user_metadata?.last_name
+        || authUser.user_metadata?.family_name
+        || authUser.user_metadata?.lastName
+        || null
+      const derivedName = [firstName, lastName].filter(Boolean).join(' ')
+      const name = authUser.user_metadata?.name
+        || authUser.user_metadata?.full_name
+        || authUser.user_metadata?.fullName
+        || derivedName
+        || authUser.email?.split('@')?.[0]
+        || 'Iyaya User'
+
+      const profilePayload = {
+        id: authUser.id,
+        email: authUser.email,
+        name,
+        role,
+        first_name: firstName,
+        last_name: lastName,
+        phone: authUser.user_metadata?.phone || null,
+        auth_provider: 'facebook',
+        status: 'active',
+        email_verified: !!authUser.email_confirmed_at,
+        profile_image: authUser.user_metadata?.avatar_url || authUser.user_metadata?.picture || null,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      }
+
+      const cleanedPayload = Object.fromEntries(
+        Object.entries(profilePayload).filter(([, value]) => value !== undefined)
+      )
+
+      const { createClient } = await import('@supabase/supabase-js')
+      const serviceClient = createClient(supabaseUrl, serviceRoleKey)
+
+      const { data: upsertData, error: upsertError } = await serviceClient
+        .from('users')
+        .upsert([cleanedPayload], { onConflict: 'id' })
+        .select()
+
+      if (upsertError) {
+        console.error('❌ Failed to create profile via service client:', upsertError)
+        return null
+      }
+
+      console.log('✅ Profile created for Facebook OAuth user:', authUser.id)
+      return Array.isArray(upsertData) ? upsertData[0] : upsertData
+    } catch (error) {
+      console.error('❌ ensureUserProfileExists error:', error)
+      return null
     }
   }
 
@@ -176,13 +265,13 @@ export const AuthProvider = ({ children }) => {
           }
         }
       })
-      
+
       if (error) throw error
 
       // Create user profile in public.users table using service role
       if (data.user) {
         console.log('🔄 Creating user profile for:', data.user.id)
-        
+
         try {
           // Use service role client to bypass RLS during signup
           const { createClient } = await import('@supabase/supabase-js')
@@ -190,7 +279,7 @@ export const AuthProvider = ({ children }) => {
             process.env.EXPO_PUBLIC_SUPABASE_URL,
             process.env.EXPO_PUBLIC_SUPABASE_SERVICE_ROLE_KEY
           )
-          
+
           const { data: profileData, error: profileError } = await serviceClient
             .from('users')
             .insert([{
@@ -239,7 +328,7 @@ export const AuthProvider = ({ children }) => {
         email,
         password
       })
-      
+
       if (error) throw error
 
       // Check if email is verified (temporarily disabled)
@@ -399,7 +488,6 @@ export const AuthProvider = ({ children }) => {
   const signInWithFacebook = () => signInWithOAuth('facebook')
   const signInWithGoogle = () => signInWithOAuth('google')
 
-  // Facebook login with user profile creation
   const loginWithFacebook = async (facebookResult) => {
     try {
       setError(null)
@@ -417,6 +505,7 @@ export const AuthProvider = ({ children }) => {
         console.log('🔍 Supabase user found:', user?.id ? 'yes' : 'no')
 
         if (user) {
+          await ensureUserProfileExists(user, facebookResult.role)
           console.log('🔍 Fetching user profile...')
           const userWithProfile = await fetchUserWithProfile(user)
           setUser(userWithProfile)
@@ -442,6 +531,8 @@ export const AuthProvider = ({ children }) => {
         })
 
         if (user && user.id) {
+          console.log('🔍 Ensuring test user profile...')
+          await ensureUserProfileExists(user, user.role || facebookResult.role)
           console.log('🔍 Setting test user profile...')
           setUser(user)
           console.log('✅ Test user set:', user)
@@ -458,6 +549,8 @@ export const AuthProvider = ({ children }) => {
       console.log('🔍 Current user from Supabase:', currentUser?.data?.user ? 'found' : 'not found')
 
       if (currentUser.data.user) {
+        console.log('🔍 Ensuring user profile from fallback...')
+        await ensureUserProfileExists(currentUser.data.user, facebookResult?.role)
         console.log('🔍 Fetching user profile from fallback...')
         const userWithProfile = await fetchUserWithProfile(currentUser.data.user)
         setUser(userWithProfile)

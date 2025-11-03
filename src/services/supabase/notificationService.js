@@ -1,11 +1,12 @@
 import { SupabaseBase, supabase } from './base'
 import { getCachedOrFetch, invalidateCache } from './cache'
+import { userService } from './userService'
 
 export class NotificationService extends SupabaseBase {
   async createNotification(notificationData) {
     try {
       this._validateRequiredFields(notificationData, ['user_id', 'type', 'title', 'message'], 'createNotification')
-      
+
       // Ensure user is authenticated before creating notification
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) {
@@ -23,21 +24,21 @@ export class NotificationService extends SupabaseBase {
         read: false,
         created_at: new Date().toISOString()
       }
-      
+
       const shouldReturnRecord = resolvedUserId === user.id
 
       const response = shouldReturnRecord
         ? await supabase
-            .from('notifications')
-            .insert([dbNotificationData])
-            .select()
-            .single()
+          .from('notifications')
+          .insert([dbNotificationData])
+          .select()
+          .single()
         : await supabase
-            .from('notifications')
-            .insert([dbNotificationData])
+          .from('notifications')
+          .insert([dbNotificationData])
 
       const { data, error } = response
-      
+
       if (error) {
         // Handle RLS policy violations gracefully
         if (error.code === '42501') {
@@ -46,7 +47,7 @@ export class NotificationService extends SupabaseBase {
         }
         throw error
       }
-      
+
       if (data) {
         console.log('✅ Notification created:', data)
       }
@@ -241,7 +242,7 @@ export class NotificationService extends SupabaseBase {
           query = query.offset(safeOffset)
         }
       }
-      
+
       const { data, error } = await query
       if (error) throw error
       return data || []
@@ -259,7 +260,7 @@ export class NotificationService extends SupabaseBase {
         .select('*', { count: 'exact', head: true })
         .eq('user_id', resolvedUserId)
         .eq('read', false)
-      
+
       if (error) throw error
       return count || 0
     } catch (error) {
@@ -332,13 +333,13 @@ export class NotificationService extends SupabaseBase {
 
       const { data, error } = await supabase
         .from('notifications')
-        .update({ 
+        .update({
           read: true
         })
         .eq('id', notificationId)
         .select()
         .single()
-      
+
       if (error) throw error
       if (data?.user_id) {
         invalidateCache(`notification-counts:${data.user_id}`)
@@ -355,13 +356,13 @@ export class NotificationService extends SupabaseBase {
 
       const { data, error } = await supabase
         .from('notifications')
-        .update({ 
+        .update({
           read: true
         })
         .eq('user_id', resolvedUserId)
         .eq('read', false)
         .select()
-      
+
       if (error) throw error
       invalidateCache(`notification-counts:${resolvedUserId}`)
       return data || []
@@ -398,26 +399,25 @@ export class NotificationService extends SupabaseBase {
         console.warn('Invalid senderId for message notification:', { senderId, recipientId, messageContent })
         return null
       }
-      
+
       if (!recipientId || recipientId === 'undefined' || recipientId === 'null') {
         console.warn('Invalid recipientId for message notification:', { senderId, recipientId, messageContent })
         return null
       }
-      
+
       if (!messageContent || typeof messageContent !== 'string') {
         console.warn('Invalid messageContent for message notification:', { senderId, recipientId, messageContent })
         return null
       }
-      
+
       if (senderId === recipientId) {
         console.warn('Cannot send notification to self')
         return null
       }
-      
-      const { userService } = await import('./userService')
+
       const senderProfile = await userService.getProfile(senderId)
       const senderName = senderProfile?.name || 'Someone'
-      
+
       const result = await this.createNotification({
         user_id: recipientId,
         type: 'message',
@@ -444,19 +444,18 @@ export class NotificationService extends SupabaseBase {
         console.warn('Invalid parameters for job application notification')
         return null
       }
-      
-      const { userService } = await import('./userService')
+
       const caregiverProfile = await userService.getProfile(caregiverId)
       const caregiverName = caregiverProfile?.name || 'A caregiver'
-      
+
       const { data: job } = await supabase
         .from('jobs')
         .select('title')
         .eq('id', jobId)
         .single()
-      
+
       const jobTitle = job?.title || 'your job'
-      
+
       const result = await this.createNotification({
         user_id: parentId,
         type: 'job_application',
@@ -484,11 +483,10 @@ export class NotificationService extends SupabaseBase {
         console.warn('Invalid parameters for booking request notification')
         return null
       }
-      
-      const { userService } = await import('./userService')
+
       const parentProfile = await userService.getProfile(parentId)
       const parentName = parentProfile?.name || 'A parent'
-      
+
       const result = await this.createNotification({
         user_id: caregiverId,
         type: 'booking_request',
@@ -510,10 +508,9 @@ export class NotificationService extends SupabaseBase {
 
   async notifyBookingConfirmed(bookingId, caregiverId, parentId) {
     try {
-      const { userService } = await import('./userService')
       const caregiverProfile = await userService.getProfile(caregiverId)
       const caregiverName = caregiverProfile?.name || 'Your caregiver'
-      
+
       const result = await this.createNotification({
         user_id: parentId,
         type: 'booking_confirmed',
@@ -535,7 +532,6 @@ export class NotificationService extends SupabaseBase {
 
   async notifyBookingCancelled(bookingId, caregiverId, parentId) {
     try {
-      const { userService } = await import('./userService')
       const caregiverProfile = await userService.getProfile(caregiverId)
       const caregiverName = caregiverProfile?.name || 'Your caregiver'
 
@@ -579,7 +575,6 @@ export class NotificationService extends SupabaseBase {
       let parentDisplayName = parentName
       if (!parentDisplayName && parentId) {
         try {
-          const { userService } = await import('./userService')
           const parentProfile = await userService.getProfile(parentId)
           parentDisplayName = parentProfile?.name || 'A parent'
         } catch (profileError) {
@@ -674,7 +669,7 @@ export class NotificationService extends SupabaseBase {
       const { userService } = await import('./userService')
       const parentProfile = await userService.getProfile(parentId)
       const parentName = parentProfile?.name || 'A parent'
-      
+
       const result = await this.createNotification({
         user_id: caregiverId,
         type: 'review',

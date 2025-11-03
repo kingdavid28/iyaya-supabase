@@ -2,10 +2,10 @@ import { Briefcase, Plus } from 'lucide-react-native';
 import React, { useMemo, useState } from 'react';
 import { RefreshControl, ScrollView, Text, TouchableOpacity, View } from 'react-native';
 import {
-    SkeletonBlock,
-    SkeletonCard,
-    SkeletonCircle,
-    SkeletonPill
+  SkeletonBlock,
+  SkeletonCard,
+  SkeletonCircle,
+  SkeletonPill
 } from '../../../components/common/SkeletonPlaceholder';
 import { colors, styles } from '../../styles/ParentDashboard.styles';
 import JobPostingModal from '../modals/JobPostingModal';
@@ -120,8 +120,8 @@ const JobsTab = ({
       >
         {filteredJobs.length > 0 ? (
           filteredJobs.map((job, index) => (
-            <JobCard 
-              key={job._id || job.id || `job-${index}`} 
+            <JobCard
+              key={job._id || job.id || `job-${index}`}
               job={job}
               onUpdate={onRefresh}
               onEdit={onEditJob}

@@ -1,8 +1,6 @@
 // src/services/facebookAuthService.js
-import { Platform } from 'react-native';
-import Constants from 'expo-constants';
-import { makeRedirectUri } from 'expo-auth-session';
 import * as WebBrowser from 'expo-web-browser';
+import { Platform } from 'react-native';
 import { supabase } from '../config/supabase';
 
 WebBrowser.maybeCompleteAuthSession();
@@ -24,100 +22,28 @@ class FacebookAuthService {
         return this.signInWithFacebookTest(userRole);
       }
 
-      const isExpoGo = Constants.appOwnership === 'expo';
-
-      // Try multiple redirect URI formats for better compatibility
-      const redirectUris = [
-        // Supabase callback URL (for web/production)
-        'https://myiyrmiiywwgismcpith.supabase.co/auth/v1/callback',
-        // Development redirect URIs
-        'iyaya-app://auth',
-        'com.iyaya.app://auth',
-        // Fallback URIs
-        makeRedirectUri({
-          path: 'auth',
-          native: 'iyaya-app://auth',
-          preferLocalhost: false,
-          useProxy: isExpoGo,
-        }),
-        makeRedirectUri({
-          path: 'auth',
-          native: 'com.iyaya.app://auth',
-          preferLocalhost: false,
-          useProxy: isExpoGo,
-        }),
-      ];
-
-      console.log('🔁 Available redirect URIs:', redirectUris);
-
-      let lastError = null;
-      let oauthData = null; // Store successful OAuth data
-      let successfulRedirectUri = null; // Store the redirect URI that worked
       const shouldHandleManually = Platform.OS !== 'web';
+      const redirectTo = 'https://myiyrmiiywwgismcpith.supabase.co/auth/v1/callback';
 
-      // Try each redirect URI until one works
-      for (const redirectTo of redirectUris) {
-        try {
-          console.log('🔄 Trying redirect URI:', redirectTo);
+      console.log('🔁 Using Supabase redirect URI:', redirectTo);
 
-          // Validate that the redirect URI is a valid URL format
-          // Handle both HTTP/HTTPS URLs and custom scheme URIs
-          try {
-            if (redirectTo.startsWith('http://') || redirectTo.startsWith('https://')) {
-              new URL(redirectTo); // Standard URL validation for HTTP URLs
-            } else if (redirectTo.includes('://')) {
-              // Custom scheme URI validation (e.g., iyaya-app://auth)
-              const [scheme, rest] = redirectTo.split('://', 2);
-              if (!scheme || !rest) {
-                throw new Error('Invalid custom scheme URI format');
-              }
-            } else {
-              throw new Error('Invalid URI format - must include ://');
-            }
-          } catch (urlError) {
-            console.warn('⚠️ Invalid URL format for redirect URI:', redirectTo, urlError);
-            continue; // Skip invalid URLs
-          }
+      const { data: oauthData, error } = await supabase.auth.signInWithOAuth({
+        provider: 'facebook',
+        options: {
+          redirectTo,
+          scopes: 'public_profile,email',
+          skipBrowserRedirect: shouldHandleManually,
+          queryParams: {
+            auth_type: 'rerequest',
+            display: 'popup',
+          },
+        },
+      });
 
-          const { data, error } = await supabase.auth.signInWithOAuth({
-            provider: 'facebook',
-            options: {
-              redirectTo,
-              scopes: 'public_profile,email',
-              skipBrowserRedirect: shouldHandleManually,
-              queryParams: {
-                auth_type: 'rerequest',
-                display: 'popup',
-              },
-            },
-          });
-
-          if (error) {
-            console.error('❌ Supabase OAuth error with URI', redirectTo, ':', error);
-            lastError = error;
-            continue; // Try next URI
-          }
-
-          // If we get here, this URI worked - store the data and URI
-          console.log('✅ Successfully used redirect URI:', redirectTo);
-          oauthData = data;
-          successfulRedirectUri = redirectTo;
-          break;
-
-        } catch (error) {
-          console.error('❌ Error with redirect URI', redirectTo, ':', error);
-          lastError = error;
-          continue; // Try next URI
-        }
+      if (error) {
+        console.error('❌ Supabase OAuth error:', error);
+        throw error;
       }
-
-      // If all URIs failed, throw the last error
-      if (lastError && !oauthData) {
-        throw lastError;
-      }
-
-      // If we get here, we need to check if the OAuth call was successful
-      // The actual authentication flow continues below...
 
       if (shouldHandleManually) {
         const authUrl = oauthData?.url;
@@ -125,13 +51,9 @@ class FacebookAuthService {
           throw new Error('Facebook sign-in did not return an authorization URL.');
         }
 
-        if (!successfulRedirectUri) {
-          throw new Error('No successful redirect URI found.');
-        }
-
         console.log('🌐 Opening Facebook auth URL:', authUrl);
 
-        const webResult = await WebBrowser.openAuthSessionAsync(authUrl, successfulRedirectUri, {
+        const webResult = await WebBrowser.openAuthSessionAsync(authUrl, redirectTo, {
           showInRecents: true,
           dismissButtonStyle: 'cancel',
           readerMode: false,

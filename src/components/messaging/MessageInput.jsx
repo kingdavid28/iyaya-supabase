@@ -26,12 +26,17 @@ const MessageInput = ({
   onUploadAttachment,
   maxMessageLength = 1000,
   allowImages = true,
-  allowDocuments = true
+  allowDocuments = true,
+  editingMessage = null,
+  onCancelEdit,
 }) => {
   const [message, setMessage] = useState('');
   const [sending, setSending] = useState(false);
   const [uploading, setUploading] = useState(false);
   const textInputRef = useRef(null);
+
+  const isEditing = Boolean(editingMessage);
+  const attachmentsAllowed = !isEditing && (allowImages || allowDocuments);
 
   useEffect(() => {
     console.log('MessageInput props', {
@@ -40,8 +45,19 @@ const MessageInput = ({
       disabled,
       sending,
       uploading,
+      isEditing,
+      editingMessageId: editingMessage?.id,
     });
-  }, [allowImages, allowDocuments, disabled, sending, uploading]);
+  }, [allowImages, allowDocuments, disabled, sending, uploading, isEditing, editingMessage?.id]);
+
+  useEffect(() => {
+    if (isEditing) {
+      setMessage(editingMessage.text ?? '');
+      requestAnimationFrame(() => textInputRef.current?.focus());
+    } else {
+      setMessage('');
+    }
+  }, [editingMessage?.id, isEditing]);
 
   const handleTextChange = (text) => {
     if (text.length <= maxMessageLength) {
@@ -52,13 +68,16 @@ const MessageInput = ({
 
   const handleSend = async () => {
     if (sending || uploading || disabled) return;
-    if (!message.trim() && !conversation) return;
+    if (!conversation) return;
+    const trimmed = message.trim();
+
+    if (!trimmed && !isEditing) return;
 
     try {
       setSending(true);
       Keyboard.dismiss();
       await onSendMessage?.(message.trim());
-      setMessage('');
+      if (!isEditing) setMessage('');
     } catch (error) {
       console.error('Failed to send message:', error);
       Alert.alert('Error', error?.message || 'Failed to send message. Please try again.');
@@ -101,7 +120,7 @@ const MessageInput = ({
   };
 
   const handleImagePick = async () => {
-    if (disabled || sending || uploading) return;
+    if (disabled || sending || uploading || isEditing) return;
 
     try {
       // Request permissions
@@ -158,7 +177,7 @@ const MessageInput = ({
   };
 
   const handleDocumentPick = async () => {
-    if (disabled || sending || uploading) return;
+    if (disabled || sending || uploading || isEditing) return;
 
     console.log('handleDocumentPick triggered');
 
@@ -219,7 +238,7 @@ const MessageInput = ({
       const processedFile = await processAndValidateFile(
         fileInfo,
         file.name,
-        file.mimeType
+        file.mimeType,
       );
 
       const attachment = await onUploadAttachment?.({
@@ -245,26 +264,32 @@ const MessageInput = ({
       disabled,
       sending,
       uploading,
+      isEditing,
     });
 
-    if (!allowImages && !allowDocuments) return;
+    if (!attachmentsAllowed) return;
 
     if (allowImages && allowDocuments) {
-      // Show action sheet for both options
       Alert.alert(
         'Add Attachment',
         'Choose attachment type',
         [
-          { text: 'Photo', onPress: () => {
-            console.log('Attachment option selected: Photo');
-            handleImagePick();
-          } },
-          { text: 'Document', onPress: () => {
-            console.log('Attachment option selected: Document');
-            handleDocumentPick();
-          } },
+          {
+            text: 'Photo',
+            onPress: () => {
+              console.log('Attachment option selected: Photo');
+              handleImagePick();
+            },
+          },
+          {
+            text: 'Document',
+            onPress: () => {
+              console.log('Attachment option selected: Document');
+              handleDocumentPick();
+            },
+          },
           { text: 'Cancel', style: 'cancel' },
-        ]
+        ],
       );
     } else if (allowImages) {
       console.log('Attachment option selected: Photo (images only)');
@@ -283,6 +308,7 @@ const MessageInput = ({
   };
 
   const isDisabled = disabled || sending || uploading;
+
   const hasValidMessage = message.trim().length > 0;
   const charactersRemaining = maxMessageLength - message.length;
 
@@ -290,13 +316,65 @@ const MessageInput = ({
 
   return (
     <View style={styles.container}>
+      {/* Message Input */}
+      <View style={styles.inputContainer}>
+        <TextInput
+          ref={textInputRef}
+          value={message}
+          onChangeText={handleTextChange}
+          placeholder={placeholder}
+          style={[
+            styles.textInput,
+            isEditing && styles.editingTextInput,
+            isDisabled && styles.textInputDisabled,
+          ]}
+          multiline
+          maxLength={maxMessageLength}
+          onSubmitEditing={handleSend}
+          blurOnSubmit={false}
+          editable={!isDisabled}
+          onKeyPress={handleKeyPress}
+          textAlignVertical="center"
+        />
+
+        {/* Character Counter */}
+        {message.length > maxMessageLength * 0.8 && (
+          <View style={styles.counterContainer}>
+            <Text style={styles.counterText}>
+              {charactersRemaining}
+            </Text>
+          </View>
+        )}
+
+        {isEditing && (
+          <View
+            style={styles.editingBanner}
+            accessibilityRole="text"
+            accessibilityLabel="Editing message"
+          >
+            <View style={styles.editingBadge}>
+              <Text style={styles.editingBadgeIcon}>✏️</Text>
+              <Text style={styles.editingText} numberOfLines={1}>
+                Editing message
+              </Text>
+            </View>
+            <TouchableOpacity
+              onPress={onCancelEdit}
+              style={styles.cancelEditButton}
+              accessibilityRole="button"
+              accessibilityLabel="Cancel editing"
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            >
+              <Text style={styles.cancelEditText}>Cancel</Text>
+            </TouchableOpacity>
+          </View>
+        )}
+      </View>
+
       {/* Attachment Button */}
-      {(allowImages || allowDocuments) && (
+      {attachmentsAllowed && (
         <TouchableOpacity
-          onPress={() => {
-            console.log('Attachment button pressed');
-            handleAttachmentPress();
-          }}
+          onPress={handleAttachmentPress}
           style={styles.attachButton}
           disabled={isDisabled}
         >
@@ -308,43 +386,13 @@ const MessageInput = ({
         </TouchableOpacity>
       )}
 
-      {/* Message Input */}
-      <View style={styles.inputContainer}>
-        <TextInput
-          ref={textInputRef}
-          value={message}
-          onChangeText={handleTextChange}
-          placeholder={placeholder}
-          style={[
-            styles.textInput,
-            isDisabled && styles.textInputDisabled,
-          ]}
-          multiline
-          maxLength={maxMessageLength}
-          onSubmitEditing={handleSend}
-          blurOnSubmit={false}
-          editable={!isDisabled}
-          onKeyPress={handleKeyPress}
-          textAlignVertical="center"
-        />
-        
-        {/* Character Counter */}
-        {message.length > maxMessageLength * 0.8 && (
-          <View style={styles.counterContainer}>
-            <Text style={styles.counterText}>
-              {charactersRemaining}
-            </Text>
-          </View>
-        )}
-      </View>
-
       {/* Send Button */}
       <TouchableOpacity
         onPress={handleSend}
-        disabled={isDisabled || (!hasValidMessage && !uploading)}
+        disabled={isDisabled || (!hasValidMessage && !uploading && !isEditing)}
         style={[
           styles.sendButton,
-          (isDisabled || (!hasValidMessage && !uploading)) && styles.sendButtonDisabled,
+          (isDisabled || (!hasValidMessage && !uploading && !isEditing)) && styles.sendButtonDisabled,
         ]}
       >
         {sending ? (
@@ -371,10 +419,51 @@ const styles = StyleSheet.create({
       },
     }),
   },
+
   inputContainer: {
     flex: 1,
     position: 'relative',
   },
+  editingBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#EEF2FF',
+    borderColor: '#6366F1',
+    borderWidth: 1,
+    borderRadius: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    marginTop: 8,
+  },
+  editingBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    flexShrink: 1,
+  },
+  editingBadgeIcon: {
+    fontSize: 16,
+  },
+  editingText: {
+    color: '#1E3A8A',
+    fontWeight: '600',
+    fontSize: 14,
+  },
+  cancelEditButton: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: '#1D4ED8',
+    backgroundColor: 'rgba(59,130,246,0.1)',
+  },
+  cancelEditText: {
+    color: '#1D4ED8',
+    fontWeight: '600',
+    fontSize: 13,
+  },
+
   attachButton: {
     padding: 12,
     marginRight: 8,
@@ -383,18 +472,24 @@ const styles = StyleSheet.create({
     minWidth: 44,
     minHeight: 44,
   },
+
   textInput: {
     borderWidth: 1,
     borderColor: '#e0e0e0',
     borderRadius: 20,
     paddingHorizontal: 16,
     paddingVertical: Platform.OS === 'ios' ? 12 : 10,
-    maxHeight: 100,
+    maxHeight: 120,
     backgroundColor: '#f5f5f5',
     fontSize: 16,
     textAlignVertical: 'center',
     paddingRight: 40, // Space for character counter
   },
+  editingTextInput: {
+    borderColor: '#6366F1',
+    backgroundColor: '#F8FAFF',
+  },
+
   textInputDisabled: {
     backgroundColor: '#f0f0f0',
     color: '#999',

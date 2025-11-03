@@ -26,15 +26,15 @@ export const useParentDashboard = () => {
   // Load profile data
   const loadProfile = useCallback(async () => {
     if (!user?.id) return;
-    
+
     try {
       const profileResponse = await apiService.auth.getProfile();
       const profileData = profileResponse?.data || profileResponse || {};
-      
+
       if (profileData) {
         const rawAddress = profileData.address || profileData.location || '';
         const addressString = typeof rawAddress === 'string' ? rawAddress : (rawAddress.street || rawAddress.city || '');
-        
+
         setProfile({
           name: profileData.name || profileData.displayName || '',
           email: profileData.email || '',
@@ -105,37 +105,134 @@ export const useParentDashboard = () => {
         return;
       }
 
-      const transformedCaregivers = caregiversList.map(caregiver => ({
-        id: caregiver.id,
-        _id: caregiver.id,
-        name: caregiver.name || 'Caregiver',
-        rating: caregiver.rating || 4.5,
-        reviewCount: caregiver.reviewCount || 0,
-        hourlyRate: caregiver.hourly_rate || 300,
-        experience: caregiver.experience || '2+ years',
-        skills: caregiver.skills || ['Childcare', 'First Aid'],
-        location: caregiver.address || 'Cebu City',
-        avatar: caregiver.profile_image,
-        profileImage: caregiver.profile_image,
-        bio: caregiver.bio || 'Experienced caregiver',
-        createdAt: caregiver.created_at || new Date().toISOString(),
-        
-        // Trust score and verification data
-        trustScore: caregiver.trustScore || caregiver.verification?.trustScore || 0,
-        verified: Boolean(caregiver.verified || caregiver.verification?.verified),
-        verification: {
-          trustScore: caregiver.trustScore || caregiver.verification?.trustScore || 0,
-          verified: Boolean(caregiver.verified || caregiver.verification?.verified),
-          backgroundCheck: caregiver.verification?.backgroundCheck || false,
-          certifications: caregiver.verification?.certifications || [],
-          documentsVerified: caregiver.verification?.documentsVerified || false
-        },
-        
-        // Additional caregiver profile data for enhanced display
-        completedJobs: caregiver.completedJobs || 0,
-        responseRate: caregiver.responseRate || '0%',
-        hasCompletedJobs: caregiver.completedJobs > 0
-      }));
+      const parseExperience = (caregiver) => {
+        const sources = [
+          caregiver.experience,
+          caregiver.experience_years,
+          caregiver.experienceYears,
+          caregiver.profile?.experience,
+          caregiver.metadata?.experience
+        ];
+
+        let years = 0;
+        let months = 0;
+        let description = '';
+
+        for (const source of sources) {
+          if (source == null) continue;
+
+          if (typeof source === 'number' && Number.isFinite(source)) {
+            years = source;
+            break;
+          }
+
+          if (typeof source === 'string') {
+            const numericMatch = source.match(/(\d+(?:\.\d+)?)/);
+            if (numericMatch) {
+              years = Number(numericMatch[1]);
+              description = source.trim();
+              break;
+            }
+            continue;
+          }
+
+          if (typeof source === 'object') {
+            const candidateYears = Number(source.years ?? source.years_of_experience ?? source.experienceYears);
+            const candidateMonths = Number(source.months ?? source.months_of_experience ?? source.experienceMonths);
+
+            if (Number.isFinite(candidateYears)) {
+              years = candidateYears;
+            }
+            if (Number.isFinite(candidateMonths)) {
+              months = candidateMonths;
+            }
+            if (!description && typeof source.description === 'string') {
+              description = source.description;
+            }
+
+            if (years || months) {
+              break;
+            }
+          }
+        }
+
+        return {
+          years,
+          months,
+          description: description || undefined
+        };
+      };
+
+      const parseVerification = (caregiver) => {
+        const trustScoreSources = [
+          caregiver.trustScore,
+          caregiver.trust_score,
+          caregiver.verification?.trustScore,
+          caregiver.verification?.trust_score,
+          caregiver.trust?.score
+        ];
+
+        const trustScore = trustScoreSources
+          .map((value) => Number(value))
+          .find((value) => Number.isFinite(value));
+
+        const verified = [
+          caregiver.verified,
+          caregiver.isVerified,
+          caregiver.is_verified,
+          caregiver.verification?.verified,
+          caregiver.verification_status === 'verified'
+        ].some(Boolean);
+
+        return {
+          trustScore: Number.isFinite(trustScore) ? trustScore : 0,
+          verified,
+          backgroundCheck: Boolean(caregiver.verification?.backgroundCheck ?? caregiver.background_check_passed),
+          certifications: caregiver.verification?.certifications || caregiver.certifications || [],
+          documentsVerified: Boolean(caregiver.verification?.documentsVerified ?? caregiver.documents_verified)
+        };
+      };
+
+      const transformedCaregivers = caregiversList.map(caregiver => {
+        const experience = parseExperience(caregiver);
+        const verification = parseVerification(caregiver);
+
+        return {
+          id: caregiver.id,
+          _id: caregiver.id,
+          name: caregiver.name || 'Caregiver',
+          rating: Number(caregiver.rating ?? caregiver.average_rating ?? 0) || 0,
+          reviewCount: caregiver.reviewCount ?? caregiver.review_count ?? 0,
+          hourlyRate: Number(caregiver.hourly_rate ?? caregiver.hourlyRate ?? 0) || 0,
+          experience: {
+            years: experience.years,
+            months: experience.months,
+            description: experience.description
+          },
+          skills: Array.isArray(caregiver.skills) ? caregiver.skills : (Array.isArray(caregiver.specialties) ? caregiver.specialties : ['Childcare', 'First Aid']),
+          location: caregiver.address || caregiver.location || 'Cebu City',
+          avatar: caregiver.profile_image || caregiver.avatar,
+          profileImage: caregiver.profile_image || caregiver.avatar,
+          bio: caregiver.bio || 'Experienced caregiver',
+          createdAt: caregiver.created_at || new Date().toISOString(),
+
+          // Trust score and verification data
+          trustScore: verification.trustScore,
+          verified: verification.verified,
+          verification: {
+            trustScore: verification.trustScore,
+            verified: verification.verified,
+            backgroundCheck: verification.backgroundCheck,
+            certifications: verification.certifications,
+            documentsVerified: verification.documentsVerified
+          },
+
+          // Additional caregiver profile data for enhanced display
+          completedJobs: caregiver.completedJobs || caregiver.completed_jobs || 0,
+          responseRate: caregiver.responseRate || caregiver.response_rate || '0%',
+          hasCompletedJobs: Boolean(caregiver.completedJobs || caregiver.completed_jobs)
+        };
+      });
 
       console.log('✅ Transformed caregivers:', transformedCaregivers.length);
       setCaregivers(transformedCaregivers);
@@ -151,11 +248,11 @@ export const useParentDashboard = () => {
 
     try {
       console.log('📅 Fetching bookings for parent:', user?.id);
-      
+
       // Import bookingService dynamically to avoid circular imports
       const { default: bookingService } = await import('../services/bookingService');
       const bookingsList = await bookingService.getBookings();
-      
+
       console.log('📅 Bookings from service:', bookingsList);
 
       const normalized = bookingsList.map((booking, idx) => ({
@@ -274,7 +371,7 @@ export const useParentDashboard = () => {
   useEffect(() => {
     if (user?.id && dataLoaded && activeTab !== 'bookings' && bookings.length === 0) {
       const timeout = setTimeout(() => {
-        fetchBookings().catch(() => {});
+        fetchBookings().catch(() => { });
       }, 3000);
 
       return () => clearTimeout(timeout);
