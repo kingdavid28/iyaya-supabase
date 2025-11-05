@@ -1,17 +1,15 @@
-import React, { useState, useEffect } from 'react';
-import {
-  View,
-  Text,
-  FlatList,
-  TouchableOpacity,
-  StyleSheet,
-  Alert,
-  Image
-} from 'react-native';
-import { Card } from 'react-native-paper';
 import { Ionicons } from '@expo/vector-icons';
-import { supabaseService } from '../../../services/supabase';
+import React, { useEffect, useState } from 'react';
+import {
+  FlatList,
+  Image,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View
+} from 'react-native';
 import { useAuth } from '../../../contexts/AuthContext';
+import { supabaseService } from '../../../services/supabase';
 
 const MessagesTab = ({ navigation, refreshing, onRefresh }) => {
   const { user } = useAuth();
@@ -23,7 +21,7 @@ const MessagesTab = ({ navigation, refreshing, onRefresh }) => {
     if (!userId) return;
 
     loadConversations();
-    
+
     // Setup real-time subscription for new conversations
     const subscription = supabaseService.messaging.subscribeToMessages('*', (payload) => {
       if (payload.eventType === 'INSERT') {
@@ -43,9 +41,9 @@ const MessagesTab = ({ navigation, refreshing, onRefresh }) => {
       setLoading(true);
       const userId = user?.id;
       if (!userId) return;
-      
+
       const conversations = await supabaseService.messaging.getConversations(userId);
-      
+
       // Transform conversations for display
       const transformedConversations = conversations.map(conv => {
         const otherUser = conv.otherParticipant;
@@ -58,7 +56,7 @@ const MessagesTab = ({ navigation, refreshing, onRefresh }) => {
           participantId: otherUser?.id
         };
       });
-      
+
       setConversations(transformedConversations);
     } catch (error) {
       console.error('Error loading conversations:', error);
@@ -92,7 +90,9 @@ const MessagesTab = ({ navigation, refreshing, onRefresh }) => {
       targetUserId: item.participantId,
       targetUserName: item.name,
       targetUserType: 'caregiver',
-      conversationId: item.id
+      targetUserAvatar: item.avatar,
+      recipientAvatar: item.avatar,
+      conversationId: item.id,
     });
   };
 

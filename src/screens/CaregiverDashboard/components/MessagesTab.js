@@ -1,6 +1,6 @@
-import React, { useState, useEffect } from 'react';
-import { View, Text, FlatList, TouchableOpacity, RefreshControl, Image, KeyboardAvoidingView, Platform, Alert } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import React, { useEffect, useState } from 'react';
+import { Alert, FlatList, Image, KeyboardAvoidingView, Platform, RefreshControl, Text, TouchableOpacity, View } from 'react-native';
 import { Card } from 'react-native-paper';
 import { useAuth } from '../../../contexts/AuthContext';
 import { supabaseService } from '../../../services/supabase';
@@ -48,17 +48,17 @@ const MessagesTab = ({ navigation, refreshing, onRefresh }) => {
         setLoading(true);
         const conversations = await supabaseService.messaging.getConversations(userIdToUse);
         console.log('📨 MessagesTab: Received conversations:', conversations);
-        
+
         // Transform conversations for display
         const transformedConversations = conversations.map(conv => {
           console.log('🔄 Transforming conversation:', conv);
-          
+
           const otherUser = conv.otherParticipant;
-          
+
           console.log('🔍 Other participant info:', {
             otherUser
           });
-          
+
           return {
             id: conv.id,
             parentId: otherUser?.id,
@@ -70,7 +70,7 @@ const MessagesTab = ({ navigation, refreshing, onRefresh }) => {
             isRead: true // Will be updated with actual read status
           };
         });
-        
+
         setConversations(transformedConversations);
       } catch (error) {
         console.error('Error loading conversations:', error);
@@ -81,7 +81,7 @@ const MessagesTab = ({ navigation, refreshing, onRefresh }) => {
     };
 
     loadConversations();
-    
+
     // Setup real-time subscription
     const subscription = supabaseService.messaging.subscribeToMessages('*', () => {
       loadConversations();
@@ -122,12 +122,12 @@ const MessagesTab = ({ navigation, refreshing, onRefresh }) => {
     });
 
     const userIdToUse = user?.id || user?.uid;
-    
+
     if (!userIdToUse) {
       Alert.alert('Error', 'User information not available');
       return;
     }
-    
+
     if (!conversation.parentId) {
       console.error('❌ Missing parentId in conversation:', conversation);
       Alert.alert('Error', 'Conversation data incomplete');
@@ -151,7 +151,8 @@ const MessagesTab = ({ navigation, refreshing, onRefresh }) => {
       userType: 'caregiver',
       targetUserId: conversation.parentId,
       targetUserName: conversation.parentName || 'Parent',
-      targetUserType: 'parent'
+      targetUserType: 'parent',
+      targetUserAvatar: conversation.parentAvatar,
     });
   };
 

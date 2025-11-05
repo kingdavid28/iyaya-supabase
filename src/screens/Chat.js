@@ -95,8 +95,15 @@ const Chat = () => {
   );
 
   const initialOtherUserAvatar = useMemo(
-    () => sanitizeImageUri(recipientAvatar || targetUserAvatar || routeOtherUserAvatar || otherUser?.avatar),
-    [recipientAvatar, targetUserAvatar, routeOtherUserAvatar, otherUser?.avatar],
+    () =>
+      sanitizeImageUri(
+        recipientAvatar ||
+        targetUserAvatar ||
+        routeOtherUserAvatar ||
+        otherUser?.avatar ||
+        otherUser?.profile_image,
+      ),
+    [recipientAvatar, targetUserAvatar, routeOtherUserAvatar, otherUser?.avatar, otherUser?.profile_image],
   );
 
   const currentUserId = user?.id || routeUserId || null;
