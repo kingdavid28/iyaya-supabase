@@ -1,17 +1,17 @@
-import React, { useState, useEffect } from 'react';
-import { 
-  View, 
-  Text, 
-  TouchableOpacity, 
-  ScrollView, 
-  Alert, 
-  StyleSheet, 
-  ActivityIndicator,
-  RefreshControl 
-} from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { settingsService } from '../../services';
 import { format } from 'date-fns';
+import React, { useEffect, useState } from 'react';
+import {
+  ActivityIndicator,
+  Alert,
+  RefreshControl,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View
+} from 'react-native';
+import { settingsService } from '../../services';
 
 export function InformationRequests({ user, userType, colors }) {
   const [activeTab, setActiveTab] = useState('pending');
@@ -62,23 +62,23 @@ export function InformationRequests({ user, userType, colors }) {
 
   const handleResponse = async (requestId, approved, sharedFields = []) => {
     try {
-      const { success, message } = await settingsService.respondToRequest({ 
-        requestId, 
-        approved, 
-        sharedFields 
+      const { success, message } = await settingsService.respondToRequest({
+        requestId,
+        approved,
+        sharedFields
       });
-      
+
       if (success) {
         Alert.alert(
-          'Success', 
+          'Success',
           approved ? 'Information shared successfully' : 'Request declined'
         );
         // Update local state to reflect the change immediately
         if (activeTab === 'pending') {
-          setPendingRequests(prev => 
-            prev.map(req => 
-              req._id === requestId 
-                ? { ...req, status: approved ? 'approved' : 'denied' } 
+          setPendingRequests(prev =>
+            prev.map(req =>
+              req._id === requestId
+                ? { ...req, status: approved ? 'approved' : 'denied' }
                 : req
             )
           );
@@ -89,7 +89,7 @@ export function InformationRequests({ user, userType, colors }) {
     } catch (error) {
       console.error('Error responding to request:', error);
       Alert.alert(
-        'Error', 
+        'Error',
         error.message || 'Failed to respond to request. Please try again.'
       );
     }
@@ -100,12 +100,12 @@ export function InformationRequests({ user, userType, colors }) {
     const targetName = request.targetUserId?.name || 'Unknown User';
     const isPending = request.status === 'pending';
     const isApproved = request.status === 'approved';
-    
+
     return (
       <View key={request._id} style={styles.requestCard}>
         <View style={styles.requestHeader}>
           <Text style={styles.requesterName}>
-            {activeTab === 'pending' 
+            {activeTab === 'pending'
               ? `${requesterName} requested information`
               : `Request to ${targetName}`}
           </Text>
@@ -113,12 +113,12 @@ export function InformationRequests({ user, userType, colors }) {
             {format(new Date(request.requestedAt || new Date()), 'MMM d, yyyy h:mm a')}
           </Text>
         </View>
-        
+
         <Text style={styles.requestReason}>
           <Text style={{ fontWeight: '600' }}>Reason: </Text>
           {request.reason || 'No reason provided'}
         </Text>
-        
+
         <View style={styles.requestedFields}>
           <Text style={styles.fieldsLabel}>Requested Information:</Text>
           {Array.isArray(request.requestedFields) && request.requestedFields.length > 0 ? (
@@ -151,15 +151,15 @@ export function InformationRequests({ user, userType, colors }) {
 
         {!isPending && (
           <View style={[
-            styles.statusBadge, 
-            { 
+            styles.statusBadge,
+            {
               backgroundColor: isApproved ? '#10B981' : '#EF4444',
               alignSelf: 'flex-start',
               marginTop: 12,
               paddingVertical: 6,
               paddingHorizontal: 12,
               borderRadius: 12
-            } 
+            }
           ]}>
             <Text style={[styles.statusText, { fontSize: 12 }]}>
               {request.status.toUpperCase()}
@@ -172,7 +172,7 @@ export function InformationRequests({ user, userType, colors }) {
             </Text>
           </View>
         )}
-        
+
         {isApproved && request.sharedFields && request.sharedFields.length > 0 && (
           <View style={{ marginTop: 12 }}>
             <Text style={[styles.fieldsLabel, { marginBottom: 6 }]}>Shared Information:</Text>
@@ -188,8 +188,8 @@ export function InformationRequests({ user, userType, colors }) {
   };
 
   const currentRequests = activeTab === 'pending' ? pendingRequests : sentRequests;
-  const noRequestsText = activeTab === 'pending' 
-    ? 'No pending requests' 
+  const noRequestsText = activeTab === 'pending'
+    ? 'No pending requests'
     : 'You have not sent any requests';
 
   return (
@@ -197,12 +197,12 @@ export function InformationRequests({ user, userType, colors }) {
       <View style={styles.header}>
         <Text style={[styles.title, { color: colors.text }]}>Information Requests</Text>
       </View>
-      
+
       <View style={[styles.tabContainer, { backgroundColor: '#fff', elevation: 2 }]}>
         <TouchableOpacity
           style={[
-            styles.tab, 
-            activeTab === 'pending' && { 
+            styles.tab,
+            activeTab === 'pending' && {
               borderBottomColor: colors.primary,
               borderBottomWidth: 2
             }
@@ -213,11 +213,11 @@ export function InformationRequests({ user, userType, colors }) {
             }
           }}
         >
-          <Text 
+          <Text
             style={[
-              styles.tabText, 
-              activeTab === 'pending' 
-                ? { color: colors.primary, fontWeight: '600' } 
+              styles.tabText,
+              activeTab === 'pending'
+                ? { color: colors.primary, fontWeight: '600' }
                 : { color: '#6b7280' }
             ]}
           >
@@ -229,11 +229,11 @@ export function InformationRequests({ user, userType, colors }) {
             )}
           </Text>
         </TouchableOpacity>
-        
+
         <TouchableOpacity
           style={[
-            styles.tab, 
-            activeTab === 'sent' && { 
+            styles.tab,
+            activeTab === 'sent' && {
               borderBottomColor: colors.primary,
               borderBottomWidth: 2
             }
@@ -244,11 +244,11 @@ export function InformationRequests({ user, userType, colors }) {
             }
           }}
         >
-          <Text 
+          <Text
             style={[
-              styles.tabText, 
-              activeTab === 'sent' 
-                ? { color: colors.primary, fontWeight: '600' } 
+              styles.tabText,
+              activeTab === 'sent'
+                ? { color: colors.primary, fontWeight: '600' }
                 : { color: '#6b7280' }
             ]}
           >
@@ -257,7 +257,7 @@ export function InformationRequests({ user, userType, colors }) {
         </TouchableOpacity>
       </View>
 
-      <ScrollView 
+      <ScrollView
         style={styles.requestsList}
         refreshControl={
           <RefreshControl
@@ -278,10 +278,10 @@ export function InformationRequests({ user, userType, colors }) {
           </View>
         ) : (
           <View style={styles.emptyState}>
-            <Ionicons 
-              name="document-text-outline" 
-              size={48} 
-              color="#9ca3af" 
+            <Ionicons
+              name="document-text-outline"
+              size={48}
+              color="#9ca3af"
               style={{ marginBottom: 16 }}
             />
             <Text style={styles.noRequestsText}>{noRequestsText}</Text>

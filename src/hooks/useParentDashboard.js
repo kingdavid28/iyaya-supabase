@@ -35,15 +35,24 @@ export const useParentDashboard = () => {
         const rawAddress = profileData.address || profileData.location || '';
         const addressString = typeof rawAddress === 'string' ? rawAddress : (rawAddress.street || rawAddress.city || '');
 
+        const resolveProfileImage = (profileData) => {
+          return profileData.profileImage || profileData.profile_image || profileData.avatar || profileData.imageUrl || null;
+        };
+
+        const resolveLocation = (profileData) => {
+          return profileData.location || addressString;
+        };
+
         setProfile({
+          ...profileData,
           name: profileData.name || profileData.displayName || '',
           email: profileData.email || '',
           phone: profileData.phone || profileData.contact || '',
           address: addressString,
-          location: addressString,
+          location: resolveLocation(profileData),
           children: profileData.children || [],
-          imageUrl: profileData.profileImage || profileData.avatar || null,
-          ...profileData
+          profileImage: resolveProfileImage(profileData),
+          imageUrl: resolveProfileImage(profileData)
         });
       }
     } catch (error) {

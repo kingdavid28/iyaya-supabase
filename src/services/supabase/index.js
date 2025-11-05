@@ -3,6 +3,7 @@ import { applicationService } from './applicationService'
 import { bookingService } from './bookingService'
 import { childrenService } from './childrenService'
 import { contractService } from './contractService'
+import { informationRequestService } from './informationRequestService'
 import { jobService } from './jobService'
 import { messagingService } from './messagingService'
 import { notificationService } from './notificationService'
@@ -16,7 +17,7 @@ import { userService } from './userService'
 // TODO: Move uploadProfileImage to storageService and remove this import
 
 // Export individual services (preferred approach)
-export { applicationService, bookingService, childrenService, contractService, jobService, messagingService, notificationService, realtimeService, reviewService, storageService, userService }
+export { applicationService, bookingService, childrenService, contractService, informationRequestService, jobService, messagingService, notificationService, realtimeService, reviewService, storageService, userService }
 
 // Facade pattern for unified access (when needed)
 export class SupabaseServiceFacade {
@@ -32,6 +33,7 @@ export class SupabaseServiceFacade {
     this.realtime = realtimeService
     this.reviews = reviewService
     this.contracts = contractService
+    this.informationRequests = informationRequestService
   }
 
   // === USER & PROFILE METHODS ===
@@ -123,6 +125,27 @@ export class SupabaseServiceFacade {
       await this.notifications.notifyNewMessage(senderId, message.recipient_id, content)
     }
     return message
+  }
+
+  // === INFORMATION REQUEST METHODS ===
+  async createInformationRequest(payload) {
+    return this.informationRequests.createRequest(payload)
+  }
+
+  async getPendingInformationRequests(userId) {
+    return this.informationRequests.getPendingRequests(userId)
+  }
+
+  async getSentInformationRequests(userId) {
+    return this.informationRequests.getSentRequests(userId)
+  }
+
+  async respondToInformationRequest(payload) {
+    return this.informationRequests.respondToRequest(payload)
+  }
+
+  async revokeInformationAccess(requestId) {
+    return this.informationRequests.revokeAccess(requestId)
   }
 }
 

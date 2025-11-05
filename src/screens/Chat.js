@@ -562,6 +562,7 @@ const Chat = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    marginBottom: 38,
     backgroundColor: '#f5f5f5',
   },
   loadingContainer: {
