@@ -460,6 +460,7 @@ const styles = StyleSheet.create({
   viewerContainer: { 
     flex: 1, 
     backgroundColor: 'black',
+    marginBottom: 50,
     paddingTop: Platform.OS === 'ios' ? 50 : 30,
   },
   closeButton: { 
