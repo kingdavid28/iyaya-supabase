@@ -1,4 +1,3 @@
-import { LinearGradient } from 'expo-linear-gradient';
 import { Search, SlidersHorizontal } from 'lucide-react-native';
 import React from 'react';
 import { ActivityIndicator, FlatList, RefreshControl, Text, TextInput, TouchableOpacity, View } from 'react-native';
@@ -36,21 +35,16 @@ const SearchTab = ({
   return (
     <View style={[styles.caregiversContent, { flex: 1 }]}>
       {/* Header and Filter Button */}
-      <LinearGradient
-        colors={PARENT_HEADER_GRADIENT}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 0 }}
-        style={searchTabStyles.headerGradient}
-      >
+      <View style={[searchTabStyles.headerGradient, { backgroundColor: '#fff' }]}>
         <View style={searchTabStyles.headerContainer}>
           <Text style={searchTabStyles.headerTitle}>Find iYaya</Text>
-          <TouchableOpacity 
+          <TouchableOpacity
             style={[searchTabStyles.filterButton, activeFilters > 0 && searchTabStyles.filterButtonActive]}
             onPress={onOpenFilter}
           >
-            <SlidersHorizontal 
-              size={16} 
-              color="rgba(255,255,255,0.92)" 
+            <SlidersHorizontal
+              size={16}
+              color="rgba(255,255,255,0.92)"
               style={searchTabStyles.filterIcon}
             />
             <Text style={searchTabStyles.filterText}>Filters</Text>
@@ -61,13 +55,13 @@ const SearchTab = ({
             )}
           </TouchableOpacity>
         </View>
-      </LinearGradient>
+      </View>
 
       {/* Search Bar */}
       <View style={searchTabStyles.searchContainer}>
-        <Search 
-          size={20} 
-          color="#9CA3AF" 
+        <Search
+          size={20}
+          color="#9CA3AF"
           style={searchTabStyles.searchIcon}
         />
         <TextInput
@@ -87,7 +81,7 @@ const SearchTab = ({
           <Text style={searchTabStyles.activeFiltersText}>
             {activeFilters} filters active
           </Text>
-          <TouchableOpacity 
+          <TouchableOpacity
             style={searchTabStyles.clearFiltersButton}
             onPress={() => {
               // Clear all filters - this would need to be passed as a prop
@@ -98,7 +92,7 @@ const SearchTab = ({
           </TouchableOpacity>
         </View>
       )}
-      
+
       {(searchLoading || loading) ? (
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color={colors.primary} />
@@ -107,7 +101,7 @@ const SearchTab = ({
       ) : showEmptyState ? (
         <View style={styles.emptySection}>
           <Text style={styles.emptySectionText}>
-            {searchQuery 
+            {searchQuery
               ? `No caregivers found matching "${searchQuery}"`
               : 'No caregivers available at the moment'}
           </Text>
@@ -129,8 +123,8 @@ const SearchTab = ({
           ListHeaderComponent={
             <View style={searchTabStyles.resultsHeader}>
               <Text style={styles.sectionTitle}>
-                {showSearchResults 
-                  ? `${displayData.length} results found` 
+                {showSearchResults
+                  ? `${displayData.length} results found`
                   : `${displayData.length} caregivers available`}
               </Text>
               {displayData.length > 0 && (
@@ -168,9 +162,9 @@ const searchTabStyles = {
     justifyContent: 'space-between',
   },
   headerTitle: {
-    fontSize: 24,
+    fontSize: 20,
     fontWeight: 'bold',
-    color: '#FFFFFF',
+    color: '#8d66b2ff',
   },
   filterButton: {
     flexDirection: 'row',
@@ -178,10 +172,10 @@ const searchTabStyles = {
     paddingHorizontal: 16,
     paddingVertical: 8,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.45)',
+    borderColor: 'rgba(96, 49, 49, 0.45)',
     borderRadius: 25,
     position: 'relative',
-    backgroundColor: 'rgba(255,255,255,0.16)',
+    backgroundColor: '#cf7de8ff',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
@@ -189,8 +183,8 @@ const searchTabStyles = {
     elevation: 3,
   },
   filterButtonActive: {
-    backgroundColor: 'rgba(255,255,255,0.28)',
-    borderColor: 'rgba(255,255,255,0.65)',
+    backgroundColor: 'rgba(116, 44, 44, 0.28)',
+    borderColor: 'rgba(123, 47, 47, 0.65)',
   },
   filterIcon: {
     marginRight: 6,

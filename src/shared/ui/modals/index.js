@@ -1,4 +1,5 @@
+export { default as RequestInfoModal } from '../../../components/features/privacy/InformationRequestModal';
+export { default as PrivacyNotificationModal } from '../../../components/features/privacy/PrivacyNotificationModal';
 export { BookingDetailsModal } from './BookingDetailsModal';
-export { PrivacyNotificationModal } from './PrivacyNotificationModal';
-export { RequestInfoModal } from './RequestInfoModal';
 export { SettingsModal } from './SettingsModal';
+

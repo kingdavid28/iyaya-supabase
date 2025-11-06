@@ -1,8 +1,9 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useEffect, useState } from 'react';
 import { Alert } from 'react-native';
 import { privacyAPI } from '../../../config/api';
-import { getFilteredProfileData } from './ProfileDataManager';
+import { informationRequestService } from '../../../services/supabase';
 import { tokenManager } from '../../../utils/tokenManager';
+import { getFilteredProfileData } from './ProfileDataManager';
 
 // Helper function to check authentication
 const isAuthenticated = async () => {
@@ -68,6 +69,7 @@ export const PrivacyProvider = ({ children }) => {
   });
 
   const [pendingRequests, setPendingRequests] = useState([]);
+  const [sentRequests, setSentRequests] = useState([]);
   const [notifications, setNotifications] = useState([]);
   const [loading, setLoading] = useState(false);
 
@@ -80,7 +82,7 @@ export const PrivacyProvider = ({ children }) => {
         console.warn('User not authenticated - skipping privacy settings load');
         return;
       }
-      
+
       const response = await privacyAPI.getPrivacySettings();
       if (response?.data) {
         setPrivacySettings(response.data);
@@ -101,7 +103,7 @@ export const PrivacyProvider = ({ children }) => {
     try {
       const updatedSettings = { ...privacySettings, [setting]: value };
       setPrivacySettings(updatedSettings);
-      
+
       await privacyAPI.updatePrivacySettings(updatedSettings);
       return true;
     } catch (error) {
@@ -110,58 +112,42 @@ export const PrivacyProvider = ({ children }) => {
     }
   };
 
-  const requestInformation = async (targetUserId, requestedFields, reason, requesterId) => {
+  const requestInformation = async (targetUserId, requestedFields, reason) => {
     try {
-      const requestData = {
-        targetUserId,
-        requesterId,
+      const request = await informationRequestService.createRequest({
+        targetId: targetUserId,
         requestedFields,
         reason,
-        requestedAt: new Date().toISOString(),
-      };
+      });
 
-      const response = await privacyAPI.requestInformation(requestData);
-      
-      if (response?.success) {
+      if (request?.id) {
+        setSentRequests(prev => [request, ...prev]);
         Alert.alert('Request Sent', 'Your information request has been sent and is pending approval.');
         return true;
       }
       return false;
     } catch (error) {
       console.error('Error requesting information:', error);
-      Alert.alert('Error', 'Failed to send information request.');
+      Alert.alert('Error', error?.message || 'Failed to send information request.');
       return false;
     }
   };
 
   const respondToRequest = async (requestId, approved, sharedFields = [], expiresIn = null) => {
     try {
-      const response = await privacyAPI.respondToRequest({
+      const updated = await informationRequestService.respondToRequest({
         requestId,
         approved,
         sharedFields,
-        expiresIn,
-        respondedAt: new Date().toISOString(),
+        expiresAt: expiresIn,
       });
 
-      if (response?.success && approved) {
-        // Grant specific permissions to the requester
-        const request = pendingRequests.find(req => req.id === requestId);
-        if (request) {
-          await privacyAPI.grantPermission(
-            request.targetUserId,
-            request.requesterId,
-            sharedFields,
-            expiresIn
-          );
-        }
-      }
-
-      if (response?.success) {
-        // Remove from pending requests
+      if (updated?.id) {
         setPendingRequests(prev => prev.filter(req => req.id !== requestId));
-        
-        // Add to notifications
+        setSentRequests(prev =>
+          prev.map(req => (req.id === requestId ? updated : req))
+        );
+
         const notification = {
           id: Date.now(),
           type: 'info_request_response',
@@ -169,12 +155,13 @@ export const PrivacyProvider = ({ children }) => {
           timestamp: new Date().toISOString(),
         };
         setNotifications(prev => [notification, ...prev]);
-        
         return true;
       }
+
       return false;
     } catch (error) {
       console.error('Error responding to request:', error);
+      Alert.alert('Error', error?.message || 'Failed to respond to request.');
       return false;
     }
   };
@@ -184,13 +171,13 @@ export const PrivacyProvider = ({ children }) => {
     if (targetUserId && viewerUserId) {
       return await getFilteredProfileData(targetUserId, viewerUserId, viewerType);
     }
-    
+
     // Fallback to local filtering if no user IDs provided
     const visibleData = {};
-    
+
     Object.keys(userData).forEach(field => {
       const classification = dataClassification[field];
-      
+
       if (classification === DATA_LEVELS.PUBLIC) {
         // Always visible
         visibleData[field] = userData[field];
@@ -244,24 +231,38 @@ export const PrivacyProvider = ({ children }) => {
   const loadPendingRequests = async () => {
     setLoading(true);
     try {
-      // Check if user is authenticated first
       const authenticated = await isAuthenticated();
       if (!authenticated) {
         console.warn('User not authenticated - skipping pending requests load');
+        setPendingRequests([]);
         return;
       }
-      
-      const response = await privacyAPI.getPendingRequests();
-      if (response?.data) {
-        setPendingRequests(response.data);
-      }
+
+      const requests = await informationRequestService.getPendingRequests();
+      setPendingRequests(Array.isArray(requests) ? requests : []);
     } catch (error) {
       console.error('Error loading pending requests:', error);
-      // If 401 error, user might not be authenticated - skip loading
-      if (error.response?.status === 401 || error.message === 'Authentication required') {
-        console.warn('Pending requests unavailable - user not authenticated');
+      Alert.alert('Error', error?.message || 'Failed to load pending requests.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const loadSentRequests = async () => {
+    setLoading(true);
+    try {
+      const authenticated = await isAuthenticated();
+      if (!authenticated) {
+        console.warn('User not authenticated - skipping sent requests load');
+        setSentRequests([]);
         return;
       }
+
+      const requests = await informationRequestService.getSentRequests();
+      setSentRequests(Array.isArray(requests) ? requests : []);
+    } catch (error) {
+      console.error('Error loading sent requests:', error);
+      Alert.alert('Error', error?.message || 'Failed to load sent requests.');
     } finally {
       setLoading(false);
     }
@@ -276,7 +277,7 @@ export const PrivacyProvider = ({ children }) => {
         console.warn('User not authenticated - skipping notifications load');
         return;
       }
-      
+
       const response = await privacyAPI.getPrivacyNotifications();
       if (response?.data) {
         setNotifications(response.data);
@@ -296,9 +297,9 @@ export const PrivacyProvider = ({ children }) => {
   const markNotificationAsRead = async (notificationId) => {
     try {
       await privacyAPI.markNotificationAsRead(notificationId);
-      setNotifications(prev => 
-        prev.map(notif => 
-          notif.id === notificationId 
+      setNotifications(prev =>
+        prev.map(notif =>
+          notif.id === notificationId
             ? { ...notif, read: true }
             : notif
         )
@@ -311,6 +312,7 @@ export const PrivacyProvider = ({ children }) => {
   useEffect(() => {
     loadPrivacySettings();
     loadPendingRequests();
+    loadSentRequests();
     loadNotifications();
   }, []);
 
@@ -318,6 +320,7 @@ export const PrivacyProvider = ({ children }) => {
     privacySettings,
     pendingRequests,
     notifications,
+    sentRequests,
     loading,
     DATA_LEVELS,
     dataClassification,
@@ -328,6 +331,7 @@ export const PrivacyProvider = ({ children }) => {
     grantUserPermission,
     revokeUserPermission,
     loadPendingRequests,
+    loadSentRequests,
     markNotificationAsRead,
   };
 

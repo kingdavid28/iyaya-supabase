@@ -1,15 +1,14 @@
-import React from 'react';
-import { View, Text, Platform, TouchableOpacity } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import ProfileImage from '../../../components/ui/feedback/ProfileImage';
-import { LinearGradient } from 'expo-linear-gradient';
-import { useAuth } from '../../../contexts/AuthContext';
-import { calculateAge } from '../../../utils/dateUtils';
 import { useNavigation } from '@react-navigation/native';
+import { LinearGradient } from 'expo-linear-gradient';
+import React from 'react';
+import { Platform, Text, TouchableOpacity, View } from 'react-native';
+import ProfileImage from '../../../components/ui/feedback/ProfileImage';
+import { useAuth } from '../../../contexts/AuthContext';
 const CaregiverProfileSection = ({ profile, activeTab }) => {
   const { user } = useAuth();
   const navigation = useNavigation();
-  
+
   const displayName = profile?.name || user?.name;
   const displayLocation = profile?.location || profile?.address || user?.address || 'Location not set';
 
@@ -46,6 +45,7 @@ const CaregiverProfileSection = ({ profile, activeTab }) => {
               style={styles.profileImageContainer}
               borderColor="#3b82f6"
               defaultIconSize={40}
+              resizeMode="cover"
             />
             <Text style={styles.welcomeText}>
               {displayName ? `Welcome back, ${displayName}! 👋` : 'Welcome back! 👋'}
@@ -53,7 +53,7 @@ const CaregiverProfileSection = ({ profile, activeTab }) => {
             <View style={styles.profileDetails}>
               <Text style={styles.profileDetailText}>📧 {user?.email || 'No email'}</Text>
               {(profile?.phone || profile?.contact_phone) && (
-              <Text style={styles.profileDetailText}>📱 {String(profile.phone || profile.contact_phone)}</Text>
+                <Text style={styles.profileDetailText}>📱 {String(profile.phone || profile.contact_phone)}</Text>
               )}
               <Text style={styles.profileDetailText}>📍 {displayLocation}</Text>
             </View>

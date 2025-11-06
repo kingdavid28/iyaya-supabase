@@ -1,6 +1,6 @@
-import React, { useState } from 'react';
-import { View, Text, Modal, TouchableOpacity, TextInput, ScrollView, Alert } from 'react-native';
-import { X, Lock, Shield, Eye } from 'lucide-react-native';
+import { Eye, Lock, Shield, X } from 'lucide-react-native';
+import React, { useMemo, useState } from 'react';
+import { Alert, Modal, ScrollView, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { usePrivacy } from './PrivacyManager';
 import { useProfileData } from './ProfileDataManager';
 
@@ -12,18 +12,20 @@ const InformationRequestModal = ({ visible, onClose, targetUser, userType = 'par
   const [loading, setLoading] = useState(false);
 
   // Use existing profile data classification from ProfileDataManager
-  const getAvailableFields = () => {
-    const fields = [];
-    
-    Object.keys(dataClassification).forEach(key => {
+  const fields = useMemo(() => {
+    const shouldOmitChildFields = userType === 'parent';
+
+    return Object.keys(dataClassification).reduce((acc, key) => {
       const level = dataClassification[key];
-      
-      // Only show PRIVATE and SENSITIVE fields for requests
+
+      if (shouldOmitChildFields && key.toLowerCase().includes('child')) {
+        return acc;
+      }
+
       if (level === DATA_LEVELS.PRIVATE || level === DATA_LEVELS.SENSITIVE) {
         let label = key;
         let icon = '📄';
-        
-        // Map field keys to user-friendly labels
+
         switch (key) {
           case 'phone': label = 'Phone Number'; icon = '📞'; break;
           case 'address': label = 'Full Address'; icon = '🏠'; break;
@@ -40,21 +42,23 @@ const InformationRequestModal = ({ visible, onClose, targetUser, userType = 'par
           case 'childAllergies': label = 'Child Allergies'; icon = '⚠️'; break;
           case 'childBehaviorNotes': label = 'Child Behavior Notes'; icon = '📝'; break;
           case 'financialInfo': label = 'Financial Information'; icon = '💰'; break;
-          default: label = key.charAt(0).toUpperCase() + key.slice(1); break;
+          default: label = key.charAt(0).toUpperCase() + key.slice(1).replace(/([A-Z])/g, ' $1'); break;
         }
-        
-        fields.push({ key, label, level, icon });
-      }
-    });
-    
-    return fields;
-  };
 
-  const fields = getAvailableFields();
+        if (shouldOmitChildFields && key.toLowerCase().includes('child')) {
+          return acc;
+        }
+
+        acc.push({ key, label, level, icon });
+      }
+
+      return acc;
+    }, []);
+  }, [DATA_LEVELS.PRIVATE, DATA_LEVELS.SENSITIVE, dataClassification, userType]);
 
   const toggleField = (fieldKey) => {
-    setSelectedFields(prev => 
-      prev.includes(fieldKey) 
+    setSelectedFields(prev =>
+      prev.includes(fieldKey)
         ? prev.filter(key => key !== fieldKey)
         : [...prev, fieldKey]
     );
@@ -71,9 +75,18 @@ const InformationRequestModal = ({ visible, onClose, targetUser, userType = 'par
       return;
     }
 
+    const targetId = targetUser?.id;
+    if (!targetId || targetId === 'sample') {
+      Alert.alert(
+        'Invalid recipient',
+        'We need a valid user to send your request. Please choose a real profile before submitting.'
+      );
+      return;
+    }
+
     setLoading(true);
     try {
-      const success = await requestInformation(targetUser.id, selectedFields, reason.trim());
+      const success = await requestInformation(targetId, selectedFields, reason.trim());
       if (success) {
         setSelectedFields([]);
         setReason('');
@@ -121,7 +134,7 @@ const InformationRequestModal = ({ visible, onClose, targetUser, userType = 'par
 
         <ScrollView style={styles.content}>
           <Text style={styles.sectionTitle}>Select Information to Request:</Text>
-          
+
           {fields.map((field) => (
             <TouchableOpacity
               key={field.key}
@@ -172,7 +185,7 @@ const InformationRequestModal = ({ visible, onClose, targetUser, userType = 'par
           >
             <Text style={styles.cancelButtonText}>Cancel</Text>
           </TouchableOpacity>
-          
+
           <TouchableOpacity
             style={[styles.button, styles.submitButton, loading && styles.buttonDisabled]}
             onPress={handleSubmitRequest}

@@ -1,15 +1,22 @@
+import { AlertCircle, Check, Clock, Shield, X } from 'lucide-react-native';
 import React, { useState } from 'react';
-import { View, Text, Modal, TouchableOpacity, ScrollView, Alert } from 'react-native';
-import { X, Check, AlertCircle, Shield, Clock } from 'lucide-react-native';
+import { Alert, Modal, ScrollView, Text, TouchableOpacity, View } from 'react-native';
 import { usePrivacy } from './PrivacyManager';
 
-const PrivacyNotificationModal = ({ visible, onClose, requests = [] }) => {
+const PrivacyNotificationModal = ({
+  visible,
+  onClose,
+  requests = [],
+  subtitle = 'Manage requests for your personal information',
+  emptyStateTitle = 'No privacy requests',
+  emptyStateMessage = "You don't have any pending information requests right now.",
+}) => {
   const { respondToRequest, DATA_LEVELS } = usePrivacy();
   const [loading, setLoading] = useState({});
 
   const handleApprove = async (request, selectedFields = []) => {
     setLoading(prev => ({ ...prev, [request.id]: true }));
-    
+
     try {
       const success = await respondToRequest(request.id, true, selectedFields);
       if (success) {
@@ -49,7 +56,7 @@ const PrivacyNotificationModal = ({ visible, onClose, requests = [] }) => {
     const now = new Date();
     const requestTime = new Date(timestamp);
     const diffInHours = Math.floor((now - requestTime) / (1000 * 60 * 60));
-    
+
     if (diffInHours < 1) return 'Just now';
     if (diffInHours < 24) return `${diffInHours}h ago`;
     return `${Math.floor(diffInHours / 24)}d ago`;
@@ -74,18 +81,21 @@ const PrivacyNotificationModal = ({ visible, onClose, requests = [] }) => {
         </View>
 
         <ScrollView style={styles.content}>
+          <Text style={styles.subtitle}>{subtitle}</Text>
+
           {requests.length === 0 ? (
             <View style={styles.emptyState}>
               <Shield size={48} color="#9ca3af" />
-              <Text style={styles.emptyTitle}>No Privacy Requests</Text>
-              <Text style={styles.emptyText}>
-                You don't have any pending information requests at the moment.
-              </Text>
+              <Text style={styles.emptyTitle}>{emptyStateTitle}</Text>
+              <Text style={styles.emptyText}>{emptyStateMessage}</Text>
             </View>
           ) : (
             requests.map((request) => (
               <View key={request.id} style={styles.requestCard}>
                 <View style={styles.requestHeader}>
+                  <Text style={styles.requestTimestamp}>
+                    Requested on {new Date(request.createdAt || request.created_at || Date.now()).toLocaleString()}
+                  </Text>
                   <View style={styles.requesterInfo}>
                     <Text style={styles.requesterName}>{request.requesterName}</Text>
                     <Text style={styles.requesterType}>

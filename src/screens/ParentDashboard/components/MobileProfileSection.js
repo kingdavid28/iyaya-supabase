@@ -1,11 +1,10 @@
-import React from 'react';
-import { View, Text, Platform, TouchableOpacity } from 'react-native';
-import { X, Edit2 } from 'lucide-react-native';
-import ProfileImage from '../../../components/ui/feedback/ProfileImage';
 import { LinearGradient } from 'expo-linear-gradient';
-import { getCurrentSocketURL } from '../../../config/api';
+import { Edit2, X } from 'lucide-react-native';
+import React from 'react';
+import { Platform, Text, TouchableOpacity, View } from 'react-native';
+import ProfileImage from '../../../components/ui/feedback/ProfileImage';
 import { useAuth } from '../../../contexts/AuthContext';
-import { calculateAge, formatBirthDate } from '../../../utils/dateUtils';
+import { calculateAge } from '../../../utils/dateUtils';
 
 const MobileProfileSection = ({ greetingName, profileImage, profileContact, profileLocation, activeTab, userData, onClose, navigation }) => {
   const { user, getUserProfile } = useAuth();
@@ -24,7 +23,7 @@ const MobileProfileSection = ({ greetingName, profileImage, profileContact, prof
         }
       }
     };
-    
+
     fetchProfile();
   }, [user?.id, userData, getUserProfile]);
 
@@ -44,16 +43,16 @@ const MobileProfileSection = ({ greetingName, profileImage, profileContact, prof
     email: profileData?.email,
     role: profileData?.role
   });
-  
+
   const userAge = profileData?.birthDate || profileData?.birth_date ? calculateAge(profileData.birthDate || profileData.birth_date) : null;
   const fullName = profileData?.name || profileData?.displayName || greetingName;
   const displayName = profileData?.firstName || profileData?.first_name || profileData?.lastName || profileData?.last_name
     ? `${profileData.firstName || profileData.first_name || ''} ${profileData.middleInitial ? profileData.middleInitial + '. ' : ''}${profileData.lastName || profileData.last_name || ''}`.trim()
     : fullName;
-  
+
   // Get the most current profile image - prioritize profileImage prop which comes from parent dashboard state
   const currentProfileImage = profileImage || profileData?.profileImage || profileData?.profile_image || profileData?.avatar || profileData?.imageUrl;
-  
+
   console.log('🖼️ MobileProfileSection - Profile image sources:', {
     profileImage,
     'profileData?.profileImage': profileData?.profileImage,
@@ -89,11 +88,12 @@ const MobileProfileSection = ({ greetingName, profileImage, profileContact, prof
         </View>
         <View style={styles.mobileProfileContent}>
           <View style={styles.mobileLeftSection}>
-            <ProfileImage 
+            <ProfileImage
               imageUrl={currentProfileImage}
               size={120}
               borderColor="#db2777"
               style={styles.mobileProfileImageContainer}
+              resizeMode="cover"
             />
             <Text style={styles.mobileWelcomeText}>
               {displayName ? `Welcome back, ${displayName}! 👋` : 'Welcome back! 👋'}

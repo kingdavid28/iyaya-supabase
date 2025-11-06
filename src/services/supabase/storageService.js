@@ -8,14 +8,14 @@ export class StorageService extends SupabaseBase {
   async uploadProfileImage(userId, imageData) {
     try {
       this._validateId(userId, 'User ID')
-      
+
       if (!imageData) {
         throw new Error('Image data is required')
       }
 
       let fileData
       let contentType = 'image/jpeg'
-      
+
       if (imageData.uri) {
         const response = await fetch(imageData.uri)
         fileData = await response.blob()
@@ -33,7 +33,7 @@ export class StorageService extends SupabaseBase {
       }
 
       const fileName = `profile-${userId}-${Date.now()}.jpg`
-      
+
       const { data, error } = await supabase.storage
         .from(PROFILE_BUCKET)
         .upload(fileName, fileData, {
@@ -47,19 +47,20 @@ export class StorageService extends SupabaseBase {
 
       const { data: signedData, error: signedError } = await supabase.storage
         .from(PROFILE_BUCKET)
-        .createSignedUrl(storagePath, SIGNED_URL_TTL_SECONDS, {
-          transform: {
-            width: 256,
-            quality: 70,
-          },
-        })
+        .createSignedUrl(storagePath, SIGNED_URL_TTL_SECONDS)
 
-      if (signedError) throw signedError
+      let signedUrl = signedData?.signedUrl
 
-      const signedUrl = signedData?.signedUrl
+      if (signedError || !signedUrl) {
+        console.warn('Falling back to public profile image URL:', signedError)
+        const { data: publicData } = supabase.storage
+          .from(PROFILE_BUCKET)
+          .getPublicUrl(storagePath)
+        signedUrl = publicData?.publicUrl
+      }
 
       if (!signedUrl) {
-        throw new Error('Failed to generate signed URL for profile image')
+        throw new Error('Failed to generate profile image URL')
       }
 
       const { userService } = await import('./userService')
@@ -74,14 +75,14 @@ export class StorageService extends SupabaseBase {
   async uploadPaymentProofImage(bookingId, { base64, mimeType = 'image/jpeg', paymentType = 'deposit' }) {
     try {
       this._validateId(bookingId, 'Booking ID')
-      
+
       if (!base64) {
         throw new Error('Image data is required')
       }
 
       // Remove data URL prefix if present
       const base64Data = base64.replace(/^data:image\/[a-z]+;base64,/, '')
-      
+
       // Convert base64 to binary
       const binaryString = atob(base64Data)
       const bytes = new Uint8Array(binaryString.length)
@@ -92,7 +93,7 @@ export class StorageService extends SupabaseBase {
       // Generate unique filename
       const timestamp = Date.now()
       const fileName = `payment-proofs/${bookingId}/${paymentType}-${timestamp}.jpg`
-      
+
       // Upload to Supabase Storage
       const { data, error } = await supabase.storage
         .from(PAYMENT_PROOF_BUCKET)
@@ -115,7 +116,7 @@ export class StorageService extends SupabaseBase {
         const { data: { publicUrl } } = supabase.storage
           .from(PAYMENT_PROOF_BUCKET)
           .getPublicUrl(storagePath)
-        
+
         return {
           url: publicUrl,
           path: storagePath,

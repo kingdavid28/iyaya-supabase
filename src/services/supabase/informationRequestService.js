@@ -8,23 +8,33 @@ const REQUEST_SELECT = `*,
     id,
     name,
     email,
-    profile_data
+    profile_image,
+    first_name,
+    last_name
   ),
   target:target_id (
     id,
     name,
     email,
-    profile_data
+    profile_image,
+    first_name,
+    last_name
   )`
 
 class InformationRequestService extends SupabaseBase {
     _profileSummary(profile, fallbackId) {
         if (!profile && !fallbackId) return null
+        const firstName = profile?.first_name
+        const lastName = profile?.last_name
+        const displayName = profile?.name || [firstName, lastName].filter(Boolean).join(' ') || null
+
         return {
             id: profile?.id || fallbackId || null,
-            name: profile?.name || null,
+            name: displayName,
             email: profile?.email || null,
-            profileData: profile?.profile_data || null
+            profileImage: profile?.profile_image || null,
+            firstName,
+            lastName
         }
     }
 

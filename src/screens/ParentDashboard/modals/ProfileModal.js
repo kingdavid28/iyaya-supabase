@@ -194,6 +194,13 @@ const ProfileModal = ({
 };
 
 const profileModalStyles = {
+  modalContainer: {
+    flex: 1,
+    marginBottom: 30,
+    justifyContent: "center",
+    alignItems: "center",
+    backgroundColor: "rgba(0, 0, 0, 0.5)",
+  },
   modalHeader: {
     flexDirection: "row",
     justifyContent: "space-between",

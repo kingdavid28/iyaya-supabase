@@ -1,7 +1,7 @@
 // src/utils/imageUtils.js
-import { Image } from 'react-native';
 import * as FileSystem from 'expo-file-system';
 import * as ImageManipulator from 'expo-image-manipulator';
+import { Image } from 'react-native';
 
 /**
  * Get profile image URL with fallback and validation
@@ -116,21 +116,48 @@ export const processImageForUpload = async (uri, options = {}) => {
     maxWidth = 1024,
     maxHeight = 1024,
     compress = 0.8,
-    format = ImageManipulator.SaveFormat.JPEG
+    format = ImageManipulator.SaveFormat.JPEG,
   } = options;
+
+  let originalWidth = maxWidth;
+  let originalHeight = maxHeight;
+
+  try {
+    const dimensions = await getImageDimensions(uri);
+    if (dimensions?.width && dimensions?.height) {
+      originalWidth = dimensions.width;
+      originalHeight = dimensions.height;
+    }
+  } catch (dimensionError) {
+    console.warn('processImageForUpload: unable to read image dimensions, falling back to max dimensions.', dimensionError);
+  }
+
+  let targetWidth = originalWidth;
+  let targetHeight = originalHeight;
+
+  if (originalWidth > maxWidth || originalHeight > maxHeight) {
+    const widthScale = maxWidth / (originalWidth || maxWidth);
+    const heightScale = maxHeight / (originalHeight || maxHeight);
+    const scale = Math.min(widthScale, heightScale, 1);
+
+    if (Number.isFinite(scale) && scale > 0) {
+      targetWidth = Math.max(1, Math.round(originalWidth * scale));
+      targetHeight = Math.max(1, Math.round(originalHeight * scale));
+    }
+  }
+
+  const shouldResize = targetWidth > 0 && targetHeight > 0 && (targetWidth !== originalWidth || targetHeight !== originalHeight);
+  const actions = shouldResize
+    ? [{ resize: { width: targetWidth, height: targetHeight } }]
+    : [];
+
+  const resolvedCompress = Math.max(0.05, Math.min(1, compress ?? 0.8));
 
   const manipResult = await ImageManipulator.manipulateAsync(
     uri,
-    [
-      {
-        resize: {
-          width: maxWidth,
-          height: maxHeight,
-        },
-      },
-    ],
+    actions,
     {
-      compress,
+      compress: resolvedCompress,
       format,
       base64: true,
     }
@@ -140,9 +167,19 @@ export const processImageForUpload = async (uri, options = {}) => {
     throw new Error('Failed to process image for upload');
   }
 
+  const resolvedMimeType =
+    format === ImageManipulator.SaveFormat.PNG
+      ? 'image/png'
+      : format === ImageManipulator.SaveFormat.WEBP
+        ? 'image/webp'
+        : 'image/jpeg';
+
   return {
     uri: manipResult.uri,
-    base64: `data:image/jpeg;base64,${manipResult.base64}`,
+    base64: `data:${resolvedMimeType};base64,${manipResult.base64}`,
+    width: shouldResize ? targetWidth : originalWidth,
+    height: shouldResize ? targetHeight : originalHeight,
+    mimeType: resolvedMimeType,
   };
 };
 
@@ -194,41 +231,45 @@ export const getPlaceholderImage = () => {
  */
 export const getImageSource = (userOrUrl, options = {}) => {
   try {
-    const { width = 100, height = 100, cache = false } = options;
+    const { cache = false, width, height, ...restOptions } = options;
 
     let imageUrl = null;
 
     // Check if first parameter is a user object or a direct URL
     if (typeof userOrUrl === 'string') {
-      // It's a direct URL string
       imageUrl = userOrUrl;
     } else if (userOrUrl && typeof userOrUrl === 'object') {
-      // It's a user object - get the profile image URL
       imageUrl = getProfileImageUrl(userOrUrl);
     }
 
     if (!imageUrl || imageUrl.trim() === '' || imageUrl === 'null') {
-      // Return placeholder if no image available
       return getPlaceholderImage();
     }
 
-    // If caching is requested, cache the image first
+    const buildSource = (uri) => {
+      const source = {
+        uri,
+        ...restOptions,
+      };
+
+      if (typeof width === 'number') {
+        source.width = width;
+      }
+
+      if (typeof height === 'number') {
+        source.height = height;
+      }
+
+      return source;
+    };
+
     if (cache) {
-      return cacheImage(imageUrl).then(cachedUri => ({
-        uri: cachedUri,
-        width,
-        height,
-        ...options
-      })).catch(() => getPlaceholderImage());
+      return cacheImage(imageUrl)
+        .then((cachedUri) => buildSource(cachedUri))
+        .catch(() => getPlaceholderImage());
     }
 
-    // Return direct image source
-    return {
-      uri: imageUrl,
-      width,
-      height,
-      ...options
-    };
+    return buildSource(imageUrl);
   } catch (error) {
     console.error('Error getting image source:', error);
     return getPlaceholderImage();

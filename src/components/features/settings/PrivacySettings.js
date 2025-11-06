@@ -1,6 +1,7 @@
-import React, { useState, useEffect } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
+import React, { useEffect, useState } from 'react';
+import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { ToggleSwitch } from '../../ui/inputs/ToggleSwitch';
+import PrivacyPolicyModal from '../privacy/PrivacyPolicyModal';
 
 export function PrivacySettings({ user, userType, data, onSave, isLoading, isSaving, colors }) {
   const [localData, setLocalData] = useState({
@@ -10,6 +11,7 @@ export function PrivacySettings({ user, userType, data, onSave, isLoading, isSav
     showRatings: true,
     dataSharing: false,
   });
+  const [showPolicyModal, setShowPolicyModal] = useState(false);
 
   useEffect(() => {
     if (data && Object.keys(data).length > 0) {
@@ -41,7 +43,6 @@ export function PrivacySettings({ user, userType, data, onSave, isLoading, isSav
     { key: 'showRatings', label: 'Show Ratings', desc: 'Display your ratings and reviews publicly' },
     { key: 'dataSharing', label: 'Data Sharing', desc: 'Share anonymized data to improve service' }
   ];
-
   if (isLoading) {
     return (
       <View style={styles.container}>
@@ -54,7 +55,15 @@ export function PrivacySettings({ user, userType, data, onSave, isLoading, isSav
   return (
     <View style={styles.container}>
       <Text style={styles.title}>Privacy & Security</Text>
-      
+
+      <TouchableOpacity
+        style={[styles.policyButton, { borderColor: colors.primary }]}
+        onPress={() => setShowPolicyModal(true)}
+        disabled={isSaving}
+      >
+        <Text style={[styles.policyButtonText, { color: colors.primary }]}>View Iyaya Privacy Data Policies</Text>
+      </TouchableOpacity>
+
       <View style={styles.settingsList}>
         {PRIVACY_SETTINGS.map(({ key, label, desc }) => (
           <View key={key} style={styles.settingItem}>
@@ -86,6 +95,11 @@ export function PrivacySettings({ user, userType, data, onSave, isLoading, isSav
           </Text>
         </TouchableOpacity>
       </View>
+      <PrivacyPolicyModal
+        visible={showPolicyModal}
+        onClose={() => setShowPolicyModal(false)}
+        userType={userType}
+      />
     </View>
   );
 }
@@ -132,6 +146,18 @@ const styles = StyleSheet.create({
     borderTopColor: '#E5E7EB',
     alignItems: 'flex-end',
     marginTop: 24,
+  },
+  policyButton: {
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderWidth: 1,
+    borderRadius: 8,
+    alignItems: 'center',
+    marginBottom: 24,
+  },
+  policyButtonText: {
+    fontSize: 14,
+    fontWeight: '600',
   },
   saveButton: {
     paddingHorizontal: 24,

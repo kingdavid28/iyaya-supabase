@@ -1,6 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import { format } from 'date-fns';
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -11,98 +11,78 @@ import {
   TouchableOpacity,
   View
 } from 'react-native';
-import { settingsService } from '../../services';
+import { usePrivacy } from '../features/privacy/PrivacyManager';
 
 export function InformationRequests({ user, userType, colors }) {
   const [activeTab, setActiveTab] = useState('pending');
-  const [pendingRequests, setPendingRequests] = useState([]);
-  const [sentRequests, setSentRequests] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [tabLoading, setTabLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
-  useEffect(() => {
-    loadRequests();
-  }, [activeTab]);
+  const {
+    pendingRequests = [],
+    sentRequests = [],
+    loadPendingRequests,
+    loadSentRequests,
+    respondToRequest,
+    loading: privacyLoading,
+  } = usePrivacy();
 
-  const loadRequests = async (showLoading = true) => {
-    if (showLoading) setLoading(true);
+  const fetchRequests = useCallback(async (showSpinner = true) => {
+    if (showSpinner) setTabLoading(true);
     try {
       if (activeTab === 'pending') {
-        const { success, data, message } = await settingsService.getPendingRequests();
-        if (success) {
-          setPendingRequests(Array.isArray(data) ? data : []);
-        } else {
-          Alert.alert('Error', message || 'Failed to load pending requests');
-          setPendingRequests([]);
-        }
+        await loadPendingRequests();
       } else {
-        const { success, data, message } = await settingsService.getSentRequests();
-        if (success) {
-          setSentRequests(Array.isArray(data) ? data : []);
-        } else {
-          Alert.alert('Error', message || 'Failed to load sent requests');
-          setSentRequests([]);
-        }
+        await loadSentRequests();
       }
-    } catch (error) {
-      console.error('Failed to load requests:', error);
-      Alert.alert('Error', 'Failed to load requests. Please check your connection and try again.');
-      setPendingRequests([]);
-      setSentRequests([]);
     } finally {
-      if (showLoading) setLoading(false);
-      if (refreshing) setRefreshing(false);
+      if (showSpinner) setTabLoading(false);
     }
-  };
+  }, [activeTab, loadPendingRequests, loadSentRequests]);
 
-  const onRefresh = () => {
+  useEffect(() => {
+    fetchRequests();
+  }, [fetchRequests]);
+
+  const onRefresh = useCallback(() => {
     setRefreshing(true);
-    loadRequests(false);
-  };
+    fetchRequests(false).finally(() => setRefreshing(false));
+  }, [fetchRequests]);
 
-  const handleResponse = async (requestId, approved, sharedFields = []) => {
+  const handleResponse = useCallback(async (request, approved) => {
     try {
-      const { success, message } = await settingsService.respondToRequest({
-        requestId,
-        approved,
-        sharedFields
-      });
+      const sharedFields = approved
+        ? request.requestedFields || request.requested_fields || []
+        : [];
+      const success = await respondToRequest(request.id || request._id, approved, sharedFields);
 
-      if (success) {
-        Alert.alert(
-          'Success',
-          approved ? 'Information shared successfully' : 'Request declined'
-        );
-        // Update local state to reflect the change immediately
-        if (activeTab === 'pending') {
-          setPendingRequests(prev =>
-            prev.map(req =>
-              req._id === requestId
-                ? { ...req, status: approved ? 'approved' : 'denied' }
-                : req
-            )
-          );
-        }
-      } else {
-        throw new Error(message || 'Failed to process response');
+      if (!success) {
+        throw new Error('Failed to process response');
       }
+
+      Alert.alert(
+        'Success',
+        approved ? 'Information shared successfully' : 'Request declined'
+      );
     } catch (error) {
       console.error('Error responding to request:', error);
       Alert.alert(
         'Error',
-        error.message || 'Failed to respond to request. Please try again.'
+        error?.message || 'Failed to respond to request. Please try again.'
       );
     }
-  };
+  }, [respondToRequest]);
 
-  const renderRequest = (request) => {
-    const requesterName = request.requesterId?.name || 'Unknown User';
-    const targetName = request.targetUserId?.name || 'Unknown User';
+  const renderRequest = useCallback((request) => {
+    const requestId = request.id || request._id;
+    const requesterName = request.requester?.name || request.requesterId?.name || 'Unknown User';
+    const targetName = request.target?.name || request.targetId?.name || 'Unknown User';
     const isPending = request.status === 'pending';
     const isApproved = request.status === 'approved';
+    const createdAt = request.createdAt || request.created_at || request.requestedAt;
 
     return (
-      <View key={request._id} style={styles.requestCard}>
+      <View key={requestId} style={styles.requestCard}>
         <View style={styles.requestHeader}>
           <Text style={styles.requesterName}>
             {activeTab === 'pending'
@@ -110,7 +90,7 @@ export function InformationRequests({ user, userType, colors }) {
               : `Request to ${targetName}`}
           </Text>
           <Text style={styles.requestDate}>
-            {format(new Date(request.requestedAt || new Date()), 'MMM d, yyyy h:mm a')}
+            {format(new Date(createdAt || new Date()), 'MMM d, yyyy h:mm a')}
           </Text>
         </View>
 
@@ -136,13 +116,13 @@ export function InformationRequests({ user, userType, colors }) {
           <View style={styles.requestActions}>
             <TouchableOpacity
               style={[styles.actionButton, styles.declineButton]}
-              onPress={() => handleResponse(request._id, false)}
+              onPress={() => handleResponse(request, false)}
             >
               <Text style={styles.declineButtonText}>Decline</Text>
             </TouchableOpacity>
             <TouchableOpacity
-              style={[styles.actionButton, { backgroundColor: colors.primary }]}
-              onPress={() => handleResponse(request._id, true, request.requestedFields || [])}
+              style={[styles.actionButton, { backgroundColor: colors?.primary || '#2563eb' }]}
+              onPress={() => handleResponse(request, true)}
             >
               <Text style={styles.approveButtonText}>Approve</Text>
             </TouchableOpacity>
@@ -162,7 +142,7 @@ export function InformationRequests({ user, userType, colors }) {
             }
           ]}>
             <Text style={[styles.statusText, { fontSize: 12 }]}>
-              {request.status.toUpperCase()}
+              {request.status?.toUpperCase?.() || 'UNKNOWN'}
               {request.respondedAt && (
                 <Text style={{ fontSize: 11, opacity: 0.8 }}>
                   {' • '}
@@ -185,17 +165,18 @@ export function InformationRequests({ user, userType, colors }) {
         )}
       </View>
     );
-  };
+  }, [activeTab, colors, handleResponse]);
 
   const currentRequests = activeTab === 'pending' ? pendingRequests : sentRequests;
   const noRequestsText = activeTab === 'pending'
     ? 'No pending requests'
     : 'You have not sent any requests';
+  const isLoading = (tabLoading && !refreshing) || privacyLoading;
 
   return (
     <View style={[styles.container, { backgroundColor: '#f9fafb' }]}>
       <View style={styles.header}>
-        <Text style={[styles.title, { color: colors.text }]}>Information Requests</Text>
+        <Text style={[styles.title, { color: colors?.text || '#111827' }]}>Information Requests</Text>
       </View>
 
       <View style={[styles.tabContainer, { backgroundColor: '#fff', elevation: 2 }]}>
@@ -203,7 +184,7 @@ export function InformationRequests({ user, userType, colors }) {
           style={[
             styles.tab,
             activeTab === 'pending' && {
-              borderBottomColor: colors.primary,
+              borderBottomColor: colors?.primary || '#2563eb',
               borderBottomWidth: 2
             }
           ]}
@@ -217,13 +198,13 @@ export function InformationRequests({ user, userType, colors }) {
             style={[
               styles.tabText,
               activeTab === 'pending'
-                ? { color: colors.primary, fontWeight: '600' }
+                ? { color: colors?.primary || '#2563eb', fontWeight: '600' }
                 : { color: '#6b7280' }
             ]}
           >
             Pending
             {pendingRequests.length > 0 && (
-              <Text style={[styles.badge, { backgroundColor: colors.primary }]}>
+              <Text style={[styles.badge, { backgroundColor: colors?.primary || '#2563eb' }]}>
                 {pendingRequests.length}
               </Text>
             )}
@@ -234,7 +215,7 @@ export function InformationRequests({ user, userType, colors }) {
           style={[
             styles.tab,
             activeTab === 'sent' && {
-              borderBottomColor: colors.primary,
+              borderBottomColor: colors?.primary || '#2563eb',
               borderBottomWidth: 2
             }
           ]}
@@ -248,7 +229,7 @@ export function InformationRequests({ user, userType, colors }) {
             style={[
               styles.tabText,
               activeTab === 'sent'
-                ? { color: colors.primary, fontWeight: '600' }
+                ? { color: colors?.primary || '#2563eb', fontWeight: '600' }
                 : { color: '#6b7280' }
             ]}
           >
@@ -268,9 +249,9 @@ export function InformationRequests({ user, userType, colors }) {
           />
         }
       >
-        {loading ? (
+        {isLoading ? (
           <View style={styles.loadingContainer}>
-            <ActivityIndicator size="large" color={colors.primary} />
+            <ActivityIndicator size="large" color={colors?.primary || '#2563eb'} />
           </View>
         ) : currentRequests.length > 0 ? (
           <View style={styles.requestsContainer}>

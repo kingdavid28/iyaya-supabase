@@ -1,13 +1,13 @@
 import { LinearGradient } from "expo-linear-gradient";
 import {
-    Calendar,
-    CheckCircle,
-    Clock,
-    DollarSign,
-    MapPin,
-    MessageCircle,
-    Star,
-    User,
+  Calendar,
+  CheckCircle,
+  Clock,
+  DollarSign,
+  MapPin,
+  MessageCircle,
+  Star,
+  User,
 } from "lucide-react-native";
 import PropTypes from "prop-types";
 import React, { useState } from "react";
@@ -18,10 +18,10 @@ import { formatAddress } from "../../../utils/addressUtils";
 import { getImageSource } from "../../../utils/imageUtils";
 
 import {
-    colors,
-    spacing,
-    styles,
-    typography,
+  colors,
+  spacing,
+  styles,
+  typography,
 } from "../../styles/ParentDashboard.styles";
 
 /**
@@ -307,20 +307,20 @@ const caregiverCardStyles = StyleSheet.create({
   },
   gradientHeader: {
     backgroundColor: colors.secondaryLight,
-    borderRadius: 22, 
-    height: 128,  
+    borderRadius: 22,
+    height: 128,
     paddingHorizontal: spacing.md,
     paddingVertical: 8,
-  },  
+  },
   headerRow: {
     flexDirection: 'row',
     alignItems: 'center',
     marginBottom: spacing.md,
   },
   avatarRing: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
+    width: 84,
+    height: 84,
+    borderRadius: 42,
     backgroundColor: 'rgba(255,255,255,0.2)',
     padding: 4,
     marginRight: spacing.md,
@@ -331,15 +331,15 @@ const caregiverCardStyles = StyleSheet.create({
     elevation: 3,
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.35)',
+    overflow: 'hidden',
   },
   avatarImage: {
     width: '100%',
     height: '100%',
-    borderRadius: 28,
   },
   avatarFallback: {
     flex: 1,
-    borderRadius: 28,
+    borderRadius: 38,
     backgroundColor: 'rgba(255,255,255,0.2)',
     justifyContent: 'center',
     alignItems: 'center',

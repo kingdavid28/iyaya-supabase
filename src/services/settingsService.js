@@ -1,6 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { API_CONFIG, STORAGE_KEYS } from '../config/constants';
 import { supabaseService } from './supabase';
-import { STORAGE_KEYS, API_CONFIG } from '../config/constants';
 
 const API_BASE_URL = API_CONFIG.BASE_URL;
 
@@ -45,8 +45,6 @@ class SettingsService {
       '/notifications/settings': { pushNotifications: true, emailNotifications: true, smsNotifications: false, bookingReminders: true, messageNotifications: true, marketingEmails: false, quietHours: { enabled: false, startTime: '22:00', endTime: '08:00' } },
       '/payments/settings': { defaultPaymentMethod: 'card', autoPayments: false, savePaymentInfo: true, receiveReceipts: true },
       '/data/usage': { profile: [{ name: 'User Profile', email: 'user@example.com', status: 'Active' }], jobs: [], bookings: [], applications: [] },
-      '/privacy/requests/pending': { requests: [{ id: '1', requesterName: 'John Doe', reason: 'Need contact info for booking', requestedFields: ['phone', 'email'], status: 'pending', createdAt: new Date().toISOString() }] },
-      '/privacy/requests/sent': { requests: [] }
     };
     return mockData[endpoint] || {};
   }
@@ -66,7 +64,7 @@ class SettingsService {
     try {
       const user = await supabaseService.user._getCurrentUser();
       if (!user) throw new Error('Authentication required');
-      
+
       const updatedProfile = await supabaseService.user.updateProfile(user.id, data);
       return updatedProfile;
     } catch (error) {
@@ -92,75 +90,29 @@ class SettingsService {
 
   // Information Requests
   async getPendingRequests() {
-    try {
-      // Try Supabase notifications first
-      const user = await supabaseService.user._getCurrentUser();
-      if (user) {
-        const notifications = await supabaseService.notifications.getNotifications(user.id);
-        const requests = notifications.filter(n => n.type === 'info_request' && !n.read) || [];
-        return {
-          success: true,
-          data: requests,
-          requests: requests
-        };
-      }
-      
-      // Fallback to API
-      const response = await this.makeRequest('/privacy/requests/pending');
-      return {
-        success: true,
-        data: response.requests || [],
-        requests: response.requests || []
-      };
-    } catch (error) {
-      console.error('Error fetching pending requests:', error);
-      return {
-        success: false,
-        message: error.message || 'Failed to fetch pending requests',
-        data: [],
-        requests: []
-      };
-    }
+    console.warn('settingsService.getPendingRequests is deprecated. Use the privacy context via usePrivacy().');
+    return {
+      success: true,
+      data: [],
+      requests: []
+    };
   }
 
   async getSentRequests() {
-    try {
-      const response = await this.makeRequest('/api/privacy/requests/sent');
-      return {
-        success: true,
-        data: response.data || [],
-        requests: response.data || [] // For backward compatibility
-      };
-    } catch (error) {
-      console.error('Error fetching sent requests:', error);
-      return {
-        success: false,
-        message: error.message || 'Failed to fetch sent requests',
-        data: [],
-        requests: []
-      };
-    }
+    console.warn('settingsService.getSentRequests is deprecated. Use the privacy context via usePrivacy().');
+    return {
+      success: true,
+      data: [],
+      requests: []
+    };
   }
 
-  async respondToRequest({ requestId, approved, sharedFields = [] }) {
-    try {
-      const response = await this.makeRequest(`/privacy/requests/${requestId}/respond`, {
-        method: 'POST',
-        body: JSON.stringify({ approved, sharedFields }),
-      });
-      
-      return {
-        success: true,
-        data: response.data,
-        ...response
-      };
-    } catch (error) {
-      console.error('Error responding to request:', error);
-      return {
-        success: false,
-        message: error.message || 'Failed to respond to request'
-      };
-    }
+  async respondToRequest() {
+    console.warn('settingsService.respondToRequest is deprecated. Use the privacy context via usePrivacy().');
+    return {
+      success: false,
+      message: 'Information request responses must be handled through the privacy context.'
+    };
   }
 
   async requestInformation({ targetUserId, requestedFields, reason }) {
@@ -173,7 +125,7 @@ class SettingsService {
           reason
         }),
       });
-      
+
       return {
         success: true,
         data: response.data,

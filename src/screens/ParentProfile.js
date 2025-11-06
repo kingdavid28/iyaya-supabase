@@ -27,11 +27,11 @@ const ParentProfile = ({ navigation }) => {
   const loadProfile = useCallback(async () => {
     try {
       setLoading(true);
-      
+
       // Retry logic for network errors
       let retries = 3;
       let lastError;
-      
+
       while (retries > 0) {
         try {
           const result = await supabaseService.getProfile(user?.id || user?.uid);
@@ -40,7 +40,7 @@ const ParentProfile = ({ navigation }) => {
             throw new Error('No profile data received');
           }
           setProfile(profileData);
-          
+
           // Initialize edit form with current data
           // Initialize edit form with current data - will be processed by getImageUrl later
           const currentImage = profileData.profile_image || profileData.profileImage || profileData.avatar || profileData.imageUrl || user?.profileImage || user?.avatar || '';
@@ -54,7 +54,7 @@ const ParentProfile = ({ navigation }) => {
         } catch (error) {
           lastError = error;
           retries--;
-          
+
           if (error.code === 'NETWORK_ERROR' && retries > 0) {
             console.log(`Network error loading profile, retrying... (${retries} attempts left)`);
             await new Promise(resolve => setTimeout(resolve, 1000));
@@ -63,11 +63,11 @@ const ParentProfile = ({ navigation }) => {
           throw error;
         }
       }
-      
+
       throw lastError;
     } catch (error) {
       console.error('Failed to load profile:', error);
-      
+
       // Use fallback data from user context if available
       if (user) {
         const fallbackProfile = {
@@ -86,12 +86,12 @@ const ParentProfile = ({ navigation }) => {
           profileImage: currentImage
         });
       }
-      
+
       let errorMessage = 'Failed to load profile. Please try again.';
       if (error.code === 'NETWORK_ERROR') {
         errorMessage = 'Network connection failed. Using cached data if available.';
       }
-      
+
       Alert.alert('Connection Issue', errorMessage);
     } finally {
       setLoading(false);
@@ -117,7 +117,7 @@ const ParentProfile = ({ navigation }) => {
       if (!result.canceled && result.assets?.[0]) {
         setUploading(true);
         const asset = result.assets[0];
-        
+
         let uploadPayload;
         try {
           const processed = await processImageForUpload(asset.uri, {
@@ -137,7 +137,7 @@ const ParentProfile = ({ navigation }) => {
 
         const response = await supabaseService.uploadProfileImage(user?.id || user?.uid, uploadPayload);
         console.log('Upload response:', response);
-        
+
         // Handle different response structures
         let imageUrl = null;
         if (response?.data?.url) {
@@ -153,7 +153,7 @@ const ParentProfile = ({ navigation }) => {
         } else if (typeof response === 'string') {
           imageUrl = response;
         }
-        
+
         if (imageUrl) {
           setEditForm(prev => ({ ...prev, profileImage: imageUrl }));
         } else {
@@ -183,20 +183,20 @@ const ParentProfile = ({ navigation }) => {
         address: editForm.location.trim(),
         profile_image: editForm.profileImage
       };
-      
+
       console.log('ParentProfile updating with:', updateData);
 
       // Retry logic for network errors
       let retries = 3;
       let lastError;
-      
+
       while (retries > 0) {
         try {
           const result = await supabaseService.updateProfile(user?.id || user?.uid, updateData);
           console.log('ParentProfile update result:', result);
           // Update profile with both server data and our sent data since server doesn't return address
-          setProfile(prev => ({ 
-            ...prev, 
+          setProfile(prev => ({
+            ...prev,
             ...updateData,
             ...(result?.data || result || {})
           }));
@@ -206,7 +206,7 @@ const ParentProfile = ({ navigation }) => {
         } catch (error) {
           lastError = error;
           retries--;
-          
+
           if (error.code === 'NETWORK_ERROR' && retries > 0) {
             console.log(`Network error, retrying... (${retries} attempts left)`);
             await new Promise(resolve => setTimeout(resolve, 1000));
@@ -215,16 +215,16 @@ const ParentProfile = ({ navigation }) => {
           throw error;
         }
       }
-      
+
       throw lastError;
     } catch (error) {
       console.error('Failed to update profile:', error);
-      
+
       let errorMessage = 'Failed to update profile. Please try again.';
       if (error.code === 'NETWORK_ERROR') {
         errorMessage = 'Network connection failed. Please check your internet connection and try again.';
       }
-      
+
       Alert.alert('Update Failed', errorMessage);
     } finally {
       setSaving(false);
@@ -235,9 +235,9 @@ const ParentProfile = ({ navigation }) => {
   const getCurrentLocation = async () => {
     try {
       setLocationLoading(true);
-      
+
       const locationData = await getCurrentDeviceLocation();
-      
+
       if (locationData && locationData.address) {
         const formattedAddress = `${locationData.address.street || ''} ${locationData.address.city || ''} ${locationData.address.province || ''}`.trim();
         setEditForm(prev => ({ ...prev, location: formattedAddress }));
@@ -256,17 +256,17 @@ const ParentProfile = ({ navigation }) => {
     if (!imageUrl || imageUrl.trim() === '' || imageUrl === 'null') {
       return null;
     }
-    
+
     // Handle base64 data URLs
     if (imageUrl.startsWith('data:')) {
       return imageUrl;
     }
-    
+
     // Handle full URLs
     if (imageUrl.startsWith('http')) {
       return imageUrl;
     }
-    
+
     // Handle relative URLs - prepend base URL
     const baseUrl = getCurrentAPIURL().replace('/api', '');
     if (imageUrl.startsWith('/')) {
@@ -279,7 +279,7 @@ const ParentProfile = ({ navigation }) => {
   const handleEditPress = useCallback(() => {
     // Get the current profile image from multiple possible sources
     const currentImage = getImageUrl(profile?.profile_image || profile?.profileImage || profile?.avatar || profile?.imageUrl || user?.profileImage || user?.avatar || '');
-    
+
     setEditForm({
       name: profile?.name || user?.name || '',
       phone: typeof profile?.phone === 'string' ? profile?.phone : '',
@@ -331,7 +331,7 @@ const ParentProfile = ({ navigation }) => {
             style={styles.avatar}
             defaultIconSize={50}
             borderColor="#3b82f6"
-            imageScale={0.95}
+            resizeMode="cover"
           />
           <View style={styles.headerInfo}>
             <Text style={styles.name}>{safeText(profile.name || user?.name, 'No name')}</Text>
@@ -380,15 +380,15 @@ const ParentProfile = ({ navigation }) => {
       {/* Action Buttons */}
       <View style={styles.actionButtons}>
         <View style={styles.buttonRow}>
-          <Button 
-            mode="contained" 
+          <Button
+            mode="contained"
             onPress={handleEditPress}
             style={styles.editButton}
             icon="pencil"
           >
             Edit Profile
           </Button>
-          <TouchableOpacity 
+          <TouchableOpacity
             onPress={() => navigation.goBack()}
             style={styles.closeIconButton}
           >
@@ -407,7 +407,7 @@ const ParentProfile = ({ navigation }) => {
       >
         <View style={styles.modalOverlay}>
           <View style={styles.modalContainer}>
-            <ScrollView 
+            <ScrollView
               style={styles.modalContent}
               showsVerticalScrollIndicator={false}
               keyboardShouldPersistTaps="handled"
@@ -415,7 +415,7 @@ const ParentProfile = ({ navigation }) => {
               {/* Modal Header */}
               <View style={styles.modalHeader}>
                 <Text style={styles.modalTitle}>Edit Profile</Text>
-                <TouchableOpacity 
+                <TouchableOpacity
                   onPress={() => !saving && setEditModalVisible(false)}
                   style={styles.closeButton}
                   disabled={saving}
@@ -423,11 +423,11 @@ const ParentProfile = ({ navigation }) => {
                   <Ionicons name="close" size={24} color="#666" />
                 </TouchableOpacity>
               </View>
-              
+
               {/* Profile Picture Section */}
               <View style={styles.photoSection}>
-                <TouchableOpacity 
-                  onPress={handleProfileImageUpload} 
+                <TouchableOpacity
+                  onPress={handleProfileImageUpload}
                   disabled={uploading || saving}
                   style={styles.photoContainer}
                   activeOpacity={0.7}
@@ -445,7 +445,7 @@ const ParentProfile = ({ navigation }) => {
                           size={120}
                           style={styles.profileImageEdit}
                           defaultIconSize={60}
-                          imageScale={0.95}
+                          resizeMode="cover"
                         />
                         <View style={styles.imageOverlay}>
                           <Ionicons name="camera" size={20} color="white" />
@@ -460,7 +460,7 @@ const ParentProfile = ({ navigation }) => {
                   </View>
                 </TouchableOpacity>
               </View>
-              
+
               {/* Form Fields */}
               <View style={styles.formContainer}>
                 <View style={styles.inputGroup}>
@@ -474,7 +474,7 @@ const ParentProfile = ({ navigation }) => {
                     autoCapitalize="words"
                   />
                 </View>
-                
+
                 <View style={styles.inputGroup}>
                   <Text style={styles.inputLabel}>Phone Number</Text>
                   <TextInput
@@ -486,11 +486,11 @@ const ParentProfile = ({ navigation }) => {
                     disabled={saving}
                   />
                 </View>
-                
+
                 <View style={styles.inputGroup}>
                   <View style={styles.locationHeader}>
                     <Text style={styles.inputLabel}>Location</Text>
-                    <TouchableOpacity 
+                    <TouchableOpacity
                       onPress={getCurrentLocation}
                       disabled={locationLoading || saving}
                       style={styles.gpsButton}
@@ -516,18 +516,18 @@ const ParentProfile = ({ navigation }) => {
                 </View>
               </View>
             </ScrollView>
-            
+
             {/* Fixed Bottom Actions */}
             <View style={styles.modalActions}>
-              <TouchableOpacity 
+              <TouchableOpacity
                 onPress={() => setEditModalVisible(false)}
                 style={styles.cancelButtonNew}
                 disabled={saving}
               >
                 <Text style={styles.cancelButtonText}>Cancel</Text>
               </TouchableOpacity>
-              
-              <TouchableOpacity 
+
+              <TouchableOpacity
                 onPress={handleSaveProfile}
                 style={[styles.saveButtonNew, (!editForm.name.trim() || saving) && styles.saveButtonDisabled]}
                 disabled={!editForm.name.trim() || saving}
@@ -629,6 +629,7 @@ const styles = StyleSheet.create({
     backgroundColor: 'white',
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
+    marginBottom: 30,
     maxHeight: '90%',
     minHeight: '60%',
   },

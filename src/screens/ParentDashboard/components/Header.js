@@ -4,9 +4,9 @@ import React, { useState } from 'react';
 import { Image, Platform, Pressable, Text, View } from 'react-native';
 import { styles } from '../../styles/ParentDashboard.styles';
 // Privacy components temporarily disabled due to backend API not implemented
+import RequestInfoModal from '../../../components/features/privacy/InformationRequestModal';
 import { usePrivacy } from '../../../components/features/privacy/PrivacyManager';
 import PrivacyNotificationModal from '../../../components/features/privacy/PrivacyNotificationModal';
-import { RequestInfoModal } from '../../../components/ui/modals/RequestInfoModal';
 import { SettingsModal } from '../../../components/ui/modals/SettingsModal';
 
 // NotificationContext removed - using local state
@@ -20,7 +20,7 @@ const Header = ({ navigation, onProfilePress, onSignOut, greetingName, onProfile
   const [showNotifications, setShowNotifications] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [showRequestModal, setShowRequestModal] = useState(false);
-  
+
   // Calculate real notification counts
   const unreadNotifications = notifications?.filter(n => !n.read)?.length || 0;
   const pendingRequestsCount = pendingRequests?.length || 0;
@@ -28,24 +28,24 @@ const Header = ({ navigation, onProfilePress, onSignOut, greetingName, onProfile
   const messagesBadgeCount = tabNotificationCounts.messages || 0;
   const alertsBadgeCount = Math.max(unreadNotifications, tabNotificationCounts.notifications || 0);
   const privacyBadgeCount = unreadNotifications + pendingRequestsCount;
-  
+
   // Handle image URI construction
   const getImageSource = () => {
     if (!profileImage || profileImage.trim() === '' || profileImage === 'null' || profileImage === 'undefined') {
       return null;
     }
-    
+
     if (profileImage.startsWith('http')) {
       return { uri: profileImage };
     }
-    
+
     // Use dynamic API URL
     const baseUrl = getCurrentSocketURL();
     return { uri: `${baseUrl}${profileImage}` };
   };
-  
+
   const imageSource = getImageSource();
-  
+
   return (
     <View style={headerStyles.parentLikeHeaderContainer}>
       <LinearGradient
@@ -56,23 +56,23 @@ const Header = ({ navigation, onProfilePress, onSignOut, greetingName, onProfile
       >
         <View style={styles.headerTop}>
           <View style={[styles.logoContainer, { flexDirection: 'column', alignItems: 'center' }]}>
-            <Image 
-              source={require('../../../../assets/icon.png')} 
-              style={[styles.logoImage, { marginBottom: 6 }]} 
+            <Image
+              source={require('../../../../assets/icon.png')}
+              style={[styles.logoImage, { marginBottom: 6 }]}
             />
-            
+
             <View style={styles.headerBadge}>
               <Text style={styles.headerBadgeText}>I am a Parent</Text>
             </View>
           </View>
-          
+
           {/* Center Profile Section with Welcome and Info - Web Only */}
           {Platform.OS === 'web' && (
             <View style={headerStyles.profileSection}>
               <View style={headerStyles.welcomeRow}>
                 <View style={headerStyles.profileImageContainer}>
                   {imageSource ? (
-                    <Image 
+                    <Image
                       source={imageSource}
                       style={headerStyles.profileImage}
                       onError={(error) => {
@@ -83,8 +83,8 @@ const Header = ({ navigation, onProfilePress, onSignOut, greetingName, onProfile
                         }
                       }}
                       resizeMode="contain"
-                      defaultSource={Platform.OS === 'ios' ? 
-                        require('../../../../assets/icon.png') : 
+                      defaultSource={Platform.OS === 'ios' ?
+                        require('../../../../assets/icon.png') :
                         { uri: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==' }
                       }
                     />
@@ -104,12 +104,12 @@ const Header = ({ navigation, onProfilePress, onSignOut, greetingName, onProfile
               </View>
             </View>
           )}
-          
+
           {/* Header Actions - 2 Row Layout: 4 icons top, 2 icons bottom */}
           <View style={styles.headerActions}>
             {/* First Row - 4 icons */}
-            <Pressable 
-              style={[styles.headerButton, { position: 'relative' }]} 
+            <Pressable
+              style={[styles.headerButton, { position: 'relative' }]}
               onPress={() => setActiveTab('messages')}
             >
               <Ionicons name="chatbubble-ellipses-outline" size={22} color="#db2777" />
@@ -121,9 +121,9 @@ const Header = ({ navigation, onProfilePress, onSignOut, greetingName, onProfile
                 </View>
               )}
             </Pressable>
-            
-            <Pressable 
-              style={[styles.headerButton, { position: 'relative' }]} 
+
+            <Pressable
+              style={[styles.headerButton, { position: 'relative' }]}
               onPress={() => setShowNotifications(true)}
             >
               <Ionicons name="shield-outline" size={22} color="#db2777" />
@@ -135,9 +135,9 @@ const Header = ({ navigation, onProfilePress, onSignOut, greetingName, onProfile
                 </View>
               )}
             </Pressable>
-            
-            <Pressable 
-              style={[styles.headerButton, { position: 'relative' }]} 
+
+            <Pressable
+              style={[styles.headerButton, { position: 'relative' }]}
               onPress={() => setActiveTab('alerts')}
             >
               <Ionicons name="notifications-outline" size={22} color="#db2777" />
@@ -149,30 +149,30 @@ const Header = ({ navigation, onProfilePress, onSignOut, greetingName, onProfile
                 </View>
               )}
             </Pressable>
-            
-            <Pressable 
-              style={[styles.headerButton, { position: 'relative' }]} 
+
+            <Pressable
+              style={[styles.headerButton, { position: 'relative' }]}
               onPress={() => setShowRequestModal(true)}
             >
               <Ionicons name="mail-outline" size={22} color="#db2777" />
             </Pressable>
-            
-            <Pressable 
+
+            <Pressable
               style={styles.headerButton}
               onPress={() => setShowSettings(true)}
             >
               <Ionicons name="settings-outline" size={22} color="#db2777" />
             </Pressable>
-            
+
             {/* Second Row - 2 icons */}
-            <Pressable 
+            <Pressable
               style={styles.headerButton}
               onPress={() => navigation.navigate('ParentProfile')}
             >
               <Ionicons name="person-outline" size={22} color="#db2777" />
             </Pressable>
-            
-            <Pressable 
+
+            <Pressable
               style={styles.headerButton}
               onPress={onSignOut}
             >
@@ -181,13 +181,16 @@ const Header = ({ navigation, onProfilePress, onSignOut, greetingName, onProfile
           </View>
         </View>
       </LinearGradient>
-      
+
       <PrivacyNotificationModal
         visible={showNotifications}
         onClose={() => setShowNotifications(false)}
         requests={pendingRequests}
+        subtitle="Manage requests for your family’s private information"
+        emptyStateTitle="No privacy requests from caregivers"
+        emptyStateMessage="No caregivers have pending requests right now."
       />
-      
+
       <SettingsModal
         visible={showSettings}
         onClose={() => setShowSettings(false)}
@@ -195,7 +198,7 @@ const Header = ({ navigation, onProfilePress, onSignOut, greetingName, onProfile
         userType="parent"
         colors={{ primary: '#db2777' }}
       />
-      
+
       <RequestInfoModal
         visible={showRequestModal}
         onClose={() => setShowRequestModal(false)}
