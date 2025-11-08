@@ -15,10 +15,16 @@ export const __PROD__ = !__DEV__;
 const getBaseHost = () => {
   try {
     // 1) Environment variable takes priority
-    const envUrl = process.env?.EXPO_PUBLIC_API_URL || process.env?.REACT_APP_API_URL;
-    if (envUrl) {
-      const cleaned = envUrl.replace(/\/$/, "").replace(/\/api$/i, "");
-      return { mode: "env", url: cleaned };
+    const envUrlRaw = process.env?.EXPO_PUBLIC_API_URL || process.env?.REACT_APP_API_URL;
+    if (envUrlRaw) {
+      const trimmed = envUrlRaw.trim().replace(/\/$/, "");
+      const withoutApi = trimmed.replace(/\/api$/i, "");
+      const isSupabase = /supabase\.co/i.test(withoutApi);
+      if (isSupabase) {
+        const withRest = withoutApi.includes('/rest/v1') ? withoutApi : `${withoutApi}/rest/v1`;
+        return { mode: "env", url: withRest, appendApi: false };
+      }
+      return { mode: "env", url: withoutApi, appendApi: true };
     }
 
     // 2) Platform-specific defaults
@@ -26,10 +32,10 @@ const getBaseHost = () => {
       const rn = require("react-native");
       const platform = rn?.Platform?.OS;
       if (platform === "android") {
-        return { mode: "android-emulator", url: "http://10.0.2.2:5000" };
+        return { mode: "android-emulator", url: "http://10.0.2.2:5000", appendApi: true };
       }
       if (platform === "ios") {
-        return { mode: "ios-simulator", url: "http://localhost:5000" };
+        return { mode: "ios-simulator", url: "http://127.0.0.1:5000", appendApi: true };
       }
     } catch (_) {
       // Ignore require errors for react-native in web environments
@@ -37,14 +43,14 @@ const getBaseHost = () => {
 
     // 3) Web fallback
     if (typeof window !== "undefined") {
-      return { mode: "web", url: "http://localhost:5000" };
+      return { mode: "web", url: "http://localhost:5000", appendApi: true };
     }
 
     // 4) Default fallback
-    return { mode: "fallback", url: "http://localhost:5000" };
+    return { mode: "fallback", url: "http://localhost:5000", appendApi: true };
   } catch (error) {
     console.error("Error determining base host:", error);
-    return { mode: "error-fallback", url: "http://localhost:5000" };
+    return { mode: "error-fallback", url: "http://localhost:5000", appendApi: true };
   }
 };
 
@@ -53,9 +59,11 @@ if (__DEV__) {
   console.log('🔗 Base host configuration:', baseHost);
 }
 
+const API_BASE_PATH = baseHost.appendApi === false ? "" : "/api";
+
 // API Configuration with enhanced timeout and retry settings
 export const API_CONFIG = {
-  BASE_URL: baseHost.url + "/api", // Use computed baseHost
+  BASE_URL: `${baseHost.url}${API_BASE_PATH}`,
   TIMEOUT: {
     DEFAULT: 8000, // 8 seconds default
     AUTH: 12000, // 12 seconds for auth

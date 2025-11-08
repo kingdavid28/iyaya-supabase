@@ -80,6 +80,8 @@ export default {
     facebookAppId: "1976692839796722",
     facebookDisplayName: "iYaya",
     extra: {
+      supabaseUrl: process.env.EXPO_PUBLIC_SUPABASE_URL ?? null,
+      supabaseAnonKey: process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY ?? null,
       eas: {
         projectId: "583f6598-db53-4667-af75-fdd1f8104fab"
       }

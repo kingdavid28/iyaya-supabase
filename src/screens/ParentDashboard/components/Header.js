@@ -2,24 +2,21 @@ import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import React, { useState } from 'react';
 import { Image, Platform, Pressable, Text, View } from 'react-native';
-import { styles } from '../../styles/ParentDashboard.styles';
-// Privacy components temporarily disabled due to backend API not implemented
-import RequestInfoModal from '../../../components/features/privacy/InformationRequestModal';
 import { usePrivacy } from '../../../components/features/privacy/PrivacyManager';
 import PrivacyNotificationModal from '../../../components/features/privacy/PrivacyNotificationModal';
 import { SettingsModal } from '../../../components/ui/modals/SettingsModal';
+import { styles } from '../../styles/ParentDashboard.styles';
 
 // NotificationContext removed - using local state
 import { getCurrentSocketURL } from '../../../config/api';
 
-const Header = ({ navigation, onProfilePress, onSignOut, greetingName, onProfileEdit, profileName, profileImage, profileContact, profileLocation, setActiveTab, tabNotificationCounts = {} }) => {
+const Header = ({ navigation, onProfilePress, onSignOut, greetingName, onProfileEdit, profileName, profileImage, profileContact, profileLocation, setActiveTab, tabNotificationCounts = {}, onRequestInfo }) => {
   // Use real privacy system
   const { pendingRequests, notifications } = usePrivacy();
 
 
   const [showNotifications, setShowNotifications] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
-  const [showRequestModal, setShowRequestModal] = useState(false);
 
   // Calculate real notification counts
   const unreadNotifications = notifications?.filter(n => !n.read)?.length || 0;
@@ -152,7 +149,7 @@ const Header = ({ navigation, onProfilePress, onSignOut, greetingName, onProfile
 
             <Pressable
               style={[styles.headerButton, { position: 'relative' }]}
-              onPress={() => setShowRequestModal(true)}
+              onPress={onRequestInfo}
             >
               <Ionicons name="mail-outline" size={22} color="#db2777" />
             </Pressable>
@@ -196,13 +193,6 @@ const Header = ({ navigation, onProfilePress, onSignOut, greetingName, onProfile
         onClose={() => setShowSettings(false)}
         user={{ role: 'parent' }}
         userType="parent"
-        colors={{ primary: '#db2777' }}
-      />
-
-      <RequestInfoModal
-        visible={showRequestModal}
-        onClose={() => setShowRequestModal(false)}
-        targetUser={{ id: 'sample', name: 'Caregiver' }}
         colors={{ primary: '#db2777' }}
       />
     </View>

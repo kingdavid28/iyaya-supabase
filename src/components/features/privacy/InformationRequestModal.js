@@ -1,8 +1,13 @@
 import { Eye, Lock, Shield, X } from 'lucide-react-native';
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { Alert, Modal, ScrollView, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { usePrivacy } from './PrivacyManager';
 import { useProfileData } from './ProfileDataManager';
+
+const EMPTY_SET = new Set();
+const DISALLOWED_FIELDS_BY_USER_TYPE = {
+  caregiver: new Set(['ageCareRanges']),
+};
 
 const InformationRequestModal = ({ visible, onClose, targetUser, userType = 'parent' }) => {
   const { requestInformation, DATA_LEVELS } = usePrivacy();
@@ -10,6 +15,8 @@ const InformationRequestModal = ({ visible, onClose, targetUser, userType = 'par
   const [selectedFields, setSelectedFields] = useState([]);
   const [reason, setReason] = useState('');
   const [loading, setLoading] = useState(false);
+
+  const disallowedFields = DISALLOWED_FIELDS_BY_USER_TYPE[userType] || EMPTY_SET;
 
   // Use existing profile data classification from ProfileDataManager
   const fields = useMemo(() => {
@@ -19,6 +26,10 @@ const InformationRequestModal = ({ visible, onClose, targetUser, userType = 'par
       const level = dataClassification[key];
 
       if (shouldOmitChildFields && key.toLowerCase().includes('child')) {
+        return acc;
+      }
+
+      if (disallowedFields.has(key)) {
         return acc;
       }
 
@@ -36,7 +47,11 @@ const InformationRequestModal = ({ visible, onClose, targetUser, userType = 'par
           case 'emergencyContacts': label = 'Emergency Contacts'; icon = '🚨'; break;
           case 'documents': label = 'Legal Documents'; icon = '📋'; break;
           case 'backgroundCheck': label = 'Background Check Details'; icon = '🔍'; break;
-          case 'ageCareRanges': label = 'Age Care Specialization'; icon = '👶'; break;
+          case 'ageCareRanges':
+            if (disallowedFields.has(key)) return acc;
+            label = 'Age Care Specialization';
+            icon = '👶';
+            break;
           case 'emergencyContact': label = 'Emergency Contact'; icon = '🚨'; break;
           case 'childMedicalInfo': label = 'Child Medical Information'; icon = '🏥'; break;
           case 'childAllergies': label = 'Child Allergies'; icon = '⚠️'; break;
@@ -49,14 +64,28 @@ const InformationRequestModal = ({ visible, onClose, targetUser, userType = 'par
           return acc;
         }
 
+        if (disallowedFields.has(key)) {
+          return acc;
+        }
+
         acc.push({ key, label, level, icon });
       }
 
       return acc;
     }, []);
-  }, [DATA_LEVELS.PRIVATE, DATA_LEVELS.SENSITIVE, dataClassification, userType]);
+  }, [DATA_LEVELS.PRIVATE, DATA_LEVELS.SENSITIVE, dataClassification, disallowedFields, userType]);
+
+  const allowedFieldKeys = useMemo(() => fields.map(field => field.key), [fields]);
+
+  useEffect(() => {
+    setSelectedFields(prev => prev.filter(key => allowedFieldKeys.includes(key)));
+  }, [allowedFieldKeys]);
 
   const toggleField = (fieldKey) => {
+    if (!allowedFieldKeys.includes(fieldKey)) {
+      return;
+    }
+
     setSelectedFields(prev =>
       prev.includes(fieldKey)
         ? prev.filter(key => key !== fieldKey)

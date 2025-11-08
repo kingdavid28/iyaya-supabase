@@ -3,10 +3,10 @@ import { Briefcase, CheckCircle, Clock, FileText, MapPin, MessageCircle, User, X
 import React, { useCallback, useMemo, useRef, useState } from 'react';
 import { Alert, FlatList, Image, Linking, RefreshControl, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import {
-    SkeletonBlock,
-    SkeletonCard,
-    SkeletonCircle,
-    SkeletonPill
+  SkeletonBlock,
+  SkeletonCard,
+  SkeletonCircle,
+  SkeletonPill
 } from '../../../components/common/SkeletonPlaceholder';
 import { getProfileImageUrl } from '../../../utils/imageUtils';
 import { colors, styles as sharedStyles } from '../../styles/ParentDashboard.styles';
@@ -62,7 +62,7 @@ const JobApplicationsTab = ({
     const key = typeof status === 'string' ? status.toLowerCase() : 'pending';
     const meta = statusMeta[key] || statusMeta.pending;
     return (
-      <View style={[styles.statusBadge, { backgroundColor: meta.background }]}> 
+      <View style={[styles.statusBadge, { backgroundColor: meta.background }]}>
         <Text style={[styles.statusText, { color: meta.color }]}>{meta.label}</Text>
       </View>
     );
@@ -219,16 +219,6 @@ const JobApplicationsTab = ({
               )}
               <Text style={styles.decisionText}>{isMutating ? 'Updating…' : 'Accept'}</Text>
             </TouchableOpacity>
-            {status === 'pending' && (
-              <TouchableOpacity
-                style={[styles.decisionButton, styles.shortlistButton, isMutating && styles.decisionButtonDisabled]}
-                onPress={() => safeUpdateStatus('shortlisted')}
-                disabled={isMutating}
-              >
-                <Clock size={16} color={colors.info} style={styles.decisionIcon} />
-                <Text style={styles.decisionShortlistText}>Short list</Text>
-              </TouchableOpacity>
-            )}
             <TouchableOpacity
               style={[styles.decisionButton, styles.rejectButton, isMutating && styles.decisionButtonDisabled]}
               onPress={() => safeUpdateStatus('rejected')}
@@ -377,15 +367,15 @@ const JobApplicationsTab = ({
               {selectedFilter === 'new'
                 ? 'No new applications'
                 : selectedFilter === 'reviewed'
-                ? 'No reviewed applications'
-                : 'No job applications yet'}
+                  ? 'No reviewed applications'
+                  : 'No job applications yet'}
             </Text>
             <Text style={styles.emptySubtitle}>
               {selectedFilter === 'new'
                 ? 'Check back later for new caregiver applications.'
                 : selectedFilter === 'reviewed'
-                ? 'Applications you have reviewed will appear here.'
-                : 'Caregiver applications will appear here once they apply to your jobs.'}
+                  ? 'Applications you have reviewed will appear here.'
+                  : 'Caregiver applications will appear here once they apply to your jobs.'}
             </Text>
           </View>
         }
@@ -673,24 +663,6 @@ const styles = StyleSheet.create({
   decisionText: {
     color: colors.surface,
     fontWeight: '700'
-  },
-  shortlistButton: {
-    marginRight: 8,
-    borderColor: colors.info,
-    backgroundColor: '#EEF4FF',
-    shadowColor: '#2563EB',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.08,
-    shadowRadius: 4,
-    elevation: 2
-  },
-  decisionIcon: {
-    marginVertical: -1
-  },
-  decisionShortlistText: {
-    color: colors.info,
-    fontWeight: '700',
-    letterSpacing: 0.2
   },
   rejectButton: {
     borderColor: colors.error,

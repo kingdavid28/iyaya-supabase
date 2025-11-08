@@ -1,25 +1,24 @@
-import React, { useMemo, useState, useEffect } from 'react';
-import { View, Text, ScrollView, TouchableOpacity, RefreshControl } from 'react-native';
-import { useTheme } from 'react-native-paper'; // Import useTheme
+import React, { useMemo } from 'react';
+import { RefreshControl, ScrollView, Text, TouchableOpacity, View } from 'react-native';
 import { styles } from '../../styles/ParentDashboard.styles';
 import QuickActions from './QuickActions';
 
 
-import MobileProfileSection from './MobileProfileSection';
-import CaregiverCard from './CaregiverCard';
 import {
-  SkeletonCard,
   SkeletonBlock,
+  SkeletonCard,
   SkeletonCircle,
   SkeletonPill
 } from '../../../components/common/SkeletonPlaceholder';
+import CaregiverCard from './CaregiverCard';
+import MobileProfileSection from './MobileProfileSection';
 
-const HomeTab = ({ 
-  bookings, 
-  children, 
-  quickActions, 
-  onAddChild, 
-  onEditChild, 
+const HomeTab = ({
+  bookings,
+  children,
+  quickActions,
+  onAddChild,
+  onEditChild,
   onDeleteChild,
   onViewBookings,
   onViewAllChildren,
@@ -33,6 +32,7 @@ const HomeTab = ({
   onBookCaregiver,
   onMessageCaregiver,
   onViewReviews,
+  onRequestInfo,
   navigation,
   refreshing = false,
   onRefresh,
@@ -41,13 +41,13 @@ const HomeTab = ({
 }) => {
 
   // Get latest 3 registered caregivers (sorted by creation date)
-  const featuredCaregivers = useMemo(() => 
+  const featuredCaregivers = useMemo(() =>
     caregivers
       .sort((a, b) => new Date(b.createdAt || b.registeredAt || 0) - new Date(a.createdAt || a.registeredAt || 0))
       .slice(0, 3),
     [caregivers]
   );
-    
+
   console.log('🎯 HomeTab - Caregivers received:', caregivers.length);
   console.log('🎯 HomeTab - Featured caregivers:', featuredCaregivers.length, featuredCaregivers.map(c => c.name));
 
@@ -114,8 +114,8 @@ const HomeTab = ({
 
   return (
     <View style={{ flex: 1 }}>
-      <ScrollView 
-        style={styles.dashboardContent} 
+      <ScrollView
+        style={styles.dashboardContent}
         contentContainerStyle={{ flexGrow: 1, paddingBottom: 20 }}
         showsVerticalScrollIndicator={false}
         bounces={true}
@@ -130,8 +130,8 @@ const HomeTab = ({
         }
       >
 
-        
-        <MobileProfileSection 
+
+        <MobileProfileSection
           greetingName={greetingName}
           profileImage={profileImage}
           profileContact={profileContact}
@@ -141,7 +141,7 @@ const HomeTab = ({
           navigation={navigation}
         />
         <QuickActions actions={quickActions} />
-        
+
         {/* Children Section */}
         <View style={styles.sectionCard}>
           <View style={styles.sectionHeader}>
@@ -149,7 +149,7 @@ const HomeTab = ({
               <Text style={styles.sectionTitle}>My Children ({children.length})</Text>
             </View>
           </View>
-          
+
           {children.length === 0 ? (
             <View style={styles.emptySection}>
               <Text style={styles.emptySectionText}>No children added yet</Text>
@@ -160,14 +160,14 @@ const HomeTab = ({
               {(showAllChildren ? children : children.slice(0, 3)).map((child, index) => (
                 <View key={child._id || child.id || index} style={styles.childItemCard}>
                   <View style={styles.topRightButtons}>
-                    <TouchableOpacity 
-                      style={styles.editButtonX} 
+                    <TouchableOpacity
+                      style={styles.editButtonX}
                       onPress={() => onEditChild(child)}
                     >
                       <Text style={styles.editButtonXText}>✎</Text>
                     </TouchableOpacity>
-                    <TouchableOpacity 
-                      style={styles.deleteButtonX} 
+                    <TouchableOpacity
+                      style={styles.deleteButtonX}
                       onPress={() => onDeleteChild(child)}
                     >
                       <Text style={styles.deleteButtonXText}>×</Text>
@@ -189,9 +189,9 @@ const HomeTab = ({
               ))}
             </View>
           )}
-          
+
           {children.length > 3 && (
-            <TouchableOpacity 
+            <TouchableOpacity
               style={{ padding: 12, alignItems: 'center' }}
               onPress={onViewAllChildren}
             >
@@ -201,7 +201,7 @@ const HomeTab = ({
             </TouchableOpacity>
           )}
         </View>
-        
+
         {/* Featured Caregivers Section */}
         <View style={{ paddingHorizontal: 8, marginBottom: 20, overflow: 'visible' }}>
           <Text style={[styles.sectionTitle, { marginBottom: 12, marginLeft: 8 }]}>Featured Caregivers ({featuredCaregivers.length})</Text>
@@ -213,6 +213,7 @@ const HomeTab = ({
                 onPress={onBookCaregiver}
                 onMessagePress={onMessageCaregiver}
                 onViewReviews={onViewReviews}
+                onRequestInfo={onRequestInfo}
               />
             ))
           ) : (

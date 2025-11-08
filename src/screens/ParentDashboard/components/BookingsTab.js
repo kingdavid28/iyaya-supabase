@@ -1,4 +1,4 @@
-import { Calendar, Clock, DollarSign, Plus } from 'lucide-react-native';
+import { Calendar, Plus } from 'lucide-react-native';
 import React, { useCallback, useEffect, useMemo, useRef } from 'react';
 import { ActivityIndicator, Alert, Animated, Easing, FlatList, Linking, RefreshControl, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import ContractModal from '../../../components/modals/ContractModal';
@@ -186,10 +186,10 @@ const BookingsTab = ({
   const [selectedContractType, setSelectedContractType] = React.useState(null);
   const filteredBookings = useMemo(() => {
     if (!bookings || !Array.isArray(bookings)) return [];
-    
+
     const now = new Date();
     now.setHours(0, 0, 0, 0); // Start of today
-    
+
     switch (bookingsFilter) {
       case 'upcoming':
         return bookings.filter((b) => {
@@ -198,7 +198,7 @@ const BookingsTab = ({
           bookingDate.setHours(0, 0, 0, 0);
           return bookingDate >= now;
         });
-        
+
       case 'past':
         return bookings.filter((b) => {
           if (!b.date) return false;
@@ -206,42 +206,36 @@ const BookingsTab = ({
           bookingDate.setHours(0, 0, 0, 0);
           return bookingDate < now;
         });
-        
+
       case 'pending':
         return bookings.filter(b => b.status === BOOKING_STATUSES.PENDING);
-        
+
       case 'confirmed':
-        return bookings.filter(b => 
-          b.status === BOOKING_STATUSES.CONFIRMED || 
+        return bookings.filter(b =>
+          b.status === BOOKING_STATUSES.CONFIRMED ||
           b.status === BOOKING_STATUSES.IN_PROGRESS
         );
-        
+
       case 'completed':
-        return bookings.filter(b => 
-          b.status === BOOKING_STATUSES.COMPLETED || 
+        return bookings.filter(b =>
+          b.status === BOOKING_STATUSES.COMPLETED ||
           b.status === BOOKING_STATUSES.PAID
         );
-        
+
       default:
         return bookings;
     }
   }, [bookings, bookingsFilter]);
-  
+
   // Calculate booking statistics
   const bookingStats = useMemo(() => {
     if (!bookings || !Array.isArray(bookings)) {
-      return { total: 0, pending: 0, confirmed: 0, completed: 0, totalSpent: 0 };
+      return { total: 0, pending: 0, confirmed: 0, completed: 0 };
     }
-    
+
     return bookings.reduce((stats, booking) => {
       stats.total += 1;
-      
-      // Only count money as "spent" if booking is paid or completed with payment
-      if (booking.status === BOOKING_STATUSES.PAID || 
-          (booking.status === BOOKING_STATUSES.COMPLETED && booking.paymentProof)) {
-        stats.totalSpent += (booking.totalCost || booking.amount || 0);
-      }
-      
+
       switch (booking.status) {
         case BOOKING_STATUSES.PENDING:
           stats.pending += 1;
@@ -255,25 +249,25 @@ const BookingsTab = ({
           stats.completed += 1;
           break;
       }
-      
+
       return stats;
-    }, { total: 0, pending: 0, confirmed: 0, completed: 0, totalSpent: 0 });
+    }, { total: 0, pending: 0, confirmed: 0, completed: 0 });
   }, [bookings]);
 
   const handleMessageCaregiver = async (caregiver) => {
     try {
       console.log('🔍 BookingsTab - Caregiver data for messaging:', caregiver);
-      
+
       if (!caregiver) {
         Alert.alert('Error', 'Caregiver information not available');
         return;
       }
-      
+
       const caregiverId = caregiver._id || caregiver.id;
       const caregiverName = caregiver.name || caregiver.firstName || 'Caregiver';
-      
+
       console.log('🔍 BookingsTab - Extracted caregiver info:', { caregiverId, caregiverName });
-      
+
       if (onMessageCaregiver) {
         await onMessageCaregiver({
           _id: caregiverId,
@@ -357,20 +351,20 @@ const BookingsTab = ({
       console.log('🔍 selectedBookingForContract:', JSON.stringify(selectedBookingForContract, null, 2));
       console.log('🔍 caregiver_id field:', selectedBookingForContract.caregiver_id);
       console.log('🔍 caregiverId field:', selectedBookingForContract.caregiverId);
-      
+
       // Extract caregiverId from various possible locations
-      const caregiverData = selectedBookingForContract.caregiverId || 
-                           selectedBookingForContract.caregiver || 
-                           selectedBookingForContract.caregiverProfile || 
-                           selectedBookingForContract.assignedCaregiver;
-      
+      const caregiverData = selectedBookingForContract.caregiverId ||
+        selectedBookingForContract.caregiver ||
+        selectedBookingForContract.caregiverProfile ||
+        selectedBookingForContract.assignedCaregiver;
+
       // If caregiverData is an object, extract the ID; otherwise use it directly
       const extractedCaregiverId = typeof caregiverData === 'object' && caregiverData !== null
         ? (caregiverData.id || caregiverData._id || caregiverData.user_id)
         : (selectedBookingForContract.caregiver_id || caregiverData);
-      
+
       console.log('🔍 Extracted caregiverId:', extractedCaregiverId);
-      
+
       if (!extractedCaregiverId) {
         Alert.alert('Error', 'Caregiver information is missing from this booking. Please contact support.');
         setSelectedContractType(null);
@@ -583,31 +577,6 @@ const BookingsTab = ({
     }
   }, []);
 
-  const renderStatsHeader = useCallback(() => (
-    <View style={styles.bookingStatsContainer}>
-      <View style={styles.statItem}>
-        <Calendar size={20} color={colors.primary} />
-        <Text style={styles.statNumber}>{bookingStats.total}</Text>
-        <Text style={styles.statLabel}>Total</Text>
-      </View>
-      <View style={styles.statItem}>
-        <Clock size={20} color={colors.warning} />
-        <Text style={styles.statNumber}>{bookingStats.pending}</Text>
-        <Text style={styles.statLabel}>Pending</Text>
-      </View>
-      <View style={styles.statItem}>
-        <Calendar size={20} color={colors.success} />
-        <Text style={styles.statNumber}>{bookingStats.confirmed}</Text>
-        <Text style={styles.statLabel}>Active</Text>
-      </View>
-      <View style={styles.statItem}>
-        <DollarSign size={20} color={colors.primary} />
-        <Text style={styles.statNumber}>₱{bookingStats.totalSpent.toFixed(0)}</Text>
-        <Text style={styles.statLabel}>Spent</Text>
-      </View>
-    </View>
-  ), [bookingStats.completed, bookingStats.confirmed, bookingStats.pending, bookingStats.total, bookingStats.totalSpent]);
-
   const renderFilterTabs = useCallback(() => {
     const filterOptions = [
       { key: 'all', label: 'All', count: bookingStats.total },
@@ -777,8 +746,7 @@ const BookingsTab = ({
             </TouchableOpacity>
           )}
         </View>
-        
-        {bookingStats.total > 0 && renderStatsHeader()}
+
         {renderFilterTabs()}
       </View>
 

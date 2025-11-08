@@ -1,5 +1,5 @@
 import { Search, SlidersHorizontal } from 'lucide-react-native';
-import React from 'react';
+import React, { memo, useCallback, useMemo } from 'react';
 import { ActivityIndicator, FlatList, RefreshControl, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { colors, styles } from '../../styles/ParentDashboard.styles';
 import CaregiverCard from './CaregiverCard';
@@ -7,7 +7,7 @@ import CaregiverCard from './CaregiverCard';
 const PARENT_HEADER_GRADIENT = ['#f4a9daff', '#dcd8f0ff'];
 
 
-const SearchTab = ({
+const SearchTabComponent = ({
   searchQuery,
   filteredCaregivers,
   caregivers,
@@ -23,14 +23,33 @@ const SearchTab = ({
   onOpenFilter,
   onQuickFilter,
   quickFilters = {},
-  loading = false
+  loading = false,
+  onRequestInfo,
 }) => {
-  const displayData = searchQuery ? filteredCaregivers : caregivers;
+  const displayData = useMemo(
+    () => (searchQuery ? filteredCaregivers : caregivers),
+    [searchQuery, filteredCaregivers, caregivers]
+  );
   const showSearchResults = searchQuery && displayData.length > 0;
-  const showAllCaregivers = !searchQuery && displayData.length > 0;
   const showEmptyState = displayData.length === 0;
 
-  const quickFilterOptions = [];
+  const keyExtractor = useCallback(
+    (item, index) => String(item?.id || item?._id || index),
+    []
+  );
+
+  const renderCaregiver = useCallback(
+    ({ item }) => (
+      <CaregiverCard
+        caregiver={item}
+        onPress={() => onBookCaregiver(item)}
+        onMessagePress={() => onMessageCaregiver(item)}
+        onViewReviews={onViewReviews ? () => onViewReviews(item) : undefined}
+        onRequestInfo={onRequestInfo ? () => onRequestInfo(item) : undefined}
+      />
+    ),
+    [onBookCaregiver, onMessageCaregiver, onViewReviews, onRequestInfo]
+  );
 
   return (
     <View style={[styles.caregiversContent, { flex: 1 }]}>
@@ -109,17 +128,14 @@ const SearchTab = ({
       ) : (
         <FlatList
           data={displayData}
-          keyExtractor={(item) => String(item.id || item._id)}
-          renderItem={({ item }) => (
-            <CaregiverCard
-              caregiver={item}
-              onPress={() => onBookCaregiver(item)}
-              onMessagePress={() => onMessageCaregiver(item)}
-              onViewReviews={onViewReviews ? () => onViewReviews(item) : undefined}
-            />
-          )}
+          keyExtractor={keyExtractor}
+          renderItem={renderCaregiver}
           contentContainerStyle={styles.caregiversList}
           showsVerticalScrollIndicator={false}
+          windowSize={7}
+          initialNumToRender={8}
+          maxToRenderPerBatch={8}
+          removeClippedSubviews
           ListHeaderComponent={
             <View style={searchTabStyles.resultsHeader}>
               <Text style={styles.sectionTitle}>
@@ -148,6 +164,9 @@ const SearchTab = ({
     </View>
   );
 };
+
+const SearchTab = memo(SearchTabComponent);
+SearchTab.displayName = 'SearchTab';
 
 const searchTabStyles = {
   headerGradient: {

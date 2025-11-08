@@ -1,7 +1,86 @@
 import { AlertCircle, Check, Clock, Shield, X } from 'lucide-react-native';
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { Alert, Modal, ScrollView, Text, TouchableOpacity, View } from 'react-native';
 import { usePrivacy } from './PrivacyManager';
+
+const toSnakeCase = (value) => {
+  if (typeof value !== 'string') {
+    return '';
+  }
+
+  return value
+    .trim()
+    .replace(/([a-z0-9])([A-Z])/g, '$1_$2')
+    .replace(/[\s-]+/g, '_')
+    .replace(/__+/g, '_')
+    .toLowerCase();
+};
+
+const toLabelCase = (value) => {
+  if (!value) {
+    return 'Requested field';
+  }
+
+  const spaced = value
+    .replace(/[_-]+/g, ' ')
+    .replace(/([a-z0-9])([A-Z])/g, '$1 $2')
+    .toLowerCase();
+
+  return spaced.charAt(0).toUpperCase() + spaced.slice(1);
+};
+
+const normalizeRequestedEntry = (entry, classification = {}, defaultLevel = 'private') => {
+  if (!entry) return null;
+
+  if (typeof entry === 'string') {
+    const trimmed = entry.trim();
+    if (!trimmed) return null;
+
+    const key = toSnakeCase(trimmed) || trimmed.toLowerCase();
+    const level = classification[key] || defaultLevel;
+
+    return {
+      key,
+      label: toLabelCase(trimmed),
+      level: typeof level === 'string' ? level.toLowerCase() : defaultLevel,
+    };
+  }
+
+  if (typeof entry === 'object') {
+    const rawKey = entry.key || entry.field || entry.name || entry.id || entry.label || '';
+    const cleaned = String(rawKey).trim();
+    const key = toSnakeCase(cleaned) || cleaned.toLowerCase();
+    const levelCandidate = entry.level && typeof entry.level === 'string'
+      ? entry.level.toLowerCase()
+      : classification[key] || defaultLevel;
+
+    const labelSource = entry.label || cleaned;
+
+    return {
+      key: key || toSnakeCase(labelSource) || undefined,
+      label: entry.label || toLabelCase(labelSource),
+      level: typeof levelCandidate === 'string' ? levelCandidate.toLowerCase() : defaultLevel,
+    };
+  }
+
+  return null;
+};
+
+const buildApprovalKeys = (rawFields) =>
+  rawFields
+    .map((entry) => {
+      if (typeof entry === 'string') {
+        return toSnakeCase(entry);
+      }
+
+      if (typeof entry === 'object') {
+        const candidate = entry.key || entry.field || entry.name || entry.id || entry.label || '';
+        return toSnakeCase(typeof candidate === 'string' ? candidate : '');
+      }
+
+      return '';
+    })
+    .filter(Boolean);
 
 const PrivacyNotificationModal = ({
   visible,
@@ -11,23 +90,37 @@ const PrivacyNotificationModal = ({
   emptyStateTitle = 'No privacy requests',
   emptyStateMessage = "You don't have any pending information requests right now.",
 }) => {
-  const { respondToRequest, DATA_LEVELS } = usePrivacy();
+  const { respondToRequest, DATA_LEVELS, dataClassification } = usePrivacy();
   const [loading, setLoading] = useState({});
 
-  const handleApprove = async (request, selectedFields = []) => {
-    setLoading(prev => ({ ...prev, [request.id]: true }));
+  const normalizedRequests = useMemo(() => {
+    return (Array.isArray(requests) ? requests : []).map((request) => {
+      const rawFields = Array.isArray(request.requestedFields) ? request.requestedFields : [];
+      const normalizedFields = rawFields
+        .map((entry) => normalizeRequestedEntry(entry, dataClassification, DATA_LEVELS.PRIVATE))
+        .filter(Boolean);
+      const approvalPayload = normalizedFields.length
+        ? normalizedFields.map((field) => field.key).filter(Boolean)
+        : buildApprovalKeys(rawFields);
+
+      return { request, normalizedFields, approvalPayload };
+    });
+  }, [requests, dataClassification, DATA_LEVELS]);
+
+  const handleApprove = async (requestId, selectedFields = []) => {
+    setLoading((prev) => ({ ...prev, [requestId]: true }));
 
     try {
-      const success = await respondToRequest(request.id, true, selectedFields);
+      const success = await respondToRequest(requestId, true, selectedFields);
       if (success) {
         Alert.alert('Approved', 'Information request has been approved.');
       }
     } finally {
-      setLoading(prev => ({ ...prev, [request.id]: false }));
+      setLoading((prev) => ({ ...prev, [requestId]: false }));
     }
   };
 
-  const handleDeny = async (request) => {
+  const handleDeny = async (requestId) => {
     Alert.alert(
       'Deny Request',
       'Are you sure you want to deny this information request?',
@@ -37,36 +130,43 @@ const PrivacyNotificationModal = ({
           text: 'Deny',
           style: 'destructive',
           onPress: async () => {
-            setLoading(prev => ({ ...prev, [request.id]: true }));
+            setLoading((prev) => ({ ...prev, [requestId]: true }));
             try {
-              const success = await respondToRequest(request.id, false);
+              const success = await respondToRequest(requestId, false);
               if (success) {
                 Alert.alert('Denied', 'Information request has been denied.');
               }
             } finally {
-              setLoading(prev => ({ ...prev, [request.id]: false }));
+              setLoading((prev) => ({ ...prev, [requestId]: false }));
             }
-          }
-        }
-      ]
+          },
+        },
+      ],
     );
   };
 
   const formatTimeAgo = (timestamp) => {
-    const now = new Date();
-    const requestTime = new Date(timestamp);
-    const diffInHours = Math.floor((now - requestTime) / (1000 * 60 * 60));
+    if (!timestamp) return 'Recently';
 
-    if (diffInHours < 1) return 'Just now';
-    if (diffInHours < 24) return `${diffInHours}h ago`;
-    return `${Math.floor(diffInHours / 24)}d ago`;
+    const parsed = new Date(timestamp);
+    if (Number.isNaN(parsed.getTime())) return 'Recently';
+
+    const diffHours = Math.floor((Date.now() - parsed.getTime()) / (1000 * 60 * 60));
+    if (diffHours < 1) return 'Just now';
+    if (diffHours < 24) return `${diffHours}h ago`;
+    return `${Math.floor(diffHours / 24)}d ago`;
   };
 
   const getLevelColor = (level) => {
-    switch (level) {
-      case DATA_LEVELS.PRIVATE: return '#f59e0b';
-      case DATA_LEVELS.SENSITIVE: return '#ef4444';
-      default: return '#10b981';
+    const normalized = typeof level === 'string' ? level.toLowerCase() : '';
+
+    switch (normalized) {
+      case DATA_LEVELS.PRIVATE:
+        return '#f59e0b';
+      case DATA_LEVELS.SENSITIVE:
+        return '#ef4444';
+      default:
+        return '#10b981';
     }
   };
 
@@ -81,82 +181,94 @@ const PrivacyNotificationModal = ({
         </View>
 
         <ScrollView style={styles.content}>
-          <Text style={styles.subtitle}>{subtitle}</Text>
+          <Text style={styles.subtitleText}>{subtitle}</Text>
 
-          {requests.length === 0 ? (
+          {normalizedRequests.length === 0 ? (
             <View style={styles.emptyState}>
               <Shield size={48} color="#9ca3af" />
               <Text style={styles.emptyTitle}>{emptyStateTitle}</Text>
               <Text style={styles.emptyText}>{emptyStateMessage}</Text>
             </View>
           ) : (
-            requests.map((request) => (
-              <View key={request.id} style={styles.requestCard}>
-                <View style={styles.requestHeader}>
-                  <Text style={styles.requestTimestamp}>
-                    Requested on {new Date(request.createdAt || request.created_at || Date.now()).toLocaleString()}
-                  </Text>
-                  <View style={styles.requesterInfo}>
-                    <Text style={styles.requesterName}>{request.requesterName}</Text>
-                    <Text style={styles.requesterType}>
-                      {request.requesterType === 'caregiver' ? '👩‍🍼 Caregiver' : '👨‍👩‍👧‍👦 Parent'}
+            normalizedRequests.map(({ request, normalizedFields, approvalPayload }) => {
+              const requesterName =
+                request.requesterName || request.requester?.name || request.requesterId?.name || 'User';
+              const requesterTypeLabel =
+                request.requesterType === 'caregiver' ? '👩‍🍼 Caregiver' : '👨‍👩‍👧‍👦 Parent';
+
+              return (
+                <View key={request.id} style={styles.requestCard}>
+                  <View style={styles.requestHeader}>
+                    <Text style={styles.requestTimestamp}>
+                      Requested on {new Date(request.createdAt || request.created_at || Date.now()).toLocaleString()}
                     </Text>
-                  </View>
-                  <View style={styles.timeInfo}>
-                    <Clock size={14} color="#6b7280" />
-                    <Text style={styles.timeText}>{formatTimeAgo(request.requestedAt)}</Text>
-                  </View>
-                </View>
-
-                <View style={styles.reasonSection}>
-                  <Text style={styles.reasonLabel}>Reason:</Text>
-                  <Text style={styles.reasonText}>{request.reason}</Text>
-                </View>
-
-                <View style={styles.fieldsSection}>
-                  <Text style={styles.fieldsLabel}>Requested Information:</Text>
-                  {request.requestedFields.map((field, index) => (
-                    <View key={index} style={styles.fieldItem}>
-                      <Text style={styles.fieldName}>{field.label}</Text>
-                      <View style={[styles.levelBadge, { backgroundColor: getLevelColor(field.level) + '20' }]}>
-                        <Text style={[styles.levelText, { color: getLevelColor(field.level) }]}>
-                          {field.level.toUpperCase()}
-                        </Text>
-                      </View>
+                    <View style={styles.requesterInfo}>
+                      <Text style={styles.requesterName}>{requesterName}</Text>
+                      <Text style={styles.requesterType}>{requesterTypeLabel}</Text>
                     </View>
-                  ))}
-                </View>
+                    <View style={styles.timeInfo}>
+                      <Clock size={14} color="#6b7280" />
+                      <Text style={styles.timeText}>{formatTimeAgo(request.requestedAt || request.createdAt)}</Text>
+                    </View>
+                  </View>
 
-                <View style={styles.actionSection}>
-                  <TouchableOpacity
-                    style={[styles.actionButton, styles.denyButton]}
-                    onPress={() => handleDeny(request)}
-                    disabled={loading[request.id]}
-                  >
-                    <X size={16} color="#ef4444" />
-                    <Text style={styles.denyButtonText}>Deny</Text>
-                  </TouchableOpacity>
+                  <View style={styles.reasonSection}>
+                    <Text style={styles.reasonLabel}>Reason:</Text>
+                    <Text style={styles.reasonText}>{request.reason || 'No reason provided'}</Text>
+                  </View>
 
-                  <TouchableOpacity
-                    style={[styles.actionButton, styles.approveButton]}
-                    onPress={() => handleApprove(request, request.requestedFields)}
-                    disabled={loading[request.id]}
-                  >
-                    <Check size={16} color="#fff" />
-                    <Text style={styles.approveButtonText}>
-                      {loading[request.id] ? 'Processing...' : 'Approve'}
+                  <View style={styles.fieldsSection}>
+                    <Text style={styles.fieldsLabel}>Requested Information:</Text>
+                    {normalizedFields.length > 0 ? (
+                      normalizedFields.map((field) => {
+                        const levelColor = getLevelColor(field.level);
+                        return (
+                          <View key={field.key || field.label} style={styles.fieldItem}>
+                            <Text style={styles.fieldName}>{field.label}</Text>
+                            <View style={[styles.levelBadge, { backgroundColor: `${levelColor}20` }]}>
+                              <Text style={[styles.levelText, { color: levelColor }]}>
+                                {String(field.level || DATA_LEVELS.PRIVATE).toUpperCase()}
+                              </Text>
+                            </View>
+                          </View>
+                        );
+                      })
+                    ) : (
+                      <Text style={styles.noFieldsText}>No fields requested</Text>
+                    )}
+                  </View>
+
+                  <View style={styles.actionSection}>
+                    <TouchableOpacity
+                      style={[styles.actionButton, styles.denyButton]}
+                      onPress={() => handleDeny(request.id)}
+                      disabled={loading[request.id]}
+                    >
+                      <X size={16} color="#ef4444" />
+                      <Text style={styles.denyButtonText}>Deny</Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                      style={[styles.actionButton, styles.approveButton]}
+                      onPress={() => handleApprove(request.id, approvalPayload)}
+                      disabled={loading[request.id]}
+                    >
+                      <Check size={16} color="#fff" />
+                      <Text style={styles.approveButtonText}>
+                        {loading[request.id] ? 'Processing…' : 'Approve'}
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
+
+                  <View style={styles.privacyNote}>
+                    <AlertCircle size={14} color="#6b7280" />
+                    <Text style={styles.privacyNoteText}>
+                      Approved information will be shared temporarily and can be revoked anytime
                     </Text>
-                  </TouchableOpacity>
+                  </View>
                 </View>
-
-                <View style={styles.privacyNote}>
-                  <AlertCircle size={14} color="#6b7280" />
-                  <Text style={styles.privacyNoteText}>
-                    Approved information will be shared temporarily and can be revoked anytime
-                  </Text>
-                </View>
-              </View>
-            ))
+              );
+            })
           )}
         </ScrollView>
       </View>
@@ -188,6 +300,11 @@ const styles = {
   content: {
     flex: 1,
     padding: 20,
+  },
+  subtitleText: {
+    fontSize: 14,
+    color: '#6b7280',
+    marginBottom: 12,
   },
   emptyState: {
     alignItems: 'center',
@@ -289,6 +406,12 @@ const styles = {
   levelText: {
     fontSize: 10,
     fontWeight: '600',
+  },
+  noFieldsText: {
+    fontSize: 13,
+    color: '#6b7280',
+    fontStyle: 'italic',
+    paddingVertical: 4,
   },
   actionSection: {
     flexDirection: 'row',

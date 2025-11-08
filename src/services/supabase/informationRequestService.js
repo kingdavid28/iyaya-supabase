@@ -183,8 +183,15 @@ class InformationRequestService extends SupabaseBase {
 
             const updated = await this._getRequestById(requestId)
 
-            invalidateCache(this._cacheKey('pending', updated.targetId))
-            invalidateCache(this._cacheKey('sent', updated.requesterId))
+            const targetCacheKey = updated?.targetUserId || updated?.target?.id || updated?.targetId?.id
+            if (targetCacheKey) {
+                invalidateCache(this._cacheKey('pending', targetCacheKey))
+            }
+
+            const requesterCacheKey = updated?.requesterUserId || updated?.requester?.id || updated?.requesterId?.id
+            if (requesterCacheKey) {
+                invalidateCache(this._cacheKey('sent', requesterCacheKey))
+            }
 
             return updated
         } catch (error) {

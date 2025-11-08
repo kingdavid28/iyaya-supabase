@@ -1,6 +1,8 @@
 import { useNavigation } from '@react-navigation/native';
+import * as Sharing from 'expo-sharing';
+import * as WebBrowser from 'expo-web-browser';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { Alert, Linking, Text, View } from 'react-native';
+import { Alert, Linking, Platform, Text, View } from 'react-native';
 
 // Core imports
 import { useAuth } from '../../contexts/AuthContext';
@@ -30,6 +32,7 @@ import SearchTab from './components/SearchTab';
 
 // Modal imports
 import ContractModal from '../../components/modals/ContractModal';
+import { RequestInfoModal } from '../../shared/ui/modals';
 import BookingDetailsModal from '../../shared/ui/modals/BookingDetailsModal';
 import BookingModal from './modals/BookingModal';
 import ChildModal from './modals/ChildModal';
@@ -273,7 +276,8 @@ const ParentDashboard = () => {
     booking: false,
     bookingDetails: false,
     contract: false,
-    contractType: false
+    contractType: false,
+    requestInfo: false,
   });
 
   const [selectedBooking, setSelectedBooking] = useState(null);
@@ -281,6 +285,7 @@ const ParentDashboard = () => {
   const [selectedContractTemplate, setSelectedContractTemplate] = useState(null);
   const [pendingApplicationForContract, setPendingApplicationForContract] = useState(null);
   const [applicationsMutatingId, setApplicationsMutatingId] = useState(null);
+  const [requestInfoTarget, setRequestInfoTarget] = useState(null);
 
   // Search and filter state
   const [searchQuery, setSearchQuery] = useState('');
@@ -383,6 +388,26 @@ const ParentDashboard = () => {
     }));
   }, []);
 
+  const openRequestInfoModal = useCallback((caregiver) => {
+    const resolvedId = caregiver?.id || caregiver?._id || caregiver?.userId;
+
+    if (!caregiver || !resolvedId) {
+      Alert.alert(
+        'Invalid recipient',
+        'Caregiver details are missing. Please try again after selecting a valid caregiver.'
+      );
+      return;
+    }
+
+    setRequestInfoTarget({
+      id: resolvedId,
+      name: caregiver.name || caregiver.fullName || 'Caregiver',
+      avatar: caregiver.avatar || caregiver.profileImage || null,
+    });
+
+    toggleModal('requestInfo', true);
+  }, [toggleModal]);
+
   const openContractTypeSelector = useCallback((application) => {
     setPendingApplicationForContract(application);
     setSelectedContractTemplate(null);
@@ -397,6 +422,22 @@ const ParentDashboard = () => {
     toggleModal('contractType', false);
     setSelectedContractTemplate(null);
     setPendingApplicationForContract(null);
+  }, [toggleModal]);
+
+  const handleOpenRequestInfoFromHeader = useCallback(() => {
+    if (requestInfoTarget) {
+      toggleModal('requestInfo', true);
+      return;
+    }
+
+    Alert.alert(
+      'Select a caregiver first',
+      'Choose a caregiver from the dashboard and tap “Request Info” on their card to start a privacy request.'
+    );
+  }, [requestInfoTarget, toggleModal]);
+
+  const handleCloseRequestInfoModal = useCallback(() => {
+    toggleModal('requestInfo', false);
   }, [toggleModal]);
 
   // Helper function to create caregiver object
@@ -1018,8 +1059,75 @@ const ParentDashboard = () => {
   }, [user?.id]);
 
   const handleDownloadPdf = useCallback(async (contract) => {
-    if (!contract) return;
-    Alert.alert('Info', 'PDF download functionality would be implemented here');
+    if (!contract?.id) {
+      Alert.alert('Error', 'Contract information is missing. Please try again.');
+      return;
+    }
+
+    try {
+      const result = await supabaseContractService.generateContractPdf(contract.id, {
+        autoDownload: Platform.OS === 'web',
+        includeSignatures: true,
+      });
+
+      if (!result?.uri && !result?.url) {
+        throw new Error('Download did not return a file location.');
+      }
+
+      const fileUri = result.uri || result.url;
+      const isLocalFile = typeof fileUri === 'string' && fileUri.startsWith('file://');
+
+      let handled = false;
+
+      if (isLocalFile) {
+        try {
+          const canShare = await Sharing.isAvailableAsync();
+          if (canShare) {
+            await Sharing.shareAsync(fileUri, { mimeType: 'application/pdf' });
+            handled = true;
+          }
+        } catch (shareError) {
+          console.warn('Share unavailable for contract PDF:', shareError);
+        }
+      }
+
+      if (!handled) {
+        if (isLocalFile) {
+          if (Platform.OS === 'android') {
+            Alert.alert('Downloaded', `PDF saved at:\n${fileUri}`);
+            handled = true;
+          } else if (Platform.OS === 'ios') {
+            Alert.alert('Downloaded', 'PDF saved. Open it through the Files app.');
+            handled = true;
+          }
+        } else {
+          try {
+            if (WebBrowser?.openBrowserAsync && Platform.OS !== 'web') {
+              await WebBrowser.openBrowserAsync(fileUri, { presentationStyle: 'automatic' });
+              handled = true;
+            }
+          } catch (browserError) {
+            console.warn('Failed to open contract PDF in in-app browser:', browserError);
+          }
+
+          if (!handled) {
+            try {
+              await Linking.openURL(fileUri);
+              handled = true;
+            } catch (linkError) {
+              console.warn('Failed to open contract PDF URL:', linkError);
+            }
+          }
+        }
+      }
+
+      if (!handled) {
+        Alert.alert('Download complete', `PDF available at:\n${fileUri}`);
+      }
+    } catch (error) {
+      console.error('Error downloading contract PDF:', error);
+      Alert.alert('Download failed', error instanceof Error ? error.message : String(error));
+    }
   }, []);
 
   // Profile management
@@ -1042,7 +1150,6 @@ const ParentDashboard = () => {
     }
   }, [profileForm, toggleModal, loadProfile, user?.id]);
 
-  // Render function for active tab
   const renderActiveTab = () => {
     switch (activeTab) {
       case 'home':
@@ -1066,6 +1173,7 @@ const ParentDashboard = () => {
             onBookCaregiver={handleBookCaregiver}
             onMessageCaregiver={handleMessageCaregiver}
             onViewReviews={handleViewReviews}
+            onRequestInfo={openRequestInfoModal}
             navigation={navigation}
             loading={loading}
             refreshing={refreshing}
@@ -1082,6 +1190,7 @@ const ParentDashboard = () => {
             onMessageCaregiver={handleMessageCaregiver}
             onViewReviews={handleViewReviews}
             onBookCaregiver={handleBookCaregiver}
+            onRequestInfo={openRequestInfoModal}
             searchQuery={searchQuery}
             onSearch={handleSearch}
             onOpenFilter={() => toggleModal('filter', true)}
@@ -1216,6 +1325,7 @@ const ParentDashboard = () => {
           profileLocation={profile?.location}
           setActiveTab={setActiveTab}
           tabNotificationCounts={tabNotificationCounts}
+          onRequestInfo={handleOpenRequestInfoFromHeader}
         />
 
         <NavigationTabs
@@ -1343,6 +1453,13 @@ const ParentDashboard = () => {
             }
           }}
           selectedType={selectedContractTemplate}
+        />
+
+        <RequestInfoModal
+          visible={modals.requestInfo}
+          onClose={handleCloseRequestInfoModal}
+          targetUser={requestInfoTarget}
+          userType="parent"
         />
       </View>
     </View>

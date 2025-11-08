@@ -1,8 +1,10 @@
-import { createContext, useContext, useReducer, useEffect, useRef } from "react"
 import AsyncStorage from "@react-native-async-storage/async-storage"
-import { STORAGE_KEYS } from "../config/constants"
-import { logger } from "../utils/logger"
+import { createContext, useContext, useEffect, useReducer, useRef } from "react"
 import { Alert } from "react-native"
+
+import { STORAGE_KEYS } from "../config/constants"
+import { bookingsAPI, jobsAPI } from "../services"
+import { logger } from "../utils/logger"
 
 // Initial State
 const initialState = {
@@ -230,7 +232,7 @@ const AppProvider = ({ children }) => {
   // Mirror AuthContext user into AppContext so isAuthenticated aligns with JWT auth
   useEffect(() => {
     if (authLoading) return
-    
+
     if (authUser) {
       const normalized = authUser?.role ? { ...authUser, role: normalizeRole(authUser.role) } : authUser
       dispatch({ type: ACTION_TYPES.SET_USER, payload: normalized })
@@ -301,7 +303,7 @@ const AppProvider = ({ children }) => {
   const initializeAuthListener = () => {
     // AuthContext is managing Supabase auth, no need for additional listener
     dispatch({ type: ACTION_TYPES.SET_AUTH_LOADING, payload: false })
-    return () => {}
+    return () => { }
   }
 
   // Action Creators
@@ -337,7 +339,7 @@ const AppProvider = ({ children }) => {
           type: ACTION_TYPES.SET_LOADING,
           payload: { key: "bookings", value: true },
         });
-        
+
         // Check if user is authenticated before making API calls
         if (!state.user) {
           console.log('User not authenticated - skipping bookings load');
@@ -347,15 +349,14 @@ const AppProvider = ({ children }) => {
           });
           return [];
         }
-        
+
         if (!state.user.role) {
           Alert.alert('Error', 'User is missing role. Please log in again.');
           dispatch({ type: ACTION_TYPES.SET_ERROR, payload: { key: 'general', value: 'User not loaded or missing role' } });
           return;
         }
-        
+
         // Use Supabase service instead of old API
-        const { bookingsAPI } = await import('../services');
         const result = await bookingsAPI.getMy();
         const bookings = result.data || [];
         dispatch({
@@ -384,7 +385,7 @@ const AppProvider = ({ children }) => {
           type: ACTION_TYPES.SET_LOADING,
           payload: { key: "jobs", value: true },
         });
-        
+
         // Check if user is authenticated before making API calls
         if (!state.user) {
           console.log('User not authenticated - skipping jobs load');
@@ -394,15 +395,14 @@ const AppProvider = ({ children }) => {
           });
           return [];
         }
-        
+
         if (!state.user.role) {
           Alert.alert('Error', 'User is missing role. Please log in again.');
           dispatch({ type: ACTION_TYPES.SET_ERROR, payload: { key: 'general', value: 'User not loaded or missing role' } });
           return;
         }
-        
+
         // Use Supabase service instead of old API
-        const { jobsAPI } = await import('../services');
         const result = await jobsAPI.getAvailable();
         const jobs = result.data || [];
         dispatch({

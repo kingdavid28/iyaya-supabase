@@ -1,8 +1,8 @@
 import { Ionicons } from '@expo/vector-icons';
-import { useFocusEffect, useNavigation, useRoute } from '@react-navigation/native';
+import { useNavigation, useRoute } from '@react-navigation/native';
 import { LinearGradient } from "expo-linear-gradient";
 import * as Linking from 'expo-linking';
-import * as Sharing from 'expo-sharing';
+import * as WebBrowser from 'expo-web-browser';
 import React, { Fragment, useCallback, useEffect, useMemo, useState } from "react";
 import { ActivityIndicator, Alert, Dimensions, Modal, Platform, Pressable, Linking as RNLinking, RefreshControl, ScrollView, Text, TextInput, View } from "react-native";
 import { Button } from "react-native-paper";
@@ -135,6 +135,7 @@ const CaregiverDashboard = () => {
   const showToast = (message, type = 'success') => setToast({ visible: true, message, type })
   const [refreshing, setRefreshing] = useState(false)
   const [showRequestModal, setShowRequestModal] = useState(false);
+  const [initialLoading, setInitialLoading] = useState(true);
 
   // Add missing handleGetDirections function
   const handleGetDirections = (booking) => {
@@ -231,7 +232,6 @@ const CaregiverDashboard = () => {
   const [showHighlightRequestModal, setShowHighlightRequestModal] = useState(false);
   const [selectedFamilyForHighlight, setSelectedFamilyForHighlight] = useState(null);
   const [showRatingsModal, setShowRatingsModal] = useState(false);
-  const [initialLoading, setInitialLoading] = useState(true);
 
   const openRatingsModal = useCallback(() => {
     setShowRatingsModal(true);
@@ -240,91 +240,6 @@ const CaregiverDashboard = () => {
   const closeRatingsModal = useCallback(() => {
     setShowRatingsModal(false);
   }, []);
-
-  const openContractFromNotification = useCallback(async ({ contractId, bookingId, source = 'notification' }) => {
-    if (!contractId) {
-      return false;
-    }
-
-    try {
-      console.log(' Attempting to open contract from', source, { contractId, bookingId });
-
-      const [contract, booking] = await Promise.all([
-        contractService.getContractById(contractId),
-        bookingId ? supabaseService.bookings.getBookingById(bookingId, user?.id) : null,
-      ]);
-
-      if (contract) {
-        setPendingContractToOpen({
-          contract,
-          booking: booking || null,
-        });
-
-        if (activeTab !== 'bookings') {
-          setActiveTab('bookings');
-        }
-
-        return true;
-      }
-
-      console.warn(' Contract not found while opening from', source, contractId);
-      Alert.alert('Contract Not Found', 'The contract could not be loaded. It may have been deleted.');
-    } catch (error) {
-      console.error(' Failed to open contract from', source, error);
-      Alert.alert('Error', 'Failed to load contract. Please try again later.');
-    }
-
-    return false;
-  }, [activeTab, setActiveTab, user?.id]);
-
-  useFocusEffect(
-    useCallback(() => {
-      const handleDeepLink = (event) => {
-        try {
-          const url = event?.url;
-          if (!url) return;
-
-          const parsed = Linking.parse(url);
-          const queryParams = parsed?.queryParams || {};
-          const contractId = queryParams.contractId || queryParams.contract || queryParams.contract_id;
-
-          if (!contractId) {
-            return;
-          }
-
-          const bookingId = queryParams.bookingId || queryParams.booking || queryParams.booking_id;
-
-          openContractFromNotification({
-            contractId,
-            bookingId,
-            source: 'deep-link',
-          });
-        } catch (linkError) {
-          console.warn(' Failed to handle caregiver dashboard deep link:', linkError);
-        }
-      };
-
-      const subscription = RNLinking.addEventListener('url', handleDeepLink);
-
-      RNLinking.getInitialURL()
-        .then((initialUrl) => {
-          if (initialUrl) {
-            handleDeepLink({ url: initialUrl });
-          }
-        })
-        .catch((initialUrlError) => {
-          console.warn(' Failed to get initial URL for caregiver dashboard:', initialUrlError);
-        });
-
-      return () => {
-        if (subscription?.remove) {
-          subscription.remove();
-        } else {
-          RNLinking.removeEventListener?.('url', handleDeepLink);
-        }
-      };
-    }, [openContractFromNotification])
-  );
 
   const preloadCaregiverReviews = useCallback(async () => {
     await fetchCaregiverReviews({ showSkeleton: false });
@@ -847,13 +762,40 @@ const CaregiverDashboard = () => {
       }
 
       const fileUri = result.uri || result.url;
+      const isLocalFile = typeof fileUri === 'string' && fileUri.startsWith('file://');
 
-      if (await Sharing.isAvailableAsync()) {
-        await Sharing.shareAsync(fileUri, { mimeType: 'application/pdf' });
-      } else if (Platform.OS === 'android') {
-        Alert.alert('Downloaded', `PDF saved at:\n${fileUri}`);
+      let handled = false;
+
+      if (isLocalFile) {
+        if (Platform.OS === 'android') {
+          Alert.alert('Downloaded', `PDF saved at:\n${fileUri}`);
+          handled = true;
+        } else if (Platform.OS === 'ios') {
+          Alert.alert('Downloaded', 'PDF saved. Open it through the Files app.');
+          handled = true;
+        }
       } else {
-        Alert.alert('Downloaded', 'PDF saved. Open it with a PDF viewer or Files app.');
+        try {
+          if (WebBrowser?.openBrowserAsync && Platform.OS !== 'web') {
+            await WebBrowser.openBrowserAsync(fileUri, { presentationStyle: 'automatic' });
+            handled = true;
+          }
+        } catch (browserError) {
+          console.warn('Failed to open contract PDF in in-app browser:', browserError);
+        }
+
+        if (!handled) {
+          try {
+            await RNLinking.openURL(fileUri);
+            handled = true;
+          } catch (linkError) {
+            console.warn('Failed to open contract PDF URL:', linkError);
+          }
+        }
+      }
+
+      if (!handled) {
+        Alert.alert('Download complete', `PDF available at:\n${fileUri}`);
       }
     } catch (error) {
       console.error('Error downloading caregiver contract PDF:', error);
@@ -1110,7 +1052,7 @@ const CaregiverDashboard = () => {
         <View style={styles.reviewsHeroHeader}>
           <Pressable
             style={styles.reviewsHeroMetric}
-            onPress={openRatingsModal}
+            onPress={handleOpenRatings}
             accessibilityRole="button"
             accessibilityLabel="View ratings and reviews"
           >
@@ -1256,6 +1198,11 @@ const CaregiverDashboard = () => {
     }
   }, [handleCloseReviewModal, refreshCaregiverReviews, selectedReview, showToast, user?.id]);
 
+  const handleOpenRatings = useCallback(async () => {
+    await preloadCaregiverReviews();
+    setShowRatingsModal(true);
+  }, [preloadCaregiverReviews]);
+
   return (
     <Fragment>
       <View style={styles.container}>
@@ -1380,6 +1327,7 @@ const CaregiverDashboard = () => {
                     subtitle={ratingStatSubtitle}
                     ctaLabel={ratingStatCTA}
                     accessibilityHint="Shows detailed caregiver ratings and reviews"
+                    onPress={handleOpenRatings}
                     showArrow
                   />
                   <QuickStat
@@ -1837,7 +1785,7 @@ const CaregiverDashboard = () => {
                 setSelectedReview(review);
                 setShowReviewForm(true);
               }}
-              onOpenRatings={openRatingsModal}
+              onOpenRatings={handleOpenRatings}
               onRequestHighlight={handleGeneralHighlightRequest}
               highlightRequestSending={highlightRequestSending}
             />
@@ -2078,7 +2026,11 @@ const CaregiverDashboard = () => {
           selectedApplication.childrenSummary ||
           (Array.isArray(jobDetails.children) && jobDetails.children.length
             ? `${jobDetails.children.length} child${jobDetails.children.length > 1 ? 'ren' : ''}`
-            : null);
+            : null)
+          || (typeof jobDetails.childrenCount === 'number'
+            ? `${jobDetails.childrenCount} child${jobDetails.childrenCount > 1 ? 'ren' : ''}`
+            : null)
+          || selectedApplication.childrenSummary;
         const messageBody = selectedApplication.coverLetter || selectedApplication.message;
         const descriptionBody = jobDetails.description;
         const requirementTags = Array.isArray(jobDetails.requirements)

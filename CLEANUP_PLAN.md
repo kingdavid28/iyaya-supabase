@@ -60,3 +60,36 @@ Implement skeletons for profile headers/cards and leverage lightweight placehold
 - **`src/screens/CaregiverDashboard.js`** – “Best of Me” tab now normalizes with `normalizeCaregiverReviewsForList()` and renders the shared `ReviewList` with a CTA into `CaregiverReviewsScreen`.
 - **`src/utils/reviews.js`** – houses `normalizeCaregiverReviews()` utilities used by caregiver-facing screens to keep Supabase payloads consistent.
 - **Maintenance** – When adding or removing review-related modules, update this inventory so newcomers can locate the current components quickly.
+
+
+To speed up the app, focus on the biggest bottlenecks first:
+
+Profile images & media
+We already stopped downscaling new uploads in 
+storageService.uploadProfileImage
+, but large originals still enlarge UI bandwidth. Add client-side resizing/compression before upload (e.g., keep longest side ≤ 512 px) and store a smaller derivative.
+For existing avatars, consider a background job to regenerate optimized versions and update stored URLs.
+Network calls & caching
+useParentDashboard
+ fires several API requests on mount (loadProfile, fetchJobs, fetchCaregivers, fetchChildren). Debounce or lazy-load secondary data (e.g., bookings/applications only when their tab is opened).
+Cache immutable data locally (AsyncStorage or react-query SWR) and reuse until refresh.
+Avoid duplicate calls; ensure hooks like fetchCaregivers aren’t triggered twice by multiple effects.
+Reduce render work
+Check expensive tabs (Home, Search) for heavy lists; wrap list items in React.memo / useCallback to prevent unnecessary re-renders.
+Use FlatList’s windowSize, initialNumToRender, and removeClippedSubviews tuned for your data.
+Split large components (e.g., 
+ParentDashboard.js
+) into smaller memoized sections to limit updates.
+Optimize images and assets
+The image-optimizer.js run compressed local PNGs drastically. Keep the optimized versions under version control and ensure notification-icon.png is converted to a supported format.
+Enable Expo asset bundling (expo-optimize) in CI so end-users download smaller bundles.
+Build & metro caching
+Use expo start --no-dev --minify for realistic performance checks.
+On iOS/Android device builds, enable Hermes (Expo SDK 49+) to improve JS execution.
+Split bundles if needed (expo export with modern bundler).
+Profiling & monitoring
+Record performance via React Native Performance Monitor (Cmd+D → “Show Perf Monitor”) to spot slow renders.
+Add logging/timing around API calls to identify slow endpoints; consider pagination or limiting payload sizes.
+Once you’ve profiled with these steps, we can target actual hotspots (e.g., a particular API or list). Let me know which area you tackle first and I can help implement concrete changes.
+
+Feedback submitted

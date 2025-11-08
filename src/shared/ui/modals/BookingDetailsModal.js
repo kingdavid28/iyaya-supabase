@@ -336,10 +336,10 @@ ChildrenDetailsSection.propTypes = {
 // Contact Info Component
 const ContactInfoItem = ({ icon: Icon, label, value, onPress, isPressable = false }) => {
   const Container = isPressable ? Pressable : View;
-  
+
   return (
-    <Container 
-      style={styles.contactItem} 
+    <Container
+      style={styles.contactItem}
       onPress={onPress}
       disabled={!isPressable}
     >
@@ -360,10 +360,10 @@ const ContactInfoItem = ({ icon: Icon, label, value, onPress, isPressable = fals
 // Emergency Contact Item Component
 const EmergencyContactItem = ({ icon: Icon, label, value, onPress, isPressable = false }) => {
   const Container = isPressable ? Pressable : View;
-  
+
   return (
-    <Container 
-      style={styles.emergencyContactItem} 
+    <Container
+      style={styles.emergencyContactItem}
       onPress={onPress}
       disabled={!isPressable}
     >
@@ -397,9 +397,9 @@ export const BookingDetailsModal = ({
   messageDisabled = false
 }) => {
   console.log('🔍 BookingDetailsModal - Received booking data:', booking);
-  
+
   if (!visible) return null;
-  
+
   if (!booking) {
     console.warn('⚠️ BookingDetailsModal - No booking data provided');
     return (
@@ -430,16 +430,16 @@ export const BookingDetailsModal = ({
     };
 
     const processSpecialInstructions = () => {
-      return booking.specialInstructions || 
-             booking.special_instructions || 
-             booking.notes || 
-             booking.instructions || 
-             null;
+      return booking.specialInstructions ||
+        booking.special_instructions ||
+        booking.notes ||
+        booking.instructions ||
+        null;
     };
 
     const processEmergencyContact = () => {
       const contact = booking.emergencyContact || booking.emergency_contact;
-      
+
       if (!contact) return null;
 
       // If it's already a properly formatted object
@@ -474,28 +474,28 @@ export const BookingDetailsModal = ({
           const nameMatch = contact.match(/(?:Name:?\s*)([^,]+)/i);
           const phoneMatch = contact.match(/(?:Phone:?\s*)([^,]+)/i);
           const relationMatch = contact.match(/(?:Relation:?\s*|Relationship:?\s*)([^,]+)/i);
-          
+
           return {
             name: nameMatch ? nameMatch[1].trim() : contact,
             phone: phoneMatch ? phoneMatch[1].trim() : null,
             relation: relationMatch ? relationMatch[1].trim() : 'Emergency Contact'
           };
         } catch (error) {
-          return { 
-            name: contact, 
-            phone: null, 
-            relation: 'Emergency Contact' 
+          return {
+            name: contact,
+            phone: null,
+            relation: 'Emergency Contact'
           };
         }
       }
-      
+
       return null;
     };
 
     const processContactInfo = () => {
       const phone = booking.contactPhone || booking.contact_phone || booking.phone || booking.parentPhone;
       const email = booking.contactEmail || booking.contact_email || booking.email || booking.parentEmail;
-      
+
       return {
         phone: phone && typeof phone === 'string' ? phone.replace(/\s+/g, '') : null,
         email: email && typeof email === 'string' ? email.trim() : null
@@ -545,25 +545,8 @@ export const BookingDetailsModal = ({
       time: booking.time || (booking.start_time && booking.end_time ? `${booking.start_time} - ${booking.end_time}` : booking.startTime && booking.endTime ? `${booking.startTime} - ${booking.endTime}` : 'Time not specified')
     };
   }, [booking]);
-  
+
   console.log('🔍 Enhanced booking data:', enhancedBooking);
-
-  const getStatusColors = (status) => {
-    switch (status?.toLowerCase()) {
-      case 'confirmed':
-        return { bg: '#dcfce7', text: '#166534' };
-      case 'pending':
-        return { bg: '#fef3c7', text: '#92400e' };
-      case 'completed':
-        return { bg: '#dbeafe', text: '#1e40af' };
-      case 'cancelled':
-        return { bg: '#fecaca', text: '#dc2626' };
-      default:
-        return { bg: '#f3f4f6', text: '#374151' };
-    }
-  };
-
-  const statusColors = getStatusColors(enhancedBooking.status);
 
   const childCount = React.useMemo(() => {
     if (Array.isArray(enhancedBooking.childrenDetails)) {
@@ -606,39 +589,7 @@ export const BookingDetailsModal = ({
   }, [childCount]);
 
   const summaryChips = React.useMemo(() => {
-    const chips = [
-      {
-        key: 'date',
-        icon: Calendar,
-        label: 'Date',
-        value: formattedDate,
-        accent: '#3b82f6'
-      },
-      {
-        key: 'time',
-        icon: Clock,
-        label: 'Time',
-        value: formattedTime,
-        accent: '#8b5cf6'
-      },
-      {
-        key: 'children',
-        icon: Baby,
-        label: 'Children',
-        value: childSummary,
-        accent: '#ef4444'
-      }
-    ];
-
-    if (enhancedBooking.location && enhancedBooking.location !== 'Location not specified') {
-      chips.push({
-        key: 'location',
-        icon: MapPin,
-        label: 'Location',
-        value: enhancedBooking.location,
-        accent: '#0ea5e9'
-      });
-    }
+    const chips = [];
 
     chips.push({
       key: 'status',
@@ -649,17 +600,17 @@ export const BookingDetailsModal = ({
     });
 
     return chips;
-  }, [childSummary, enhancedBooking.location, enhancedBooking.status, formattedDate, formattedTime]);
+  }, [enhancedBooking.status]);
 
   const canComplete = (enhancedBooking.status || '').toLowerCase() === 'confirmed';
   const canCancel = ['pending', 'confirmed'].includes((enhancedBooking.status || '').toLowerCase());
 
   const handlePhonePress = async (phone) => {
     if (!phone || typeof phone !== 'string') return;
-    
+
     // Clean phone number for dialing
     const cleanPhone = phone.replace(/[^\d+]/g, '');
-    
+
     try {
       const canOpen = await Linking.canOpenURL(`tel:${cleanPhone}`);
       if (canOpen) {
@@ -675,7 +626,7 @@ export const BookingDetailsModal = ({
 
   const handleEmailPress = async (email) => {
     if (!email || typeof email !== 'string') return;
-    
+
     // Validate email format
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!emailRegex.test(email)) {
@@ -740,11 +691,6 @@ export const BookingDetailsModal = ({
                   </View>
                 </View>
                 <View style={styles.headerRight}>
-                  <View style={[styles.statusBadge, { backgroundColor: statusColors.bg }]}>
-                    <Text style={[styles.statusText, { color: statusColors.text }]}>
-                      {formatStatus(enhancedBooking.status)}
-                    </Text>
-                  </View>
                   <Pressable
                     onPress={onClose}
                     style={styles.closeButton}
@@ -758,7 +704,7 @@ export const BookingDetailsModal = ({
             </View>
 
             {/* Content */}
-            <ScrollView 
+            <ScrollView
               style={styles.scrollView}
               contentContainerStyle={styles.scrollContent}
               showsVerticalScrollIndicator={false}
@@ -769,7 +715,7 @@ export const BookingDetailsModal = ({
                 <View style={styles.summaryChips}>
                   {summaryChips.map(({ key, icon: Icon, label, value, accent }) => (
                     <View key={key} style={styles.summaryChip}>
-                      <View style={[styles.summaryChipIcon, { backgroundColor: `${accent}1A` }]}> 
+                      <View style={[styles.summaryChipIcon, { backgroundColor: `${accent}1A` }]}>
                         <Icon size={16} color={accent} />
                       </View>
                       <View style={styles.summaryChipText}>
@@ -856,13 +802,13 @@ export const BookingDetailsModal = ({
                       label="Parent Name"
                       value={enhancedBooking.parentName}
                     />
-                    
+
                     <ContactInfoItem
                       icon={MapPin}
                       label="Location"
                       value={enhancedBooking.location}
                     />
-                    
+
                     {enhancedBooking.contactPhone ? (
                       <ContactInfoItem
                         icon={Phone}
@@ -878,7 +824,7 @@ export const BookingDetailsModal = ({
                         value={t('contact.hidden')}
                       />
                     )}
-                    
+
                     {enhancedBooking.contactEmail ? (
                       <ContactInfoItem
                         icon={Mail}
@@ -937,20 +883,20 @@ export const BookingDetailsModal = ({
                         <Text style={styles.emergencySubtitle}>Available in case of emergencies</Text>
                       </View>
                     </View>
-                    
+
                     <View style={styles.emergencyContent}>
                       <EmergencyContactItem
                         icon={User}
                         label="Full Name"
                         value={enhancedBooking.emergencyContact.name}
                       />
-                      
+
                       <EmergencyContactItem
                         icon={User}
                         label="Relationship"
                         value={enhancedBooking.emergencyContact.relation}
                       />
-                      
+
                       <EmergencyContactItem
                         icon={Phone}
                         label="Phone Number"
@@ -959,7 +905,7 @@ export const BookingDetailsModal = ({
                         isPressable={!!enhancedBooking.emergencyContact.phone}
                       />
                     </View>
-                    
+
                     {enhancedBooking.emergencyContact.phone && (
                       <View style={styles.emergencyActions}>
                         <Pressable
@@ -981,7 +927,7 @@ export const BookingDetailsModal = ({
             {/* Footer Actions */}
             <View style={styles.footer}>
               <View style={styles.footerRow}>
-                <Pressable 
+                <Pressable
                   style={[styles.actionButton, styles.messageButton, messageDisabled && styles.actionButtonDisabled]}
                   onPress={messageDisabled ? undefined : onMessage}
                   accessibilityLabel={messageLabel}
@@ -992,8 +938,8 @@ export const BookingDetailsModal = ({
                   <Text style={[styles.messageButtonText, messageDisabled && styles.messageButtonTextDisabled]}>{messageLabel}</Text>
                 </Pressable>
 
-                <Pressable 
-                  style={[styles.actionButton, styles.directionsButton]} 
+                <Pressable
+                  style={[styles.actionButton, styles.directionsButton]}
                   onPress={() => {
                     try {
                       Linking.openURL(`https://maps.google.com/?q=${encodeURIComponent(enhancedBooking.address)}`);

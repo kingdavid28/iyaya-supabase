@@ -1,8 +1,11 @@
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
+import * as Linking from 'expo-linking';
 import * as Sharing from 'expo-sharing';
+import * as WebBrowser from 'expo-web-browser';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Alert, FlatList, ScrollView, Text, TouchableOpacity, View } from 'react-native';
+import { Alert, FlatList, Platform, ScrollView, Text, TouchableOpacity, View } from 'react-native';
+
 import {
   SkeletonBlock,
   SkeletonCard,
@@ -145,132 +148,132 @@ const BookingCard = React.memo(({ booking, onMessageFamily, onConfirmBooking, on
 
       <View style={bookingCardStyles.body}>
         <View style={bookingCardStyles.details}>
-        {detailChips.map(({ key, icon, text }) => {
-          const displayText = text != null ? String(text) : '';
-          return (
-            <View key={key} style={bookingCardStyles.detailChip}>
-              <Ionicons name={icon} size={14} color="#2563EB" />
-              <Text style={bookingCardStyles.detailChipText} numberOfLines={1}>
-                {displayText}
+          {detailChips.map(({ key, icon, text }) => {
+            const displayText = text != null ? String(text) : '';
+            return (
+              <View key={key} style={bookingCardStyles.detailChip}>
+                <Ionicons name={icon} size={14} color="#2563EB" />
+                <Text style={bookingCardStyles.detailChipText} numberOfLines={1}>
+                  {displayText}
+                </Text>
+              </View>
+            );
+          })}
+        </View>
+
+        {specialInstructions && (
+          <View style={bookingCardStyles.instructionsContainer}>
+            <Text style={bookingCardStyles.sectionLabel}>Special Instructions</Text>
+            <Text style={bookingCardStyles.instructionsText} numberOfLines={3}>
+              {String(specialInstructions)}
+            </Text>
+          </View>
+        )}
+
+        {contactChips.length > 0 && (
+          <View style={bookingCardStyles.contactContainer}>
+            <Text style={bookingCardStyles.sectionLabel}>Contact</Text>
+            <View style={bookingCardStyles.contactChips}>
+              {contactChips.map(({ key, icon, text }) => (
+                <View key={key} style={bookingCardStyles.contactChip}>
+                  <Ionicons name={icon} size={14} color="#10B981" />
+                  <Text style={bookingCardStyles.contactChipText} numberOfLines={1}>{String(text ?? '')}</Text>
+                </View>
+              ))}
+            </View>
+          </View>
+        )}
+
+        {/* Contract Row */}
+        <TouchableOpacity
+          style={[
+            bookingCardStyles.contractRow,
+            contractInfo.variant === 'primary' && bookingCardStyles.contractRow_primary,
+            contractInfo.variant === 'success' && bookingCardStyles.contractRow_success,
+            contractInfo.variant === 'neutral' && bookingCardStyles.contractRow_neutral,
+          ]}
+          onPress={handleContractPress}
+          activeOpacity={0.7}
+        >
+          <View style={bookingCardStyles.contractRowLeft}>
+            <View style={bookingCardStyles.contractIconWrapper}>
+              <Ionicons
+                name="document-text-outline"
+                size={20}
+                color={contractInfo.variant === 'success' ? '#10B981' : contractInfo.variant === 'primary' ? '#3B82F6' : '#6B7280'}
+              />
+            </View>
+            <View style={bookingCardStyles.contractInfo}>
+              <Text style={bookingCardStyles.contractTitle}>
+                {String(contractInfo.label || 'No contract')}
+              </Text>
+              <Text style={bookingCardStyles.contractSubtitle}>
+                {String(contractInfo.action || '')}
               </Text>
             </View>
-          );
-        })}
-      </View>
-
-      {specialInstructions && (
-        <View style={bookingCardStyles.instructionsContainer}>
-          <Text style={bookingCardStyles.sectionLabel}>Special Instructions</Text>
-          <Text style={bookingCardStyles.instructionsText} numberOfLines={3}>
-            {String(specialInstructions)}
-          </Text>
-        </View>
-      )}
-
-      {contactChips.length > 0 && (
-        <View style={bookingCardStyles.contactContainer}>
-          <Text style={bookingCardStyles.sectionLabel}>Contact</Text>
-          <View style={bookingCardStyles.contactChips}>
-            {contactChips.map(({ key, icon, text }) => (
-              <View key={key} style={bookingCardStyles.contactChip}>
-                <Ionicons name={icon} size={14} color="#10B981" />
-                <Text style={bookingCardStyles.contactChipText} numberOfLines={1}>{String(text ?? '')}</Text>
-              </View>
-            ))}
           </View>
-        </View>
-      )}
-
-      {/* Contract Row */}
-      <TouchableOpacity
-        style={[
-          bookingCardStyles.contractRow,
-          contractInfo.variant === 'primary' && bookingCardStyles.contractRow_primary,
-          contractInfo.variant === 'success' && bookingCardStyles.contractRow_success,
-          contractInfo.variant === 'neutral' && bookingCardStyles.contractRow_neutral,
-        ]}
-        onPress={handleContractPress}
-        activeOpacity={0.7}
-      >
-        <View style={bookingCardStyles.contractRowLeft}>
-          <View style={bookingCardStyles.contractIconWrapper}>
+          <View style={bookingCardStyles.contractAction}>
+            <Text
+              style={[
+                bookingCardStyles.contractActionText,
+                contractInfo.variant === 'success' && bookingCardStyles.contractActionTextDisabled
+              ]}
+            >
+              {String(contractInfo.action === 'Create contract' ? 'Create' : 'View')}
+            </Text>
             <Ionicons
-              name="document-text-outline"
-              size={20}
-              color={contractInfo.variant === 'success' ? '#10B981' : contractInfo.variant === 'primary' ? '#3B82F6' : '#6B7280'}
+              name="chevron-forward"
+              size={16}
+              color={contractInfo.variant === 'success' ? '#9CA3AF' : '#3B82F6'}
             />
           </View>
-          <View style={bookingCardStyles.contractInfo}>
-            <Text style={bookingCardStyles.contractTitle}>
-              {String(contractInfo.label || 'No contract')}
+        </TouchableOpacity>
+
+        <View style={bookingCardStyles.footer}>
+          <View style={bookingCardStyles.amountContainer}>
+            <Text style={bookingCardStyles.amount}>
+              {`₱${totalAmount?.toLocaleString() || '0'}`}
             </Text>
-            <Text style={bookingCardStyles.contractSubtitle}>
-              {String(contractInfo.action || '')}
+            <Text style={bookingCardStyles.hourlyRate}>
+              {`₱${hourlyRate || 300}/hr`}
             </Text>
           </View>
-        </View>
-        <View style={bookingCardStyles.contractAction}>
-          <Text
-            style={[
-              bookingCardStyles.contractActionText,
-              contractInfo.variant === 'success' && bookingCardStyles.contractActionTextDisabled
-            ]}
-          >
-            {String(contractInfo.action === 'Create contract' ? 'Create' : 'View')}
-          </Text>
-          <Ionicons
-            name="chevron-forward"
-            size={16}
-            color={contractInfo.variant === 'success' ? '#9CA3AF' : '#3B82F6'}
-          />
-        </View>
-      </TouchableOpacity>
 
-      <View style={bookingCardStyles.footer}>
-        <View style={bookingCardStyles.amountContainer}>
-          <Text style={bookingCardStyles.amount}>
-            {`₱${totalAmount?.toLocaleString() || '0'}`}
-          </Text>
-          <Text style={bookingCardStyles.hourlyRate}>
-            {`₱${hourlyRate || 300}/hr`}
-          </Text>
-        </View>
+          <View style={bookingCardStyles.actionButtons}>
+            <View style={bookingCardStyles.actionRow}>
+              {booking.status === 'pending' && (
+                <TouchableOpacity
+                  style={bookingCardStyles.confirmButton}
+                  onPress={() => onConfirmBooking && onConfirmBooking(booking)}
+                >
+                  <Ionicons name="checkmark" size={16} color="#FFFFFF" />
+                  <Text style={bookingCardStyles.buttonText}>Confirm</Text>
+                </TouchableOpacity>
+              )}
 
-        <View style={bookingCardStyles.actionButtons}>
-          <View style={bookingCardStyles.actionRow}>
-            {booking.status === 'pending' && (
               <TouchableOpacity
-                style={bookingCardStyles.confirmButton}
-                onPress={() => onConfirmBooking && onConfirmBooking(booking)}
+                style={bookingCardStyles.detailsButton}
+                onPress={() => onViewDetails && onViewDetails(booking)}
               >
-                <Ionicons name="checkmark" size={16} color="#FFFFFF" />
-                <Text style={bookingCardStyles.buttonText}>Confirm</Text>
+                <Ionicons name="eye-outline" size={16} color="#FFFFFF" />
+                <Text style={bookingCardStyles.buttonText}>Details</Text>
               </TouchableOpacity>
-            )}
+            </View>
 
-            <TouchableOpacity
-              style={bookingCardStyles.detailsButton}
-              onPress={() => onViewDetails && onViewDetails(booking)}
-            >
-              <Ionicons name="eye-outline" size={16} color="#FFFFFF" />
-              <Text style={bookingCardStyles.buttonText}>Details</Text>
-            </TouchableOpacity>
-          </View>
-
-          <View style={bookingCardStyles.actionRow}>
-            <TouchableOpacity
-              style={bookingCardStyles.messageButton}
-              onPress={() => onMessageFamily && onMessageFamily(booking)}
-            >
-              <Ionicons name="chatbubble-outline" size={16} color="#FFFFFF" />
-              <Text style={bookingCardStyles.buttonText}>Message</Text>
-            </TouchableOpacity>
+            <View style={bookingCardStyles.actionRow}>
+              <TouchableOpacity
+                style={bookingCardStyles.messageButton}
+                onPress={() => onMessageFamily && onMessageFamily(booking)}
+              >
+                <Ionicons name="chatbubble-outline" size={16} color="#FFFFFF" />
+                <Text style={bookingCardStyles.buttonText}>Message</Text>
+              </TouchableOpacity>
+            </View>
           </View>
         </View>
       </View>
     </View>
-  </View>
-);
+  );
 });
 
 const bookingCardStyles = {
@@ -817,15 +820,15 @@ const CaregiverBookingsTabWithModal = ({ pendingContract, onPendingContractHandl
   useEffect(() => {
     let isMounted = true;
 
-    import('../../components/modals/ContractModal')
-      .then((module) => {
-        if (isMounted) {
-          setContractModal(() => module.default || module.ContractModal || module);
-        }
-      })
-      .catch((error) => {
-        console.warn('Failed to load ContractModal:', error);
-      });
+    try {
+      const module = require('../../components/modals/ContractModal');
+      const resolved = module?.default || module?.ContractModal || module;
+      if (isMounted && resolved) {
+        setContractModal(() => resolved);
+      }
+    } catch (error) {
+      console.warn('Failed to load ContractModal via require:', error);
+    }
 
     return () => {
       isMounted = false;
@@ -860,8 +863,6 @@ const CaregiverBookingsTabWithModal = ({ pendingContract, onPendingContractHandl
     if (!selectedContract || !selectedBookingForContract) return;
 
     try {
-      const { contractService } = await import('../../services/supabase/contractService');
-
       let existing;
       try {
         existing = await contractService.getContractById(selectedContract.id);
@@ -918,7 +919,6 @@ const CaregiverBookingsTabWithModal = ({ pendingContract, onPendingContractHandl
     if (!contract) return;
 
     try {
-      const { contractService } = await import('../../services/supabase/contractService');
       await contractService.resendContract(contract.id, 'caregiver-id-placeholder');
       Alert.alert('Success', 'Contract reminder sent!');
     } catch (error) {
@@ -931,7 +931,6 @@ const CaregiverBookingsTabWithModal = ({ pendingContract, onPendingContractHandl
     if (!contract) return;
 
     try {
-      const { contractService } = await import('../../services/supabase/contractService');
       const result = await contractService.generateContractPdf(contract.id, { autoDownload: true });
 
       if (!result?.uri && !result?.url) {
@@ -939,13 +938,54 @@ const CaregiverBookingsTabWithModal = ({ pendingContract, onPendingContractHandl
       }
 
       const fileUri = result.uri || result.url;
+      const isLocalFile = typeof fileUri === 'string' && fileUri.startsWith('file://');
 
-      if (await Sharing.isAvailableAsync()) {
-        await Sharing.shareAsync(fileUri, { mimeType: 'application/pdf' });
-      } else if (Platform.OS === 'android') {
-        Alert.alert('Downloaded', `PDF saved at:\n${fileUri}`);
-      } else {
-        Alert.alert('Downloaded', 'PDF saved. Open it with a PDF viewer or Files app.');
+      let handled = false;
+
+      if (isLocalFile) {
+        try {
+          const canShare = await Sharing.isAvailableAsync();
+          if (canShare) {
+            await Sharing.shareAsync(fileUri, { mimeType: 'application/pdf' });
+            handled = true;
+          }
+        } catch (shareError) {
+          console.warn('Share unavailable for contract PDF:', shareError);
+        }
+      }
+
+      if (!handled) {
+        if (isLocalFile) {
+          if (Platform.OS === 'android') {
+            Alert.alert('Downloaded', `PDF saved at:\n${fileUri}`);
+            handled = true;
+          } else if (Platform.OS === 'ios') {
+            Alert.alert('Downloaded', 'PDF saved. Open it through the Files app.');
+            handled = true;
+          }
+        } else {
+          try {
+            if (WebBrowser?.openBrowserAsync && Platform.OS !== 'web') {
+              await WebBrowser.openBrowserAsync(fileUri, { presentationStyle: 'automatic' });
+              handled = true;
+            }
+          } catch (browserError) {
+            console.warn('Failed to open contract PDF in in-app browser:', browserError);
+          }
+
+          if (!handled) {
+            try {
+              await Linking.openURL(fileUri);
+              handled = true;
+            } catch (linkError) {
+              console.warn('Failed to open contract PDF URL:', linkError);
+            }
+          }
+        }
+      }
+
+      if (!handled) {
+        Alert.alert('Download complete', `PDF available at:\n${fileUri}`);
       }
     } catch (error) {
       console.error('Error downloading PDF:', error);

@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useEffect, useState } from 'react';
+import React, { createContext, useCallback, useContext, useEffect, useState } from 'react';
 import { Alert } from 'react-native';
 import { privacyAPI } from '../../../config/api';
 import { informationRequestService } from '../../../services/supabase';
@@ -73,10 +73,9 @@ export const PrivacyProvider = ({ children }) => {
   const [notifications, setNotifications] = useState([]);
   const [loading, setLoading] = useState(false);
 
-  const loadPrivacySettings = async () => {
+  const loadPrivacySettings = useCallback(async () => {
     setLoading(true);
     try {
-      // Check if user is authenticated first
       const authenticated = await isAuthenticated();
       if (!authenticated) {
         console.warn('User not authenticated - skipping privacy settings load');
@@ -89,7 +88,6 @@ export const PrivacyProvider = ({ children }) => {
       }
     } catch (error) {
       console.error('Error loading privacy settings:', error);
-      // If 401 error, user might not be authenticated - use default settings
       if (error.response?.status === 401 || error.message === 'Authentication required') {
         console.warn('Privacy settings unavailable - using defaults');
         return;
@@ -97,9 +95,9 @@ export const PrivacyProvider = ({ children }) => {
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
-  const updatePrivacySetting = async (setting, value) => {
+  const updatePrivacySetting = useCallback(async (setting, value) => {
     try {
       const updatedSettings = { ...privacySettings, [setting]: value };
       setPrivacySettings(updatedSettings);
@@ -110,13 +108,68 @@ export const PrivacyProvider = ({ children }) => {
       console.error('Error updating privacy setting:', error);
       return false;
     }
+  }, [privacySettings]);
+
+  const ALLOWED_REQUEST_FIELDS = [
+    'phone',
+    'address',
+    'profile_image',
+    'portfolio',
+    'availability',
+    'languages',
+    'emergency_contacts',
+    'documents',
+    'background_check',
+    'age_care_ranges',
+    'emergency_contact',
+    'child_medical_info',
+    'child_allergies',
+    'child_behavior_notes',
+    'financial_info'
+  ];
+
+  const normalizeRequestedField = (field) => {
+    if (!field) return null;
+    const trimmed = String(field).trim();
+    if (!trimmed) return null;
+
+    const lower = trimmed.toLowerCase();
+    if (ALLOWED_REQUEST_FIELDS.includes(lower)) {
+      return lower;
+    }
+
+    const snake = trimmed
+      .replace(/([a-z0-9])([A-Z])/g, '$1_$2')
+      .replace(/\s+/g, '_')
+      .replace(/__+/g, '_')
+      .toLowerCase();
+
+    return ALLOWED_REQUEST_FIELDS.includes(snake) ? snake : null;
   };
 
-  const requestInformation = async (targetUserId, requestedFields, reason) => {
+  const requestInformation = useCallback(async (targetUserId, requestedFields, reason) => {
     try {
+      const normalizedFields = Array.from(
+        new Set(
+          (Array.isArray(requestedFields) ? requestedFields : [])
+            .map(normalizeRequestedField)
+            .filter(Boolean)
+        )
+      );
+
+      if (!normalizedFields.length) {
+        Alert.alert(
+          'Unavailable fields',
+          'The selected information cannot be requested right now. Please choose different items.'
+        );
+        return false;
+      }
+
+      console.log('Requested fields →', normalizedFields);
+
       const request = await informationRequestService.createRequest({
         targetId: targetUserId,
-        requestedFields,
+        requestedFields: normalizedFields,
         reason,
       });
 
@@ -131,9 +184,9 @@ export const PrivacyProvider = ({ children }) => {
       Alert.alert('Error', error?.message || 'Failed to send information request.');
       return false;
     }
-  };
+  }, []);
 
-  const respondToRequest = async (requestId, approved, sharedFields = [], expiresIn = null) => {
+  const respondToRequest = useCallback(async (requestId, approved, sharedFields = [], expiresIn = null) => {
     try {
       const updated = await informationRequestService.respondToRequest({
         requestId,
@@ -164,25 +217,21 @@ export const PrivacyProvider = ({ children }) => {
       Alert.alert('Error', error?.message || 'Failed to respond to request.');
       return false;
     }
-  };
+  }, []);
 
-  const getVisibleData = async (userData, viewerUserId, targetUserId, viewerType = 'caregiver') => {
-    // Use ProfileDataManager for consistent data filtering
+  const getVisibleData = useCallback(async (userData, viewerUserId, targetUserId, viewerType = 'caregiver') => {
     if (targetUserId && viewerUserId) {
       return await getFilteredProfileData(targetUserId, viewerUserId, viewerType);
     }
 
-    // Fallback to local filtering if no user IDs provided
     const visibleData = {};
 
     Object.keys(userData).forEach(field => {
       const classification = dataClassification[field];
 
       if (classification === DATA_LEVELS.PUBLIC) {
-        // Always visible
         visibleData[field] = userData[field];
       } else if (classification === DATA_LEVELS.PRIVATE) {
-        // Check privacy settings
         const settingKey = `share${field.charAt(0).toUpperCase() + field.slice(1)}`;
         if (privacySettings[settingKey]) {
           visibleData[field] = userData[field];
@@ -190,15 +239,14 @@ export const PrivacyProvider = ({ children }) => {
           visibleData[field] = '[Private - Request Access]';
         }
       } else if (classification === DATA_LEVELS.SENSITIVE) {
-        // Sensitive data requires explicit permission
         visibleData[field] = '[Sensitive - Requires Explicit Permission]';
       }
     });
 
     return visibleData;
-  };
+  }, [privacySettings]);
 
-  const grantUserPermission = async (targetUserId, viewerUserId, fields, expiresIn = null) => {
+  const grantUserPermission = useCallback(async (targetUserId, viewerUserId, fields, expiresIn = null) => {
     try {
       const response = await privacyAPI.grantPermission(targetUserId, viewerUserId, fields, expiresIn);
       if (response?.success) {
@@ -211,9 +259,9 @@ export const PrivacyProvider = ({ children }) => {
       Alert.alert('Error', 'Failed to grant permission.');
       return false;
     }
-  };
+  }, []);
 
-  const revokeUserPermission = async (targetUserId, viewerUserId, fields = null) => {
+  const revokeUserPermission = useCallback(async (targetUserId, viewerUserId, fields = null) => {
     try {
       const response = await privacyAPI.revokePermission(targetUserId, viewerUserId, fields);
       if (response?.success) {
@@ -226,9 +274,9 @@ export const PrivacyProvider = ({ children }) => {
       Alert.alert('Error', 'Failed to revoke permission.');
       return false;
     }
-  };
+  }, []);
 
-  const loadPendingRequests = async () => {
+  const loadPendingRequests = useCallback(async () => {
     setLoading(true);
     try {
       const authenticated = await isAuthenticated();
@@ -246,9 +294,9 @@ export const PrivacyProvider = ({ children }) => {
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
-  const loadSentRequests = async () => {
+  const loadSentRequests = useCallback(async () => {
     setLoading(true);
     try {
       const authenticated = await isAuthenticated();
@@ -266,12 +314,11 @@ export const PrivacyProvider = ({ children }) => {
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
-  const loadNotifications = async () => {
+  const loadNotifications = useCallback(async () => {
     setLoading(true);
     try {
-      // Check if user is authenticated first
       const authenticated = await isAuthenticated();
       if (!authenticated) {
         console.warn('User not authenticated - skipping notifications load');
@@ -284,7 +331,6 @@ export const PrivacyProvider = ({ children }) => {
       }
     } catch (error) {
       console.error('Error loading notifications:', error);
-      // If 401 error, user might not be authenticated - skip loading
       if (error.response?.status === 401 || error.message === 'Authentication required') {
         console.warn('Privacy notifications unavailable - user not authenticated');
         return;
@@ -292,9 +338,9 @@ export const PrivacyProvider = ({ children }) => {
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
-  const markNotificationAsRead = async (notificationId) => {
+  const markNotificationAsRead = useCallback(async (notificationId) => {
     try {
       await privacyAPI.markNotificationAsRead(notificationId);
       setNotifications(prev =>
@@ -307,14 +353,14 @@ export const PrivacyProvider = ({ children }) => {
     } catch (error) {
       console.error('Error marking notification as read:', error);
     }
-  };
+  }, []);
 
   useEffect(() => {
     loadPrivacySettings();
     loadPendingRequests();
     loadSentRequests();
     loadNotifications();
-  }, []);
+  }, [loadNotifications, loadPendingRequests, loadPrivacySettings, loadSentRequests]);
 
   const value = {
     privacySettings,

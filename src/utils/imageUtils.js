@@ -210,18 +210,7 @@ export const getImageDimensions = (uri) => {
  * Get a placeholder image source when no profile image is available
  * @returns {Object} Image source object with a placeholder
  */
-export const getPlaceholderImage = () => {
-  // Return a simple placeholder object that can be used with Image component
-  return {
-    uri: 'data:image/svg+xml;base64,' + btoa(`
-      <svg width="100" height="100" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
-        <rect width="100" height="100" fill="#F3F4F6"/>
-        <circle cx="50" cy="40" r="15" fill="#9CA3AF"/>
-        <path d="M30 80 C30 70, 70 70, 70 80" fill="#9CA3AF"/>
-      </svg>
-    `)
-  };
-};
+export const getPlaceholderImage = () => require('../../assets/placeholder-avatar.png');
 
 /**
  * Get image source object for React Native Image component

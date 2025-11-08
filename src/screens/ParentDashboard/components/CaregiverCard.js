@@ -6,11 +6,12 @@ import {
   DollarSign,
   MapPin,
   MessageCircle,
+  Shield,
   Star,
   User,
 } from "lucide-react-native";
 import PropTypes from "prop-types";
-import React, { useState } from "react";
+import React, { memo, useState } from "react";
 import { Image, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { Card, TrustScoreBadge } from '../../../shared/ui';
 
@@ -35,7 +36,7 @@ import {
  * @param {string} [props.testID] - Test ID for testing frameworks
  * @returns {JSX.Element} Rendered CaregiverCard component
  */
-const CaregiverCard = ({ caregiver = {}, onPress, onMessagePress, onViewReviews, testID, style }) => {
+const CaregiverCardComponent = ({ caregiver = {}, onPress, onMessagePress, onViewReviews, onRequestInfo, testID, style }) => {
 
 
   // Safe defaults
@@ -63,8 +64,8 @@ const CaregiverCard = ({ caregiver = {}, onPress, onMessagePress, onViewReviews,
     caregiver?.location ||
     caregiver?.address ||
     caregiver?.user?.location ||
-    caregiver?.user?.address;
-
+    caregiver?.user?.address ||
+    caregiver?.requestInfoTarget;
 
   const hourlyRate =
     typeof caregiver?.hourlyRate === "number" ? caregiver.hourlyRate : 0;
@@ -101,6 +102,7 @@ const CaregiverCard = ({ caregiver = {}, onPress, onMessagePress, onViewReviews,
   const remainingSpecialties = specialties.length - displaySpecialties.length;
   const canMessage = typeof onMessagePress === "function";
   const canViewReviews = typeof onViewReviews === "function" && hasReviews;
+  const canRequestInfo = typeof onRequestInfo === "function";
   const RatingComponent = canViewReviews ? TouchableOpacity : View;
 
   const handleMessagePress = () => {
@@ -112,6 +114,12 @@ const CaregiverCard = ({ caregiver = {}, onPress, onMessagePress, onViewReviews,
   const handleViewReviews = () => {
     if (canViewReviews) {
       onViewReviews(caregiver);
+    }
+  };
+
+  const handleRequestInfo = () => {
+    if (canRequestInfo) {
+      onRequestInfo(caregiver);
     }
   };
 
@@ -167,28 +175,40 @@ const CaregiverCard = ({ caregiver = {}, onPress, onMessagePress, onViewReviews,
                 )}
               </View>
 
-              <RatingComponent
-                style={caregiverCardStyles.ratingRow}
-                accessibilityRole={canViewReviews ? "button" : undefined}
-                accessibilityLabel={canViewReviews ? `View reviews for ${name}` : undefined}
-                onPress={canViewReviews ? handleViewReviews : undefined}
-              >
-                <Star size={14} color={hasReviews ? '#FDE68A' : 'rgba(255,255,255,0.9)'} fill={hasReviews ? '#FDE68A' : 'transparent'} />
-                <Text style={caregiverCardStyles.ratingText}>{ratingLabel}</Text>
-              </RatingComponent>
+              <View style={caregiverCardStyles.badgesRow}>
+                <RatingComponent
+                  style={caregiverCardStyles.ratingRow}
+                  accessibilityRole={canViewReviews ? "button" : undefined}
+                  accessibilityLabel={canViewReviews ? `View reviews for ${name}` : undefined}
+                  onPress={canViewReviews ? handleViewReviews : undefined}
+                >
+                  <Star
+                    size={14}
+                    color={hasReviews ? '#FDE68A' : 'rgba(255,255,255,0.9)'}
+                    fill={hasReviews ? '#FDE68A' : 'transparent'}
+                  />
+                  <Text style={caregiverCardStyles.ratingText}>{ratingLabel}</Text>
+                </RatingComponent>
 
-              <TrustScoreBadge
-                trustScore={trustScore}
-                verified={verified}
-                size="small"
-                onPress={canViewReviews ? handleViewReviews : undefined}
-                style={caregiverCardStyles.trustBadgeSpacing}
-              />
+                <TrustScoreBadge
+                  trustScore={trustScore}
+                  verified={verified}
+                  size="small"
+                  onPress={canViewReviews ? handleViewReviews : undefined}
+                  style={caregiverCardStyles.trustBadgeSpacing}
+                />
+              </View>
 
               {locationText ? (
                 <View style={caregiverCardStyles.locationRow}>
                   <MapPin size={14} color="rgba(255,255,255,0.85)" />
-                  <Text style={caregiverCardStyles.locationText}>{locationText}</Text>
+                  <Text
+                    style={caregiverCardStyles.locationText}
+                    numberOfLines={2}
+                    ellipsizeMode="tail"
+                  >
+                    {locationText}
+                  </Text>
                 </View>
               ) : null}
             </View>
@@ -229,17 +249,30 @@ const CaregiverCard = ({ caregiver = {}, onPress, onMessagePress, onViewReviews,
             </View>
           )}
 
-          {(canMessage || canViewReviews) && (
+          {(canMessage || canViewReviews || canRequestInfo) && (
             <View style={caregiverCardStyles.actionsRow}>
               {canMessage && (
                 <TouchableOpacity
-                  style={caregiverCardStyles.secondaryButton}
+                  style={[caregiverCardStyles.secondaryButton, caregiverCardStyles.messageButton]}
                   onPress={handleMessagePress}
                   accessibilityLabel={messageButtonLabel}
                   accessibilityRole="button"
+                  activeOpacity={0.92}
                 >
-                  <MessageCircle size={18} color={colors.primaryDark} />
+                  <MessageCircle size={18} color={colors.primary} />
                   <Text style={caregiverCardStyles.secondaryButtonText}>Message</Text>
+                </TouchableOpacity>
+              )}
+              {canRequestInfo && (
+                <TouchableOpacity
+                  style={[caregiverCardStyles.secondaryButton, caregiverCardStyles.requestInfoButton]}
+                  onPress={handleRequestInfo}
+                  accessibilityLabel={`Request info from ${name}`}
+                  accessibilityRole="button"
+                  activeOpacity={0.92}
+                >
+                  <Shield size={18} color={colors.primaryDark} />
+                  <Text style={caregiverCardStyles.secondaryButtonText}>Request Info</Text>
                 </TouchableOpacity>
               )}
               {canViewReviews && (
@@ -248,9 +281,10 @@ const CaregiverCard = ({ caregiver = {}, onPress, onMessagePress, onViewReviews,
                   onPress={handleViewReviews}
                   accessibilityLabel={`View reviews for ${name}`}
                   accessibilityRole="button"
+                  activeOpacity={0.92}
                 >
                   <Star size={18} color={colors.accent} fill={colors.accent} />
-                  <Text style={caregiverCardStyles.reviewButtonText}>Reviews</Text>
+                  <Text style={caregiverCardStyles.secondaryButtonText}>Reviews</Text>
                 </TouchableOpacity>
               )}
             </View>
@@ -275,9 +309,7 @@ const CaregiverCard = ({ caregiver = {}, onPress, onMessagePress, onViewReviews,
   );
 };
 
-export default CaregiverCard;
-
-CaregiverCard.propTypes = {
+CaregiverCardComponent.propTypes = {
   caregiver: PropTypes.shape({
     experience: PropTypes.oneOfType([
       PropTypes.number,
@@ -288,7 +320,13 @@ CaregiverCard.propTypes = {
       }),
     ]),
   }).isRequired,
+  onRequestInfo: PropTypes.func,
 };
+
+const CaregiverCard = memo(CaregiverCardComponent);
+CaregiverCard.displayName = 'CaregiverCard';
+
+export default CaregiverCard;
 
 const caregiverCardStyles = StyleSheet.create({
   card: {
@@ -315,6 +353,7 @@ const caregiverCardStyles = StyleSheet.create({
   headerRow: {
     flexDirection: 'row',
     alignItems: 'center',
+    marginStart: spacing.xxs,
     marginBottom: spacing.md,
   },
   avatarRing: {
@@ -354,6 +393,9 @@ const caregiverCardStyles = StyleSheet.create({
     marginBottom: spacing.xs,
   },
   nameText: {
+    fontSize: 16,
+    fontWeight: '600',
+    lineHeight: 16,
     color: colors.text,
   },
   verifiedBadge: {
@@ -435,27 +477,45 @@ const caregiverCardStyles = StyleSheet.create({
   },
   actionsRow: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'flex-start',
     marginTop: spacing.md,
-    gap: spacing.sm,
+    marginHorizontal: -spacing.xs,
   },
   secondaryButton: {
-    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: colors.primaryLight,
     borderRadius: 16,
     paddingVertical: 12,
     paddingHorizontal: spacing.md,
+    borderWidth: 1,
+    borderColor: 'rgba(219,39,119,0.2)',
+    backgroundColor: '#ffffff',
+    shadowColor: '#00000012',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.08,
+    shadowRadius: 8,
+    elevation: 2,
+    marginHorizontal: spacing.xs,
+    marginBottom: spacing.sm,
+    minHeight: 48,
+    flexGrow: 1,
+    flexBasis: '48%',
   },
   secondaryButtonText: {
     marginLeft: spacing.xs,
     color: colors.primaryDark,
     fontWeight: '600',
-    fontSize: 13,
+    fontSize: 14,
   },
-  reviewButton: {
-    backgroundColor: colors.accentLight,
+  messageButton: {
+    borderColor: 'rgba(59,130,246,0.25)',
+    backgroundColor: 'rgba(59,130,246,0.08)',
+  },
+  requestInfoButton: {
+    borderColor: 'rgba(219,39,119,0.45)',
+    backgroundColor: 'rgba(219,39,119,0.12)',
   },
   reviewButtonText: {
     marginLeft: spacing.xs,
@@ -470,19 +530,20 @@ const caregiverCardStyles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 14,
+    paddingVertical: 16,
     shadowColor: '#312E81',
     shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.18,
-    shadowRadius: 8,
-    elevation: 4,
+    shadowOpacity: 0.2,
+    shadowRadius: 10,
+    elevation: 5,
   },
   primaryButtonIcon: {
     marginRight: spacing.xs,
   },
   primaryButtonText: {
     color: colors.textInverse,
-    fontWeight: '600',
+    fontWeight: '700',
     fontSize: 15,
+    letterSpacing: 0.2,
   },
 });

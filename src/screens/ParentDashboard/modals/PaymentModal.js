@@ -107,7 +107,7 @@ const PaymentModal = ({
       
       Alert.alert(
         'Payment Submitted', 
-        `Your ${paymentType === 'deposit' ? 'deposit' : 'final payment'} proof has been submitted. We will verify it shortly.`
+        `Your ${paymentType === 'deposit' ? 'deposit' : 'final payment'} proof has been submitted.`
       );
       
       if (onPaymentSuccess) {

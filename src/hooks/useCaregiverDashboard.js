@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { supabase } from '../config/supabase';
 import { useAuth } from '../contexts/AuthContext';
 import { supabaseService } from '../services/supabase';
+import { contractService } from '../services/supabase/contractService';
 import { reviewService } from '../services/supabase/reviewService';
 import { normalizeCaregiverReviewsForList } from '../utils/reviews';
 
@@ -123,11 +124,11 @@ const annotateJobWithProximity = (job, caregiverLocation, caregiverCoordinates) 
   const existingDistance = toFiniteNumber(job.distance ?? job.distanceKm);
   const jobCoordinates = extractCoordinates(
     job.locationCoordinates ??
-      job.location_coordinates ??
-      job.coordinates ??
-      job.raw?.location_coordinates ??
-      job.raw?.coordinates ??
-      job?.locationDetails?.coordinates
+    job.location_coordinates ??
+    job.coordinates ??
+    job.raw?.location_coordinates ??
+    job.raw?.coordinates ??
+    job?.locationDetails?.coordinates
   );
 
   let distanceKm = null;
@@ -311,7 +312,7 @@ export const useCaregiverDashboard = () => {
 
       // Get user profile from users table
       const userProfile = await supabaseService.getProfile(targetUserId);
-      
+
       // Get caregiver-specific profile from caregiver_profiles table
       let caregiverProfile = null;
       try {
@@ -365,7 +366,7 @@ export const useCaregiverDashboard = () => {
         const isVerifiedFlag = typeof combinedProfile.verified === 'boolean'
           ? Boolean(combinedProfile.verified)
           : (typeof verificationStatus === 'string' && verificationStatus.toLowerCase() === 'verified')
-            || Boolean(prev.verification?.verified);
+          || Boolean(prev.verification?.verified);
 
         const verification = {
           trustScore: numericTrustScore,
@@ -508,7 +509,6 @@ export const useCaregiverDashboard = () => {
     if (!user?.id || user?.role !== 'caregiver') return;
 
     try {
-      const { contractService } = await import('../services/supabase/contractService');
       const list = await contractService.getContractsForUser(user.id, 'caregiver');
       setContracts(Array.isArray(list) ? list : []);
     } catch (error) {
@@ -544,8 +544,8 @@ export const useCaregiverDashboard = () => {
 
         const rawCaregiver =
           (b.caregiverId && typeof b.caregiverId === 'object') ? b.caregiverId :
-          (b.caregiver && typeof b.caregiver === 'object') ? b.caregiver :
-          null;
+            (b.caregiver && typeof b.caregiver === 'object') ? b.caregiver :
+              null;
 
         const caregiverDetails = rawCaregiver || {
           _id: b.caregiver_id,
@@ -558,8 +558,8 @@ export const useCaregiverDashboard = () => {
 
         const rawParent =
           (b.clientId && typeof b.clientId === 'object') ? b.clientId :
-          (b.parent && typeof b.parent === 'object') ? b.parent :
-          null;
+            (b.parent && typeof b.parent === 'object') ? b.parent :
+              null;
 
         const parentDetails = rawParent || {
           _id: b.parent_id,

@@ -5,7 +5,7 @@ export class UserService extends SupabaseBase {
   async getProfile(userId) {
     try {
       let targetUserId = userId
-      
+
       if (!targetUserId) {
         const user = await this._getCurrentUser()
         if (!user) {
@@ -14,9 +14,9 @@ export class UserService extends SupabaseBase {
         }
         targetUserId = user.id
       }
-      
+
       const resolvedUserId = await this._ensureUserId(targetUserId, 'User ID')
-      
+
       const cacheKey = `profile:${resolvedUserId}`
       const data = await getCachedOrFetch(cacheKey, async () => {
         const { data, error } = await this._withTimeout(
@@ -42,7 +42,7 @@ export class UserService extends SupabaseBase {
             .eq('id', resolvedUserId)
             .maybeSingle()
         )
-        
+
         if (error) {
           console.warn('Error getting profile:', error)
           return null
@@ -50,9 +50,9 @@ export class UserService extends SupabaseBase {
 
         return data || null
       }, 5 * 60 * 1000)
-      
+
       if (!data) return null
-      
+
       return {
         ...data,
         firstName: data.first_name,
@@ -73,7 +73,7 @@ export class UserService extends SupabaseBase {
   async updateProfile(userId, updates) {
     try {
       const resolvedUserId = await this._ensureUserId(userId, 'User ID')
-      
+
       if (!updates || typeof updates !== 'object') {
         throw new Error('Updates must be a valid object')
       }
@@ -84,7 +84,7 @@ export class UserService extends SupabaseBase {
       }
 
       const existingUser = await this.getProfile(resolvedUserId)
-      
+
       if (!existingUser) {
         const userData = {
           id: resolvedUserId,
@@ -120,7 +120,7 @@ export class UserService extends SupabaseBase {
           .insert([userData])
           .select()
           .single()
-          
+
         if (error) {
           if (error.code === '23505') {
             return await this.updateProfile(userId, updates)
@@ -130,17 +130,17 @@ export class UserService extends SupabaseBase {
         invalidateCache(`profile:${resolvedUserId}`)
         return data
       }
-      
+
       const { data, error } = await supabase
         .from('users')
-        .update({ 
-          ...updates, 
-          updated_at: new Date().toISOString() 
+        .update({
+          ...updates,
+          updated_at: new Date().toISOString()
         })
         .eq('id', resolvedUserId)
         .select()
         .single()
-      
+
       if (error) throw error
       invalidateCache(`profile:${resolvedUserId}`)
       return data
@@ -152,6 +152,7 @@ export class UserService extends SupabaseBase {
   async getCaregivers(filters = {}) {
     try {
       const cacheKey = `caregivers:${JSON.stringify(filters || {})}`
+
       return await getCachedOrFetch(cacheKey, async () => {
         let query = supabase
           .from('users')
@@ -181,31 +182,81 @@ export class UserService extends SupabaseBase {
         const { data, error } = await query
         if (error) throw error
 
-        // Calculate review count for each caregiver
-        const caregiversWithReviews = await Promise.all(
-          (data || []).map(async (caregiver) => {
-            try {
-              const { count } = await supabase
-                .from('reviews')
-                .select('*', { count: 'exact', head: true })
-                .eq('reviewee_id', caregiver.id)
+        const caregiverIds = (data || []).map(caregiver => caregiver?.id).filter(Boolean)
+        let reviewStatsMap = new Map()
 
-              return {
-                ...caregiver,
-                reviewCount: count || 0
-              }
-            } catch (reviewError) {
-              console.warn(`Error getting review count for caregiver ${caregiver.id}:`, reviewError)
-              return {
-                ...caregiver,
-                reviewCount: 0
-              }
+        if (caregiverIds.length) {
+          try {
+            const { data: reviewRows, error: reviewRowsError } = await supabase
+              .from('reviews')
+              .select('reviewee_id, rating')
+              .in('reviewee_id', caregiverIds)
+
+            if (reviewRowsError) {
+              console.warn('Error fetching caregiver review rows:', reviewRowsError)
+            } else if (Array.isArray(reviewRows) && reviewRows.length) {
+              const aggregates = new Map()
+
+              reviewRows.forEach(({ reviewee_id, rating }) => {
+                if (!reviewee_id) {
+                  return
+                }
+
+                const numericRating = Number(rating)
+                const bucket = aggregates.get(reviewee_id) || { sum: 0, count: 0 }
+
+                if (Number.isFinite(numericRating)) {
+                  bucket.sum += numericRating
+                  bucket.count += 1
+                }
+
+                aggregates.set(reviewee_id, bucket)
+              })
+
+              reviewStatsMap = new Map(
+                Array.from(aggregates.entries()).map(([revieweeId, { sum, count }]) => {
+                  const average = count > 0 ? Math.round((sum / count) * 10) / 10 : null
+                  return [
+                    revieweeId,
+                    {
+                      averageRating: average,
+                      reviewCount: count,
+                    },
+                  ]
+                })
+              )
             }
-          })
-        )
+          } catch (aggregationError) {
+            console.warn('Error processing caregiver review aggregates:', aggregationError)
+          }
+        }
 
-        console.log('✅ Fetched caregivers from Supabase:', caregiversWithReviews?.length || 0)
-        return caregiversWithReviews || []
+        const caregiversWithStats = (data || []).map((caregiver) => {
+          const stats = reviewStatsMap.get(caregiver.id)
+          const averageRating = stats?.averageRating ?? caregiver.average_rating ?? caregiver.rating
+          const resolvedRating = Number.isFinite(Number(averageRating))
+            ? Math.round(Number(averageRating) * 10) / 10
+            : 0
+          const reviewCount = stats?.reviewCount ?? caregiver.reviewCount ?? caregiver.review_count ?? 0
+
+          const computedTrustScore = reviewCount > 0
+            ? Math.min(100, Math.round(((resolvedRating / 5) * 80) + Math.min(reviewCount, 20)))
+            : null
+
+          const trustScore = computedTrustScore ?? 0
+
+          return {
+            ...caregiver,
+            rating: resolvedRating,
+            average_rating: resolvedRating,
+            reviewCount,
+            review_count: reviewCount,
+            trustScore,
+          }
+        })
+
+        console.log('✅ Fetched caregivers from Supabase:', caregiversWithStats?.length || 0)
+        return caregiversWithStats || []
       }, 60 * 1000)
     } catch (error) {
       return this._handleError('getCaregivers', error)
