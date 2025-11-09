@@ -299,13 +299,6 @@ const ContractModal = ({
       hasErrors,
       errorMessage
     };
-
-    return {
-      entries: finalEntries,
-      normalizedTerms,
-      hasErrors,
-      errorMessage
-    };
   };
 
   const runTermsValidation = useCallback(() => {
