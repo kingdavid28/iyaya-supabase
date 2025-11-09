@@ -182,8 +182,11 @@ const BookingsTab = ({
   const [contractModalVisible, setContractModalVisible] = React.useState(false);
   const [selectedContract, setSelectedContract] = React.useState(null);
   const [selectedBookingForContract, setSelectedBookingForContract] = React.useState(null);
-  const [contractTypeSelectorVisible, setContractTypeSelectorVisible] = React.useState(false);
   const [selectedContractType, setSelectedContractType] = React.useState(null);
+  const [contractTypeSelectorVisible, setContractTypeSelectorVisible] = React.useState(false);
+  const [savingDraft, setSavingDraft] = React.useState(false);
+  const [sendingForSignature, setSendingForSignature] = React.useState(false);
+
   const filteredBookings = useMemo(() => {
     if (!bookings || !Array.isArray(bookings)) return [];
 
@@ -448,7 +451,8 @@ const BookingsTab = ({
         result = await contractService.signContract(existing.id, 'parent', {
           signature,
           signatureHash: btoa(signature), // Simple hash for demo
-          ipAddress: null
+          ipAddress: null,
+          acknowledged
         });
       } catch (error) {
         if (error?.code === 'CONTRACT_NOT_FOUND') {
@@ -462,7 +466,6 @@ const BookingsTab = ({
       }
 
       if (result) {
-        // Update the contract in state
         setContracts(prev => ({
           ...prev,
           [selectedBookingForContract.id || selectedBookingForContract._id]: result
@@ -494,25 +497,7 @@ const BookingsTab = ({
 
     try {
       console.log('🔍 BookingsTab - Downloading PDF for contract:', contract);
-
-      // Check if contract has a PDF URL
-      const pdfUrl = contract?.pdfUrl || contract?.pdf_url || contract?.documentUrl || contract?.document_url;
-
-      if (pdfUrl) {
-        // Open the PDF URL
-        const canOpen = await Linking.canOpenURL(pdfUrl);
-        if (canOpen) {
-          await Linking.openURL(pdfUrl);
-        } else {
-          Alert.alert('Cannot Open PDF', 'Unable to open the contract PDF. The link may be invalid.');
-        }
-      } else {
-        // Show message that PDF is not available
-        Alert.alert(
-          'PDF Not Available',
-          'The contract PDF is not available for download at this time. Please contact support if you need a copy of your contract.'
-        );
-      }
+      await contractService.generateContractPdf(contract.id, { autoDownload: true });
     } catch (error) {
       console.error('Error downloading contract PDF:', error);
       Alert.alert('Download Error', 'Failed to download the contract PDF. Please try again later.');
@@ -791,6 +776,54 @@ const BookingsTab = ({
           onSign={handleContractSign}
           onResend={handleContractResend}
           onDownloadPdf={handleDownloadPdf}
+          onSaveDraft={async ({ contract: currentContract, terms }) => {
+            if (!currentContract?.id) return;
+            setSavingDraft(true);
+            try {
+              const saved = await contractService.saveDraft(currentContract.id, terms, {
+                actorRole: 'parent'
+              });
+              setContracts(prev => ({
+                ...prev,
+                [saved.bookingId]: saved
+              }));
+              setSelectedContract(saved);
+              Alert.alert('Draft saved', 'Your changes were saved.');
+            } catch (error) {
+              console.error('Failed to save draft:', error);
+              Alert.alert('Save failed', error?.message || 'Unable to save draft.');
+            } finally {
+              setSavingDraft(false);
+            }
+          }}
+          onSendForSignature={async ({ contract: currentContract, terms }) => {
+            if (!currentContract?.id) return;
+            setSendingForSignature(true);
+            try {
+              const sent = await contractService.sendDraftForSignature(currentContract.id, {
+                terms,
+                actorRole: 'parent'
+              });
+              setContracts(prev => ({
+                ...prev,
+                [sent.bookingId]: sent
+              }));
+              setSelectedContract(sent);
+              Alert.alert('Sent!', 'Contract sent to caregiver for signature.');
+              if (typeof refreshBookings === 'function') {
+                await refreshBookings();
+              }
+            } catch (error) {
+              console.error('Failed to send for signature:', error);
+              const message = error?.message || 'Unable to send for signature.';
+              Alert.alert('Send failed', message);
+            } finally {
+              setSendingForSignature(false);
+              setContractModalVisible(false);
+            }
+          }}
+          savingDraft={savingDraft}
+          sendingForSignature={sendingForSignature}
         />
       )}
 

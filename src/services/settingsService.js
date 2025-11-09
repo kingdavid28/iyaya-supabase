@@ -77,15 +77,22 @@ class SettingsService {
   }
 
   // Privacy Settings
-  async getPrivacySettings() {
-    return this.makeRequest('/privacy/settings');
+  async getPrivacySettings(userId = null) {
+    try {
+      return await supabaseService.getPrivacySettings(userId);
+    } catch (error) {
+      console.log('Settings privacy fetch error:', error.message);
+      return { data: this.getMockData('/privacy/settings') };
+    }
   }
 
-  async updatePrivacySettings(data) {
-    return this.makeRequest('/privacy/settings', {
-      method: 'PUT',
-      body: JSON.stringify(data),
-    });
+  async updatePrivacySettings(data, userId = null) {
+    try {
+      return await supabaseService.updatePrivacySettings(userId, data);
+    } catch (error) {
+      console.log('Settings privacy update error:', error.message);
+      return { success: false, error };
+    }
   }
 
   // Information Requests

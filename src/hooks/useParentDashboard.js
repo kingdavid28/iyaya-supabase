@@ -9,13 +9,14 @@ import { formatAddress } from '../utils/addressUtils';
 
 const CAREGIVERS_CACHE_KEY = 'parent-dashboard:caregivers';
 
-const QUERY_KEYS = {
+export const QUERY_KEYS = {
   profile: (userId) => ['parentDashboard', userId, 'profile'],
   jobs: (userId) => ['parentDashboard', userId, 'jobs'],
   caregivers: (userId) => ['parentDashboard', userId, 'caregivers'],
   bookings: (userId) => ['parentDashboard', userId, 'bookings'],
   applications: (userId) => ['parentDashboard', userId, 'applications'],
   children: (userId) => ['parentDashboard', userId, 'children'],
+  caregiverAssets: (viewerId, caregiverId) => ['parentDashboard', viewerId, 'caregiverAssets', caregiverId],
 };
 
 const EMPTY_PROFILE = {

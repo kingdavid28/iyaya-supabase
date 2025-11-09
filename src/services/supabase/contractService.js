@@ -8,7 +8,38 @@ const ACTIVE_STATUSES = ['sent', 'signed_parent', 'signed_caregiver', 'active']
 const VALID_STATUSES = [...ACTIVE_STATUSES, 'draft', 'completed', 'cancelled']
 const PDF_FUNCTION_NAME = 'generate-contract-pdf'
 
+const normalizeTermsObject = (terms = {}) => {
+  if (!terms) return {}
+
+  if (Array.isArray(terms)) {
+    return terms.reduce((acc, entry, index) => {
+      acc[`Term ${index + 1}`] = entry
+      return acc
+    }, {})
+  }
+
+  if (typeof terms === 'string') {
+    return { Terms: terms }
+  }
+
+  if (typeof terms === 'object') {
+    return { ...terms }
+  }
+
+  return {}
+}
+
 class ContractService extends SupabaseBase {
+  _validateRequiredClauses(terms = {}) {
+    if (!terms || typeof terms !== 'object' || Array.isArray(terms)) {
+      const error = new Error('Contract terms must be provided as an object.')
+      error.code = 'INVALID_TERMS'
+      throw error
+    }
+
+    return true
+  }
+
   _normalizeContract(row) {
     if (!row) return null
 
@@ -46,12 +77,15 @@ class ContractService extends SupabaseBase {
       const resolvedParentId = await this._ensureUserId(contractData.parentId || contractData.parent_id, 'Parent ID')
       const resolvedCaregiverId = await this._ensureUserId(contractData.caregiverId || contractData.caregiver_id, 'Caregiver ID')
 
+      const sanitizedTerms = normalizeTermsObject(contractData.terms || {})
+      this._validateRequiredClauses(sanitizedTerms)
+
       const dbContractData = {
         booking_id: resolvedBookingId,
         parent_id: resolvedParentId,
         caregiver_id: resolvedCaregiverId,
         status: contractData.status || 'draft',
-        terms: contractData.terms || {},
+        terms: sanitizedTerms,
         version: contractData.version || 1,
         effective_date: contractData.effectiveDate || contractData.effective_date || null,
         expiry_date: contractData.expiryDate || contractData.expiry_date || null,
@@ -138,6 +172,425 @@ class ContractService extends SupabaseBase {
     } catch (error) {
       return this._handleError('getContractsForUser', error)
     }
+  }
+
+  async updateContract(contractId, updates = {}, options = {}) {
+    try {
+      this._validateId(contractId, 'Contract ID')
+      const normalizedUpdates = updates || {}
+
+      const existing = await this.getContractById(contractId)
+      if (!existing) {
+        const notFoundError = new Error('Contract not found')
+        notFoundError.code = 'CONTRACT_NOT_FOUND'
+        throw notFoundError
+      }
+
+      const currentUser = await this._getCurrentUser()
+      const actorId = options.actorId || currentUser?.id || null
+      const actorRole = options.actorRole
+        || currentUser?.role
+        || currentUser?.user_metadata?.role
+        || currentUser?.app_metadata?.role
+        || null
+
+      const bypassAccess = Boolean(
+        options?.bypassAccess
+        || actorRole === 'service_role'
+        || actorRole === 'admin'
+        || actorRole === 'staff'
+      )
+
+      const isParentActor = actorId && existing.parentId === actorId
+      const isCaregiverActor = actorId && existing.caregiverId === actorId
+
+      if (!bypassAccess) {
+        if (!actorId) {
+          const authError = new Error('Authentication required to update contract.')
+          authError.code = 'AUTH_REQUIRED'
+          throw authError
+        }
+
+        if (!isParentActor && !isCaregiverActor) {
+          const accessError = new Error('You do not have permission to update this contract.')
+          accessError.code = 'CONTRACT_ACCESS_DENIED'
+          throw accessError
+        }
+
+        if (
+          ['completed', 'cancelled'].includes(existing.status)
+          && !options?.allowFinalizedEdit
+        ) {
+          const statusError = new Error('Finalized contracts cannot be edited.')
+          statusError.code = 'CONTRACT_FINALIZED'
+          throw statusError
+        }
+      }
+
+      const contractIsSigned = Boolean(
+        existing.parentSignedAt
+        || existing.caregiverSignedAt
+        || ['signed_parent', 'signed_caregiver', 'active'].includes(existing.status)
+      )
+
+      if (!bypassAccess && contractIsSigned && !options?.allowSignedEdit) {
+        return await this._createContractVersion(existing, normalizedUpdates, {
+          actorId,
+          actorRole,
+          options
+        })
+      }
+
+      const allowedFields = [
+        'terms',
+        'metadata',
+        'effectiveDate',
+        'effective_date',
+        'expiryDate',
+        'expiry_date',
+        'version'
+      ]
+
+      const updatePayload = {}
+      allowedFields.forEach((field) => {
+        if (Object.prototype.hasOwnProperty.call(normalizedUpdates, field)) {
+          switch (field) {
+            case 'effectiveDate':
+            case 'effective_date':
+              updatePayload.effective_date = normalizedUpdates[field]
+              break
+            case 'expiryDate':
+            case 'expiry_date':
+              updatePayload.expiry_date = normalizedUpdates[field]
+              break
+            case 'terms':
+              updatePayload.terms = normalizedUpdates[field] || {}
+              break
+            case 'metadata':
+              updatePayload.metadata = normalizedUpdates[field] || {}
+              break
+            case 'version':
+              updatePayload.version = normalizedUpdates[field]
+              break
+            default:
+              break
+          }
+        }
+      })
+
+      if (options?.mergeTerms !== false && updatePayload.terms && existing.terms) {
+        updatePayload.terms = {
+          ...existing.terms,
+          ...updatePayload.terms
+        }
+      }
+
+      if (updatePayload.terms) {
+        updatePayload.terms = normalizeTermsObject(updatePayload.terms)
+        this._validateRequiredClauses(updatePayload.terms)
+      }
+
+      const existingMetadata = (existing.metadata && typeof existing.metadata === 'object')
+        ? { ...existing.metadata }
+        : {}
+
+      if (options?.mergeMetadata !== false && existingMetadata && updatePayload.metadata) {
+        updatePayload.metadata = {
+          ...existingMetadata,
+          ...updatePayload.metadata
+        }
+      }
+
+      if (!updatePayload.metadata) {
+        updatePayload.metadata = { ...existingMetadata }
+      }
+
+      const auditStamp = {
+        updatedBy: actorId || null,
+        updatedAt: new Date().toISOString()
+      }
+
+      const versionHistory = Array.isArray(updatePayload.metadata.versionHistory)
+        ? [...updatePayload.metadata.versionHistory]
+        : Array.isArray(existingMetadata.versionHistory)
+          ? [...existingMetadata.versionHistory]
+          : []
+
+      const nextVersion = updatePayload.version
+        || ((existing.version ?? 1) + 1)
+
+      versionHistory.push({
+        contractId,
+        version: nextVersion,
+        previousVersion: existing.version ?? null,
+        status: existing.status,
+        parentSignedAt: existing.parentSignedAt || null,
+        caregiverSignedAt: existing.caregiverSignedAt || null,
+        updatedAt: auditStamp.updatedAt,
+        updatedBy: auditStamp.updatedBy
+      })
+
+      updatePayload.version = nextVersion
+      updatePayload.metadata.versionHistory = versionHistory
+      updatePayload.metadata.audit = {
+        ...(updatePayload.metadata.audit || {}),
+        ...auditStamp
+      }
+
+      updatePayload.updated_at = auditStamp.updatedAt
+
+      if (typeof updatePayload.metadata === 'object' && updatePayload.metadata !== null) {
+        Object.keys(updatePayload.metadata).forEach((key) => {
+          if (updatePayload.metadata[key] === undefined) {
+            delete updatePayload.metadata[key]
+          }
+        })
+      }
+
+      if (updatePayload.terms) {
+        updatePayload.terms = normalizeTermsObject(updatePayload.terms)
+        this._validateRequiredClauses(updatePayload.terms)
+      }
+
+      const { data, error } = await supabase
+        .from('job_contracts')
+        .update(updatePayload)
+        .eq('id', contractId)
+        .select('*')
+        .single()
+
+      if (error) throw error
+
+      const normalized = this._normalizeContract(data)
+
+      invalidateCache(`job_contracts:booking:${normalized.bookingId}`)
+      invalidateCache(`job_contracts:user:${normalized.parentId}`)
+      invalidateCache(`job_contracts:user:${normalized.caregiverId}`)
+      invalidateCache(`bookings:parent:${normalized.parentId}`)
+      invalidateCache(`bookings:caregiver:${normalized.caregiverId}`)
+      invalidateCache('bookings:')
+
+      if (!options?.silent) {
+        await notificationService.notifyContractUpdated(normalized, {
+          actorId,
+          actorRole: actorRole || (isParentActor ? 'parent' : isCaregiverActor ? 'caregiver' : null)
+        })
+      }
+
+      return normalized
+    } catch (error) {
+      return this._handleError('updateContract', error)
+    }
+  }
+
+  async saveDraft(contractId, terms, options = {}) {
+    try {
+      this._validateId(contractId, 'Contract ID')
+      const sanitizedTerms = normalizeTermsObject(terms || {})
+      this._validateRequiredClauses(sanitizedTerms)
+
+      return await this.updateContract(contractId, { terms: sanitizedTerms }, {
+        mergeTerms: false,
+        ...options
+      })
+    } catch (error) {
+      return this._handleError('saveDraft', error)
+    }
+  }
+
+  async sendDraftForSignature(contractId, payload = {}) {
+    try {
+      this._validateId(contractId, 'Contract ID')
+      const { terms, metadata = {}, actorId, actorRole } = payload
+
+      const existing = await this.getContractById(contractId)
+      if (!existing) {
+        const notFoundError = new Error('Contract not found')
+        notFoundError.code = 'CONTRACT_NOT_FOUND'
+        throw notFoundError
+      }
+
+      if (existing.status !== 'draft') {
+        const statusError = new Error('Only draft contracts can be sent for signature.')
+        statusError.code = 'CONTRACT_STATUS_INVALID'
+        throw statusError
+      }
+
+      const resolvedTerms = normalizeTermsObject(terms || existing.terms || {})
+      this._validateRequiredClauses(resolvedTerms)
+
+      const updatePayload = {
+        terms: resolvedTerms,
+        metadata: {
+          ...existing.metadata,
+          ...metadata,
+          lastSentAt: new Date().toISOString()
+        },
+        status: 'sent'
+      }
+
+      const { data, error } = await supabase
+        .from('job_contracts')
+        .update({
+          terms: normalizeTermsObject(updatePayload.terms || existing.terms || {}),
+          metadata: updatePayload.metadata,
+          status: updatePayload.status
+        })
+        .eq('id', contractId)
+        .select('*')
+        .single()
+
+      if (error) throw error
+
+      const normalized = this._normalizeContract(data)
+
+      invalidateCache(`job_contracts:booking:${normalized.bookingId}`)
+      invalidateCache(`job_contracts:user:${normalized.parentId}`)
+      invalidateCache(`job_contracts:user:${normalized.caregiverId}`)
+      invalidateCache(`bookings:parent:${normalized.parentId}`)
+      invalidateCache(`bookings:caregiver:${normalized.caregiverId}`)
+      invalidateCache('bookings:')
+
+      await notificationService.notifyContractStatusChange(normalized, 'sent')
+
+      await notificationService.notifyContractUpdated(normalized, {
+        actorId: actorId || existing.parentId,
+        actorRole: actorRole || 'parent'
+      })
+
+      await notificationService.notifyContractResent(normalized, actorId || existing.parentId)
+
+      return normalized
+    } catch (error) {
+      return this._handleError('sendDraftForSignature', error)
+    }
+  }
+
+  async _createContractVersion(existing, updates = {}, context = {}) {
+    const { actorId = null, actorRole = null, options = {} } = context
+    const normalizedUpdates = updates || {}
+
+    const mergeTerms = options?.mergeTerms !== false
+    const mergeMetadata = options?.mergeMetadata !== false
+    const auditTimestamp = new Date().toISOString()
+
+    const baseMetadata = (existing.metadata && typeof existing.metadata === 'object')
+      ? { ...existing.metadata }
+      : {}
+
+    const nextVersion = (existing.version ?? 1) + 1
+
+    const resolvedTerms = (() => {
+      if (!normalizedUpdates.terms) {
+        return normalizeTermsObject(existing.terms || {})
+      }
+      if (!mergeTerms) {
+        return normalizeTermsObject(normalizedUpdates.terms)
+      }
+      return normalizeTermsObject({
+        ...existing.terms,
+        ...normalizedUpdates.terms
+      })
+    })()
+
+    this._validateRequiredClauses(resolvedTerms)
+
+    let resolvedMetadata = mergeMetadata ? { ...baseMetadata } : {}
+    if (normalizedUpdates.metadata && typeof normalizedUpdates.metadata === 'object') {
+      resolvedMetadata = {
+        ...resolvedMetadata,
+        ...normalizedUpdates.metadata
+      }
+    }
+
+    const versionHistory = Array.isArray(resolvedMetadata.versionHistory)
+      ? [...resolvedMetadata.versionHistory]
+      : Array.isArray(baseMetadata.versionHistory)
+        ? [...baseMetadata.versionHistory]
+        : []
+
+    versionHistory.push({
+      contractId: existing.id,
+      version: existing.version ?? 1,
+      status: existing.status,
+      parentSignedAt: existing.parentSignedAt || null,
+      caregiverSignedAt: existing.caregiverSignedAt || null,
+      updatedAt: auditTimestamp,
+      updatedBy: actorId || null
+    })
+
+    resolvedMetadata.versionHistory = versionHistory
+    resolvedMetadata.audit = {
+      ...(resolvedMetadata.audit || {}),
+      supersedes: existing.id,
+      updatedBy: actorId || null,
+      updatedAt: auditTimestamp
+    }
+
+    const effectiveDate = normalizedUpdates.effectiveDate
+      || normalizedUpdates.effective_date
+      || existing.effectiveDate
+      || null
+
+    const expiryDate = normalizedUpdates.expiryDate
+      || normalizedUpdates.expiry_date
+      || existing.expiryDate
+      || null
+
+    const insertPayload = {
+      booking_id: existing.bookingId,
+      parent_id: existing.parentId,
+      caregiver_id: existing.caregiverId,
+      status: 'draft',
+      terms: resolvedTerms,
+      version: normalizedUpdates.version || nextVersion,
+      effective_date: effectiveDate,
+      expiry_date: expiryDate,
+      metadata: resolvedMetadata,
+      created_by: actorId || existing.createdBy || null
+    }
+
+    const { data, error } = await supabase
+      .from('job_contracts')
+      .insert([insertPayload])
+      .select('*')
+      .single()
+
+    if (error) throw error
+
+    const supersededMetadata = {
+      ...baseMetadata,
+      versionHistory,
+      audit: {
+        ...(baseMetadata.audit || {}),
+        supersededBy: actorId || null,
+        supersededAt: auditTimestamp
+      },
+      superseded_by: data.id
+    }
+
+    await supabase
+      .from('job_contracts')
+      .update({ metadata: supersededMetadata })
+      .eq('id', existing.id)
+
+    const normalized = this._normalizeContract(data)
+
+    invalidateCache(`job_contracts:booking:${normalized.bookingId}`)
+    invalidateCache(`job_contracts:user:${normalized.parentId}`)
+    invalidateCache(`job_contracts:user:${normalized.caregiverId}`)
+    invalidateCache(`bookings:parent:${normalized.parentId}`)
+    invalidateCache(`bookings:caregiver:${normalized.caregiverId}`)
+    invalidateCache('bookings:')
+
+    if (!options?.silent) {
+      await notificationService.notifyContractUpdated(normalized, {
+        actorId,
+        actorRole
+      })
+    }
+
+    return normalized
   }
 
   async updateContractStatus(contractId, status, metadata = {}) {
@@ -245,6 +698,15 @@ class ContractService extends SupabaseBase {
         notFoundError.code = 'CONTRACT_NOT_FOUND'
         throw notFoundError
       }
+
+      const sanitizedTerms = normalizeTermsObject(normalized.terms || {})
+      if (JSON.stringify(sanitizedTerms) !== JSON.stringify(normalized.terms || {})) {
+        await supabase
+          .from('job_contracts')
+          .update({ terms: sanitizedTerms })
+          .eq('id', normalized.id)
+        normalized.terms = sanitizedTerms
+      }
       invalidateCache(`job_contracts:booking:${normalized.bookingId}`)
       invalidateCache(`job_contracts:user:${normalized.parentId}`)
       invalidateCache(`job_contracts:user:${normalized.caregiverId}`)
@@ -273,6 +735,7 @@ class ContractService extends SupabaseBase {
       return this._handleError('signContract', error)
     }
   }
+
 
   async resendContract(contractId, actorId) {
     try {

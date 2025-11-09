@@ -1,32 +1,32 @@
 import {
-    Briefcase,
-    Calendar,
-    CheckCircle,
-    Clock,
-    DollarSign,
-    FileCheck2,
-    MessageCircle,
-    Star
+  Briefcase,
+  Calendar,
+  CheckCircle,
+  Clock,
+  DollarSign,
+  FileCheck2,
+  MessageCircle,
+  Star
 } from 'lucide-react-native';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
-    ActivityIndicator,
-    Alert,
-    Image,
-    Linking,
-    Modal,
-    RefreshControl,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TouchableOpacity,
-    View
+  ActivityIndicator,
+  Alert,
+  Image,
+  Linking,
+  Modal,
+  RefreshControl,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View
 } from 'react-native';
 import {
-    SkeletonBlock,
-    SkeletonCard,
-    SkeletonCircle,
-    SkeletonPill
+  SkeletonBlock,
+  SkeletonCard,
+  SkeletonCircle,
+  SkeletonPill
 } from '../../../components/common/SkeletonPlaceholder';
 import { useAuth } from '../../../contexts/AuthContext';
 import { notificationService } from '../../../services/supabase';
@@ -79,7 +79,7 @@ const NotificationsTab = ({ navigation, onNavigateTab }) => {
       'message': 'messages',
       'review': 'reviews'
     };
-    
+
     return tabMap[type] || null;
   }, []);
 
@@ -127,7 +127,7 @@ const NotificationsTab = ({ navigation, onNavigateTab }) => {
   const markAsRead = useCallback(async (notificationId) => {
     try {
       await notificationService.markNotificationAsRead(notificationId);
-      setNotifications(prev => prev.map(notif => 
+      setNotifications(prev => prev.map(notif =>
         notif.id === notificationId ? { ...notif, read: true } : notif
       ));
     } catch (error) {
@@ -138,7 +138,7 @@ const NotificationsTab = ({ navigation, onNavigateTab }) => {
   // Parse notification data safely
   const parseNotificationData = useCallback((data) => {
     if (!data) return {};
-    
+
     if (typeof data === 'string') {
       try {
         return JSON.parse(data);
@@ -147,7 +147,7 @@ const NotificationsTab = ({ navigation, onNavigateTab }) => {
         return {};
       }
     }
-    
+
     return data;
   }, []);
 
@@ -162,10 +162,22 @@ const NotificationsTab = ({ navigation, onNavigateTab }) => {
     }
 
     const notificationData = parseNotificationData(notification.data);
-    
+
     console.log('🔍 Parsed notification data:', JSON.stringify(notificationData, null, 2));
     console.log('🔍 notificationData.notificationType:', notificationData?.notificationType);
     console.log('🔍 Available data keys:', Object.keys(notificationData || {}));
+
+    const isInformationRequest =
+      notification.type === 'information_request' ||
+      notificationData?.notificationType === 'information_request' ||
+      notificationData?.type === 'information_request' ||
+      notificationData?.category === 'information_request';
+
+    if (isInformationRequest && onNavigateTab) {
+      console.log('🛡️ Information request notification tapped - opening privacy modal');
+      onNavigateTab('notifications', { ...notification, data: notificationData, openPrivacyRequests: true });
+      return;
+    }
 
     // Close payment proof modal if it's open
     if (paymentProofModalVisible) {
@@ -213,26 +225,26 @@ const NotificationsTab = ({ navigation, onNavigateTab }) => {
     // 2. New format: type = 'payment' with data.notificationType = 'payment_proof'
     const isOldFormat = notification.type === 'payment_proof';
     const isNewFormat = notification.type === 'payment' && notificationData?.notificationType === 'payment_proof';
-    const hasProofUrl = !!(notificationData?.paymentProofUrl || 
-                            notificationData?.payment_proof_url || 
-                            notificationData?.receiptUrl ||
-                            notificationData?.proofUrl ||
-                            notificationData?.url);
-    
+    const hasProofUrl = !!(notificationData?.paymentProofUrl ||
+      notificationData?.payment_proof_url ||
+      notificationData?.receiptUrl ||
+      notificationData?.proofUrl ||
+      notificationData?.url);
+
     const isPaymentProof = isOldFormat || isNewFormat;
-    
+
     console.log('🤔 Payment proof detection breakdown:');
     console.log('   - Old format (type=payment_proof)?', isOldFormat);
     console.log('   - New format (type=payment + notificationType)?', isNewFormat);
     console.log('   - Has proof URL?', hasProofUrl);
     console.log('   - Final result (isPaymentProof)?', isPaymentProof);
-    
+
     if (isPaymentProof) {
       console.log('✅ OPENING PAYMENT PROOF MODAL');
       console.log('   - Payment Type:', notificationData.paymentType);
       console.log('   - Amount:', notificationData.totalAmount);
       console.log('   - Proof URL:', notificationData.paymentProofUrl);
-      
+
       setSelectedPaymentProof({ ...notification, data: notificationData });
       setPaymentProofModalVisible(true);
       setResolvedProofUrl(null);
@@ -241,7 +253,7 @@ const NotificationsTab = ({ navigation, onNavigateTab }) => {
       resolvePaymentProofUrl(notificationData)
         .then((url) => setResolvedProofUrl(url))
         .finally(() => setResolvingProofUrl(false));
-      
+
       console.log('🛑 Stopping further navigation for payment proof');
       return;
     }
@@ -492,7 +504,7 @@ const NotificationsTab = ({ navigation, onNavigateTab }) => {
       'payment_proof': <FileCheck2 size={20} color="#0ea5e9" />,
       'payment': <DollarSign size={20} color="#ef4444" />
     };
-    
+
     return iconMap[type] || <Clock size={20} color="#6b7280" />;
   }, []);
 
@@ -507,7 +519,7 @@ const NotificationsTab = ({ navigation, onNavigateTab }) => {
       'payment_proof': '#cffafe',
       'payment': '#fee2e2'
     };
-    
+
     return colorMap[type] || '#f3f4f6';
   }, []);
 
@@ -683,8 +695,8 @@ const NotificationsTab = ({ navigation, onNavigateTab }) => {
                   )}
                 </View>
               </View>
-              <TouchableOpacity 
-                onPress={() => setPaymentProofModalVisible(false)} 
+              <TouchableOpacity
+                onPress={() => setPaymentProofModalVisible(false)}
                 style={styles.modalCloseButton}
               >
                 <Text style={styles.modalCloseText}>Close</Text>

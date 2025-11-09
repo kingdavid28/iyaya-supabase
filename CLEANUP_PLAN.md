@@ -92,4 +92,29 @@ Record performance via React Native Performance Monitor (Cmd+D → “Show Perf 
 Add logging/timing around API calls to identify slow endpoints; consider pagination or limiting payload sizes.
 Once you’ve profiled with these steps, we can target actual hotspots (e.g., a particular API or list). Let me know which area you tackle first and I can help implement concrete changes.
 
-Feedback submitted
+
+
+
+Best practices for edit-contract functionality across bookings/applications:
+
+Shared service layer
+Centralize contract CRUD in a single service (e.g., contractService.updateContract) so all screens hit the same validation, Supabase calls, and error handling.
+Validate access: parent/caregiver can only edit contracts tied to bookings they own; service-role bypasses if needed.
+Schema + versioning
+Store immutable historical copies or maintain version, updated_at, updated_by fields so edits are auditable.
+Consider soft-locking signed contracts (no edits once all parties have signed) unless creating a new version for re-signing.
+UI/UX consistency
+Reuse a modal/form component for contract editing across bookings and applications to avoid divergence.
+Prefill existing values, highlight required fields, show read-only sections if contract is finalized.
+Validation + draft workflow
+Enforce schema-level validation (Supabase RLS/functions) plus client-side checks (required terms, payment clauses).
+Allow saving as draft vs. “send for signature”; notify other party when a contract was modified.
+State + cache updates
+On successful edit, update React Query caches / context so contract details refresh instantly in all tabs.
+Emit toast/snackbar confirming changes; handle optimistic updates carefully (revert on failure).
+Security + RLS
+Ensure Supabase RLS policies allow updates only when auth.uid() matches parent or caregiver for that booking/application.
+Restrict sensitive fields (e.g., payment terms) so only parent can modify, caregiver can view/ack.
+Testing
+Cover unit tests for the shared service, integration tests for Supabase function/policy, and UI tests for both bookings and applications flows.
+These patterns keep contract editing consistent, secure, and maintainable across the dashboard.

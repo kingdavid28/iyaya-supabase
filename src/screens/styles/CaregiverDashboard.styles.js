@@ -237,7 +237,7 @@ const sections = {
     marginTop: 12,
     paddingLeft: 4,
   },
-  
+
   // UPDATED: Enhanced Profile Card with gradient and better styling
   enhancedProfileCard: {
     borderRadius: 16,
@@ -460,7 +460,7 @@ const cards = {
     justifyContent: 'space-between',
     alignItems: 'center',
   },
-  
+
   // Original styles kept for compatibility
   applicationCard: {
     marginBottom: 12,

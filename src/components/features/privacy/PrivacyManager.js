@@ -213,6 +213,13 @@ export const PrivacyProvider = ({ children }) => {
 
       return false;
     } catch (error) {
+      if (error?.code === '23505') {
+        console.warn('Duplicate permission detected, treating as already approved.', error);
+        setPendingRequests(prev => prev.filter(req => req.id !== requestId));
+        Alert.alert('Already shared', 'You have already granted access to this information.');
+        return true;
+      }
+
       console.error('Error responding to request:', error);
       Alert.alert('Error', error?.message || 'Failed to respond to request.');
       return false;
@@ -245,6 +252,15 @@ export const PrivacyProvider = ({ children }) => {
 
     return visibleData;
   }, [privacySettings]);
+
+  const getSharedProfileForViewer = useCallback(async (targetUserId, viewerUserId, options = {}) => {
+    try {
+      return await privacyAPI.getSharedProfileForViewer(targetUserId, viewerUserId, options);
+    } catch (error) {
+      console.error('Error fetching shared profile for viewer:', error);
+      return null;
+    }
+  }, []);
 
   const grantUserPermission = useCallback(async (targetUserId, viewerUserId, fields, expiresIn = null) => {
     try {
@@ -379,6 +395,7 @@ export const PrivacyProvider = ({ children }) => {
     loadPendingRequests,
     loadSentRequests,
     markNotificationAsRead,
+    getSharedProfileForViewer,
   };
 
   return (

@@ -1,4 +1,4 @@
-import { AlertCircle, Check, Clock, Shield, X } from 'lucide-react-native';
+import { AlertCircle, Check, Clock, Download, Shield, X } from 'lucide-react-native';
 import React, { useMemo, useState } from 'react';
 import { Alert, Modal, ScrollView, Text, TouchableOpacity, View } from 'react-native';
 import { usePrivacy } from './PrivacyManager';
@@ -66,29 +66,104 @@ const normalizeRequestedEntry = (entry, classification = {}, defaultLevel = 'pri
   return null;
 };
 
-const buildApprovalKeys = (rawFields) =>
-  rawFields
-    .map((entry) => {
-      if (typeof entry === 'string') {
-        return toSnakeCase(entry);
-      }
+const extractFieldKey = (entry) => {
+  if (!entry) {
+    return '';
+  }
 
-      if (typeof entry === 'object') {
-        const candidate = entry.key || entry.field || entry.name || entry.id || entry.label || '';
-        return toSnakeCase(typeof candidate === 'string' ? candidate : '');
-      }
+  if (typeof entry === 'string') {
+    return toSnakeCase(entry);
+  }
 
-      return '';
-    })
-    .filter(Boolean);
+  if (typeof entry === 'object') {
+    const candidate =
+      entry.key ||
+      entry.field ||
+      entry.name ||
+      entry.id ||
+      entry.label ||
+      entry.value ||
+      entry.column ||
+      '';
+
+    if (typeof candidate === 'string') {
+      return toSnakeCase(candidate);
+    }
+  }
+
+  return '';
+};
+
+const buildApprovalKeys = (rawFields) => {
+  const seen = new Set();
+
+  return (Array.isArray(rawFields) ? rawFields : [])
+    .map(extractFieldKey)
+    .filter((key) => {
+      if (!key || seen.has(key)) {
+        return false;
+      }
+      seen.add(key);
+      return true;
+    });
+};
+
+const dedupeNormalizedFields = (normalizedFields = []) => {
+  const seen = new Set();
+
+  return (Array.isArray(normalizedFields) ? normalizedFields : []).reduce((acc, field) => {
+    if (!field) return acc;
+
+    const key = extractFieldKey(field);
+    if (!key || seen.has(key)) {
+      return acc;
+    }
+
+    seen.add(key);
+    acc.push({ ...field, key });
+    return acc;
+  }, []);
+};
+
+const buildApprovalPayload = (normalizedFields, rawFields, sharedKeys = new Set()) => {
+  const payload = [];
+  const seen = new Set();
+
+  (Array.isArray(normalizedFields) ? normalizedFields : []).forEach((field) => {
+    const key = extractFieldKey(field);
+    if (!key || seen.has(key) || sharedKeys.has(key)) {
+      return;
+    }
+    seen.add(key);
+    payload.push(key);
+  });
+
+  if (payload.length) {
+    return payload;
+  }
+
+  (Array.isArray(rawFields) ? rawFields : []).forEach((entry) => {
+    const key = extractFieldKey(entry);
+    if (!key || seen.has(key) || sharedKeys.has(key)) {
+      return;
+    }
+    seen.add(key);
+    payload.push(key);
+  });
+
+  return payload;
+};
 
 const PrivacyNotificationModal = ({
   visible,
   onClose,
   requests = [],
+  sentRequests = [],
+  viewerType = 'caregiver',
   subtitle = 'Manage requests for your personal information',
   emptyStateTitle = 'No privacy requests',
   emptyStateMessage = "You don't have any pending information requests right now.",
+  onViewSharedDocuments,
 }) => {
   const { respondToRequest, DATA_LEVELS, dataClassification } = usePrivacy();
   const [loading, setLoading] = useState({});
@@ -96,16 +171,28 @@ const PrivacyNotificationModal = ({
   const normalizedRequests = useMemo(() => {
     return (Array.isArray(requests) ? requests : []).map((request) => {
       const rawFields = Array.isArray(request.requestedFields) ? request.requestedFields : [];
-      const normalizedFields = rawFields
-        .map((entry) => normalizeRequestedEntry(entry, dataClassification, DATA_LEVELS.PRIVATE))
-        .filter(Boolean);
-      const approvalPayload = normalizedFields.length
-        ? normalizedFields.map((field) => field.key).filter(Boolean)
-        : buildApprovalKeys(rawFields);
+      const normalizedFields = dedupeNormalizedFields(
+        rawFields
+          .map((entry) => normalizeRequestedEntry(entry, dataClassification, DATA_LEVELS.PRIVATE))
+          .filter(Boolean),
+      );
+      const approvalPayload = buildApprovalPayload(normalizedFields, rawFields);
 
       return { request, normalizedFields, approvalPayload };
     });
   }, [requests, dataClassification, DATA_LEVELS]);
+
+  const sharedAccessRequests = useMemo(() => {
+    if (viewerType !== 'parent') return [];
+
+    return (Array.isArray(sentRequests) ? sentRequests : [])
+      .filter((request) =>
+        request?.status === 'approved' &&
+        Array.isArray(request.sharedFields) &&
+        request.sharedFields.includes('documents'),
+      )
+      .sort((a, b) => new Date(b.respondedAt || b.updatedAt || 0) - new Date(a.respondedAt || a.updatedAt || 0));
+  }, [sentRequests, viewerType]);
 
   const handleApprove = async (requestId, selectedFields = []) => {
     setLoading((prev) => ({ ...prev, [requestId]: true }));
@@ -270,6 +357,43 @@ const PrivacyNotificationModal = ({
               );
             })
           )}
+
+          {viewerType === 'parent' && (
+            <View style={styles.sharedSection}>
+              <Text style={styles.sharedSectionTitle}>Shared caregiver documents</Text>
+              {sharedAccessRequests.length === 0 ? (
+                <Text style={styles.sharedEmptyText}>
+                  Caregivers will appear here once they approve document access.
+                </Text>
+              ) : (
+                sharedAccessRequests.map((request) => {
+                  const caregiverName = request.target?.name || request.targetId?.name || 'Caregiver';
+                  const sharedAt = request.respondedAt || request.updatedAt || request.createdAt;
+
+                  return (
+                    <View key={request.id} style={styles.sharedCard}>
+                      <View style={styles.sharedCardHeader}>
+                        <View style={{ flex: 1 }}>
+                          <Text style={styles.sharedCaregiverName}>{caregiverName}</Text>
+                          <Text style={styles.sharedTimestamp}>
+                            {sharedAt ? `Shared ${formatTimeAgo(sharedAt)} • ${new Date(sharedAt).toLocaleDateString()}` : 'Shared access'}
+                          </Text>
+                        </View>
+                      </View>
+
+                      <TouchableOpacity
+                        style={styles.viewDocumentsButton}
+                        onPress={() => onViewSharedDocuments?.(request)}
+                      >
+                        <Download size={16} color="#fff" />
+                        <Text style={styles.viewDocumentsButtonText}>Open Shared Documents</Text>
+                      </TouchableOpacity>
+                    </View>
+                  );
+                })
+              )}
+            </View>
+          )}
         </ScrollView>
       </View>
     </Modal>
@@ -333,12 +457,15 @@ const styles = {
     borderColor: '#e5e7eb',
   },
   requestHeader: {
-    flexDirection: 'row',
+    flexDirection: 'column',
     justifyContent: 'space-between',
-    alignItems: 'flex-start',
+    alignItems: 'center',
     marginBottom: 16,
   },
   requesterInfo: {
+    paddingVertical: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
     flex: 1,
   },
   requesterName: {
@@ -458,6 +585,57 @@ const styles = {
     color: '#92400e',
     flex: 1,
     lineHeight: 16,
+  },
+  sharedSection: {
+    marginTop: 32,
+  },
+  sharedSectionTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#111827',
+    marginBottom: 12,
+  },
+  sharedEmptyText: {
+    fontSize: 13,
+    color: '#6b7280',
+  },
+  sharedCard: {
+    backgroundColor: '#f9fafb',
+    borderRadius: 16,
+    padding: 18,
+    borderWidth: 1,
+    borderColor: '#e5e7eb',
+    marginBottom: 14,
+  },
+  sharedCardHeader: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    marginBottom: 12,
+  },
+  sharedCaregiverName: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#111827',
+  },
+  sharedTimestamp: {
+    fontSize: 12,
+    color: '#6b7280',
+    marginTop: 2,
+  },
+  viewDocumentsButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    backgroundColor: '#2563eb',
+    borderRadius: 8,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+  },
+  viewDocumentsButtonText: {
+    color: '#fff',
+    fontWeight: '600',
+    fontSize: 14,
   },
 };
 

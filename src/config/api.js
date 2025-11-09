@@ -2,17 +2,19 @@
 // Provides backward compatibility while using improved architecture
 
 import {
-  authAPI,
-  jobsAPI,
   applicationsAPI,
+  authAPI,
   bookingsAPI,
   childrenAPI,
-  messagingService,
   getCurrentAPIURL,
-  getCurrentSocketURL
+  getCurrentSocketURL,
+  jobsAPI,
+  messagingService,
+  supabaseService
 } from '../services';
-import { supabase } from './supabase';
+import { informationRequestService } from '../services/supabase/informationRequestService';
 import { tokenManager } from '../utils/tokenManager';
+import { supabase } from './supabase';
 
 // Export for backward compatibility
 export const API_BASE_URL = getCurrentAPIURL();
@@ -56,7 +58,7 @@ export const uploadsAPI = {
   uploadProfileImage: authAPI.uploadProfileImage,
   uploadProfileImageBase64: authAPI.uploadProfileImage, // Alias for backward compatibility
   uploadImage: authAPI.uploadProfileImage, // Generic image upload
-  
+
   // Document upload functionality
   uploadDocument: async (documentData) => {
     try {
@@ -75,7 +77,7 @@ export const uploadsAPI = {
           type: documentData.documentType
         };
       }
-      
+
       // If it's FormData
       if (documentData instanceof FormData) {
         // For FormData uploads, you might need a different endpoint
@@ -83,7 +85,7 @@ export const uploadsAPI = {
         console.warn('FormData upload not fully implemented');
         return { url: 'temp-url', fileName: 'document' };
       }
-      
+
       throw new Error('Unsupported document format');
     } catch (error) {
       console.error('❌ [UPLOAD] Document upload failed:', error);
@@ -105,14 +107,14 @@ export const uploadsAPI = {
       if (fileData.base64) {
         return await authAPI.uploadProfileImage(fileData.base64);
       }
-      
+
       if (fileData instanceof FormData) {
         // Handle FormData uploads
         // This would need to be implemented based on your backend
         console.warn('FormData file upload not fully implemented');
         return { url: 'temp-url' };
       }
-      
+
       throw new Error('Unsupported file format');
     } catch (error) {
       console.error('❌ [UPLOAD] File upload failed:', error);
@@ -126,13 +128,13 @@ export const directUploadAPI = {
   uploadImage: async (base64Image, options = {}) => {
     try {
       console.log('🔄 [DIRECT UPLOAD] Using direct upload method');
-      
+
       const baseURL = getCurrentAPIURL();
       const endpoint = `${baseURL}/upload/image`;
-      
+
       const { data: { session } } = await supabase.auth.getSession();
       const token = session?.access_token;
-      
+
       if (!token) {
         throw new Error('No authentication token available');
       }
@@ -179,17 +181,53 @@ export const messagingAPI = {
   sendMessage: (payload) => messagingService.sendMessage(payload.conversationId, payload.text, payload.recipientId)
 };
 
-// Privacy API (stub implementation)
+// Privacy API backed by Supabase services
 export const privacyAPI = {
-  getPrivacySettings: () => ({ data: null }),
-  getPendingRequests: () => ({ data: [] }),
-  getPrivacyNotifications: () => ({ data: [] }),
-  updatePrivacySettings: () => ({ success: true }),
-  requestInformation: () => ({ success: true }),
-  respondToRequest: () => ({ success: true }),
-  grantPermission: () => ({ success: true }),
-  revokePermission: () => ({ success: true }),
-  markNotificationAsRead: () => ({ success: true })
+  async getPrivacySettings(userId = null) {
+    return supabaseService.getPrivacySettings(userId);
+  },
+
+  async updatePrivacySettings(settings, userId = null) {
+    return supabaseService.updatePrivacySettings(userId, settings);
+  },
+
+  async getPrivacyNotifications(userId = null, options = {}) {
+    return supabaseService.getPrivacyNotifications(userId, options);
+  },
+
+  async markNotificationAsRead(notificationId, userId = null) {
+    return supabaseService.markPrivacyNotificationAsRead(notificationId, userId);
+  },
+
+  async acknowledgeNotifications(userId = null, notificationIds = []) {
+    return supabaseService.acknowledgeNotifications(userId, notificationIds);
+  },
+
+  async grantPermission(targetUserId, viewerUserId, fields, expiresAt = null, metadata = {}) {
+    return supabaseService.grantPermission({
+      targetUserId,
+      viewerUserId,
+      fields,
+      expiresAt,
+      metadata
+    });
+  },
+
+  async revokePermission(targetUserId, viewerUserId, fields = null) {
+    return supabaseService.revokePermission(targetUserId, viewerUserId, fields);
+  },
+
+  async getUserPermissions(targetUserId, viewerUserId = null, options = {}) {
+    return supabaseService.getViewerPermissions(targetUserId, viewerUserId, options);
+  },
+
+  async getSharedCaregiverData(targetUserId, viewerUserId = null, options = {}) {
+    return informationRequestService.getSharedCaregiverData(targetUserId, viewerUserId, options);
+  },
+
+  async getSharedProfileForViewer(targetUserId, viewerUserId = null, options = {}) {
+    return informationRequestService.getSharedProfileForViewer(targetUserId, viewerUserId, options);
+  }
 };
 
 // Enhanced upload utility with multiple fallbacks
@@ -237,7 +275,7 @@ export const uploadUtility = {
       uploadImage: typeof uploadsAPI.uploadImage === 'function',
       directUpload: typeof directUploadAPI.uploadImage === 'function'
     };
-    
+
     console.log('🔍 [UPLOAD] Available methods:', availableMethods);
     return availableMethods;
   }

@@ -286,6 +286,8 @@ const ParentDashboard = () => {
   const [pendingApplicationForContract, setPendingApplicationForContract] = useState(null);
   const [applicationsMutatingId, setApplicationsMutatingId] = useState(null);
   const [requestInfoTarget, setRequestInfoTarget] = useState(null);
+  const [savingContractDraft, setSavingContractDraft] = useState(false);
+  const [sendingContractForSignature, setSendingContractForSignature] = useState(false);
 
   // Search and filter state
   const [searchQuery, setSearchQuery] = useState('');
@@ -1058,6 +1060,48 @@ const ParentDashboard = () => {
     }
   }, [user?.id]);
 
+  const handleSaveContractDraft = useCallback(async ({ contract, terms }) => {
+    if (!contract?.id) return;
+    setSavingContractDraft(true);
+    try {
+      const saved = await supabaseContractService.saveDraft(contract.id, terms, {
+        actorId: user?.id || null,
+        actorRole: 'parent'
+      });
+      setSelectedContract(saved);
+      await fetchBookings();
+      Alert.alert('Draft saved', 'Your changes were saved successfully.');
+    } catch (error) {
+      console.error('Failed to save draft:', error);
+      Alert.alert('Save failed', error?.message || 'Unable to save draft. Please try again.');
+    } finally {
+      setSavingContractDraft(false);
+    }
+  }, [fetchBookings, user?.id]);
+
+  const handleSendContractForSignature = useCallback(async ({ contract, terms }) => {
+    if (!contract?.id) return;
+    setSendingContractForSignature(true);
+    try {
+      const sent = await supabaseContractService.sendDraftForSignature(contract.id, {
+        terms,
+        actorId: user?.id || null,
+        actorRole: 'parent'
+      });
+      setSelectedContract(sent);
+      Alert.alert('Sent for signature', 'Caregiver has been notified to review and sign.');
+      await fetchBookings();
+      toggleModal('contract', false);
+      setSelectedContract(null);
+      setSelectedBooking(null);
+    } catch (error) {
+      console.error('Failed to send contract for signature:', error);
+      Alert.alert('Send failed', error?.message || 'Unable to send contract. Please try again.');
+    } finally {
+      setSendingContractForSignature(false);
+    }
+  }, [fetchBookings, toggleModal, user?.id]);
+
   const handleDownloadPdf = useCallback(async (contract) => {
     if (!contract?.id) {
       Alert.alert('Error', 'Contract information is missing. Please try again.');
@@ -1431,6 +1475,8 @@ const ParentDashboard = () => {
             toggleModal('contract', false);
             setSelectedContract(null);
             setSelectedBooking(null);
+            setSavingContractDraft(false);
+            setSendingContractForSignature(false);
           }}
           contract={selectedContract}
           booking={selectedBooking}
@@ -1438,6 +1484,10 @@ const ParentDashboard = () => {
           onSign={handleContractSign}
           onResend={handleContractResend}
           onDownloadPdf={handleDownloadPdf}
+          onSaveDraft={handleSaveContractDraft}
+          onSendForSignature={handleSendContractForSignature}
+          savingDraft={savingContractDraft}
+          sendingForSignature={sendingContractForSignature}
         />
 
         <ContractTypeSelector

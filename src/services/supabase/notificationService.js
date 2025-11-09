@@ -165,15 +165,14 @@ export class NotificationService extends SupabaseBase {
       await Promise.all(targets.map(userId => this.createNotification({
         user_id: userId,
         type: 'system',
-        title: 'Contract Active',
-        message: 'Both parties signed the contract. You can now proceed with the job.',
+        title: 'Contract Activated',
+        message: 'A contract you are part of is now active.',
         data: {
           contractId: contract.id,
           bookingId: contract.bookingId,
           jobId: contract.metadata?.jobId || contract.metadata?.job_id || null,
           applicationId: contract.metadata?.applicationId || contract.metadata?.application_id || null,
-          status: 'active',
-          notificationType: 'contract_active'
+          notificationType: 'contract_activated'
         }
       })))
 
@@ -185,10 +184,40 @@ export class NotificationService extends SupabaseBase {
     }
   }
 
+  async notifyContractUpdated(contract, context = {}) {
+    try {
+      if (!contract) return null
+      const targets = [contract.parentId, contract.caregiverId].filter(Boolean)
+
+      await Promise.all(targets.map(userId => this.createNotification({
+        user_id: userId,
+        type: 'system',
+        title: 'Contract Updated',
+        message: 'Contract terms were updated.',
+        data: {
+          contractId: contract.id,
+          bookingId: contract.bookingId,
+          jobId: contract.metadata?.jobId || contract.metadata?.job_id || null,
+          applicationId: contract.metadata?.applicationId || contract.metadata?.application_id || null,
+          actorId: context.actorId || null,
+          actorRole: context.actorRole || null,
+          notificationType: 'contract_updated'
+        }
+      })))
+
+      targets.forEach(userId => invalidateCache(`notification-counts:${userId}`))
+      return true
+    } catch (error) {
+      console.warn('Error notifying contract update:', error)
+      return null
+    }
+  }
+
   async notifyContractResent(contract, actorId) {
     try {
       if (!contract) return null
       const targets = [contract.parentId, contract.caregiverId].filter(id => id && id !== actorId)
+
       if (!targets.length) return null
 
       await Promise.all(targets.map(userId => this.createNotification({

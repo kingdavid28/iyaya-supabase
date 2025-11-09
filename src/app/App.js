@@ -1,9 +1,14 @@
 import { QueryClient, QueryClientProvider, focusManager } from '@tanstack/react-query';
+import { Buffer } from 'buffer';
 import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
 import React, { useEffect, useState } from 'react';
 import { ActivityIndicator, AppState, Platform, Text, View } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
+
+if (!global.Buffer) {
+  global.Buffer = Buffer;
+}
 
 const queryClient = new QueryClient({
   defaultOptions: {

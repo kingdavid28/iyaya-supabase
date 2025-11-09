@@ -1,7 +1,7 @@
-import React, { memo, useMemo } from 'react';
-import { View, Text, Pressable, Image, Alert } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
+import React, { memo, useMemo } from 'react';
+import { Alert, Image, Pressable, Text, View } from 'react-native';
 
 import { styles } from '../styles/CaregiverDashboard.styles';
 

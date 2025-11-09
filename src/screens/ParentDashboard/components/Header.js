@@ -1,22 +1,36 @@
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
-import React, { useState } from 'react';
+import React, { useCallback, useState } from 'react';
 import { Image, Platform, Pressable, Text, View } from 'react-native';
 import { usePrivacy } from '../../../components/features/privacy/PrivacyManager';
 import PrivacyNotificationModal from '../../../components/features/privacy/PrivacyNotificationModal';
 import { SettingsModal } from '../../../components/ui/modals/SettingsModal';
 import { styles } from '../../styles/ParentDashboard.styles';
+import ApprovedDocumentsModal from '../modals/ApprovedDocumentsModal';
 
 // NotificationContext removed - using local state
 import { getCurrentSocketURL } from '../../../config/api';
 
-const Header = ({ navigation, onProfilePress, onSignOut, greetingName, onProfileEdit, profileName, profileImage, profileContact, profileLocation, setActiveTab, tabNotificationCounts = {}, onRequestInfo }) => {
+const Header = ({ navigation, onProfilePress, onSignOut, greetingName, onProfileEdit, profileName, profileImage, profileContact, profileLocation, setActiveTab, tabNotificationCounts = {}, onRequestInfo, onViewSharedDocuments }) => {
+  const [documentsModal, setDocumentsModal] = useState({ visible: false, caregiver: null, request: null });
   // Use real privacy system
-  const { pendingRequests, notifications } = usePrivacy();
+  const { pendingRequests, sentRequests, notifications } = usePrivacy();
 
 
   const [showNotifications, setShowNotifications] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
+
+  const handleViewSharedDocuments = useCallback((request) => {
+    setShowNotifications(false);
+    const caregiverInfo = request?.target || request?.targetId || request?.caregiver;
+    const resolvedCaregiver = caregiverInfo || {
+      id: request?.targetUserId || request?.target_id,
+      name: request?.targetName || request?.target_name,
+    };
+
+    setDocumentsModal({ visible: true, caregiver: resolvedCaregiver, request });
+    onViewSharedDocuments?.(request);
+  }, [onViewSharedDocuments]);
 
   // Calculate real notification counts
   const unreadNotifications = notifications?.filter(n => !n.read)?.length || 0;
@@ -183,9 +197,19 @@ const Header = ({ navigation, onProfilePress, onSignOut, greetingName, onProfile
         visible={showNotifications}
         onClose={() => setShowNotifications(false)}
         requests={pendingRequests}
+        sentRequests={sentRequests}
+        viewerType="parent"
         subtitle="Manage requests for your family’s private information"
         emptyStateTitle="No privacy requests from caregivers"
         emptyStateMessage="No caregivers have pending requests right now."
+        onViewSharedDocuments={handleViewSharedDocuments}
+      />
+
+      <ApprovedDocumentsModal
+        visible={documentsModal.visible}
+        onClose={() => setDocumentsModal({ visible: false, caregiver: null, request: null })}
+        caregiver={documentsModal.caregiver || {}}
+        viewerId={documentsModal.request?.requesterUserId || documentsModal.request?.requester?.id}
       />
 
       <SettingsModal

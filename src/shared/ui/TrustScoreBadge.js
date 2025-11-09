@@ -5,7 +5,7 @@ import { Shield, CheckCircle } from 'lucide-react-native';
 
 const SCORE_TIERS = {
   high: { color: '#10B981', background: '#D1FAE5' },
-  medium: { color: '#F59E0B', background: '#FEF3C7' },
+  medium: { color: '#e5eb75ff', background: '#FEF3C7' },
   low: { color: '#6B7280', background: '#F3F4F6' },
 };
 

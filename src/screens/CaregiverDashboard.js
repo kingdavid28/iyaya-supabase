@@ -1763,6 +1763,7 @@ const CaregiverDashboard = () => {
               loading={false}
               pendingContract={pendingContractToOpen}
               onPendingContractHandled={() => setPendingContractToOpen(null)}
+              currentUserId={user?.id || null}
             />
           )}
 
@@ -1798,6 +1799,11 @@ const CaregiverDashboard = () => {
                 setActiveTab(tabId)
 
                 if (!payload) {
+                  return
+                }
+
+                if (payload.openPrivacyRequests) {
+                  setShowNotifications(true)
                   return
                 }
 

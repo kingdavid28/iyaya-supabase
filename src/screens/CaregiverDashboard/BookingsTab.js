@@ -811,11 +811,13 @@ const BookingsTab = ({
 };
 
 // ContractModal integration - wrap the component with modal functionality
-const CaregiverBookingsTabWithModal = ({ pendingContract, onPendingContractHandled, ...props }) => {
+const CaregiverBookingsTabWithModal = ({ pendingContract, onPendingContractHandled, currentUserId, ...props }) => {
   const [ContractModal, setContractModal] = useState(null);
   const [contractModalVisible, setContractModalVisible] = useState(false);
   const [selectedContract, setSelectedContract] = useState(null);
   const [selectedBookingForContract, setSelectedBookingForContract] = useState(null);
+  const [savingDraft, setSavingDraft] = useState(false);
+  const [sendingForSignature, setSendingForSignature] = useState(false);
 
   useEffect(() => {
     let isMounted = true;
@@ -867,14 +869,7 @@ const CaregiverBookingsTabWithModal = ({ pendingContract, onPendingContractHandl
       try {
         existing = await contractService.getContractById(selectedContract.id);
       } catch (error) {
-        if (error?.code === 'PGRST116' || error?.message?.includes('0 rows')) {
-          Alert.alert('Contract unavailable', 'This contract could not be found. Please refresh and try again.');
-          setContractModalVisible(false);
-          setSelectedContract(null);
-          setSelectedBookingForContract(null);
-          return;
-        }
-        throw error;
+        console.warn('Error fetching contract before signing:', error);
       }
 
       if (!existing) {
@@ -885,23 +880,12 @@ const CaregiverBookingsTabWithModal = ({ pendingContract, onPendingContractHandl
         return;
       }
 
-      let result;
-      try {
-        result = await contractService.signContract(existing.id, 'caregiver', {
-          signature,
-          signatureHash: btoa(signature),
-          ipAddress: null
-        });
-      } catch (error) {
-        if (error?.code === 'CONTRACT_NOT_FOUND') {
-          Alert.alert('Contract unavailable', 'This contract could not be found. Please refresh and try again.');
-          setContractModalVisible(false);
-          setSelectedContract(null);
-          setSelectedBookingForContract(null);
-          return;
-        }
-        throw error;
-      }
+      const result = await contractService.signContract(existing.id, 'caregiver', {
+        signature,
+        signatureHash: btoa(signature),
+        ipAddress: null,
+        acknowledged
+      });
 
       if (result) {
         Alert.alert('Success', 'Contract signed successfully!');
@@ -914,6 +898,48 @@ const CaregiverBookingsTabWithModal = ({ pendingContract, onPendingContractHandl
       Alert.alert('Error', 'Failed to sign contract. Please try again.');
     }
   }, [selectedContract, selectedBookingForContract]);
+
+  const handleSaveDraft = useCallback(async ({ contract, terms }) => {
+    if (!contract?.id) return;
+    setSavingDraft(true);
+    try {
+      const saved = await contractService.saveDraft(contract.id, terms, {
+        actorId: currentUserId || null,
+        actorRole: 'caregiver'
+      });
+      setSelectedContract(saved);
+      props.onRefresh?.();
+      Alert.alert('Draft saved', 'Your changes were saved successfully.');
+    } catch (error) {
+      console.error('Failed to save draft:', error);
+      Alert.alert('Save failed', error?.message || 'Unable to save draft. Please try again.');
+    } finally {
+      setSavingDraft(false);
+    }
+  }, [currentUserId, props]);
+
+  const handleSendForSignature = useCallback(async ({ contract, terms }) => {
+    if (!contract?.id) return;
+    setSendingForSignature(true);
+    try {
+      const sent = await contractService.sendDraftForSignature(contract.id, {
+        terms,
+        actorId: currentUserId || null,
+        actorRole: 'caregiver'
+      });
+      setSelectedContract(sent);
+      Alert.alert('Sent!', 'Contract sent to the parent for review.');
+      props.onRefresh?.();
+      setContractModalVisible(false);
+      setSelectedContract(null);
+      setSelectedBookingForContract(null);
+    } catch (error) {
+      console.error('Failed to send for signature:', error);
+      Alert.alert('Send failed', error?.message || 'Unable to send contract. Please try again.');
+    } finally {
+      setSendingForSignature(false);
+    }
+  }, [currentUserId, props]);
 
   const handleContractResend = useCallback(async (contract) => {
     if (!contract) return;
@@ -1005,6 +1031,8 @@ const CaregiverBookingsTabWithModal = ({ pendingContract, onPendingContractHandl
             setContractModalVisible(false);
             setSelectedContract(null);
             setSelectedBookingForContract(null);
+            setSavingDraft(false);
+            setSendingForSignature(false);
           }}
           contract={selectedContract}
           booking={selectedBookingForContract}
@@ -1012,6 +1040,10 @@ const CaregiverBookingsTabWithModal = ({ pendingContract, onPendingContractHandl
           onSign={handleContractSign}
           onResend={handleContractResend}
           onDownloadPdf={handleDownloadPdf}
+          onSaveDraft={handleSaveDraft}
+          onSendForSignature={handleSendForSignature}
+          savingDraft={savingDraft}
+          sendingForSignature={sendingForSignature}
         />
       )}
     </>

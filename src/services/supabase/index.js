@@ -7,6 +7,7 @@ import { informationRequestService } from './informationRequestService'
 import { jobService } from './jobService'
 import { messagingService } from './messagingService'
 import { notificationService } from './notificationService'
+import { privacyService } from './privacyService'
 import { realtimeService } from './realtimeService'
 import { reviewService } from './reviewService'
 import { storageService } from './storageService'
@@ -17,7 +18,7 @@ import { userService } from './userService'
 // TODO: Move uploadProfileImage to storageService and remove this import
 
 // Export individual services (preferred approach)
-export { applicationService, bookingService, childrenService, contractService, informationRequestService, jobService, messagingService, notificationService, realtimeService, reviewService, storageService, userService }
+export { applicationService, bookingService, childrenService, contractService, informationRequestService, jobService, messagingService, notificationService, privacyService, realtimeService, reviewService, storageService, userService }
 
 // Facade pattern for unified access (when needed)
 export class SupabaseServiceFacade {
@@ -29,6 +30,7 @@ export class SupabaseServiceFacade {
     this.bookings = bookingService
     this.messaging = messagingService
     this.notifications = notificationService
+    this.privacy = privacyService
     this.storage = storageService
     this.realtime = realtimeService
     this.reviews = reviewService
@@ -78,6 +80,7 @@ export class SupabaseServiceFacade {
   async getContractById(contractId) { return this.contracts.getContractById(contractId) }
   async getContractsByBooking(bookingId) { return this.contracts.getContractsByBooking(bookingId) }
   async getContractsForUser(userId, role) { return this.contracts.getContractsForUser(userId, role) }
+  async updateContract(contractId, updates, options) { return this.contracts.updateContract(contractId, updates, options) }
   async updateContractStatus(contractId, status, metadata) { return this.contracts.updateContractStatus(contractId, status, metadata) }
   async signContract(contractId, signer, payload) { return this.contracts.signContract(contractId, signer, payload) }
   async resendContract(contractId, actorId) { return this.contracts.resendContract(contractId, actorId) }
@@ -100,6 +103,16 @@ export class SupabaseServiceFacade {
   async getUnreadNotificationCount(userId) { return this.notifications.getUnreadNotificationCount(userId) }
   async getNotificationCountsByType(userId) { return this.notifications.getNotificationCountsByType(userId) }
   subscribeToNotifications(userId, callback) { return this.notifications.subscribeToNotifications(userId, callback) }
+
+  // === PRIVACY METHODS ===
+  async getPrivacySettings(userId) { return this.privacy.getPrivacySettings(userId) }
+  async updatePrivacySettings(userId, settings) { return this.privacy.updatePrivacySettings(userId, settings) }
+  async getPrivacyNotifications(userId, options) { return this.privacy.getPrivacyNotifications(userId, options) }
+  async markPrivacyNotificationAsRead(notificationId, userId) { return this.privacy.markNotificationAsRead(notificationId, userId) }
+  async getViewerPermissions(targetUserId, viewerUserId, options) { return this.privacy.getViewerPermissions(targetUserId, viewerUserId, options) }
+  async grantPermission(payload) { return this.privacy.grantPermission(payload) }
+  async revokePermission(targetUserId, viewerUserId, fields) { return this.privacy.revokePermission(targetUserId, viewerUserId, fields) }
+  async acknowledgeNotifications(userId, notificationIds) { return this.privacy.acknowledgeNotifications(userId, notificationIds) }
 
   // === NOTIFICATION HELPERS ===
   async notifyJobApplication(jobId, caregiverId, parentId) { return this.notifications.notifyJobApplication(jobId, caregiverId, parentId) }

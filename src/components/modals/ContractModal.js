@@ -1,5 +1,5 @@
 import { Ionicons } from '@expo/vector-icons';
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   Modal,
@@ -48,17 +48,103 @@ const ContractModal = ({
   signing = false,
   onResend,
   onDownloadPdf,
-  error
+  error,
+  onUpdate,
+  updating = false,
+  canEdit: canEditProp,
+  onSaveDraft,
+  onSendForSignature,
+  savingDraft = false,
+  sendingForSignature = false
 }) => {
   const [acknowledged, setAcknowledged] = useState(false);
   const [signature, setSignature] = useState('');
+  const [isEditing, setIsEditing] = useState(false);
+  const [editableTerms, setEditableTerms] = useState([]);
+  const [editError, setEditError] = useState(null);
+
+  const parentSignedAt = contract?.parentSignedAt || contract?.parent_signed_at;
+  const caregiverSignedAt = contract?.caregiverSignedAt || contract?.caregiver_signed_at;
+  const status = (contract?.status || '').toLowerCase();
+  const bothSigned = Boolean(parentSignedAt && caregiverSignedAt);
+  const isFinalized = ['active', 'completed', 'cancelled'].includes(status) || bothSigned;
+
+  const allowEditingHandlers = [onUpdate, onSaveDraft, onSendForSignature].some((handler) => typeof handler === 'function');
+  const allowEditing = allowEditingHandlers && (typeof canEditProp === 'boolean' ? canEditProp : true);
+  const editingAllowed = allowEditing && !isFinalized;
+
+  const buildEditableEntries = useCallback((terms) => {
+    const createEntry = (key = '', value = '', overrides = {}) => ({
+      id: `${Date.now()}-${Math.random()}`,
+      key,
+      value,
+      keyError: false,
+      valueError: false,
+      ...overrides
+    });
+
+    const normalizedTerms = (() => {
+      if (!terms) {
+        return {};
+      }
+
+      if (Array.isArray(terms)) {
+        return terms.reduce((acc, value, index) => {
+          const label = `Term ${index + 1}`;
+          if (acc[label] === undefined) {
+            acc[label] = normalizeTermValue(value);
+          }
+          return acc;
+        }, {});
+      }
+
+      if (typeof terms === 'string') {
+        return { Term: normalizeTermValue(terms) };
+      }
+
+      if (typeof terms === 'object') {
+        return Object.entries(terms).reduce((acc, [key, value]) => {
+          const normalizedKey = normalizeTermValue(key);
+          if (!normalizedKey) {
+            return acc;
+          }
+          if (acc[normalizedKey] === undefined) {
+            acc[normalizedKey] = normalizeTermValue(value);
+          }
+          return acc;
+        }, {});
+      }
+
+      return {};
+    })();
+
+    const entries = Object.entries(normalizedTerms).map(([key, value]) => createEntry(key, value, {
+      keyError: !key,
+      valueError: !value
+    }));
+
+    if (entries.length === 0) {
+      return [createEntry()];
+    }
+
+    return entries;
+  }, []);
 
   useEffect(() => {
     if (visible) {
       setAcknowledged(false);
       setSignature('');
+      setIsEditing(false);
+      setEditableTerms(buildEditableEntries(contract?.terms));
+      setEditError(null);
     }
-  }, [visible, contract?.id]);
+  }, [visible, contract?.id, buildEditableEntries]);
+
+  useEffect(() => {
+    if (!editingAllowed) {
+      setIsEditing(false);
+    }
+  }, [editingAllowed]);
 
   const termsEntries = useMemo(() => {
     if (!contract?.terms) return [];
@@ -86,10 +172,8 @@ const ContractModal = ({
     return [];
   }, [contract?.terms]);
 
-  const parentSignedAt = contract?.parentSignedAt || contract?.parent_signed_at;
-  const caregiverSignedAt = contract?.caregiverSignedAt || contract?.caregiver_signed_at;
-
   const canSign = useMemo(() => {
+    if (isEditing) return false;
     const role = (viewerRole || '').toLowerCase();
     if (role === 'parent') {
       return !parentSignedAt;
@@ -98,7 +182,7 @@ const ContractModal = ({
       return !caregiverSignedAt;
     }
     return false;
-  }, [viewerRole, parentSignedAt, caregiverSignedAt]);
+  }, [viewerRole, parentSignedAt, caregiverSignedAt, isEditing]);
 
   const readyToSign = acknowledged && signature.trim().length >= 2 && !signing;
 
@@ -116,6 +200,179 @@ const ContractModal = ({
 
   const roleLabel = (viewerRole || 'parent').toLowerCase() === 'caregiver' ? 'Caregiver' : 'Parent';
 
+  const handleStartEdit = () => {
+    setEditableTerms(buildEditableEntries(contract?.terms));
+    setEditError(null);
+    setIsEditing(true);
+  };
+
+  const handleCancelEdit = () => {
+    setEditableTerms(buildEditableEntries(contract?.terms));
+    setEditError(null);
+    setIsEditing(false);
+  };
+
+  const handleTermChange = (id, field, value) => {
+    setEditableTerms((prev) => prev.map((entry) => (entry.id === id ? { ...entry, [field]: value, [`${field}Error`]: false } : entry)));
+  };
+
+  const handleRemoveTerm = (id) => {
+    setEditableTerms((prev) => {
+      if (prev.length === 1) {
+        return [{ ...prev[0], key: '', value: '', keyError: false, valueError: false }];
+      }
+      return prev.filter((entry) => entry.id !== id);
+    });
+  };
+
+  const handleAddTerm = () => {
+    setEditableTerms((prev) => [
+      ...prev,
+      {
+        id: `${Date.now()}-${Math.random()}`,
+        key: '',
+        value: '',
+        keyError: false,
+        valueError: false
+      }
+    ]);
+  };
+
+  const validateEditableTerms = (entries) => {
+    const trimmedEntries = entries.map((entry) => ({
+      ...entry,
+      key: entry.key?.trim?.() || '',
+      value: entry.value?.trim?.() || ''
+    }));
+
+    const keyedEntries = trimmedEntries.map((entry) => ({
+      ...entry,
+      keyError: !entry.key,
+      valueError: !entry.value
+    }));
+
+    const seenKeys = new Set();
+    const duplicates = new Set();
+    keyedEntries.forEach((entry) => {
+      const lowerKey = entry.key?.toLowerCase();
+      if (!lowerKey) {
+        return;
+      }
+      if (seenKeys.has(lowerKey)) {
+        duplicates.add(lowerKey);
+      }
+      seenKeys.add(lowerKey);
+    });
+
+    const entriesWithDuplicateFlags = keyedEntries.map((entry) => {
+      const lowerKey = entry.key?.toLowerCase();
+      const duplicate = lowerKey && duplicates.has(lowerKey);
+      return {
+        ...entry,
+        keyError: entry.keyError || duplicate
+      };
+    });
+
+    const entriesWithRequiredFlags = entriesWithDuplicateFlags;
+
+    const hasErrors = entriesWithRequiredFlags.some((entry) => entry.keyError || entry.valueError);
+
+    const normalizedTerms = hasErrors
+      ? null
+      : entriesWithRequiredFlags.reduce((acc, entry) => {
+        if (entry.key) {
+          acc[entry.key] = entry.value;
+        }
+        return acc;
+      }, {});
+
+    let errorMessage = null;
+    if (duplicates.size > 0) {
+      errorMessage = 'Each term label must be unique.';
+    } else if (hasErrors) {
+      errorMessage = 'Please complete all required fields before saving.';
+    }
+
+    return {
+      entries: entriesWithRequiredFlags,
+      normalizedTerms,
+      hasErrors,
+      errorMessage
+    };
+
+    return {
+      entries: finalEntries,
+      normalizedTerms,
+      hasErrors,
+      errorMessage
+    };
+  };
+
+  const runTermsValidation = useCallback(() => {
+    const validation = validateEditableTerms(editableTerms);
+    setEditableTerms(validation.entries);
+
+    if (validation.hasErrors || !validation.normalizedTerms) {
+      setEditError(validation.errorMessage);
+      return null;
+    }
+
+    setEditError(null);
+    return validation.normalizedTerms;
+  }, [editableTerms]);
+
+  const handleSaveEdit = async () => {
+    if (!onUpdate) {
+      setIsEditing(false);
+      return;
+    }
+
+    const normalizedTerms = runTermsValidation();
+    if (!normalizedTerms) return;
+
+    try {
+      await onUpdate({ terms: normalizedTerms }, { mergeTerms: false });
+      setIsEditing(false);
+    } catch (updateError) {
+      const message = updateError?.message || 'Failed to update the contract. Please try again.';
+      setEditError(message);
+    }
+  };
+
+  const handleSaveDraftAction = useCallback(async () => {
+    if (typeof onSaveDraft !== 'function') {
+      return;
+    }
+
+    const normalizedTerms = runTermsValidation();
+    if (!normalizedTerms) return;
+
+    try {
+      await onSaveDraft({ contract, booking, terms: normalizedTerms });
+      setIsEditing(false);
+    } catch (draftError) {
+      const message = draftError?.message || 'Failed to save the draft. Please try again.';
+      setEditError(message);
+    }
+  }, [onSaveDraft, runTermsValidation, contract, booking]);
+
+  const handleSendForSignatureAction = useCallback(async () => {
+    if (typeof onSendForSignature !== 'function') {
+      return;
+    }
+
+    const normalizedTerms = runTermsValidation();
+    if (!normalizedTerms) return;
+
+    try {
+      await onSendForSignature({ contract, booking, terms: normalizedTerms });
+      setIsEditing(false);
+    } catch (sendError) {
+      const message = sendError?.message || 'Failed to send for signature. Please try again.';
+      setEditError(message);
+    }
+  }, [onSendForSignature, runTermsValidation, contract, booking]);
+
   return (
     <Modal
       visible={Boolean(visible)}
@@ -130,9 +387,17 @@ const ContractModal = ({
               <Ionicons name="document-text-outline" size={22} color="#4F46E5" />
               <Text style={styles.headerTitle}>Contract</Text>
             </View>
-            <TouchableOpacity onPress={onClose} style={styles.closeButton}>
-              <Ionicons name="close" size={22} color="#111827" />
-            </TouchableOpacity>
+            <View style={styles.headerActions}>
+              {editingAllowed && !isEditing ? (
+                <TouchableOpacity style={styles.headerActionButton} onPress={handleStartEdit}>
+                  <Ionicons name="create-outline" size={18} color="#2563EB" />
+                  <Text style={styles.headerActionText}>Edit</Text>
+                </TouchableOpacity>
+              ) : null}
+              <TouchableOpacity onPress={onClose} style={styles.closeButton}>
+                <Ionicons name="close" size={22} color="#111827" />
+              </TouchableOpacity>
+            </View>
           </View>
 
           <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
@@ -152,9 +417,52 @@ const ContractModal = ({
               </View>
             </View>
 
+            {allowEditing && !editingAllowed ? (
+              <View style={styles.noticeBox}>
+                <Ionicons name="lock-closed-outline" size={18} color="#6B7280" />
+                <Text style={styles.noticeText}>This contract has been finalized and can no longer be edited.</Text>
+              </View>
+            ) : null}
+
             <View style={styles.section}>
-              <Text style={styles.sectionTitle}>Contract terms</Text>
-              {termsEntries.length === 0 ? (
+              <Text style={styles.sectionTitle}>{isEditing ? 'Edit contract terms' : 'Contract terms'}</Text>
+              {isEditing ? (
+                <View style={styles.editTermsContainer}>
+                  {editableTerms.map((entry, index) => (
+                    <View key={entry.id} style={styles.editTermRow}>
+                      <View style={styles.editTermColumn}>
+                        <TextInput
+                          value={entry.key}
+                          onChangeText={(value) => handleTermChange(entry.id, 'key', value)}
+                          placeholder={`Term label ${index + 1}`}
+                          style={[styles.editTermInput, entry.keyError && styles.inputErrorBorder]}
+                        />
+                        {entry.keyError ? <Text style={styles.inputErrorText}>Required</Text> : null}
+                      </View>
+                      <View style={[styles.editTermColumn, styles.editTermValueColumn]}>
+                        <TextInput
+                          value={entry.value}
+                          onChangeText={(value) => handleTermChange(entry.id, 'value', value)}
+                          placeholder="Details"
+                          style={[styles.editTermInput, styles.editTermValueInput, entry.valueError && styles.inputErrorBorder]}
+                          multiline
+                          textAlignVertical="top"
+                        />
+                        {entry.valueError ? <Text style={styles.inputErrorText}>Required</Text> : null}
+                      </View>
+                      {editableTerms.length > 1 ? (
+                        <TouchableOpacity style={styles.removeTermButton} onPress={() => handleRemoveTerm(entry.id)}>
+                          <Ionicons name="trash-outline" size={18} color="#DC2626" />
+                        </TouchableOpacity>
+                      ) : null}
+                    </View>
+                  ))}
+                  <TouchableOpacity style={styles.addTermButton} onPress={handleAddTerm}>
+                    <Ionicons name="add-circle-outline" size={18} color="#2563EB" />
+                    <Text style={styles.addTermButtonText}>Add term</Text>
+                  </TouchableOpacity>
+                </View>
+              ) : termsEntries.length === 0 ? (
                 <Text style={styles.emptyText}>No terms provided.</Text>
               ) : (
                 <View style={styles.termsList}>
@@ -186,7 +494,7 @@ const ContractModal = ({
               </View>
             </View>
 
-            {canSign ? (
+            {isEditing ? null : canSign ? (
               <View style={styles.section}>
                 <Text style={styles.sectionTitle}>Review & sign</Text>
                 <TouchableOpacity style={styles.checkboxRow} onPress={handleToggleAcknowledge}>
@@ -212,7 +520,14 @@ const ContractModal = ({
               </View>
             )}
 
-            {error ? (
+            {editError ? (
+              <View style={styles.errorBox}>
+                <Ionicons name="alert-circle" size={18} color="#B91C1C" />
+                <Text style={styles.errorText}>{editError}</Text>
+              </View>
+            ) : null}
+
+            {error && !editError ? (
               <View style={styles.errorBox}>
                 <Ionicons name="alert-circle" size={18} color="#B91C1C" />
                 <Text style={styles.errorText}>{error}</Text>
@@ -221,41 +536,104 @@ const ContractModal = ({
           </ScrollView>
 
           <View style={styles.footer}>
-            {onDownloadPdf ? (
-              <TouchableOpacity style={[styles.footerButton, styles.secondaryButton]} onPress={() => onDownloadPdf(contract)}>
-                <Ionicons name="download-outline" size={18} color="#4F46E5" />
-                <Text style={styles.footerButtonTextSecondary}>Download PDF</Text>
-              </TouchableOpacity>
-            ) : null}
-
-            {canSign ? (
-              <TouchableOpacity
-                style={[styles.footerButton, readyToSign ? styles.primaryButton : styles.primaryButtonDisabled]}
-                disabled={!readyToSign}
-                onPress={handleSignPress}
-              >
-                {signing ? (
-                  <ActivityIndicator color="#FFFFFF" />
-                ) : (
-                  <>
-                    <Ionicons name="create-outline" size={18} color="#FFFFFF" />
-                    <Text style={styles.footerButtonTextPrimary}>Sign contract</Text>
-                  </>
-                )}
-              </TouchableOpacity>
+            {isEditing ? (
+              <>
+                <TouchableOpacity
+                  style={[styles.footerButton, styles.secondaryButton]}
+                  onPress={handleCancelEdit}
+                  disabled={updating || savingDraft || sendingForSignature}
+                >
+                  <Ionicons name="arrow-undo" size={18} color="#4F46E5" />
+                  <Text style={styles.footerButtonTextSecondary}>Cancel</Text>
+                </TouchableOpacity>
+                {typeof onSaveDraft === 'function' ? (
+                  <TouchableOpacity
+                    style={[styles.footerButton, savingDraft ? styles.primaryButtonDisabled : styles.primaryButton]}
+                    onPress={handleSaveDraftAction}
+                    disabled={savingDraft || sendingForSignature}
+                  >
+                    {savingDraft ? (
+                      <ActivityIndicator color="#FFFFFF" />
+                    ) : (
+                      <>
+                        <Ionicons name="cloud-upload-outline" size={18} color="#FFFFFF" />
+                        <Text style={styles.footerButtonTextPrimary}>Save draft</Text>
+                      </>
+                    )}
+                  </TouchableOpacity>
+                ) : null}
+                {typeof onSendForSignature === 'function' ? (
+                  <TouchableOpacity
+                    style={[styles.footerButton, sendingForSignature ? styles.primaryButtonDisabled : styles.primaryButton]}
+                    onPress={handleSendForSignatureAction}
+                    disabled={sendingForSignature || savingDraft}
+                  >
+                    {sendingForSignature ? (
+                      <ActivityIndicator color="#FFFFFF" />
+                    ) : (
+                      <>
+                        <Ionicons name="send-outline" size={18} color="#FFFFFF" />
+                        <Text style={styles.footerButtonTextPrimary}>Send for signature</Text>
+                      </>
+                    )}
+                  </TouchableOpacity>
+                ) : null}
+                {typeof onSaveDraft !== 'function' && typeof onSendForSignature !== 'function' ? (
+                  <TouchableOpacity
+                    style={[styles.footerButton, updating ? styles.primaryButtonDisabled : styles.primaryButton]}
+                    onPress={handleSaveEdit}
+                    disabled={updating}
+                  >
+                    {updating ? (
+                      <ActivityIndicator color="#FFFFFF" />
+                    ) : (
+                      <>
+                        <Ionicons name="save-outline" size={18} color="#FFFFFF" />
+                        <Text style={styles.footerButtonTextPrimary}>Save changes</Text>
+                      </>
+                    )}
+                  </TouchableOpacity>
+                ) : null}
+              </>
             ) : (
-              <TouchableOpacity style={[styles.footerButton, styles.primaryButton]} onPress={onClose}>
-                <Ionicons name="checkmark" size={18} color="#FFFFFF" />
-                <Text style={styles.footerButtonTextPrimary}>Close</Text>
-              </TouchableOpacity>
-            )}
+              <>
+                {onDownloadPdf ? (
+                  <TouchableOpacity style={[styles.footerButton, styles.secondaryButton]} onPress={() => onDownloadPdf(contract)}>
+                    <Ionicons name="download-outline" size={18} color="#4F46E5" />
+                    <Text style={styles.footerButtonTextSecondary}>Download PDF</Text>
+                  </TouchableOpacity>
+                ) : null}
 
-            {!canSign && onResend ? (
-              <TouchableOpacity style={[styles.footerButton, styles.secondaryButton]} onPress={() => onResend(contract)}>
-                <Ionicons name="send-outline" size={18} color="#4F46E5" />
-                <Text style={styles.footerButtonTextSecondary}>Send reminder</Text>
-              </TouchableOpacity>
-            ) : null}
+                {canSign ? (
+                  <TouchableOpacity
+                    style={[styles.footerButton, readyToSign ? styles.primaryButton : styles.primaryButtonDisabled]}
+                    disabled={!readyToSign}
+                    onPress={handleSignPress}
+                  >
+                    {signing ? (
+                      <ActivityIndicator color="#FFFFFF" />
+                    ) : (
+                      <>
+                        <Ionicons name="create-outline" size={18} color="#FFFFFF" />
+                        <Text style={styles.footerButtonTextPrimary}>Sign contract</Text>
+                      </>
+                    )}
+                  </TouchableOpacity>
+                ) : (
+                  <TouchableOpacity style={[styles.footerButton, styles.primaryButton]} onPress={onClose}>
+                    <Ionicons name="checkmark" size={18} color="#FFFFFF" />
+                    <Text style={styles.footerButtonTextPrimary}>Close</Text>
+                  </TouchableOpacity>
+                )}
+
+                {!canSign && onResend ? (
+                  <TouchableOpacity style={[styles.footerButton, styles.secondaryButton]} onPress={() => onResend(contract)}>
+                    <Ionicons name="send-outline" size={18} color="#4F46E5" />
+                    <Text style={styles.footerButtonTextSecondary}>Send reminder</Text>
+                  </TouchableOpacity>
+                ) : null}
+              </>
+            )}
           </View>
         </View>
       </View>

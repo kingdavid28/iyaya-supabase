@@ -2,6 +2,7 @@ import { SupabaseBase, supabase } from './base'
 import { getCachedOrFetch, invalidateCache } from './cache'
 
 const TABLE_REQUESTS = 'information_requests'
+const VIEWER_PERMISSION_TABLE = 'information_request_permissions'
 const CACHE_TTL_MS = 30 * 1000
 const REQUEST_SELECT = `*,
   requester:requester_id (
@@ -20,6 +21,19 @@ const REQUEST_SELECT = `*,
     first_name,
     last_name
   )`
+
+const SENSITIVE_PERMISSION_FIELDS = new Set([
+    'documents',
+    'background_check',
+    'emergency_contacts',
+    'age_care_ranges',
+    'child_medical_info',
+    'child_allergies',
+    'child_behavior_notes',
+    'financial_info'
+])
+
+const snakeToCamel = (input = '') => String(input).replace(/_([a-z])/g, (_, group) => group.toUpperCase())
 
 class InformationRequestService extends SupabaseBase {
     _profileSummary(profile, fallbackId) {
@@ -61,6 +75,95 @@ class InformationRequestService extends SupabaseBase {
             createdAt: row.created_at,
             updatedAt: row.updated_at
         }
+    }
+
+    _normalizePermission(row) {
+        if (!row) return null
+
+        return {
+            id: row.id,
+            requestId: row.request_id,
+            viewerId: row.viewer_id,
+            targetId: row.target_id,
+            field: row.field,
+            expiresAt: this._normalizeTimestamp(row.expires_at),
+            createdAt: this._normalizeTimestamp(row.created_at)
+        }
+    }
+
+    _normalizeTimestamp(value) {
+        if (!value) return null
+
+        if (value instanceof Date) {
+            return value.toISOString()
+        }
+
+        const parsed = new Date(value)
+        return Number.isNaN(parsed.getTime()) ? null : parsed.toISOString()
+    }
+
+    _normalizeDocuments(documents) {
+        if (!Array.isArray(documents)) {
+            return []
+        }
+
+        return documents
+            .map(document => {
+                if (!document || typeof document !== 'object') {
+                    return null
+                }
+
+                const uploadedAt = document.uploadedAt || document.uploaded_at || document.createdAt || document.created_at || document.timestamp
+
+                return {
+                    id: document.id || document.documentId || document.uuid || document.url || null,
+                    type: document.type || document.documentType || document.category || null,
+                    label: document.label || document.name || document.fileName || 'Document',
+                    fileName: document.fileName || document.name || null,
+                    url: document.url || document.fileUrl || document.href || null,
+                    verified: typeof document.verified === 'boolean'
+                        ? document.verified
+                        : Boolean(document.isVerified ?? document.approved ?? document.status === 'verified'),
+                    uploadedAt: this._normalizeTimestamp(uploadedAt),
+                    metadata: document.metadata || null,
+                    raw: document
+                }
+            })
+            .filter(Boolean)
+    }
+
+    _dedupePermissions(rows = [], includeExpired = false) {
+        const normalized = (rows || []).map(row => {
+            const permission = this._normalizePermission(row)
+            return {
+                ...permission,
+                fieldCamel: snakeToCamel(permission.field)
+            }
+        })
+
+        const byField = new Map()
+        normalized.forEach(permission => {
+            const existing = byField.get(permission.field)
+            const createdAtMs = permission.createdAt ? new Date(permission.createdAt).getTime() : 0
+
+            if (!existing) {
+                byField.set(permission.field, permission)
+                return
+            }
+
+            const existingCreatedMs = existing.createdAt ? new Date(existing.createdAt).getTime() : 0
+            if (createdAtMs > existingCreatedMs) {
+                byField.set(permission.field, permission)
+            }
+        })
+
+        const deduped = Array.from(byField.values())
+        if (includeExpired) {
+            return deduped
+        }
+
+        const now = Date.now()
+        return deduped.filter(permission => !permission.expiresAt || new Date(permission.expiresAt).getTime() > now)
     }
 
     _cacheKey(type, userId) {
@@ -195,6 +298,29 @@ class InformationRequestService extends SupabaseBase {
 
             return updated
         } catch (error) {
+            if (error?.code === '23505') {
+                console.warn('Duplicate permission detected during respondToRequest, skipping insert.', error)
+
+                try {
+                    const existing = await this._getRequestById(requestId)
+
+                    const targetCacheKey = existing?.targetUserId || existing?.target?.id || existing?.targetId?.id
+                    if (targetCacheKey) {
+                        invalidateCache(this._cacheKey('pending', targetCacheKey))
+                    }
+
+                    const requesterCacheKey = existing?.requesterUserId || existing?.requester?.id || existing?.requesterId?.id
+                    if (requesterCacheKey) {
+                        invalidateCache(this._cacheKey('sent', requesterCacheKey))
+                    }
+
+                    return existing
+                } catch (fetchError) {
+                    console.warn('Failed to refetch request after duplicate permission error.', fetchError)
+                    return { id: requestId }
+                }
+            }
+
             return this._handleError('respondToRequest', error)
         }
     }
@@ -218,6 +344,217 @@ class InformationRequestService extends SupabaseBase {
             return updated
         } catch (error) {
             return this._handleError('revokeAccess', error)
+        }
+    }
+
+    async getViewerPermissions(targetUserId, viewerUserId = null, options = {}) {
+        const { includeExpired = false } = options
+
+        try {
+            const viewerId = viewerUserId
+                ? await this._ensureUserId(viewerUserId, 'Viewer ID')
+                : (await this._ensureAuthenticated()).id
+            const resolvedTargetId = await this._ensureUserId(targetUserId, 'Target ID')
+
+            const { data, error } = await supabase
+                .from(VIEWER_PERMISSION_TABLE)
+                .select('*')
+                .eq('viewer_id', viewerId)
+                .eq('target_id', resolvedTargetId)
+                .order('created_at', { ascending: false })
+
+            if (error) throw error
+
+            const deduped = this._dedupePermissions(data || [], includeExpired)
+            const permissionFields = deduped.map(permission => permission.field)
+            const camelFields = deduped.map(permission => permission.fieldCamel)
+            const sensitiveFields = deduped
+                .filter(permission => SENSITIVE_PERMISSION_FIELDS.has(permission.field))
+                .map(permission => permission.field)
+
+            const expiresAt = deduped.reduce((acc, permission) => {
+                if (!permission.expiresAt) {
+                    return acc
+                }
+
+                if (!acc) {
+                    return permission.expiresAt
+                }
+
+                const current = new Date(permission.expiresAt).getTime()
+                const existing = new Date(acc).getTime()
+                return current < existing ? permission.expiresAt : acc
+            }, null)
+
+            return {
+                targetId: resolvedTargetId,
+                viewerId,
+                permissions: permissionFields,
+                permissionsCamel: camelFields,
+                sensitiveFields,
+                entries: deduped,
+                expiresAt
+            }
+        } catch (error) {
+            return this._handleError('getViewerPermissions', error)
+        }
+    }
+
+    async getSharedCaregiverData(targetUserId, viewerUserId = null, options = {}) {
+        const { includeExpired = false, includeRaw = false } = options
+
+        try {
+            const permissions = await this.getViewerPermissions(targetUserId, viewerUserId, { includeExpired })
+            if (!permissions || !Array.isArray(permissions.entries) || permissions.entries.length === 0) {
+                return {
+                    targetId: permissions?.targetId || null,
+                    viewerId: permissions?.viewerId || null,
+                    permissions,
+                    shared: {},
+                    documents: []
+                }
+            }
+
+            const allowedFields = new Set(permissions.permissions)
+            const [{ data: userRow, error: userError }, { data: profileRow, error: profileError }] = await Promise.all([
+                supabase
+                    .from('users')
+                    .select('id,name,email,phone,address,profile_image')
+                    .eq('id', permissions.targetId)
+                    .maybeSingle(),
+                supabase
+                    .from('caregiver_profiles')
+                    .select('*')
+                    .eq('user_id', permissions.targetId)
+                    .maybeSingle()
+            ])
+
+            if (userError) throw userError
+            if (profileError) throw profileError
+
+            const shared = {}
+            let documents = []
+
+            if (allowedFields.has('profile_image')) {
+                shared.profileImage = userRow?.profile_image || null
+            }
+
+            if (allowedFields.has('documents')) {
+                documents = this._normalizeDocuments(profileRow?.documents)
+                shared.documents = documents
+            }
+
+            if (allowedFields.has('background_check')) {
+                shared.backgroundCheckStatus = profileRow?.background_check_status || null
+            }
+
+            if (allowedFields.has('emergency_contacts')) {
+                shared.emergencyContacts = profileRow?.emergency_contacts || []
+            }
+
+            if (allowedFields.has('age_care_ranges')) {
+                shared.ageCareRanges = profileRow?.age_care_ranges || []
+            }
+
+            if (allowedFields.has('portfolio')) {
+                shared.portfolio = profileRow?.portfolio || null
+            }
+
+            if (allowedFields.has('availability')) {
+                shared.availability = profileRow?.availability || null
+            }
+
+            if (allowedFields.has('languages')) {
+                shared.languages = profileRow?.languages || []
+            }
+
+            if (allowedFields.has('phone')) {
+                shared.phone = userRow?.phone || null
+            }
+
+            if (allowedFields.has('address')) {
+                shared.address = userRow?.address || profileRow?.address || null
+            }
+
+            const result = {
+                targetId: permissions.targetId,
+                viewerId: permissions.viewerId,
+                permissions,
+                shared,
+                documents
+            }
+
+            if (includeRaw) {
+                result.raw = {
+                    user: userRow,
+                    caregiverProfile: profileRow
+                }
+            }
+
+            return result
+        } catch (error) {
+            return this._handleError('getSharedCaregiverData', error)
+        }
+    }
+
+    async getSharedProfileForViewer(targetUserId, viewerUserId = null, options = {}) {
+        const { includeExpired = false, includeRaw = false } = options || {}
+
+        try {
+            const sharedData = await this.getSharedCaregiverData(targetUserId, viewerUserId, {
+                includeExpired,
+                includeRaw
+            })
+
+            if (!sharedData) {
+                return null
+            }
+
+            const sharedProfile = {
+                profileImage: sharedData.shared?.profileImage ?? null,
+                backgroundCheckStatus: sharedData.shared?.backgroundCheckStatus ?? null,
+                emergencyContacts: sharedData.shared?.emergencyContacts ?? [],
+                ageCareRanges: sharedData.shared?.ageCareRanges ?? [],
+                portfolio: sharedData.shared?.portfolio ?? null,
+                availability: sharedData.shared?.availability ?? null,
+                languages: sharedData.shared?.languages ?? [],
+                phone: sharedData.shared?.phone ?? null,
+                address: sharedData.shared?.address ?? null
+            }
+
+            const grantedFields = new Set(sharedData.permissions?.permissions || [])
+            const grantedFieldsCamel = new Set(sharedData.permissions?.permissionsCamel || [])
+            const permissionsMap = {}
+            grantedFields.forEach(field => {
+                permissionsMap[field] = true
+            })
+            grantedFieldsCamel.forEach(field => {
+                permissionsMap[field] = true
+            })
+
+            const permissionsMeta = {
+                ...(sharedData.permissions || {}),
+                grantedFields: sharedData.permissions?.permissions || [],
+                grantedFieldsCamel: sharedData.permissions?.permissionsCamel || [],
+                map: permissionsMap
+            }
+
+            const response = {
+                targetId: sharedData.targetId,
+                viewerId: sharedData.viewerId,
+                profile: sharedProfile,
+                shared: sharedData.shared || {},
+                documents: sharedData.documents || [],
+                permissions: permissionsMeta
+            }
+
+            if (includeRaw && sharedData.raw) {
+                response.raw = sharedData.raw
+            }
+
+            return response
+        } catch (error) {
+            return this._handleError('getSharedProfileForViewer', error)
         }
     }
 }
