@@ -47,9 +47,9 @@ export class BookingService extends SupabaseBase {
         .insert([dbBookingData])
         .select()
         .single()
-      
+
       if (error) throw error
-      
+
       console.log('✅ Booking created successfully:', data)
       invalidateCache('bookings:')
       return data
@@ -61,7 +61,7 @@ export class BookingService extends SupabaseBase {
   async getMyBookings(userId, role) {
     try {
       const resolvedUserId = await this._ensureUserId(userId, 'User ID')
-      
+
       if (!['parent', 'caregiver'].includes(role)) {
         throw new Error('Role must be either "parent" or "caregiver"')
       }
@@ -96,10 +96,10 @@ export class BookingService extends SupabaseBase {
         }
 
         query = query.order('created_at', { ascending: false })
-        
+
         const { data, error } = await query
         if (error) throw error
-        
+
         const transformedData = data?.map(booking => {
           const { contracts: bookingContracts = [], job_contracts: legacyContracts = [], ...bookingRest } = booking
           const contractRecords = Array.isArray(bookingContracts) && bookingContracts.length > 0
@@ -184,7 +184,7 @@ export class BookingService extends SupabaseBase {
             latestContract
           }
         }) || []
-        
+
         return transformedData
       }, 30 * 1000)
     } catch (error) {
@@ -203,9 +203,9 @@ export class BookingService extends SupabaseBase {
         .eq('id', bookingId)
         .or(`parent_id.eq.${resolvedUserId},caregiver_id.eq.${resolvedUserId}`)
         .single()
-      
+
       if (error) throw error
-      
+
       return {
         ...data,
         caregiverId: data.caregiver ? {
@@ -254,22 +254,22 @@ export class BookingService extends SupabaseBase {
   async updateBookingStatus(bookingId, status) {
     try {
       this._validateId(bookingId, 'Booking ID')
-      
+
       const validStatuses = ['pending', 'confirmed', 'completed', 'cancelled']
       if (!validStatuses.includes(status)) {
         throw new Error(`Invalid status: ${status}. Must be one of: ${validStatuses.join(', ')}`)
       }
-      
+
       const { data, error } = await supabase
         .from('bookings')
-        .update({ 
-          status, 
-          updated_at: new Date().toISOString() 
+        .update({
+          status,
+          updated_at: new Date().toISOString()
         })
         .eq('id', bookingId)
         .select()
         .single()
-      
+
       if (error) throw error
       invalidateCache('bookings:')
       return data
@@ -395,27 +395,110 @@ export class BookingService extends SupabaseBase {
       }
     } catch (error) {
       return this._handleError('uploadPaymentProof', error)
+    } finally {
+      // Close the payment proof upload process
     }
   }
 
   async cancelBooking(bookingId) {
     try {
       this._validateId(bookingId, 'Booking ID')
-      
+
       const { data, error } = await supabase
         .from('bookings')
-        .update({ 
-          status: 'cancelled', 
-          updated_at: new Date().toISOString() 
+        .update({
+          status: 'cancelled',
+          updated_at: new Date().toISOString()
         })
         .eq('id', bookingId)
         .select()
         .single()
-      
+
       if (error) throw error
+      invalidateCache('bookings:')
       return data
     } catch (error) {
       return this._handleError('cancelBooking', error)
+    }
+  }
+
+  async updateBooking(bookingId, updates) {
+    try {
+      this._validateId(bookingId, 'Booking ID')
+
+      if (!updates || typeof updates !== 'object') {
+        throw new Error('Updates must be a valid object')
+      }
+
+      const normalizedUpdates = { ...updates }
+
+      if (normalizedUpdates.startTime && !normalizedUpdates.start_time) {
+        normalizedUpdates.start_time = normalizedUpdates.startTime
+        delete normalizedUpdates.startTime
+      }
+
+      if (normalizedUpdates.endTime && !normalizedUpdates.end_time) {
+        normalizedUpdates.end_time = normalizedUpdates.endTime
+        delete normalizedUpdates.endTime
+      }
+
+      if (normalizedUpdates.totalAmount && !normalizedUpdates.total_amount) {
+        normalizedUpdates.total_amount = normalizedUpdates.totalAmount
+        delete normalizedUpdates.totalAmount
+      }
+
+      if (normalizedUpdates.hourlyRate && !normalizedUpdates.hourly_rate) {
+        normalizedUpdates.hourly_rate = normalizedUpdates.hourlyRate
+        delete normalizedUpdates.hourlyRate
+      }
+
+      if (normalizedUpdates.contactPhone && !normalizedUpdates.contact_phone) {
+        normalizedUpdates.contact_phone = normalizedUpdates.contactPhone
+        delete normalizedUpdates.contactPhone
+      }
+
+      if (normalizedUpdates.specialInstructions && !normalizedUpdates.special_instructions) {
+        normalizedUpdates.special_instructions = normalizedUpdates.specialInstructions
+        delete normalizedUpdates.specialInstructions
+      }
+
+      if (normalizedUpdates.emergencyContact && !normalizedUpdates.emergency_contact) {
+        normalizedUpdates.emergency_contact = normalizedUpdates.emergencyContact
+        delete normalizedUpdates.emergencyContact
+      }
+
+      const { data, error } = await supabase
+        .from('bookings')
+        .update({
+          ...normalizedUpdates,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', bookingId)
+        .select()
+        .single()
+
+      if (error) throw error
+      invalidateCache('bookings:')
+      return data
+    } catch (error) {
+      return this._handleError('updateBooking', error)
+    }
+  }
+
+  async deleteBooking(bookingId) {
+    try {
+      this._validateId(bookingId, 'Booking ID')
+
+      const { error } = await supabase
+        .from('bookings')
+        .delete()
+        .eq('id', bookingId)
+
+      if (error) throw error
+      invalidateCache('bookings:')
+      return { success: true }
+    } catch (error) {
+      return this._handleError('deleteBooking', error)
     }
   }
 }

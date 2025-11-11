@@ -146,7 +146,7 @@ const CaregiverCardComponent = ({ caregiver = {}, onPress, onMessagePress, onVie
                 <Image
                   source={getImageSource(avatar)}
                   style={caregiverCardStyles.avatarImage}
-                  resizeMode="contain"
+                  resizeMode="cover"
                   accessible={false}
                   onError={(error) => {
                     const errorMessage = error?.nativeEvent?.error || error;
@@ -375,6 +375,7 @@ const caregiverCardStyles = StyleSheet.create({
   avatarImage: {
     width: '100%',
     height: '100%',
+    borderRadius: 38,
   },
   avatarFallback: {
     flex: 1,
@@ -382,6 +383,7 @@ const caregiverCardStyles = StyleSheet.create({
     backgroundColor: 'rgba(255,255,255,0.2)',
     justifyContent: 'center',
     alignItems: 'center',
+    overflow: 'hidden',
   },
   headerInfo: {
     flex: 1,

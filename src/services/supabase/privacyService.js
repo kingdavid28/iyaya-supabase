@@ -1,7 +1,7 @@
 // c:/Users/reycel/Documents/iyayabeforereadme/forTransferIyaya/iyayaSupa/src/services/supabase/privacyService.js
-import { SupabaseBase, supabase } from './base'
-import { getCachedOrFetch, invalidateCache } from './cache'
-import { notificationService } from './index'
+import { SupabaseBase, supabase } from './base.js'
+import { getCachedOrFetch, invalidateCache } from './cache.js'
+import { notificationService } from './notificationService.js'
 
 // Database artefacts
 const TABLE_SETTINGS = 'privacy_settings'
@@ -35,10 +35,14 @@ const DEFAULT_SETTINGS = {
 
 // Helpers
 const toCamel = (input = '') => input.replace(/_([a-z])/g, (_, c) => c.toUpperCase())
+
 const toSnake = (input = '') =>
-    input
-        .replace(/([a-z0-9])([A-Z])/g, '$1_$2')
-        .replace(/\s+/g, '_')
+    String(input)
+        .trim()
+        .replace(/([a-z\d])([A-Z])/g, '$1_$2')
+        .replace(/[^a-z\d_]+/gi, '_')
+        .replace(/__+/g, '_')
+        .replace(/^_+|_+$/g, '')
         .toLowerCase()
 
 const normalizeSettingsRow = (row) => {
@@ -92,7 +96,7 @@ const isMissingTableError = (error, tableName) => {
     if (error.code === 'PGRST205') return true
     const message = String(error.message || '').toLowerCase()
     const hint = String(error.hint || '').toLowerCase()
-    return message.includes('could not find the table') || hint.includes(`'public.${tableName?.toLowerCase?.()}`)
+    return message.includes('could not find the table') || hint.includes(`'public.${tableName?.toLowerCase?.()}'`)
 }
 
 class PrivacyService extends SupabaseBase {
@@ -321,14 +325,14 @@ class PrivacyService extends SupabaseBase {
             const entries = await getCachedOrFetch(
                 cacheKey,
                 async () => {
-                    const query = supabase
+                    let query = supabase
                         .from(TABLE_NOTIFICATIONS)
                         .select('*')
                         .eq('user_id', targetId)
                         .order('created_at', { ascending: false })
 
                     if (!includeRead) {
-                        query.eq('read', false)
+                        query = query.eq('read', false)
                     }
 
                     const { data, error } = await query

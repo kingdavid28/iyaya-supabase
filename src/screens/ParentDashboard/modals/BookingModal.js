@@ -1,44 +1,35 @@
-import React, { useState, useEffect } from 'react';
 import {
-  View,
-  Text,
-  ScrollView,
-  TouchableOpacity,
-  TextInput,
-  Alert,
-  Platform,
+  AlertCircle,
+  Baby,
+  Calendar,
+  CheckCircle,
+  Clock,
+  MapPin,
+  Phone,
+  User,
+  X
+} from 'lucide-react-native';
+import React, { useEffect, useState } from 'react';
+import {
   ActivityIndicator,
-  StyleSheet,
-  KeyboardAvoidingView,
+  Alert,
   Image,
   Keyboard,
-  Dimensions,
+  KeyboardAvoidingView,
+  Platform,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View
 } from 'react-native';
 import { Button } from 'react-native-paper';
 import { ModalWrapper } from '../../../shared/ui';
-import KeyboardAvoidingWrapper from '../../../shared/ui/layout/KeyboardAvoidingWrapper';
-import { 
-  X, 
-  Calendar, 
-  Clock, 
-  DollarSign, 
-  MapPin, 
-  Users, 
-  Phone, 
-  Mail, 
-  MessageCircle, 
-  Navigation, 
-  Star, 
-  Baby, 
-  AlertCircle, 
-  CheckCircle, 
-  User 
-} from 'lucide-react-native';
 import SimpleDatePicker from '../../../shared/ui/inputs/SimpleDatePicker';
 import TimePicker from '../../../shared/ui/inputs/TimePicker';
-import { formatAddress } from '../../../utils/addressUtils';
-import { getCurrentDeviceLocation } from '../../../utils/locationUtils';
 import { getImageSource } from '../../../utils/imageUtils';
+import { getCurrentDeviceLocation } from '../../../utils/locationUtils';
 
 const BookingModal = ({ caregiver, childrenList = [], onConfirm, onClose, visible }) => {
   const [currentStep, setCurrentStep] = useState(1);
@@ -81,18 +72,18 @@ const BookingModal = ({ caregiver, childrenList = [], onConfirm, onClose, visibl
   // Helper function to convert time to 24-hour format
   const convertTo24Hour = (time12h) => {
     if (!time12h) return '';
-    
+
     const [time, modifier] = time12h.split(' ');
     let [hours, minutes] = time.split(':');
-    
+
     if (hours === '12') {
       hours = '00';
     }
-    
+
     if (modifier === 'PM') {
       hours = parseInt(hours, 10) + 12;
     }
-    
+
     return `${hours.padStart(2, '0')}:${minutes}`;
   };
 
@@ -107,15 +98,15 @@ const BookingModal = ({ caregiver, childrenList = [], onConfirm, onClose, visibl
 
   const calculateTotalCost = () => {
     if (!bookingData.startTime || !bookingData.endTime) return 0;
-    
+
     // Convert to 24-hour format for calculation
     const startTime24 = convertTo24Hour(bookingData.startTime);
     const endTime24 = convertTo24Hour(bookingData.endTime);
-    
+
     const start = new Date(`2024-01-01T${startTime24}`);
     const end = new Date(`2024-01-01T${endTime24}`);
     const hours = (end.getTime() - start.getTime()) / (1000 * 60 * 60);
-    
+
     return Math.max(0, hours * resolveHourlyRate());
   };
 
@@ -135,7 +126,7 @@ const BookingModal = ({ caregiver, childrenList = [], onConfirm, onClose, visibl
     try {
       setLocationLoading(true);
       const locationData = await getCurrentDeviceLocation();
-      
+
       if (locationData && locationData.address) {
         const formattedAddress = `${locationData.address.street || ''} ${locationData.address.city || ''}, ${locationData.address.province || ''}`;
         setBookingData(prev => ({ ...prev, address: formattedAddress.trim() }));
@@ -150,11 +141,11 @@ const BookingModal = ({ caregiver, childrenList = [], onConfirm, onClose, visibl
   const handleSubmit = async () => {
     setSubmitError('');
     setSubmitting(true);
-    
+
     // Convert times to 24-hour format for backend
     const startTime24 = convertTo24Hour(bookingData.startTime);
     const endTime24 = convertTo24Hour(bookingData.endTime);
-    
+
     // Validate time format before submission
     const timeRegex = /^([01]?[0-9]|2[0-3]):[0-5][0-9]$/;
     if (!timeRegex.test(startTime24) || !timeRegex.test(endTime24)) {
@@ -162,12 +153,12 @@ const BookingModal = ({ caregiver, childrenList = [], onConfirm, onClose, visibl
       setSubmitting(false);
       return;
     }
-    
+
     console.log('BookingModal - caregiver object:', caregiver);
     console.log('BookingModal - caregiver._id:', caregiver._id);
     console.log('BookingModal - caregiver.id:', caregiver.id);
     console.log('BookingModal - caregiverId type:', typeof (caregiver._id || caregiver.id));
-    
+
     const finalBookingData = {
       ...bookingData,
       startTime: startTime24,
@@ -214,7 +205,7 @@ const BookingModal = ({ caregiver, childrenList = [], onConfirm, onClose, visibl
   const renderStep1 = () => (
     <View style={styles.stepContainer}>
       <Text style={styles.sectionTitle}>Schedule Details</Text>
-      
+
       <View style={styles.inputContainer}>
         <SimpleDatePicker
           label="Date"
@@ -269,7 +260,7 @@ const BookingModal = ({ caregiver, childrenList = [], onConfirm, onClose, visibl
           </Text>
         </View>
       )}
-      
+
       {/* Step Navigation Buttons */}
       <View style={styles.stepNavigation}>
         <TouchableOpacity
@@ -302,7 +293,7 @@ const BookingModal = ({ caregiver, childrenList = [], onConfirm, onClose, visibl
   const renderStep2 = () => (
     <View style={styles.stepContainer}>
       <Text style={styles.sectionTitle}>Select Children</Text>
-      
+
       <View style={styles.childrenList}>
         {childrenList.map((child, index) => (
           <View key={index} style={styles.childItem}>
@@ -389,7 +380,7 @@ const BookingModal = ({ caregiver, childrenList = [], onConfirm, onClose, visibl
   const renderStep3 = () => (
     <View style={styles.stepContainer}>
       <Text style={styles.sectionTitle}>Contact & Location</Text>
-      
+
       <View style={styles.locationSection}>
         <Button
           mode="outlined"
@@ -402,7 +393,7 @@ const BookingModal = ({ caregiver, childrenList = [], onConfirm, onClose, visibl
           {locationLoading ? 'Getting Location...' : 'Use Current Location (GPS)'}
         </Button>
       </View>
-      
+
       <View style={styles.inputContainer}>
         <Text style={styles.label}>Address</Text>
         <TextInput
@@ -721,7 +712,7 @@ const BookingModal = ({ caregiver, childrenList = [], onConfirm, onClose, visibl
                   <View style={[
                     styles.progressLine,
                     step < currentStep && styles.progressLineActive
-                  ]}/>
+                  ]} />
                 )}
               </View>
             ))}

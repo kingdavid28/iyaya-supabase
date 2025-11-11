@@ -33,7 +33,17 @@ const SENSITIVE_PERMISSION_FIELDS = new Set([
     'financial_info'
 ])
 
-const snakeToCamel = (input = '') => String(input).replace(/_([a-z])/g, (_, group) => group.toUpperCase())
+const snakeToCamel = (input = '') =>
+  String(input).replace(/_([a-z])/g, (_, group) => group.toUpperCase());
+
+const toSnake = (input = '') =>
+  String(input)
+    .trim()
+    .replace(/([a-z\d])([A-Z])/g, '$1_$2')
+    .replace(/[^a-z\d_]+/gi, '_')
+    .replace(/__+/g, '_')
+    .replace(/^_+|_+$/g, '')
+    .toLowerCase();
 
 class InformationRequestService extends SupabaseBase {
     _profileSummary(profile, fallbackId) {
@@ -170,6 +180,43 @@ class InformationRequestService extends SupabaseBase {
         return `${TABLE_REQUESTS}:${type}:${userId}`
     }
 
+    async _filterNewPermissionFields(targetId, viewerId, fields) {
+        if (!targetId || !viewerId || !Array.isArray(fields) || !fields.length) {
+            return Array.isArray(fields) ? fields : []
+        }
+
+        try {
+            const { data, error } = await supabase
+                .from(VIEWER_PERMISSION_TABLE)
+                .select('field')
+                .eq('target_id', targetId)
+                .eq('viewer_id', viewerId)
+                .in('field', fields)
+
+            if (error) {
+                console.warn('Failed to query existing information request permissions:', error)
+                return fields
+            }
+
+            const existingFields = new Set((data || []).map((row) => row.field))
+            if (!existingFields.size) {
+                return fields
+            }
+
+            const filtered = fields.filter((field) => !existingFields.has(field))
+            if (filtered.length !== fields.length) {
+                console.log('ℹ️ Skipping already granted fields for information request:', {
+                    skipped: fields.filter((field) => existingFields.has(field))
+                })
+            }
+
+            return filtered
+        } catch (error) {
+            console.warn('Error filtering existing information request permissions:', error)
+            return fields
+        }
+    }
+
     async _getRequestById(requestId) {
         this._validateId(requestId, 'Request ID')
 
@@ -267,15 +314,36 @@ class InformationRequestService extends SupabaseBase {
     }
 
     async respondToRequest({ requestId, approved, sharedFields = [], expiresAt = null }) {
+        let requestMeta = null
+
         try {
             if (typeof approved !== 'boolean') {
                 throw new Error('approved flag is required')
             }
 
+            requestMeta = await this._getRequestById(requestId)
+
+            const normalizedFields = Array.from(
+                new Set(
+                    (Array.isArray(sharedFields) ? sharedFields : [])
+                        .map((field) => toSnake(String(field).trim()))
+                        .filter(Boolean)
+                )
+            )
+
+            let filteredFields = normalizedFields
+
+            if (approved && normalizedFields.length) {
+                const targetId = requestMeta?.targetUserId || requestMeta?.target?.id || requestMeta?.targetId?.id
+                const viewerId = requestMeta?.requesterUserId || requestMeta?.requester?.id || requestMeta?.requesterId?.id
+
+                filteredFields = await this._filterNewPermissionFields(targetId, viewerId, normalizedFields)
+            }
+
             const payload = {
                 p_request_id: requestId,
                 approved,
-                shared_fields_input: Array.isArray(sharedFields) ? sharedFields : [],
+                shared_fields_input: filteredFields,
                 expires_at_input: expiresAt
             }
 
@@ -302,7 +370,7 @@ class InformationRequestService extends SupabaseBase {
                 console.warn('Duplicate permission detected during respondToRequest, skipping insert.', error)
 
                 try {
-                    const existing = await this._getRequestById(requestId)
+                    const existing = requestMeta || (await this._getRequestById(requestId))
 
                     const targetCacheKey = existing?.targetUserId || existing?.target?.id || existing?.targetId?.id
                     if (targetCacheKey) {

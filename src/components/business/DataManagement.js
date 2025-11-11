@@ -1,12 +1,47 @@
-import React, { useState } from 'react';
-import { View, Text, TouchableOpacity, ScrollView, Alert, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import * as Print from 'expo-print';
+import * as Sharing from 'expo-sharing';
+import React, { useCallback, useEffect, useState } from 'react';
+import { Alert, Platform, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { settingsService } from '../../services/settingsService';
+
+const escapeHtml = (value = '') =>
+  String(value)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+
+const buildExportHtml = (payload) => {
+  const jsonString = JSON.stringify(payload, null, 2) || '{}';
+  return `<!DOCTYPE html>
+  <html>
+    <head>
+      <meta charset="utf-8" />
+      <title>Iyaya Data Export</title>
+      <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; padding: 24px; color: #111827; }
+        h1 { margin-top: 0; font-size: 24px; color: #0ea5e9; }
+        p { color: #4b5563; }
+        pre { background: #f9fafb; border: 1px solid #e5e7eb; border-radius: 8px; padding: 16px; font-size: 12px; overflow-x: auto; white-space: pre-wrap; word-break: break-word; }
+        footer { margin-top: 32px; font-size: 12px; color: #6b7280; }
+      </style>
+    </head>
+    <body>
+      <h1>Iyaya Data Export</h1>
+      <p>Generated at ${escapeHtml(new Date().toISOString())}</p>
+      <pre>${escapeHtml(jsonString)}</pre>
+      <footer>Iyaya — Childcare Services Platform</footer>
+    </body>
+  </html>`;
+};
 
 export function DataManagement({ user, userType, colors }) {
   const [activeSection, setActiveSection] = useState('profile');
   const [data, setData] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [exporting, setExporting] = useState(false);
 
   const sections = [
     { id: 'profile', label: 'Profile Data', icon: 'person-outline' },
@@ -15,75 +50,65 @@ export function DataManagement({ user, userType, colors }) {
     { id: 'applications', label: 'Applications', icon: 'document-text-outline' },
   ];
 
-  const loadData = async (section) => {
+  const loadData = useCallback(async (section) => {
     setLoading(true);
     try {
       let result;
       switch (section) {
-        case 'profile':
+        case 'profile': {
           result = await settingsService.getProfile();
-          setData([result]);
+          setData(result ? [result] : []);
           break;
+        }
         case 'jobs':
         case 'bookings':
-        case 'applications':
+        case 'applications': {
           result = await settingsService.getDataUsage();
           setData(result[section] || []);
           break;
+        }
+        default:
+          setData([]);
       }
     } catch (error) {
+      console.error('Data load failed:', error);
       Alert.alert('Error', 'Failed to load data');
       setData([]);
     } finally {
       setLoading(false);
     }
+  }, []);
+
+  useEffect(() => {
+    loadData(activeSection);
+  }, [activeSection, loadData]);
+
+  const resolveId = (item) => item?.id || item?._id;
+
+  const resolveTitle = (item) => item?.name || item?.title || item?.family || 'Unnamed Item';
+
+  const resolveSubtitle = (item) =>
+    item?.email || item?.location || item?.status || item?.contact_phone || 'No details available';
+
+  const resolveMeta = (item) => {
+    const parts = [];
+    const id = resolveId(item);
+    if (id) parts.push(`ID: ${id}`);
+    if (item?.status) parts.push(`Status: ${item.status}`);
+    if (item?.created_at || item?.createdAt) {
+      parts.push(`Created: ${item.created_at || item.createdAt}`);
+    }
+    return parts.join(' • ');
   };
 
-  const handleDelete = async (item, section) => {
-    Alert.alert(
-      'Confirm Delete',
-      'Are you sure you want to delete this item?',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Delete',
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              // Implement delete logic based on section
-              await loadData(section);
-            } catch (error) {
-              Alert.alert('Error', 'Failed to delete item');
-            }
-          },
-        },
-      ]
-    );
-  };
-
-  const renderItem = ({ item }) => (
-    <View style={styles.dataItem}>
+  const renderItem = (item, index) => (
+    <View key={item?.id || item?._id || index} style={styles.dataItem}>
       <View style={styles.itemContent}>
-        <Text style={styles.itemTitle}>
-          {item.name || item.title || item.family || 'Unnamed Item'}
-        </Text>
-        <Text style={styles.itemSubtitle}>
-          {item.email || item.location || item.status || 'No details'}
-        </Text>
-      </View>
-      <View style={styles.itemActions}>
-        <TouchableOpacity
-          style={[styles.actionButton, { backgroundColor: colors.primary }]}
-          onPress={() => {/* Edit logic */}}
-        >
-          <Ionicons name="create-outline" size={16} color="#FFFFFF" />
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={[styles.actionButton, styles.deleteButton]}
-          onPress={() => handleDelete(item, activeSection)}
-        >
-          <Ionicons name="trash-outline" size={16} color="#FFFFFF" />
-        </TouchableOpacity>
+        <Text style={styles.itemTitle}>{resolveTitle(item)}</Text>
+        <Text style={styles.itemSubtitle}>{resolveSubtitle(item)}</Text>
+        {resolveMeta(item) ? (
+          <Text style={styles.itemMeta}>{resolveMeta(item)}</Text>
+        ) : null}
       </View>
     </View>
   );
@@ -91,7 +116,7 @@ export function DataManagement({ user, userType, colors }) {
   return (
     <View style={styles.container}>
       <Text style={styles.title}>Data Management</Text>
-      
+
       <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.sectionTabs}>
         {sections.map((section) => (
           <TouchableOpacity
@@ -126,57 +151,73 @@ export function DataManagement({ user, userType, colors }) {
         {loading ? (
           <Text style={styles.loadingText}>Loading...</Text>
         ) : data.length > 0 ? (
-          data.map((item, index) => (
-            <View key={item.id || item._id || index}>
-              {renderItem({ item, index })}
-            </View>
-          ))
+          data.map((item, index) => renderItem(item, index))
         ) : (
           <Text style={styles.emptyText}>No data available</Text>
         )}
-        
+
         <View style={styles.exportSection}>
           <TouchableOpacity
-            style={[styles.exportButton, { backgroundColor: colors.primary }]}
+            style={[styles.exportButton, { backgroundColor: colors.primary }, exporting && styles.disabledButton]}
             onPress={async () => {
+              if (exporting) return;
+              setExporting(true);
               try {
-                await settingsService.exportUserData();
-                Alert.alert('Success', 'Data export initiated. You will receive an email with your data.');
+                const exportPayload = await settingsService.exportUserData({ userId: user?.id, userType });
+                if (!exportPayload) {
+                  throw new Error('No export data available');
+                }
+
+                const html = buildExportHtml(exportPayload);
+                const fileName = `iyaya-data-export-${Date.now()}.pdf`;
+                let pdfResult;
+
+                try {
+                  pdfResult = await Print.printToFileAsync({ html, base64: Platform.OS === 'web' });
+                } catch (printError) {
+                  throw new Error(printError?.message || 'Unable to generate PDF file.');
+                }
+
+                if (Platform.OS === 'web') {
+                  if (pdfResult?.base64) {
+                    const link = document.createElement('a');
+                    link.href = `data:application/pdf;base64,${pdfResult.base64}`;
+                    link.download = fileName;
+                    link.style.display = 'none';
+                    document.body.appendChild(link);
+                    link.click();
+                    document.body.removeChild(link);
+                    Alert.alert('Success', 'PDF downloaded to your device.');
+                  } else {
+                    throw new Error('PDF generation is not supported on this platform.');
+                  }
+                  return;
+                }
+
+                const sharingAvailable = await Sharing.isAvailableAsync();
+                if (sharingAvailable && pdfResult?.uri) {
+                  await Sharing.shareAsync(pdfResult.uri, {
+                    mimeType: 'application/pdf',
+                    dialogTitle: 'Share exported data',
+                    UTI: 'com.adobe.pdf',
+                  });
+                  Alert.alert('Success', 'PDF ready. Complete the download from the share sheet.');
+                } else if (pdfResult?.uri) {
+                  Alert.alert('Success', `PDF saved to: ${pdfResult.uri}`);
+                } else {
+                  throw new Error('Failed to generate PDF file.');
+                }
               } catch (error) {
-                Alert.alert('Error', 'Failed to export data');
+                console.error('Data export failed:', error);
+                Alert.alert('Error', error?.message || 'Failed to export data');
+              } finally {
+                setExporting(false);
               }
             }}
+            disabled={exporting}
           >
             <Ionicons name="download-outline" size={20} color="#FFFFFF" />
-            <Text style={styles.exportButtonText}>Export All Data</Text>
-          </TouchableOpacity>
-          
-          <TouchableOpacity
-            style={[styles.exportButton, styles.deleteAllButton]}
-            onPress={() => {
-              Alert.alert(
-                'Delete All Data',
-                'This will permanently delete all your data. This action cannot be undone.',
-                [
-                  { text: 'Cancel', style: 'cancel' },
-                  {
-                    text: 'Delete All',
-                    style: 'destructive',
-                    onPress: async () => {
-                      try {
-                        await settingsService.deleteUserData();
-                        Alert.alert('Success', 'All data has been deleted.');
-                      } catch (error) {
-                        Alert.alert('Error', 'Failed to delete data');
-                      }
-                    },
-                  },
-                ]
-              );
-            }}
-          >
-            <Ionicons name="trash-outline" size={20} color="#FFFFFF" />
-            <Text style={styles.exportButtonText}>Delete All Data</Text>
+            <Text style={styles.exportButtonText}>{exporting ? 'Generating PDF…' : 'Export All Data'}</Text>
           </TouchableOpacity>
         </View>
       </View>
@@ -242,16 +283,10 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#6B7280',
   },
-  itemActions: {
-    flexDirection: 'row',
-    gap: 8,
-  },
-  actionButton: {
-    padding: 8,
-    borderRadius: 6,
-  },
-  deleteButton: {
-    backgroundColor: '#EF4444',
+  itemMeta: {
+    marginTop: 4,
+    fontSize: 12,
+    color: '#9CA3AF',
   },
   loadingText: {
     textAlign: 'center',
@@ -277,13 +312,13 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     marginBottom: 12,
   },
-  deleteAllButton: {
-    backgroundColor: '#EF4444',
-  },
   exportButtonText: {
     color: '#FFFFFF',
     fontSize: 16,
     fontWeight: '600',
     marginLeft: 8,
   },
+  disabledButton: {
+    opacity: 0.6,
+  }
 });

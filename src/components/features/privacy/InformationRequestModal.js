@@ -9,12 +9,13 @@ const DISALLOWED_FIELDS_BY_USER_TYPE = {
   caregiver: new Set(['ageCareRanges']),
 };
 
-const InformationRequestModal = ({ visible, onClose, targetUser, userType = 'parent' }) => {
+const InformationRequestModal = ({ visible, onClose, targetUser, userType = 'parent', availableTargets = [], onTargetChange, onSuccess }) => {
   const { requestInformation, DATA_LEVELS } = usePrivacy();
   const { dataClassification } = useProfileData();
   const [selectedFields, setSelectedFields] = useState([]);
   const [reason, setReason] = useState('');
   const [loading, setLoading] = useState(false);
+  const [activeTarget, setActiveTarget] = useState(targetUser || null);
 
   const disallowedFields = DISALLOWED_FIELDS_BY_USER_TYPE[userType] || EMPTY_SET;
 
@@ -81,6 +82,26 @@ const InformationRequestModal = ({ visible, onClose, targetUser, userType = 'par
     setSelectedFields(prev => prev.filter(key => allowedFieldKeys.includes(key)));
   }, [allowedFieldKeys]);
 
+  useEffect(() => {
+    if (targetUser?.id) {
+      setActiveTarget(targetUser);
+    }
+  }, [targetUser?.id, targetUser]);
+
+  useEffect(() => {
+    if (!targetUser?.id && availableTargets.length) {
+      setActiveTarget(availableTargets[0]);
+    }
+  }, [availableTargets, targetUser?.id]);
+
+  const handleSelectTarget = (target) => {
+    if (!target?.id) {
+      return;
+    }
+    setActiveTarget(target);
+    onTargetChange?.(target);
+  };
+
   const toggleField = (fieldKey) => {
     if (!allowedFieldKeys.includes(fieldKey)) {
       return;
@@ -104,7 +125,7 @@ const InformationRequestModal = ({ visible, onClose, targetUser, userType = 'par
       return;
     }
 
-    const targetId = targetUser?.id;
+    const targetId = activeTarget?.id;
     if (!targetId || targetId === 'sample') {
       Alert.alert(
         'Invalid recipient',
@@ -119,6 +140,8 @@ const InformationRequestModal = ({ visible, onClose, targetUser, userType = 'par
       if (success) {
         setSelectedFields([]);
         setReason('');
+        onTargetChange?.(activeTarget);
+        onSuccess?.(activeTarget);
         onClose();
       }
     } finally {
@@ -154,12 +177,35 @@ const InformationRequestModal = ({ visible, onClose, targetUser, userType = 'par
 
         <View style={styles.userInfo}>
           <Text style={styles.userInfoText}>
-            Requesting information from: <Text style={styles.userName}>{targetUser?.name}</Text>
+            Requesting information from: <Text style={styles.userName}>{activeTarget?.name || 'Select a family'}</Text>
           </Text>
           <Text style={styles.privacyNote}>
             🔒 All requests require approval and follow privacy guidelines
           </Text>
         </View>
+
+        {availableTargets.length > 1 && (
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.targetSelector}
+          >
+            {availableTargets.map((target) => {
+              const isSelected = activeTarget?.id === target.id;
+              return (
+                <TouchableOpacity
+                  key={target.id}
+                  style={[styles.targetChip, isSelected && styles.targetChipSelected]}
+                  onPress={() => handleSelectTarget(target)}
+                >
+                  <Text style={[styles.targetChipText, isSelected && styles.targetChipTextSelected]}>
+                    {target.name || 'Family'}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
+          </ScrollView>
+        )}
 
         <ScrollView style={styles.content}>
           <Text style={styles.sectionTitle}>Select Information to Request:</Text>
@@ -231,6 +277,32 @@ const InformationRequestModal = ({ visible, onClose, targetUser, userType = 'par
 };
 
 const styles = {
+  targetSelector: {
+    paddingHorizontal: 20,
+    paddingBottom: 12,
+    gap: 8,
+  },
+  targetChip: {
+    marginRight: 8,
+    borderWidth: 1,
+    borderColor: '#d1d5db',
+    borderRadius: 999,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    backgroundColor: '#fff',
+  },
+  targetChipSelected: {
+    backgroundColor: '#fdf2f8',
+    borderColor: '#db2777',
+  },
+  targetChipText: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: '#4b5563',
+  },
+  targetChipTextSelected: {
+    color: '#db2777',
+  },
   container: {
     flex: 1,
     backgroundColor: '#fff',

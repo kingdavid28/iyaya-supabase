@@ -10,6 +10,7 @@ import {
   getCurrentSocketURL,
   jobsAPI,
   messagingService,
+  storageService,
   supabaseService
 } from '../services';
 import { informationRequestService } from '../services/supabase/informationRequestService';
@@ -62,31 +63,35 @@ export const uploadsAPI = {
   // Document upload functionality
   uploadDocument: async (documentData) => {
     try {
-      console.log('📄 [UPLOAD] Uploading document:', {
-        type: documentData.documentType,
-        fileName: documentData.fileName,
-        folder: documentData.folder
-      });
-
-      // If it's a base64 document
-      if (documentData.documentBase64) {
-        const response = await authAPI.uploadProfileImage(documentData.documentBase64);
-        return {
-          url: response?.url || response?.data?.url || response,
-          fileName: documentData.fileName,
-          type: documentData.documentType
-        };
+      if (!documentData?.uri) {
+        throw new Error('Document payload must include a URI');
       }
 
-      // If it's FormData
-      if (documentData instanceof FormData) {
-        // For FormData uploads, you might need a different endpoint
-        // This is a stub - implement based on your backend
-        console.warn('FormData upload not fully implemented');
-        return { url: 'temp-url', fileName: 'document' };
-      }
+      const {
+        uri,
+        name,
+        type,
+        size,
+        documentType = 'general',
+        folder,
+        signedUrlTTL,
+      } = documentData;
 
-      throw new Error('Unsupported document format');
+      const payload = {
+        uri,
+        fileName: name,
+        folder: folder || documentType,
+        mimeType: type,
+        size,
+        signedUrlTTL,
+      };
+
+      const response = await storageService.uploadDocument(payload);
+      return {
+        ...response,
+        fileName: payload.fileName,
+        type: documentType,
+      };
     } catch (error) {
       console.error('❌ [UPLOAD] Document upload failed:', error);
       throw error;
@@ -104,18 +109,19 @@ export const uploadsAPI = {
         folder: options.folder || 'uploads'
       });
 
-      if (fileData.base64) {
-        return await authAPI.uploadProfileImage(fileData.base64);
+      if (!fileData?.uri) {
+        throw new Error('uploadFile expects a payload with uri');
       }
 
-      if (fileData instanceof FormData) {
-        // Handle FormData uploads
-        // This would need to be implemented based on your backend
-        console.warn('FormData file upload not fully implemented');
-        return { url: 'temp-url' };
-      }
+      const payload = {
+        uri: fileData.uri,
+        fileName: fileData.name,
+        folder: options.folder || options.type || 'uploads',
+        mimeType: fileData.type,
+        signedUrlTTL: options.signedUrlTTL,
+      };
 
-      throw new Error('Unsupported file format');
+      return await storageService.uploadDocument(payload);
     } catch (error) {
       console.error('❌ [UPLOAD] File upload failed:', error);
       throw error;

@@ -1,6 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { API_CONFIG, STORAGE_KEYS } from '../config/constants';
 import { supabaseService } from './supabase';
+import { dataService } from './supabase/dataService';
 
 const API_BASE_URL = API_CONFIG.BASE_URL;
 
@@ -73,6 +74,73 @@ class SettingsService {
         method: 'PUT',
         body: JSON.stringify(data),
       });
+    }
+  }
+
+  async deleteProfile(userId = null) {
+    try {
+      const currentUser = await supabaseService._getCurrentUser();
+      const targetUserId = userId || currentUser?.id;
+      if (!targetUserId) throw new Error('Authentication required');
+
+      return await supabaseService.deleteProfile(targetUserId);
+    } catch (error) {
+      console.log('Settings delete profile error:', error.message);
+      throw error;
+    }
+  }
+
+  async updateJob(jobId, updates) {
+    try {
+      return await supabaseService.updateJob(jobId, updates);
+    } catch (error) {
+      console.log('Settings update job error:', error.message);
+      throw error;
+    }
+  }
+
+  async deleteJob(jobId) {
+    try {
+      return await supabaseService.deleteJob(jobId);
+    } catch (error) {
+      console.log('Settings delete job error:', error.message);
+      throw error;
+    }
+  }
+
+  async updateBooking(bookingId, updates) {
+    try {
+      return await supabaseService.updateBooking(bookingId, updates);
+    } catch (error) {
+      console.log('Settings update booking error:', error.message);
+      throw error;
+    }
+  }
+
+  async deleteBooking(bookingId) {
+    try {
+      return await supabaseService.deleteBooking(bookingId);
+    } catch (error) {
+      console.log('Settings delete booking error:', error.message);
+      throw error;
+    }
+  }
+
+  async updateApplicationStatus(applicationId, status) {
+    try {
+      return await supabaseService.applications.updateApplicationStatus(applicationId, status);
+    } catch (error) {
+      console.log('Settings update application status error:', error.message);
+      throw error;
+    }
+  }
+
+  async withdrawApplication(applicationId) {
+    try {
+      return await supabaseService.applications.withdrawApplication(applicationId);
+    } catch (error) {
+      console.log('Settings withdraw application error:', error.message);
+      throw error;
     }
   }
 
@@ -172,16 +240,16 @@ class SettingsService {
   }
 
   // Data Management
-  async exportUserData() {
-    return this.makeRequest('/data/export', { method: 'POST' });
+  async exportUserData(options = {}) {
+    return dataService.exportUserData(options.userId, options.userType);
   }
 
-  async deleteUserData() {
-    return this.makeRequest('/data/all', { method: 'DELETE' });
+  async deleteUserData(options = {}) {
+    return dataService.deleteUserData(options.userId, options.userType);
   }
 
-  async getDataUsage() {
-    return this.makeRequest('/data/usage');
+  async getDataUsage(options = {}) {
+    return dataService.getDataUsage(options.userId, options.userType);
   }
 }
 

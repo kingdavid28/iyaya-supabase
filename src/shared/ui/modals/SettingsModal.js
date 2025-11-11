@@ -1,29 +1,20 @@
-import React, { useState, useEffect } from 'react';
-import { View, Text, Modal, ScrollView, TouchableOpacity, StyleSheet, Alert } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { ProfileSettings } from '../../../components/features/profile/ProfileSettings';
-import { PrivacySettings } from '../../../components/features/settings/PrivacySettings';
-import { InformationRequests } from '../../../components/business/InformationRequests';
-import { NotificationSettings } from '../../../components/features/settings/NotificationSettings';
-import { PaymentSettings } from '../../../components/features/settings/PaymentSettings';
+import React, { useEffect, useState } from 'react';
+import { Alert, Modal, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { DataManagement } from '../../../components/business/DataManagement';
+import { InformationRequests } from '../../../components/business/InformationRequests';
+import { PrivacySettings } from '../../../components/features/settings/PrivacySettings';
 import { settingsService } from '../../../services';
 
 export function SettingsModal({ visible, onClose, user, userType, colors }) {
-  const [activeTab, setActiveTab] = useState('profile');
-  const [profileData, setProfileData] = useState({});
+  const [activeTab, setActiveTab] = useState('privacy');
   const [privacyData, setPrivacyData] = useState({});
-  const [notificationData, setNotificationData] = useState({});
-  const [paymentData, setPaymentData] = useState({});
   const [isSaving, setIsSaving] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
 
   const tabs = [
-    { id: 'profile', label: 'Profile', icon: 'person-outline' },
     { id: 'privacy', label: 'Privacy', icon: 'shield-outline' },
     { id: 'requests', label: 'Requests', icon: 'mail-outline' },
-    { id: 'notifications', label: 'Notifications', icon: 'notifications-outline' },
-    { id: 'payment', label: 'Payment', icon: 'card-outline' },
     { id: 'data', label: 'Data', icon: 'server-outline' },
   ];
 
@@ -36,35 +27,14 @@ export function SettingsModal({ visible, onClose, user, userType, colors }) {
   const loadSettings = async () => {
     setIsLoading(true);
     try {
-      switch (activeTab) {
-        case 'profile':
-          if (!profileData.name) {
-            const profile = await settingsService.getProfile();
-            setProfileData(profile?.data || profile || {});
-          }
-          break;
-        case 'privacy':
-          if (!privacyData.profileVisibility) {
-            const privacy = await settingsService.getPrivacySettings();
-            setPrivacyData(privacy?.data || privacy || {});
-          }
-          break;
-        case 'notifications':
-          if (!notificationData.pushEnabled) {
-            const notifications = await settingsService.getNotificationSettings();
-            setNotificationData(notifications?.data || notifications || {});
-          }
-          break;
-        case 'payment':
-          if (!paymentData.paymentMethod) {
-            const payment = await settingsService.getPaymentSettings();
-            setPaymentData(payment?.data || payment || {});
-          }
-          break;
+      if (activeTab === 'privacy') {
+        if (!privacyData || Object.keys(privacyData).length === 0) {
+          const privacy = await settingsService.getPrivacySettings();
+          setPrivacyData(privacy?.data || privacy || {});
+        }
       }
     } catch (error) {
       console.error('Settings load error:', error);
-      // Use mock data on error
       setMockData();
     } finally {
       setIsLoading(false);
@@ -72,48 +42,25 @@ export function SettingsModal({ visible, onClose, user, userType, colors }) {
   };
 
   const setMockData = () => {
-    switch (activeTab) {
-      case 'profile':
-        setProfileData({ name: user?.name || '', email: user?.email || '', phone: '' });
-        break;
-      case 'privacy':
-        setPrivacyData({ profileVisibility: true, showOnlineStatus: true });
-        break;
-      case 'notifications':
-        setNotificationData({ pushEnabled: true, emailEnabled: true });
-        break;
-      case 'payment':
-        setPaymentData({ paymentMethod: 'card', autoPayment: false });
-        break;
+    if (activeTab === 'privacy') {
+      setPrivacyData({ profileVisibility: true, showOnlineStatus: true });
     }
   };
 
   const handleSave = async (data) => {
+    if (activeTab !== 'privacy') {
+      Alert.alert('Not Available', 'There are no editable settings on this tab.');
+      return;
+    }
+
     setIsSaving(true);
     try {
-      let result;
-      switch (activeTab) {
-        case 'profile':
-          result = await settingsService.updateProfile(data);
-          setProfileData(data);
-          break;
-        case 'privacy':
-          result = await settingsService.updatePrivacySettings(data);
-          setPrivacyData(data);
-          break;
-        case 'notifications':
-          result = await settingsService.updateNotificationSettings(data);
-          setNotificationData(data);
-          break;
-        case 'payment':
-          result = await settingsService.updatePaymentSettings(data);
-          setPaymentData(data);
-          break;
-      }
-      Alert.alert('Success', 'Settings saved successfully');
+      await settingsService.updatePrivacySettings(data);
+      setPrivacyData(data);
+      Alert.alert('Success', 'Privacy settings saved successfully');
     } catch (error) {
       console.error('Settings save error:', error);
-      Alert.alert('Error', 'Failed to save settings. Please try again.');
+      Alert.alert('Error', 'Failed to save privacy settings. Please try again.');
     } finally {
       setIsSaving(false);
     }
@@ -130,16 +77,10 @@ export function SettingsModal({ visible, onClose, user, userType, colors }) {
     };
 
     switch (activeTab) {
-      case 'profile':
-        return <ProfileSettings {...commonProps} data={profileData} />;
       case 'privacy':
         return <PrivacySettings {...commonProps} data={privacyData} />;
       case 'requests':
         return <InformationRequests {...commonProps} />;
-      case 'notifications':
-        return <NotificationSettings {...commonProps} data={notificationData} />;
-      case 'payment':
-        return <PaymentSettings {...commonProps} data={paymentData} />;
       case 'data':
         return <DataManagement {...commonProps} />;
       default:

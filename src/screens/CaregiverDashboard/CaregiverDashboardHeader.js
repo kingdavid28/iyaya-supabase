@@ -12,6 +12,7 @@ const CaregiverDashboardHeader = ({
   onOpenPrivacyRequests,
   onNavigateNotifications,
   onOpenRequestModal,
+  requestInfoDisabled = false,
   onOpenSettings,
   onNavigateProfile,
   onLogout,
@@ -71,7 +72,15 @@ const CaregiverDashboardHeader = ({
               )}
             </Pressable>
 
-            <Pressable style={styles.headerButton} onPress={onOpenRequestModal}>
+            <Pressable
+              style={[styles.headerButton, requestInfoDisabled && { opacity: 0.5 }]}
+              onPress={() => {
+                if (!requestInfoDisabled) {
+                  onOpenRequestModal?.();
+                }
+              }}
+              disabled={requestInfoDisabled}
+            >
               <Ionicons name="mail-outline" size={22} color="#FFFFFF" />
             </Pressable>
 

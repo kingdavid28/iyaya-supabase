@@ -1,27 +1,34 @@
+import * as FileSystem from 'expo-file-system';
+import * as IntentLauncher from 'expo-intent-launcher';
+import * as Sharing from 'expo-sharing';
 import {
     AlertCircle,
     Download,
     ExternalLink,
     FileText,
-    Image as ImageIcon,
+    Maximize2,
     RefreshCcw,
     ShieldCheck,
-    X,
+    X
 } from 'lucide-react-native';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
     ActivityIndicator,
+    Alert,
     FlatList,
     Image,
     Linking,
     Modal,
     Platform,
     ScrollView,
+    Share,
     StyleSheet,
     Text,
     TouchableOpacity,
     View,
+    useWindowDimensions
 } from 'react-native';
+
 import { privacyAPI } from '../../../config/api';
 
 const CATEGORIES = {
@@ -52,6 +59,134 @@ const getDocumentCategory = (document) => {
     return CATEGORIES.DOCUMENTS;
 };
 
+const sanitizeFileName = (fileName = 'document') => {
+    const trimmed = String(fileName || '').trim();
+    if (!trimmed) {
+        return 'shared-document';
+    }
+    return trimmed.replace(/[^a-z0-9_.-]+/gi, '_');
+};
+
+const getFileExtension = (document) => {
+    const fromFileName = String(document?.fileName || '').split('.');
+    if (fromFileName.length > 1) {
+        return fromFileName.pop();
+    }
+
+    const type = String(document?.type || '').toLowerCase();
+    if (type.includes('/')) {
+        return type.split('/').pop();
+    }
+
+    return 'pdf';
+};
+
+const guessMimeType = (document, extension = null) => {
+    if (document?.mimeType) {
+        return document.mimeType;
+    }
+
+    const type = String(document?.type || '').toLowerCase();
+    if (type.includes('/')) {
+        return document.type;
+    }
+
+    const ext = String(extension || getFileExtension(document) || '').toLowerCase();
+    switch (ext) {
+        case 'jpg':
+        case 'jpeg':
+            return 'image/jpeg';
+        case 'png':
+            return 'image/png';
+        case 'gif':
+            return 'image/gif';
+        case 'bmp':
+            return 'image/bmp';
+        case 'webp':
+            return 'image/webp';
+        case 'heic':
+        case 'heif':
+            return 'image/heic';
+        case 'pdf':
+            return 'application/pdf';
+        case 'doc':
+            return 'application/msword';
+        case 'docx':
+            return 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+        case 'xls':
+            return 'application/vnd.ms-excel';
+        case 'xlsx':
+            return 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+        case 'ppt':
+            return 'application/vnd.ms-powerpoint';
+        case 'pptx':
+            return 'application/vnd.openxmlformats-officedocument.presentationml.presentation';
+        case 'csv':
+            return 'text/csv';
+        case 'txt':
+            return 'text/plain';
+        default:
+            return 'application/octet-stream';
+    }
+};
+
+const withDownloadDisposition = (url, fileName = 'document') => {
+    if (typeof url !== 'string' || !url.length) {
+        return url;
+    }
+
+    const safeName = sanitizeFileName(fileName) || 'shared-document';
+
+    try {
+        const parsed = new URL(url);
+
+        if (!parsed.searchParams.has('download')) {
+            parsed.searchParams.set('download', safeName);
+        }
+
+        if (!parsed.searchParams.has('response-content-disposition')) {
+            parsed.searchParams.set('response-content-disposition', `attachment; filename="${safeName}"`);
+        }
+
+        return parsed.toString();
+    } catch (parseError) {
+        const attachmentParam = `download=${encodeURIComponent(safeName)}`;
+        const dispositionParam = `response-content-disposition=${encodeURIComponent(`attachment; filename="${safeName}"`)}`;
+        const separator = url.includes('?') ? '&' : '?';
+        const existingParams = [];
+
+        if (url.includes('download=')) {
+            existingParams.push(attachmentParam);
+        }
+
+        if (url.includes('response-content-disposition=')) {
+            existingParams.push(dispositionParam);
+        }
+
+        const paramsToAppend = [attachmentParam, dispositionParam].filter((param) => !existingParams.includes(param));
+        if (!paramsToAppend.length) {
+            return url;
+        }
+
+        return `${url}${separator}${paramsToAppend.join('&')}`;
+    }
+};
+
+const openAndroidDocument = async (uri, mimeType) => {
+    try {
+        const contentUri = await FileSystem.getContentUriAsync(uri);
+        await IntentLauncher.startActivityAsync('android.intent.action.VIEW', {
+            data: contentUri,
+            flags: 1,
+            type: mimeType || '*/*',
+        });
+        return true;
+    } catch (androidError) {
+        console.warn('Failed to launch Android intent for document', androidError);
+        return false;
+    }
+};
+
 const hasBackgroundCategory = (documents, sharedMeta) => {
     if (sharedMeta?.backgroundCheckStatus) {
         return true;
@@ -72,7 +207,7 @@ const SkeletonTile = () => (
     </View>
 );
 
-const DocumentTile = ({ document, onDownload, onOpenInNewTab }) => {
+const DocumentTile = ({ document, onDownload, onOpenInNewTab, isDownloading, onPreview }) => {
     const category = getDocumentCategory(document);
     const isImagePreview = category === CATEGORIES.IMAGES && document?.url;
     const uploadedAt = document?.uploadedAt || document?.createdAt || document?.created_at;
@@ -82,15 +217,26 @@ const DocumentTile = ({ document, onDownload, onOpenInNewTab }) => {
 
     return (
         <View style={styles.tileContainer}>
-            <View style={styles.tilePreview}>
-                {isImagePreview ? (
+            {isImagePreview ? (
+                <TouchableOpacity
+                    accessibilityRole="button"
+                    activeOpacity={0.85}
+                    style={styles.tilePreview}
+                    onPress={() => onPreview?.(document)}
+                >
                     <Image source={{ uri: document.url }} style={styles.tileImage} resizeMode="cover" />
-                ) : (
+                    <View style={styles.tilePreviewOverlay} pointerEvents="none">
+                        <Maximize2 size={16} color="#1d4ed8" />
+                        <Text style={styles.tilePreviewOverlayText}>Preview</Text>
+                    </View>
+                </TouchableOpacity>
+            ) : (
+                <View style={styles.tilePreview}>
                     <View style={styles.tileIconWrapper}>
                         <FileText size={22} color="#4338ca" />
                     </View>
-                )}
-            </View>
+                </View>
+            )}
 
             <View style={styles.tileContent}>
                 <View style={styles.tileHeader}>
@@ -113,11 +259,18 @@ const DocumentTile = ({ document, onDownload, onOpenInNewTab }) => {
                 <View style={styles.tileActions}>
                     <TouchableOpacity
                         accessibilityRole="button"
-                        style={styles.downloadButton}
+                        style={[styles.downloadButton, isDownloading && styles.downloadButtonDisabled]}
                         onPress={() => onDownload(document)}
+                        disabled={isDownloading}
                     >
-                        <Download size={16} color="#fff" />
-                        <Text style={styles.downloadButtonText}>Download</Text>
+                        {isDownloading ? (
+                            <ActivityIndicator size="small" color="#fff" />
+                        ) : (
+                            <>
+                                <Download size={16} color="#fff" />
+                                <Text style={styles.downloadButtonText}>Download</Text>
+                            </>
+                        )}
                     </TouchableOpacity>
 
                     {Platform.OS === 'web' && document?.url ? (
@@ -125,6 +278,7 @@ const DocumentTile = ({ document, onDownload, onOpenInNewTab }) => {
                             accessibilityRole="button"
                             style={styles.openButton}
                             onPress={() => onOpenInNewTab?.(document)}
+                            disabled={isDownloading}
                         >
                             <ExternalLink size={16} color="#2563eb" />
                             <Text style={styles.openButtonText}>Open in new tab</Text>
@@ -142,8 +296,21 @@ const ApprovedDocumentsModal = ({ visible, onClose, caregiver = {}, viewerId = n
     const [error, setError] = useState(null);
     const [sharedPayload, setSharedPayload] = useState(null);
     const [selectedCategory, setSelectedCategory] = useState(CATEGORIES.DOCUMENTS);
+    const [downloadingId, setDownloadingId] = useState(null);
+    const [previewDocument, setPreviewDocument] = useState(null);
+
+    const { width: screenWidth, height: screenHeight } = useWindowDimensions();
+
+    const previewImageStyle = useMemo(
+        () => ({
+            maxWidth: Math.min(screenWidth - 48, 640),
+            maxHeight: screenHeight * 0.75,
+        }),
+        [screenHeight, screenWidth],
+    );
 
     const documents = useMemo(() => sharedPayload?.documents || [], [sharedPayload]);
+
     const backgroundInfo = sharedPayload?.shared || {};
 
     const categoryOptions = useMemo(() => {
@@ -199,195 +366,397 @@ const ApprovedDocumentsModal = ({ visible, onClose, caregiver = {}, viewerId = n
         }
     }, [visible, categoryOptions]);
 
-    const handleDownload = useCallback(async (document) => {
+    const handlePreview = useCallback((document) => {
         if (!document?.url) {
             return;
         }
 
+        const category = getDocumentCategory(document);
+        if (category !== CATEGORIES.IMAGES) {
+            return;
+        }
+
+        setPreviewDocument(document);
+    }, []);
+
+    const handleDismissPreview = useCallback(() => {
+        setPreviewDocument(null);
+    }, []);
+
+    const handleDownload = useCallback(async (document) => {
+        const downloadUrl = document?.originalUrl || document?.url;
+        if (!downloadUrl) {
+            Alert.alert('Download unavailable', 'This document does not have a download link.');
+            return;
+        }
+
+        console.log('[download] platform', Platform.OS);
+        console.log('[download] starting', downloadUrl);
+
+        const documentKey = document.id || downloadUrl;
+        setDownloadingId(documentKey);
+
         try {
-            const canOpen = await Linking.canOpenURL(document.url);
-            if (!canOpen) {
-                throw new Error('Unsupported URL');
+            const safeBaseName = sanitizeFileName(document.fileName || document.label || 'document');
+            const rawExtension = String(getFileExtension(document) || '').replace(/^\.+/, '');
+            const extension = rawExtension.split('?')[0] || 'pdf';
+            const mimeType = guessMimeType(document, extension);
+            const fileNameWithExtension = extension ? `${safeBaseName}.${extension}` : safeBaseName;
+            const effectiveDownloadUrl = withDownloadDisposition(downloadUrl, fileNameWithExtension);
+            const downloadSourceUrl = Platform.OS === 'web' ? effectiveDownloadUrl : downloadUrl;
+
+            if (Platform.OS === 'web') {
+                if (typeof window !== 'undefined' && typeof window.document !== 'undefined') {
+                    try {
+                        const response = await fetch(effectiveDownloadUrl);
+
+                        if (!response.ok) {
+                            throw new Error(`Download failed with status ${response.status}`);
+                        }
+                        const blob = await response.blob();
+                        const objectUrl = window.URL.createObjectURL(blob);
+                        const link = window.document.createElement('a');
+                        link.href = objectUrl;
+                        link.download = fileNameWithExtension;
+                        window.document.body.appendChild(link);
+                        link.click();
+                        window.document.body.removeChild(link);
+                        window.URL.revokeObjectURL(objectUrl);
+                    } catch (webError) {
+                        console.warn('[download] web blob fallback failed, opening original URL', webError);
+                        window.open(effectiveDownloadUrl, '_blank', 'noopener,noreferrer');
+                    }
+                } else {
+                    await Linking.openURL(effectiveDownloadUrl);
+                }
+                return;
             }
-            await Linking.openURL(document.url);
+
+            if (typeof FileSystem?.downloadAsync !== 'function') {
+                console.warn('[download] downloadAsync unavailable, opening original URL');
+                await Linking.openURL(effectiveDownloadUrl);
+                return;
+            }
+
+            const baseDirectory = [
+                FileSystem.documentDirectory,
+                FileSystem.cacheDirectory,
+                FileSystem.temporaryDirectory,
+            ].find((path) => typeof path === 'string' && path.length > 0);
+
+            if (!baseDirectory) {
+                console.warn('[download] no storage directory available, opening original URL');
+                await Linking.openURL(effectiveDownloadUrl);
+                return;
+            }
+
+            const normalizedBase = baseDirectory.endsWith('/') ? baseDirectory : `${baseDirectory}/`;
+            const documentsDirectory = `${normalizedBase}shared-documents/`;
+            try {
+                await FileSystem.makeDirectoryAsync(documentsDirectory, { intermediates: true });
+            } catch (dirError) {
+                const dirMessage = String(dirError?.message || '');
+                if (!dirMessage.includes('Directory exists') && !dirMessage.includes('EEXIST')) {
+                    console.warn('[download] failed to ensure shared-documents directory', dirError);
+                }
+            }
+
+            const uniqueSuffix = Date.now();
+            const targetFileName = `${safeBaseName}-${uniqueSuffix}.${extension}`;
+            const targetUri = `${documentsDirectory}${targetFileName}`;
+
+            const downloadResult = await FileSystem.downloadAsync(downloadSourceUrl, targetUri);
+
+            if (!downloadResult || (downloadResult.status && downloadResult.status >= 400)) {
+                throw new Error('Failed to download shared document. Please try again.');
+            }
+            console.log('[download] download complete', downloadResult.uri);
+
+            const shareAvailable = await Sharing.isAvailableAsync().catch(() => false);
+            console.log('[download] sharing available?', shareAvailable);
+
+            if (Platform.OS === 'android') {
+                const launched = await openAndroidDocument(downloadResult.uri, mimeType);
+                if (launched) {
+                    return;
+                }
+            }
+
+            if (shareAvailable) {
+                await Sharing.shareAsync(downloadResult.uri, {
+                    mimeType,
+                    dialogTitle: document.label || document.fileName || 'Shared document',
+                });
+                return;
+            }
+
+            try {
+                const shareResult = await Share.share({
+                    title: document.label || document.fileName || 'Shared document',
+                    message: downloadResult.uri,
+                    url: downloadResult.uri,
+                });
+
+                if (shareResult.action === Share.sharedAction) {
+                    return;
+                }
+            } catch (shareError) {
+                console.warn('Native share unavailable, falling back to alert', shareError);
+            }
+
+            Alert.alert(
+                'Download complete',
+                `Saved to: ${downloadResult.uri}`,
+                [
+                    {
+                        text: 'Open in browser',
+                        onPress: () => Linking.openURL(effectiveDownloadUrl),
+
+                    },
+                    { text: 'OK' },
+                ],
+                { cancelable: true },
+            );
         } catch (downloadError) {
-            console.error('Unable to open shared document', downloadError);
+            console.error('Unable to download shared document', downloadError);
+            const message = downloadError?.message || 'Unable to download this document. Please try again later.';
+            Alert.alert(
+                'Download failed',
+                message,
+                [
+                    {
+                        text: 'Open in browser',
+                        onPress: () => Linking.openURL(effectiveDownloadUrl),
+
+                    },
+                    { text: 'Cancel', style: 'cancel' },
+                ],
+            );
+        } finally {
+            setDownloadingId(null);
         }
     }, []);
 
     const handleOpenInNewTab = useCallback((document) => {
-        if (Platform.OS === 'web' && document?.url && typeof window !== 'undefined') {
-            window.open(document.url, '_blank', 'noopener,noreferrer');
+        const targetUrl = document?.originalUrl || document?.url;
+        if (!targetUrl) {
+            return;
         }
-    }, []);
 
-    const backgroundDocuments = useMemo(
-        () => documents.filter((doc) => getDocumentCategory(doc) === CATEGORIES.BACKGROUND),
-        [documents],
-    );
+        const baseName = sanitizeFileName(document.fileName || document.label || 'document');
+        const rawExtension = String(getFileExtension(document) || '').replace(/^\.+/, '');
+        const extension = rawExtension.split('?')[0];
+        const fileNameWithExtension = extension ? `${baseName}.${extension}` : baseName;
+        const enrichedUrl = withDownloadDisposition(targetUrl, fileNameWithExtension);
+
+        Linking.openURL(enrichedUrl);
+    }, []);
 
     const filteredDocuments = useMemo(() => {
         if (selectedCategory === CATEGORIES.BACKGROUND) {
-            return backgroundDocuments;
+            return documents.filter((doc) => getDocumentCategory(doc) === CATEGORIES.BACKGROUND);
         }
-
         return documents.filter((doc) => getDocumentCategory(doc) === selectedCategory);
-    }, [backgroundDocuments, documents, selectedCategory]);
-
-    const renderCategoryControls = () => (
-        <View style={styles.segmentedControl}>
-            {categoryOptions.map((option) => {
-                const isActive = option.key === selectedCategory;
-                const textStyle = isActive ? styles.segmentButtonTextActive : styles.segmentButtonText;
-                const iconColor = isActive ? '#fff' : '#2563eb';
-
-                return (
-                    <TouchableOpacity
-                        key={option.key}
-                        accessibilityRole="tab"
-                        accessibilityState={{ selected: isActive }}
-                        style={[styles.segmentButton, isActive && styles.segmentButtonActive]}
-                        onPress={() => setSelectedCategory(option.key)}
-                    >
-                        {option.key === CATEGORIES.IMAGES ? <ImageIcon size={16} color={iconColor} /> : null}
-                        <Text style={textStyle}>{option.label}</Text>
-                    </TouchableOpacity>
-                );
-            })}
-        </View>
-    );
+    }, [documents, selectedCategory]);
 
     const renderContent = () => {
-        if (loading) {
-            return SKELETON_ROWS.map((row) => <SkeletonTile key={row.id} />);
+        if (loading && !sharedPayload) {
+            return (
+                <FlatList
+                    data={SKELETON_ROWS}
+                    renderItem={() => <SkeletonTile />}
+                    keyExtractor={(item) => item.id}
+                    contentContainerStyle={styles.contentContainer}
+                />
+            );
         }
 
         if (error) {
             return (
                 <View style={styles.errorContainer}>
-                    <AlertCircle size={22} color="#dc2626" />
+                    <AlertCircle size={32} color="#dc2626" />
                     <Text style={styles.errorText}>{error}</Text>
                     <TouchableOpacity style={styles.retryButton} onPress={fetchSharedData}>
                         <RefreshCcw size={16} color="#2563eb" />
-                        <Text style={styles.retryButtonText}>Retry</Text>
+                        <Text style={styles.retryButtonText}>Try Again</Text>
                     </TouchableOpacity>
                 </View>
             );
         }
 
-        if (selectedCategory === CATEGORIES.BACKGROUND) {
+        if (!documents.length) {
             return (
-                <View style={styles.backgroundSection}>
-                    <View style={styles.backgroundHeader}>
-                        <ShieldCheck size={18} color="#15803d" />
-                        <Text style={styles.backgroundTitle}>Background Check</Text>
-                    </View>
-                    <Text style={styles.backgroundStatus}>
-                        {backgroundInfo?.backgroundCheckStatus || 'Status unavailable'}
+                <View style={styles.emptyState}>
+                    <FileText size={48} color="#d1d5db" />
+                    <Text style={styles.emptyTitle}>No documents shared</Text>
+                    <Text style={styles.emptySubtitle}>
+                        This caregiver hasn't shared any documents with you yet.
                     </Text>
+                </View>
+            );
+        }
 
-                    {backgroundDocuments.length ? (
-                        <FlatList
-                            data={backgroundDocuments}
-                            keyExtractor={(item) => item.id || item.url}
-                            scrollEnabled={false}
-                            renderItem={({ item }) => (
-                                <DocumentTile document={item} onDownload={handleDownload} onOpenInNewTab={handleOpenInNewTab} />
-                            )}
-                            ItemSeparatorComponent={() => <View style={{ height: 12 }} />}
-                            ListFooterComponent={<View style={{ height: 12 }} />}
-                        />
+        return (
+            <ScrollView style={styles.contentScroll} contentContainerStyle={styles.contentContainer}>
+                <View style={styles.noticeBox}>
+                    <ShieldCheck size={18} color="#ea580c" />
+                    <Text style={styles.noticeText}>
+                        These documents have been securely shared with you. Please handle them with care.
+                    </Text>
+                </View>
+
+                {categoryOptions.length > 1 && (
+                    <View style={styles.segmentedControl}>
+                        {categoryOptions.map((option) => (
+                            <TouchableOpacity
+                                key={option.key}
+                                style={[
+                                    styles.segmentButton,
+                                    selectedCategory === option.key && styles.segmentButtonActive,
+                                ]}
+                                onPress={() => setSelectedCategory(option.key)}
+                            >
+                                <Text
+                                    style={[
+                                        styles.segmentButtonText,
+                                        selectedCategory === option.key && styles.segmentButtonTextActive,
+                                    ]}
+                                >
+                                    {option.label}
+                                </Text>
+                            </TouchableOpacity>
+                        ))}
+                    </View>
+                )}
+
+                <View style={styles.contentSection}>
+                    {selectedCategory === CATEGORIES.BACKGROUND && backgroundInfo?.backgroundCheckStatus && (
+                        <View style={styles.backgroundSection}>
+                            <View style={styles.backgroundHeader}>
+                                <Text style={styles.backgroundTitle}>Background Check Status</Text>
+                                <Text style={styles.backgroundStatus}>{backgroundInfo.backgroundCheckStatus}</Text>
+                            </View>
+                        </View>
+                    )}
+
+                    {filteredDocuments.length > 0 ? (
+                        filteredDocuments.map((document, index) => (
+                            <DocumentTile
+                                key={document.id || `doc-${index}`}
+                                document={document}
+                                onDownload={handleDownload}
+                                onOpenInNewTab={handleOpenInNewTab}
+                                onPreview={handlePreview}
+                                isDownloading={downloadingId === (document.id || document.url)}
+                            />
+                        ))
                     ) : (
                         <Text style={styles.backgroundEmptyText}>
-                            No background check documents were shared. Ask the caregiver if you need supporting paperwork.
+                            No {selectedCategory} found in shared documents.
                         </Text>
                     )}
                 </View>
-            );
-        }
-
-        if (!filteredDocuments.length) {
-            return (
-                <View style={styles.emptyState}>
-                    <Text style={styles.emptyTitle}>
-                        {selectedCategory === CATEGORIES.IMAGES ? 'No shared images' : 'No shared documents'}
-                    </Text>
-                    <Text style={styles.emptySubtitle}>
-                        Caregivers can share items in this category whenever they approve your request.
-                    </Text>
-                </View>
-            );
-        }
-
-        return filteredDocuments.map((document) => (
-            <DocumentTile
-                key={document.id || document.url}
-                document={document}
-                onDownload={handleDownload}
-                onOpenInNewTab={handleOpenInNewTab}
-            />
-        ));
+            </ScrollView>
+        );
     };
 
-    const caregiverInitial = caregiver?.name ? caregiver.name.charAt(0).toUpperCase() : 'C';
+    const caregiverName = caregiver?.name || caregiver?.fullName || 'Caregiver';
+    const caregiverInitials = caregiverName
+        .split(' ')
+        .map((n) => n[0])
+        .join('')
+        .toUpperCase()
+        .slice(0, 2);
 
     return (
-        <Modal
-            visible={visible}
-            animationType="slide"
-            presentationStyle="pageSheet"
-            onRequestClose={onClose}
-            transparent={false}
-        >
-            <View style={styles.modalContainer}>
-                <View style={styles.header}>
-                    <View style={styles.headerInfo}>
-                        <View style={styles.avatarWrapper}>
-                            {caregiver?.avatar ? (
-                                <Image source={{ uri: caregiver.avatar }} style={styles.avatarImage} resizeMode="cover" />
-                            ) : (
-                                <View style={styles.avatarFallback}>
-                                    <Text style={styles.avatarFallbackText}>{caregiverInitial}</Text>
-                                </View>
-                            )}
+        <>
+            <Modal
+                visible={visible}
+                animationType="slide"
+                presentationStyle="pageSheet"
+                onRequestClose={onClose}
+            >
+                <View style={styles.modalContainer}>
+                    <View style={styles.header}>
+                        <View style={styles.headerInfo}>
+                            <View style={styles.avatarWrapper}>
+                                {caregiver?.photoUrl ? (
+                                    <Image source={{ uri: caregiver.photoUrl }} style={styles.avatarImage} />
+                                ) : (
+                                    <View style={styles.avatarFallback}>
+                                        <Text style={styles.avatarFallbackText}>{caregiverInitials}</Text>
+                                    </View>
+                                )}
+                            </View>
+                            <View style={styles.headerTextWrapper}>
+                                <Text style={styles.headerTitle}>{caregiverName}'s Shared Documents</Text>
+                                <Text style={styles.headerSubtitle}>
+                                    {documents.length} document{documents.length !== 1 ? 's' : ''} securely shared with you
+                                </Text>
+                            </View>
                         </View>
-                        <View style={styles.headerTextWrapper}>
-                            <Text style={styles.headerTitle}>{caregiver?.name || 'Caregiver'}</Text>
-                            <Text style={styles.headerSubtitle}>Approved documents & images</Text>
-                        </View>
+                        <TouchableOpacity style={styles.closeButton} onPress={onClose}>
+                            <X size={20} color="#374151" />
+                        </TouchableOpacity>
                     </View>
-                    <TouchableOpacity onPress={onClose} style={styles.closeButton} accessibilityRole="button">
-                        <X size={20} color="#1f2937" />
-                    </TouchableOpacity>
+
+                    {renderContent()}
+
+                    {loading && sharedPayload && (
+                        <View style={styles.loadingOverlay}>
+                            <ActivityIndicator size="large" color="#2563eb" />
+                        </View>
+                    )}
                 </View>
+            </Modal>
 
-                <ScrollView style={styles.contentScroll} contentContainerStyle={styles.contentContainer}>
-                    <View style={styles.noticeBox}>
-                        <AlertCircle size={18} color="#f97316" style={{ marginRight: 8 }} />
-                        <Text style={styles.noticeText}>
-                            These items were shared via caregiver approval and can be revoked at any time.
+            <Modal
+                visible={!!previewDocument}
+                transparent={true}
+                animationType="fade"
+                onRequestClose={handleDismissPreview}
+            >
+                <View style={styles.previewBackdrop}>
+                    <TouchableOpacity
+                        style={styles.previewBackdropTouchable}
+                        activeOpacity={1}
+                        onPress={handleDismissPreview}
+                    />
+                    <View style={styles.previewCard}>
+                        <TouchableOpacity style={styles.previewCloseButton} onPress={handleDismissPreview}>
+                            <X size={20} color="#374151" />
+                        </TouchableOpacity>
+
+                        <Image
+                            source={{ uri: previewDocument?.url }}
+                            style={[styles.previewImage, previewImageStyle]}
+                            resizeMode="contain"
+                        />
+
+                        <Text style={styles.previewTitle}>
+                            {previewDocument?.label || previewDocument?.fileName || 'Image Preview'}
                         </Text>
+
+                        <View style={styles.previewActions}>
+                            <TouchableOpacity
+                                style={styles.previewActionButton}
+                                onPress={() => handleDownload(previewDocument)}
+                            >
+                                <Download size={16} color="#fff" />
+                                <Text style={styles.previewActionText}>Download</Text>
+                            </TouchableOpacity>
+                        </View>
                     </View>
-
-                    {renderCategoryControls()}
-
-                    <View style={styles.contentSection}>{renderContent()}</View>
-                </ScrollView>
-
-                {loading && (
-                    <View style={styles.loadingOverlay}>
-                        <ActivityIndicator size="large" color="#2563eb" />
-                    </View>
-                )}
-            </View>
-        </Modal>
+                </View>
+            </Modal>
+        </>
     );
 };
 
-const styles = {
+const styles = StyleSheet.create({
     modalContainer: {
         flex: 1,
-        backgroundColor: '#fff',
+        backgroundColor: '#ffffff',
     },
     header: {
         flexDirection: 'row',
@@ -464,6 +833,7 @@ const styles = {
         borderWidth: 1,
         borderColor: '#fed7aa',
         marginTop: 20,
+        gap: 8,
     },
     noticeText: {
         flex: 1,
@@ -519,10 +889,25 @@ const styles = {
         backgroundColor: '#ede9fe',
         alignItems: 'center',
         justifyContent: 'center',
+        position: 'relative',
     },
     tileImage: {
         width: '100%',
         height: '100%',
+    },
+    tilePreviewOverlay: {
+        position: 'absolute',
+        inset: 0,
+        backgroundColor: 'rgba(255, 255, 255, 0.7)',
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: 6,
+    },
+    tilePreviewOverlayText: {
+        fontSize: 12,
+        fontWeight: '600',
+        color: '#1d4ed8',
     },
     tileIconWrapper: {
         alignItems: 'center',
@@ -562,11 +947,20 @@ const styles = {
     downloadButton: {
         flexDirection: 'row',
         alignItems: 'center',
-        gap: 8,
+        justifyContent: 'center',
         backgroundColor: '#2563eb',
-        borderRadius: 8,
-        paddingHorizontal: 14,
+        paddingHorizontal: 16,
         paddingVertical: 10,
+        borderRadius: 9999,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 1 },
+        shadowOpacity: 0.1,
+        shadowRadius: 1,
+        elevation: 2,
+        gap: 6,
+    },
+    downloadButtonDisabled: {
+        opacity: 0.7,
     },
     downloadButtonText: {
         color: '#fff',
@@ -607,6 +1001,7 @@ const styles = {
         borderRadius: 12,
         padding: 20,
         gap: 12,
+        margin: 20,
     },
     errorText: {
         textAlign: 'center',
@@ -690,6 +1085,66 @@ const styles = {
         borderRadius: 4,
         marginBottom: 6,
     },
-};
+    previewBackdrop: {
+        flex: 1,
+        backgroundColor: 'rgba(17, 24, 39, 0.8)',
+        alignItems: 'center',
+        justifyContent: 'center',
+        padding: 24,
+    },
+    previewBackdropTouchable: {
+        ...StyleSheet.absoluteFillObject,
+    },
+    previewCard: {
+        backgroundColor: '#ffffff',
+        borderRadius: 20,
+        padding: 20,
+        alignItems: 'center',
+        gap: 16,
+        maxWidth: '90%',
+    },
+    previewCloseButton: {
+        alignSelf: 'flex-end',
+        padding: 6,
+        borderRadius: 999,
+        backgroundColor: '#f3f4f6',
+    },
+    previewImage: {
+        width: '100%',
+        borderRadius: 12,
+        backgroundColor: '#000000',
+    },
+    previewTitle: {
+        fontSize: 16,
+        fontWeight: '600',
+        color: '#111827',
+        textAlign: 'center',
+    },
+    previewSubtitle: {
+        fontSize: 13,
+        color: '#6b7280',
+        textAlign: 'center',
+    },
+    previewActions: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: 12,
+    },
+    previewActionButton: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 8,
+        paddingHorizontal: 18,
+        paddingVertical: 12,
+        backgroundColor: '#2563eb',
+        borderRadius: 9999,
+    },
+    previewActionText: {
+        fontSize: 15,
+        fontWeight: '600',
+        color: '#ffffff',
+    },
+});
 
 export default ApprovedDocumentsModal;

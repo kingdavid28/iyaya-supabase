@@ -135,6 +135,7 @@ const CaregiverDashboard = () => {
   const showToast = (message, type = 'success') => setToast({ visible: true, message, type })
   const [refreshing, setRefreshing] = useState(false)
   const [showRequestModal, setShowRequestModal] = useState(false);
+  const [requestInfoTarget, setRequestInfoTarget] = useState(null);
   const [initialLoading, setInitialLoading] = useState(true);
 
   // Add missing handleGetDirections function
@@ -268,6 +269,121 @@ const CaregiverDashboard = () => {
 
     return Array.from(uniqueMap.values()).slice(0, 10);
   }, [bookings, applications]);
+
+  const requestInfoTargets = useMemo(() => {
+    const unique = new Map();
+    const registerTarget = (rawId, name, avatar = null) => {
+      const normalizedId = rawId ? String(rawId).trim() : '';
+      if (!normalizedId || unique.has(normalizedId)) {
+        return;
+      }
+      unique.set(normalizedId, {
+        id: normalizedId,
+        name: name || 'Family',
+        avatar,
+      });
+    };
+
+    (bookings || []).forEach((booking = {}) => {
+      const client = booking.clientId;
+      const parentId =
+        booking.parentId ||
+        (typeof client === 'object' ? client?.id || client?._id : client) ||
+        booking.createdBy ||
+        booking.familyId ||
+        booking.parent?.id ||
+        booking.parent_id;
+
+      const parentName =
+        booking.family ||
+        booking.parentName ||
+        (typeof client === 'object' ? client?.name || client?.fullName : null) ||
+        booking.parent?.name ||
+        'Family';
+
+      const avatar =
+        (typeof client === 'object' && (client?.avatar || client?.profileImage)) ||
+        booking.parent?.avatar ||
+        booking.parent?.profileImage ||
+        null;
+
+      registerTarget(parentId, parentName, avatar);
+    });
+
+    (applications || []).forEach((application = {}) => {
+      const parent =
+        application.parent ||
+        application.parentInfo ||
+        application.parentProfile ||
+        {};
+
+      const parentId =
+        parent.id ||
+        application.parent_id ||
+        application.parentId ||
+        application.userId ||
+        application.createdBy;
+
+      const parentName =
+        parent.name ||
+        parent.fullName ||
+        application.family ||
+        application.familyName ||
+        application.parentName ||
+        'Family';
+
+      const avatar = parent.avatar || parent.profileImage || null;
+
+      registerTarget(parentId, parentName, avatar);
+    });
+
+    return Array.from(unique.values());
+  }, [applications, bookings]);
+
+  useEffect(() => {
+    if (!requestInfoTargets.length) {
+      setRequestInfoTarget(null);
+      return;
+    }
+
+    setRequestInfoTarget((previous) => {
+      if (previous?.id && requestInfoTargets.some((target) => target.id === previous.id)) {
+        return previous;
+      }
+      return requestInfoTargets[0];
+    });
+  }, [requestInfoTargets]);
+
+  const handleOpenRequestInfoModal = useCallback(() => {
+    if (!requestInfoTargets.length) {
+      showToast('No families available yet. Connect with families through bookings or applications first.', 'info');
+      return;
+    }
+
+    setRequestInfoTarget((previous) => {
+      if (previous?.id && requestInfoTargets.some((target) => target.id === previous.id)) {
+        return previous;
+      }
+      return requestInfoTargets[0];
+    });
+    setShowRequestModal(true);
+  }, [requestInfoTargets, showToast]);
+
+  const handleCloseRequestInfoModal = useCallback(() => {
+    setShowRequestModal(false);
+  }, []);
+
+  const handleRequestInfoTargetChange = useCallback((target) => {
+    if (!target?.id) {
+      return;
+    }
+    setRequestInfoTarget(target);
+  }, []);
+
+  const handleRequestInfoSuccess = useCallback((target) => {
+    setShowRequestModal(false);
+    showToast(`Request sent to ${target?.name || 'the family'}!`, 'success');
+  }, [showToast]);
 
   const openEditProfileModal = () => {
     try {
@@ -1212,7 +1328,8 @@ const CaregiverDashboard = () => {
           onNavigateMessages={() => setActiveTab('messages')}
           onOpenPrivacyRequests={() => setShowNotifications(true)}
           onNavigateNotifications={() => setActiveTab('notifications')}
-          onOpenRequestModal={() => setShowRequestModal(true)}
+          onOpenRequestModal={handleOpenRequestInfoModal}
+          requestInfoDisabled={!requestInfoTargets.length}
           onOpenSettings={() => setShowSettings(true)}
           onNavigateProfile={() => {
             try {
@@ -2405,9 +2522,12 @@ const CaregiverDashboard = () => {
 
       <RequestInfoModal
         visible={showRequestModal}
-        onClose={() => setShowRequestModal(false)}
-        targetUser={{ id: 'sample', name: 'Parent' }}
-        colors={{ primary: '#3B82F6' }}
+        onClose={handleCloseRequestInfoModal}
+        targetUser={requestInfoTarget}
+        availableTargets={requestInfoTargets}
+        onTargetChange={handleRequestInfoTargetChange}
+        onSuccess={handleRequestInfoSuccess}
+        userType="caregiver"
       />
 
       <Modal

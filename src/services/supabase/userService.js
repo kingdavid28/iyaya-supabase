@@ -262,6 +262,23 @@ export class UserService extends SupabaseBase {
       return this._handleError('getCaregivers', error)
     }
   }
+
+  async deleteProfile(userId) {
+    try {
+      const resolvedUserId = await this._ensureUserId(userId, 'User ID')
+
+      const { error } = await supabase
+        .from('users')
+        .delete()
+        .eq('id', resolvedUserId)
+
+      if (error) throw error
+      invalidateCache(`profile:${resolvedUserId}`)
+      return { success: true }
+    } catch (error) {
+      return this._handleError('deleteProfile', error)
+    }
+  }
 }
 
 export const userService = new UserService()

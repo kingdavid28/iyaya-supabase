@@ -424,14 +424,21 @@ export const useCaregiverDashboard = () => {
       console.log('📋 Available jobs from Supabase:', jobsList);
 
       const normalizedJobs = Array.isArray(jobsList) ? jobsList : [];
-      setJobs(normalizedJobs);
+      const caregiverLocation = profile?.location || profile?.address || user?.location || null;
+      const caregiverCoordinates = extractCoordinates(profile?.locationCoordinates || profile?.coordinates || null);
+
+      const jobsWithProximity = normalizedJobs.map((job) =>
+        annotateJobWithProximity(job, caregiverLocation, caregiverCoordinates)
+      );
+
+      setJobs(jobsWithProximity);
     } catch (error) {
       console.error('❌ Error fetching jobs:', error);
       setJobs([]);
     } finally {
       setJobsLoading(false);
     }
-  }, [user?.id, user?.role]);
+  }, [profile?.address, profile?.coordinates, profile?.location, profile?.locationCoordinates, user?.id, user?.location, user?.role]);
 
   const fetchApplications = useCallback(async () => {
     if (!user?.id || user?.role !== 'caregiver') return;

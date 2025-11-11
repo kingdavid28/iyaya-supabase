@@ -1,19 +1,18 @@
-import React, { useState, useRef } from 'react';
+import { Ionicons } from '@expo/vector-icons';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import React, { useEffect, useRef, useState } from 'react';
 import {
-  View,
-  Text,
-  StyleSheet,
-  Dimensions,
-  TouchableOpacity,
+  FlatList,
   Image,
   StatusBar,
-  FlatList,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
+  useWindowDimensions,
+  Platform
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import { Ionicons } from '@expo/vector-icons';
-
-const { width, height } = Dimensions.get('window');
 
 const onboardingData = [
   {
@@ -31,7 +30,7 @@ const onboardingData = [
     subtitle: 'Find & book trusted caregivers easily',
     description: 'Browse verified profiles, post jobs, manage bookings, and communicate securely with background-checked caregivers.',
     icon: 'people-outline',
-    color: '#8B5CF6', // Parent dashboard color
+    color: '#8B5CF6',
     backgroundColor: '#F5F3FF',
   },
   {
@@ -40,7 +39,7 @@ const onboardingData = [
     subtitle: 'Complete childcare management',
     description: 'Add children profiles, track booking history, upload payment confirmations, and rate your experience with caregivers.',
     icon: 'shield-checkmark-outline',
-    color: '#EC4899', // Parent secondary color
+    color: '#EC4899',
     backgroundColor: '#FCE7F3',
   },
   {
@@ -49,7 +48,7 @@ const onboardingData = [
     subtitle: 'Find rewarding childcare opportunities',
     description: 'Browse jobs, showcase certifications, manage availability, build relationships with families, and grow your career.',
     icon: 'briefcase-outline',
-    color: '#5bbafa', // Caregiver dashboard color
+    color: '#5bbafa',
     backgroundColor: '#e0f2fe',
   },
   {
@@ -58,7 +57,7 @@ const onboardingData = [
     subtitle: 'Join our community of trusted caregivers',
     description: 'Turn your passion for childcare into a rewarding career. Flexible schedules, competitive rates, and meaningful work await you.',
     icon: 'star-outline',
-    color: '#b672ff', // Caregiver secondary color
+    color: '#b672ff',
     backgroundColor: '#f3e8ff',
   },
 ];
@@ -66,12 +65,32 @@ const onboardingData = [
 const OnboardingScreen = ({ navigation }) => {
   const [currentIndex, setCurrentIndex] = useState(0);
   const flatListRef = useRef(null);
+  const { width: windowWidth } = useWindowDimensions();
+  const isWeb = Platform.OS === 'web';
+
+  const slideWidth = Math.max(windowWidth, 1);
+  const clampedIndex = Math.min(Math.max(currentIndex, 0), onboardingData.length - 1);
+  const currentSlide = onboardingData[clampedIndex] ?? onboardingData[0];
+  const iconSize = isWeb ? 96 : 60;
+  const logoSize = isWeb ? 220 : 150;
+
+  useEffect(() => {
+    if (flatListRef.current) {
+      flatListRef.current.scrollToOffset({
+        offset: clampedIndex * slideWidth,
+        animated: false,
+      });
+    }
+  }, [slideWidth, clampedIndex]);
 
   const handleNext = () => {
-    if (currentIndex < onboardingData.length - 1) {
-      const nextIndex = currentIndex + 1;
+    if (clampedIndex < onboardingData.length - 1) {
+      const nextIndex = clampedIndex + 1;
       setCurrentIndex(nextIndex);
-      flatListRef.current?.scrollToIndex({ index: nextIndex, animated: true });
+      flatListRef.current?.scrollToOffset({
+        offset: nextIndex * slideWidth,
+        animated: true,
+      });
     } else {
       handleGetStarted();
     }
@@ -92,35 +111,56 @@ const OnboardingScreen = ({ navigation }) => {
   };
 
   const handlePrevious = () => {
-    if (currentIndex > 0) {
-      const prevIndex = currentIndex - 1;
+    if (clampedIndex > 0) {
+      const prevIndex = clampedIndex - 1;
       setCurrentIndex(prevIndex);
-      flatListRef.current?.scrollToIndex({ index: prevIndex, animated: true });
+      flatListRef.current?.scrollToOffset({
+        offset: prevIndex * slideWidth,
+        animated: true,
+      });
     }
   };
 
-  const onViewableItemsChanged = useRef(({ viewableItems }) => {
-    if (viewableItems.length > 0) {
-      setCurrentIndex(viewableItems[0].index);
+  const handleScroll = (event) => {
+    const offsetX = event.nativeEvent.contentOffset.x;
+    const newIndex = Math.round(offsetX / slideWidth);
+    
+    if (newIndex >= 0 && newIndex < onboardingData.length && newIndex !== currentIndex) {
+      setCurrentIndex(newIndex);
     }
-  }).current;
+  };
 
   const renderOnboardingItem = ({ item }) => (
-    <View style={[styles.slide, { backgroundColor: item.backgroundColor }]}>
+    <View
+      style={[
+        styles.slide,
+        {
+          backgroundColor: item.backgroundColor,
+          width: slideWidth,
+        },
+      ]}
+    >
       <View style={styles.iconContainer}>
         {item.showLogo ? (
-          <Image 
-            source={require('../../assets/icon.png')} 
-            style={styles.logoImage}
+          <Image
+            source={require('../../assets/icon.png')}
+            style={[
+              styles.logoImage,
+              { width: logoSize, height: logoSize }
+            ]}
             resizeMode="contain"
           />
         ) : (
           <View style={[styles.iconCircle, { backgroundColor: item.color }]}>
-            <Ionicons name={item.icon} size={60} color="white" />
+            <Ionicons 
+              name={item.icon} 
+              size={iconSize} 
+              color="white" 
+            />
           </View>
         )}
       </View>
-      
+
       <View style={styles.textContainer}>
         <Text style={[styles.title, { color: item.color }]}>{item.title}</Text>
         <Text style={styles.subtitle}>{item.subtitle}</Text>
@@ -131,33 +171,35 @@ const OnboardingScreen = ({ navigation }) => {
 
   const renderPagination = () => (
     <View style={styles.paginationContainer}>
-      {onboardingData.map((_, index) => (
-        <View
-          key={index}
-          style={[
-            styles.paginationDot,
-            {
-              backgroundColor: index === currentIndex 
-                ? onboardingData[currentIndex].color 
-                : '#E0E0E0',
-              width: index === currentIndex ? 24 : 8,
-            }
-          ]}
-        />
-      ))}
+      {onboardingData.map((_, index) => {
+        const isActive = clampedIndex === index;
+        return (
+          <View
+            key={`dot-${index}`}
+            style={[
+              styles.paginationDot,
+              {
+                backgroundColor: isActive ? currentSlide.color : '#E0E0E0',
+                width: isActive ? 24 : 8,
+              },
+            ]}
+          />
+        );
+      })}
     </View>
   );
 
   return (
     <SafeAreaView style={styles.container}>
-      <StatusBar barStyle="dark-content" backgroundColor="transparent" translucent />
-      
+      <StatusBar 
+        barStyle="dark-content" 
+        backgroundColor={currentSlide.backgroundColor} 
+        translucent 
+      />
+
       {/* Skip Button */}
       <TouchableOpacity
-        style={[
-          styles.skipButton,
-          { backgroundColor: onboardingData[currentIndex].color }
-        ]}
+        style={[styles.skipButton, { backgroundColor: currentSlide.color }]}
         onPress={handleSkip}
       >
         <Text style={styles.skipText}>Skip</Text>
@@ -170,10 +212,28 @@ const OnboardingScreen = ({ navigation }) => {
         renderItem={renderOnboardingItem}
         horizontal
         pagingEnabled
+        snapToInterval={slideWidth}
+        snapToAlignment="center"
+        decelerationRate="fast"
         showsHorizontalScrollIndicator={false}
         keyExtractor={(item) => item.id}
-        onViewableItemsChanged={onViewableItemsChanged}
-        viewabilityConfig={{ itemVisiblePercentThreshold: 50 }}
+        onMomentumScrollEnd={handleScroll}
+        onScroll={handleScroll}
+        scrollEventThrottle={16}
+        getItemLayout={(_, index) => ({
+          length: slideWidth,
+          offset: slideWidth * index,
+          index,
+        })}
+        onScrollToIndexFailed={({ index }) => {
+          const wait = new Promise(resolve => setTimeout(resolve, 500));
+          wait.then(() => {
+            flatListRef.current?.scrollToOffset({
+              offset: slideWidth * index,
+              animated: true,
+            });
+          });
+        }}
       />
 
       {/* Pagination */}
@@ -181,26 +241,29 @@ const OnboardingScreen = ({ navigation }) => {
 
       {/* Navigation Buttons */}
       <View style={styles.buttonContainer}>
-        {currentIndex > 0 && (
-          <TouchableOpacity style={styles.previousButton} onPress={handlePrevious}>
+        {clampedIndex > 0 && (
+          <TouchableOpacity 
+            style={styles.previousButton} 
+            onPress={handlePrevious}
+          >
             <Ionicons name="chevron-back" size={24} color="#666" />
             <Text style={styles.previousText}>Previous</Text>
           </TouchableOpacity>
         )}
-        
+
         <View style={styles.spacer} />
-        
-        <TouchableOpacity 
-          style={[styles.nextButton, { backgroundColor: onboardingData[currentIndex].color }]} 
+
+        <TouchableOpacity
+          style={[styles.nextButton, { backgroundColor: currentSlide.color }]}
           onPress={handleNext}
         >
           <Text style={styles.nextText}>
-            {currentIndex === onboardingData.length - 1 ? 'Get Started' : 'Next'}
+            {clampedIndex === onboardingData.length - 1 ? 'Get Started' : 'Next'}
           </Text>
-          <Ionicons 
-            name={currentIndex === onboardingData.length - 1 ? "checkmark" : "chevron-forward"} 
-            size={24} 
-            color="white" 
+          <Ionicons
+            name={clampedIndex === onboardingData.length - 1 ? 'checkmark' : 'chevron-forward'}
+            size={24}
+            color="white"
           />
         </TouchableOpacity>
       </View>
@@ -215,7 +278,7 @@ const styles = StyleSheet.create({
   },
   skipButton: {
     position: 'absolute',
-    top: 50,
+    top: Platform.OS === 'ios' ? 50 : 40,
     right: 20,
     zIndex: 1,
     paddingHorizontal: 16,
@@ -233,7 +296,6 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   slide: {
-    width,
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
@@ -257,8 +319,6 @@ const styles = StyleSheet.create({
     elevation: 8,
   },
   logoImage: {
-    width: 150,
-    height: 150,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.1,
@@ -299,6 +359,7 @@ const styles = StyleSheet.create({
     height: 8,
     borderRadius: 4,
     marginHorizontal: 4,
+    transition: 'width 0.3s ease',
   },
   buttonContainer: {
     flexDirection: 'row',

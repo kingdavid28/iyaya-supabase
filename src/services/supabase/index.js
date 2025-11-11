@@ -41,6 +41,7 @@ export class SupabaseServiceFacade {
   // === USER & PROFILE METHODS ===
   async getProfile(userId) { return this.user.getProfile(userId) }
   async updateProfile(userId, data) { return this.user.updateProfile(userId, data) }
+  async deleteProfile(userId) { return this.user.deleteProfile(userId) }
   async uploadProfileImage(userId, imageData) { return this.storage.uploadProfileImage(userId, imageData) }
   async getCaregivers(filters) { return this.user.getCaregivers(filters) }
   async _getCurrentUser() { return this.user._getCurrentUser() }
@@ -71,6 +72,8 @@ export class SupabaseServiceFacade {
   async getMyBookings(userId, role) { return this.bookings.getMyBookings(userId, role) }
   async getBookingById(bookingId, userId) { return this.bookings.getBookingById(bookingId, userId) }
   async updateBookingStatus(bookingId, status, feedback) { return this.bookings.updateBookingStatus(bookingId, status) }
+  async updateBooking(bookingId, data) { return this.bookings.updateBooking(bookingId, data) }
+  async deleteBooking(bookingId) { return this.bookings.deleteBooking(bookingId) }
   async cancelBooking(bookingId) { return this.bookings.cancelBooking(bookingId) }
   async uploadPaymentProof(bookingId, proofData, metadata) { return this.bookings.uploadPaymentProof(bookingId, proofData, metadata) }
   async getPaymentProof(bookingId) { return this.bookings.getPaymentProof(bookingId) }

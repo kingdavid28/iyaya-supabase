@@ -1,102 +1,101 @@
-import React, { useState } from 'react';
-import { View, StyleSheet, Image, TouchableOpacity, Alert, Platform } from 'react-native';
-import { Button, Text, IconButton } from 'react-native-paper';
-import * as ImagePicker from 'expo-image-picker';
-import { uploadsAPI, authAPI } from '../../config/api';
+import * as DocumentPicker from 'expo-document-picker';
+import * as FileSystem from 'expo-file-system';
+import React, { useCallback, useMemo, useState } from 'react';
+import { Alert, Image, StyleSheet, TouchableOpacity, View } from 'react-native';
+import { Button, IconButton, Text } from 'react-native-paper';
+import { uploadsAPI } from '../../config/api';
 
-// Platform-specific FileSystem import
-const FileSystem = Platform.OS === 'web' ? null : require('expo-file-system/legacy');
+const SUPPORTED_TYPES = ['application/pdf', 'image/*'];
 
 const DocumentUpload = ({ label, documentType, onUploadComplete, initialUri = '' }) => {
   const [isUploading, setIsUploading] = useState(false);
   const [documentUri, setDocumentUri] = useState(initialUri);
   const [uploadProgress, setUploadProgress] = useState(0);
 
-  const pickDocument = async () => {
+  const allowedTypes = useMemo(() => SUPPORTED_TYPES, []);
+
+  const pickDocument = useCallback(async () => {
     try {
-      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-      if (status !== 'granted') {
-        Alert.alert('Permission required', 'We need access to your photos to upload documents.');
+      const result = await DocumentPicker.getDocumentAsync({
+        type: allowedTypes,
+        copyToCacheDirectory: true,
+      });
+
+      if (result.canceled || !result.assets?.length) {
         return;
       }
 
-      const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ['images'],
-        allowsEditing: true,
-        aspect: [4, 3],
-        quality: 0.8,
-      });
-
-      if (!result.canceled && result.assets && result.assets.length > 0) {
-        await uploadDocument(result.assets[0].uri);
-      }
+      await uploadDocument(result.assets[0]);
     } catch (error) {
       console.error('Error picking document:', error);
       Alert.alert('Error', 'Failed to pick document. Please try again.');
     }
-  };
+  }, [allowedTypes, uploadDocument]);
 
-  const uploadDocument = async (uri) => {
+  const uploadDocument = useCallback(async (asset) => {
     try {
       setIsUploading(true);
       setUploadProgress(0);
-      // Read file as base64 (skip on web)
-      let imageBase64 = '';
-      if (Platform.OS !== 'web' && FileSystem) {
-        imageBase64 = await FileSystem.readAsStringAsync(uri, { encoding: 'base64' });
-      } else {
-        // For web, we'll need to handle file reading differently
-        console.warn('FileSystem not available on web platform');
-        Alert.alert('Upload Error', 'File upload is not supported on web platform');
-        return;
-      }
-      // Best-effort mime type guess
-      const mimeType = uri.toLowerCase().endsWith('.png') ? 'image/png' : 'image/jpeg';
-      const name = `${documentType}_${Date.now()}`;
-      const folder = 'verification_documents';
 
-      // Try uploadsAPI first, fallback to authAPI
-      let res;
-      try {
-        res = await uploadsAPI.base64Upload({ imageBase64, mimeType, folder, name });
-      } catch (uploadError) {
-        console.log('Upload API failed, trying auth API:', uploadError.message);
-        res = await authAPI.uploadProfileImage(uri);
+      const { uri, name, mimeType, size } = asset;
+
+      if (!uri) {
+        throw new Error('Selected file is missing a URI');
       }
-      
-      const url = res?.data?.url || res?.url;
-      if (!res?.success && !url) throw new Error('Upload failed');
-      
+
+      const fileInfo = await FileSystem.getInfoAsync(uri, { size: true });
+      if (!fileInfo.exists) {
+        throw new Error('Unable to read the selected file');
+      }
+
+      const inferredMimeType = mimeType || inferMimeType(name);
+      const fileName = name || `${documentType || 'document'}-${Date.now()}`;
+
+      const filePayload = {
+        uri,
+        name: fileName,
+        type: inferredMimeType,
+        size: size || fileInfo.size || 0,
+        documentType: documentType || 'general',
+      };
+
+      const uploadResult = await uploadsAPI.uploadDocument(filePayload);
+      const url = uploadResult?.url || uploadResult?.data?.url;
+
+      if (!url) {
+        throw new Error('Upload did not return a file URL');
+      }
+
       setUploadProgress(100);
       setDocumentUri(url);
       onUploadComplete(url, documentType);
-      setIsUploading(false);
     } catch (error) {
       console.error('Upload error:', error);
       Alert.alert('Upload Failed', error.message || 'Failed to upload document. Please try again.');
+    } finally {
       setIsUploading(false);
     }
-  };
+  }, [documentType, onUploadComplete]);
 
-  const removeDocument = () => {
+  const removeDocument = useCallback(() => {
     setDocumentUri('');
     onUploadComplete('', documentType);
-  };
+  }, [documentType, onUploadComplete]);
 
   return (
     <View style={styles.container}>
       <Text style={styles.label}>{label}</Text>
-      
+
       {documentUri ? (
         <View style={styles.documentPreview}>
-          <Image 
-            source={{ uri: documentUri }} 
-            style={styles.documentImage} 
+          <Image
+            source={{ uri: documentUri }}
+            style={styles.documentImage}
             resizeMode="contain"
           />
           <View style={styles.documentActions}>
-            <Button 
-              mode="outlined" 
+            <Button
+              mode="outlined"
               onPress={pickDocument}
               style={styles.actionButton}
               disabled={isUploading}
@@ -113,7 +112,7 @@ const DocumentUpload = ({ label, documentType, onUploadComplete, initialUri = ''
           </View>
         </View>
       ) : (
-        <TouchableOpacity 
+        <TouchableOpacity
           style={styles.uploadButton}
           onPress={pickDocument}
           disabled={isUploading}
