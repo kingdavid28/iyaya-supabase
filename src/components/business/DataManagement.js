@@ -2,7 +2,7 @@ import { Ionicons } from '@expo/vector-icons';
 import * as Print from 'expo-print';
 import * as Sharing from 'expo-sharing';
 import React, { useCallback, useEffect, useState } from 'react';
-import { Alert, Platform, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, Alert, Platform, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { settingsService } from '../../services/settingsService';
 
 const escapeHtml = (value = '') =>
@@ -37,11 +37,31 @@ const buildExportHtml = (payload) => {
   </html>`;
 };
 
+const formatTimestamp = (value) => {
+  if (!value) {
+    return null;
+  }
+
+  const date = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return String(value);
+  }
+
+  return date.toLocaleString(undefined, {
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit'
+  });
+};
+
 export function DataManagement({ user, userType, colors }) {
   const [activeSection, setActiveSection] = useState('profile');
   const [data, setData] = useState([]);
   const [loading, setLoading] = useState(false);
   const [exporting, setExporting] = useState(false);
+  const [deletingId, setDeletingId] = useState(null);
 
   const sections = [
     { id: 'profile', label: 'Profile Data', icon: 'person-outline' },
@@ -63,8 +83,11 @@ export function DataManagement({ user, userType, colors }) {
         case 'jobs':
         case 'bookings':
         case 'applications': {
-          result = await settingsService.getDataUsage();
-          setData(result[section] || []);
+          result = await settingsService.getDataUsage({
+            userId: user?.id,
+            userType,
+          });
+          setData(result?.[section] || []);
           break;
         }
         default:
@@ -77,7 +100,7 @@ export function DataManagement({ user, userType, colors }) {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [user?.id, userType]);
 
   useEffect(() => {
     loadData(activeSection);
@@ -95,23 +118,151 @@ export function DataManagement({ user, userType, colors }) {
     const id = resolveId(item);
     if (id) parts.push(`ID: ${id}`);
     if (item?.status) parts.push(`Status: ${item.status}`);
-    if (item?.created_at || item?.createdAt) {
-      parts.push(`Created: ${item.created_at || item.createdAt}`);
+
+    const createdAt = formatTimestamp(item?.created_at || item?.createdAt);
+    if (createdAt) {
+      parts.push(`Created: ${createdAt}`);
     }
+
+    const updatedAt = formatTimestamp(item?.updated_at || item?.updatedAt);
+    if (updatedAt) {
+      parts.push(`Updated: ${updatedAt}`);
+    }
+
     return parts.join(' • ');
   };
 
-  const renderItem = (item, index) => (
-    <View key={item?.id || item?._id || index} style={styles.dataItem}>
-      <View style={styles.itemContent}>
-        <Text style={styles.itemTitle}>{resolveTitle(item)}</Text>
-        <Text style={styles.itemSubtitle}>{resolveSubtitle(item)}</Text>
-        {resolveMeta(item) ? (
-          <Text style={styles.itemMeta}>{resolveMeta(item)}</Text>
-        ) : null}
-      </View>
-    </View>
+  const canDeleteRecord = useCallback(
+    (section, item) => {
+      if (!user?.id) {
+        return false;
+      }
+
+      if (section === 'jobs') {
+        const ownerId = item?.parentId || item?.clientId || item?.parent_id;
+        if (ownerId) {
+          return ownerId === user.id && userType === 'parent';
+        }
+        return userType === 'parent';
+      }
+
+      if (section === 'bookings') {
+        const ownerId = item?.parentId || item?.parent_id;
+        if (ownerId) {
+          return ownerId === user.id && userType === 'parent';
+        }
+        return userType === 'parent';
+      }
+
+      if (section === 'applications') {
+        const caregiverId = item?.caregiverId || item?.caregiver_id;
+        if (caregiverId) {
+          return caregiverId === user.id && userType === 'caregiver';
+        }
+        return userType === 'caregiver';
+      }
+
+      return false;
+    },
+    [user?.id, userType]
   );
+
+  const handleDelete = useCallback((item) => {
+    const id = resolveId(item);
+    if (!id) {
+      Alert.alert('Delete unavailable', 'We could not determine which record to delete.');
+      return;
+    }
+
+    if (!canDeleteRecord(activeSection, item)) {
+      const restrictionMessage = {
+        jobs: 'Only parents can delete their own job postings.',
+        bookings: 'Only parents can delete their own bookings.',
+        applications: 'Only caregivers can delete their own applications.',
+      };
+
+      Alert.alert('Action restricted', restrictionMessage[activeSection] || 'You do not have permission to delete this item.');
+      return;
+    }
+
+    const entityLabelMap = {
+      jobs: 'Job',
+      bookings: 'Booking',
+      applications: 'Application',
+    };
+
+    const entityLabel = entityLabelMap[activeSection] || 'Item';
+
+    const performDelete = async () => {
+      setDeletingId(id);
+      try {
+        if (activeSection === 'jobs') {
+          await settingsService.deleteJob(id);
+        } else if (activeSection === 'bookings') {
+          await settingsService.deleteBooking(id);
+        } else if (activeSection === 'applications') {
+          await settingsService.deleteApplication(id);
+        } else {
+          throw new Error('Deletion is not supported for this data type.');
+        }
+
+        Alert.alert('Deleted', `${entityLabel} deleted successfully.`);
+        await loadData(activeSection);
+      } catch (error) {
+        console.error('Data delete failed:', error);
+        Alert.alert('Error', error?.message || `Failed to delete the ${entityLabel.toLowerCase()}.`);
+      } finally {
+        setDeletingId(null);
+      }
+    };
+
+    Alert.alert(
+      `Delete ${entityLabel}`,
+      `Are you sure you want to delete this ${entityLabel.toLowerCase()}? This action cannot be undone.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Delete', style: 'destructive', onPress: () => performDelete() },
+      ]
+    );
+  }, [activeSection, canDeleteRecord, loadData]);
+
+  const renderItem = (item, index) => {
+    const recordId = resolveId(item);
+    const canDelete = canDeleteRecord(activeSection, item);
+    const showDelete = ['jobs', 'bookings', 'applications'].includes(activeSection) && canDelete;
+    const isDeleting = deletingId === recordId;
+
+    return (
+      <View key={recordId || index} style={styles.dataItem}>
+        <View style={styles.itemContent}>
+          <Text style={styles.itemTitle}>{resolveTitle(item)}</Text>
+          <Text style={styles.itemSubtitle}>{resolveSubtitle(item)}</Text>
+          {resolveMeta(item) ? (
+            <Text style={styles.itemMeta}>{resolveMeta(item)}</Text>
+          ) : null}
+        </View>
+
+        {showDelete && (
+          <TouchableOpacity
+            style={[styles.deleteButton, isDeleting && styles.deleteButtonDisabled]}
+            onPress={() => handleDelete(item)}
+            disabled={isDeleting}
+            accessibilityRole="button"
+            accessibilityHint={`Delete this ${activeSection.slice(0, -1)}`}
+          >
+            {isDeleting ? (
+              <ActivityIndicator size="small" color="#B91C1C" />
+            ) : (
+              <>
+                <Ionicons name="trash-outline" size={18} color="#B91C1C" />
+                <Text style={styles.deleteButtonText}>Delete</Text>
+              </>
+            )}
+          </TouchableOpacity>
+        )}
+      </View>
+    );
+  };
 
   return (
     <View style={styles.container}>
@@ -269,6 +420,26 @@ const styles = StyleSheet.create({
     marginBottom: 8,
     borderWidth: 1,
     borderColor: '#E5E7EB',
+  },
+  deleteButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 8,
+    marginLeft: 12,
+    backgroundColor: '#FEE2E2',
+    borderWidth: 1,
+    borderColor: '#FCA5A5',
+  },
+  deleteButtonText: {
+    marginLeft: 6,
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#B91C1C',
+  },
+  deleteButtonDisabled: {
+    opacity: 0.6,
   },
   itemContent: {
     flex: 1,

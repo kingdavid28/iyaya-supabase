@@ -11,7 +11,23 @@ import ApprovedDocumentsModal from '../modals/ApprovedDocumentsModal';
 // NotificationContext removed - using local state
 import { getCurrentSocketURL } from '../../../config/api';
 
-const Header = ({ navigation, onProfilePress, onSignOut, greetingName, onProfileEdit, profileName, profileImage, profileContact, profileLocation, setActiveTab, tabNotificationCounts = {}, onRequestInfo, onViewSharedDocuments }) => {
+const Header = ({
+  navigation,
+  onProfilePress,
+  onSignOut,
+  greetingName,
+  onProfileEdit,
+  profileName,
+  profileImage,
+  profileContact,
+  profileLocation,
+  setActiveTab,
+  tabNotificationCounts = {},
+  onRequestInfo,
+  onViewSharedDocuments,
+  user,
+  userType = user?.role,
+}) => {
   const [documentsModal, setDocumentsModal] = useState({ visible: false, caregiver: null, request: null });
   // Use real privacy system
   const { pendingRequests, sentRequests, notifications } = usePrivacy();
@@ -215,8 +231,8 @@ const Header = ({ navigation, onProfilePress, onSignOut, greetingName, onProfile
       <SettingsModal
         visible={showSettings}
         onClose={() => setShowSettings(false)}
-        user={{ role: 'parent' }}
-        userType="parent"
+        user={user}
+        userType={userType || 'parent'}
         colors={{ primary: '#db2777' }}
       />
     </View>

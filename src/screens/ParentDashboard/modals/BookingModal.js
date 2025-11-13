@@ -70,21 +70,43 @@ const BookingModal = ({ caregiver, childrenList = [], onConfirm, onClose, visibl
   }, []);
 
   // Helper function to convert time to 24-hour format
-  const convertTo24Hour = (time12h) => {
-    if (!time12h) return '';
-
-    const [time, modifier] = time12h.split(' ');
-    let [hours, minutes] = time.split(':');
-
-    if (hours === '12') {
-      hours = '00';
+  const convertTo24Hour = (input) => {
+    if (!input) {
+      return '';
     }
 
-    if (modifier === 'PM') {
-      hours = parseInt(hours, 10) + 12;
+    if (input instanceof Date) {
+      const hours = String(input.getHours()).padStart(2, '0');
+      const minutes = String(input.getMinutes()).padStart(2, '0');
+      return `${hours}:${minutes}`;
     }
 
-    return `${hours.padStart(2, '0')}:${minutes}`;
+    if (typeof input === 'string') {
+      const trimmed = input.trim();
+      if (!trimmed) {
+        return '';
+      }
+
+      const match24h = trimmed.match(/^([01]?\d|2[0-3]):([0-5]\d)$/);
+      if (match24h) {
+        const [, hours, minutes] = match24h;
+        return `${hours.padStart(2, '0')}:${minutes}`;
+      }
+
+      const match12h = trimmed.match(/^(\d{1,2}):([0-5]\d)\s*([AaPp][Mm])$/);
+      if (match12h) {
+        let [, hours, minutes, modifier] = match12h;
+        const numericHours = parseInt(hours, 10) % 12;
+        if (modifier.toUpperCase() === 'PM') {
+          hours = String(numericHours + 12);
+        } else {
+          hours = String(numericHours);
+        }
+        return `${hours.padStart(2, '0')}:${minutes}`;
+      }
+    }
+
+    return '';
   };
 
   const resolveHourlyRate = () => {

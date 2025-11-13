@@ -144,6 +144,15 @@ class SettingsService {
     }
   }
 
+  async deleteApplication(applicationId) {
+    try {
+      return await supabaseService.applications.withdrawApplication(applicationId);
+    } catch (error) {
+      console.log('Settings delete application error:', error.message);
+      throw error;
+    }
+  }
+
   // Privacy Settings
   async getPrivacySettings(userId = null) {
     try {

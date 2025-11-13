@@ -27,7 +27,7 @@ const TimePicker = ({
     if (!value) return format24Hour ? 9 : 9;
     const time = typeof value === 'string' ? value : value.toTimeString().slice(0, 5);
     const hour = parseInt(time.split(':')[0]);
-    
+
     if (format24Hour) {
       return Math.max(0, Math.min(23, hour));
     } else {
@@ -229,12 +229,42 @@ const TimePicker = ({
     </Modal>
   );
 
+  const handleWebTimeChange = (selectedValue) => {
+    if (!onTimeChange) {
+      return;
+    }
+
+    if (!selectedValue) {
+      onTimeChange('');
+      return;
+    }
+
+    const date = selectedValue instanceof Date ? selectedValue : new Date(selectedValue);
+    if (Number.isNaN(date.getTime())) {
+      onTimeChange('');
+      return;
+    }
+
+    const hours = date.getHours().toString().padStart(2, '0');
+    const minutes = date.getMinutes().toString().padStart(2, '0');
+    const time24 = `${hours}:${minutes}`;
+
+    if (format24Hour) {
+      onTimeChange(time24);
+      return;
+    }
+
+    // Keep storing 24-hour strings so downstream utilities (e.g. convertTo24Hour)
+    // behave consistently. Display formatting handles conversion to 12-hour.
+    onTimeChange(time24);
+  };
+
   if (Platform.OS === 'web') {
     return (
       <WebDatePicker
         value={value}
         mode="time"
-        onDateChange={onTimeChange}
+        onDateChange={handleWebTimeChange}
         placeholder={placeholder}
         label={label}
         error={error}

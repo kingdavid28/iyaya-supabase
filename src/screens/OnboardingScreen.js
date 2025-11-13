@@ -4,15 +4,16 @@ import React, { useEffect, useRef, useState } from 'react';
 import {
   FlatList,
   Image,
+  Platform,
   StatusBar,
   StyleSheet,
   Text,
   TouchableOpacity,
   View,
-  useWindowDimensions,
-  Platform
+  useWindowDimensions
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useThemeContext } from '../contexts/ThemeContext';
 
 const onboardingData = [
   {
@@ -67,6 +68,9 @@ const OnboardingScreen = ({ navigation }) => {
   const flatListRef = useRef(null);
   const { width: windowWidth } = useWindowDimensions();
   const isWeb = Platform.OS === 'web';
+  const { theme } = useThemeContext();
+  const backgroundColor = theme?.colors?.background ?? '#FFFFFF';
+  const isDarkTheme = theme?.dark ?? false;
 
   const slideWidth = Math.max(windowWidth, 1);
   const clampedIndex = Math.min(Math.max(currentIndex, 0), onboardingData.length - 1);
@@ -124,7 +128,7 @@ const OnboardingScreen = ({ navigation }) => {
   const handleScroll = (event) => {
     const offsetX = event.nativeEvent.contentOffset.x;
     const newIndex = Math.round(offsetX / slideWidth);
-    
+
     if (newIndex >= 0 && newIndex < onboardingData.length && newIndex !== currentIndex) {
       setCurrentIndex(newIndex);
     }
@@ -134,6 +138,7 @@ const OnboardingScreen = ({ navigation }) => {
     <View
       style={[
         styles.slide,
+        isWeb && styles.webSlide,
         {
           backgroundColor: item.backgroundColor,
           width: slideWidth,
@@ -152,10 +157,10 @@ const OnboardingScreen = ({ navigation }) => {
           />
         ) : (
           <View style={[styles.iconCircle, { backgroundColor: item.color }]}>
-            <Ionicons 
-              name={item.icon} 
-              size={iconSize} 
-              color="white" 
+            <Ionicons
+              name={item.icon}
+              size={iconSize}
+              color="white"
             />
           </View>
         )}
@@ -190,11 +195,17 @@ const OnboardingScreen = ({ navigation }) => {
   );
 
   return (
-    <SafeAreaView style={styles.container}>
-      <StatusBar 
-        barStyle="dark-content" 
-        backgroundColor={currentSlide.backgroundColor} 
-        translucent 
+    <SafeAreaView
+      style={[
+        styles.container,
+        isWeb && styles.webContainer,
+        { backgroundColor },
+      ]}
+    >
+      <StatusBar
+        barStyle={isDarkTheme ? 'light-content' : 'dark-content'}
+        backgroundColor={backgroundColor}
+        translucent
       />
 
       {/* Skip Button */}
@@ -242,8 +253,8 @@ const OnboardingScreen = ({ navigation }) => {
       {/* Navigation Buttons */}
       <View style={styles.buttonContainer}>
         {clampedIndex > 0 && (
-          <TouchableOpacity 
-            style={styles.previousButton} 
+          <TouchableOpacity
+            style={styles.previousButton}
             onPress={handlePrevious}
           >
             <Ionicons name="chevron-back" size={24} color="#666" />
@@ -274,7 +285,10 @@ const OnboardingScreen = ({ navigation }) => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#FFFFFF',
+  },
+  webContainer: {
+    minHeight: '100vh',
+    width: '100%',
   },
   skipButton: {
     position: 'absolute',
@@ -300,6 +314,9 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     paddingHorizontal: 40,
+  },
+  webSlide: {
+    minHeight: '100vh',
   },
   iconContainer: {
     flex: 0.4,

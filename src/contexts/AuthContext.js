@@ -1,12 +1,11 @@
 import * as AuthSession from 'expo-auth-session'
 import Constants from 'expo-constants'
-import * as WebBrowser from 'expo-web-browser'
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react'
+
 import { ActivityIndicator, Platform, View } from 'react-native'
+
 import { supabase } from '../config/supabase'
 import { tokenManager } from '../utils/tokenManager'
-
-WebBrowser.maybeCompleteAuthSession()
 
 export const AuthContext = createContext()
 
@@ -213,7 +212,7 @@ export const AuthProvider = ({ children }) => {
         first_name: firstName,
         last_name: lastName,
         phone: authUser.user_metadata?.phone || null,
-        auth_provider: 'facebook',
+        auth_provider: 'supabase',
         status: 'active',
         email_verified: !!authUser.email_confirmed_at,
         profile_image: authUser.user_metadata?.avatar_url || authUser.user_metadata?.picture || null,
@@ -238,7 +237,8 @@ export const AuthProvider = ({ children }) => {
         return null
       }
 
-      console.log('✅ Profile created for Facebook OAuth user:', authUser.id)
+      console.log('✅ Profile created for user:', authUser.id)
+
       return Array.isArray(upsertData) ? upsertData[0] : upsertData
     } catch (error) {
       console.error('❌ ensureUserProfileExists error:', error)
@@ -485,89 +485,7 @@ export const AuthProvider = ({ children }) => {
     }
   }
 
-  const signInWithFacebook = () => signInWithOAuth('facebook')
   const signInWithGoogle = () => signInWithOAuth('google')
-
-  const loginWithFacebook = async (facebookResult) => {
-    try {
-      setError(null)
-      setLoading(true)
-
-      console.log('🔄 Processing Facebook login result:', facebookResult)
-      console.log('🔄 Facebook result structure:', Object.keys(facebookResult))
-
-      // Check if the result has success and user properties (from facebookAuthService)
-      if (facebookResult?.success && facebookResult?.user) {
-        console.log('✅ Processing real Facebook authentication from facebookAuthService')
-
-        // The user is already authenticated via Supabase OAuth
-        const user = facebookResult.user
-        console.log('🔍 Supabase user found:', user?.id ? 'yes' : 'no')
-
-        if (user) {
-          await ensureUserProfileExists(user, facebookResult.role)
-          console.log('🔍 Fetching user profile...')
-          const userWithProfile = await fetchUserWithProfile(user)
-          setUser(userWithProfile)
-          console.log('✅ User with profile set:', userWithProfile)
-          return userWithProfile
-        }
-
-        console.log('❌ No user found in Facebook result')
-        throw new Error('Facebook authentication failed - no user data')
-      }
-
-      // Handle test mode results - check for isTestMode flag
-      if (facebookResult?.isTestMode === true && facebookResult?.user) {
-        console.log('🧪 Processing test mode Facebook authentication')
-
-        const user = facebookResult.user
-        console.log('🔍 Test user found:', user?.id ? 'yes' : 'no')
-        console.log('🔍 Test user details:', {
-          id: user?.id,
-          email: user?.email,
-          role: user?.role,
-          isTestMode: facebookResult.isTestMode
-        })
-
-        if (user && user.id) {
-          console.log('🔍 Ensuring test user profile...')
-          await ensureUserProfileExists(user, user.role || facebookResult.role)
-          console.log('🔍 Setting test user profile...')
-          setUser(user)
-          console.log('✅ Test user set:', user)
-          return user
-        }
-
-        console.log('❌ No valid user found in test mode result')
-        throw new Error('Test mode authentication failed - no valid user data')
-      }
-
-      // Fallback: check current Supabase user
-      console.log('🔍 Checking current Supabase user as fallback...')
-      const currentUser = await supabase.auth.getUser()
-      console.log('🔍 Current user from Supabase:', currentUser?.data?.user ? 'found' : 'not found')
-
-      if (currentUser.data.user) {
-        console.log('🔍 Ensuring user profile from fallback...')
-        await ensureUserProfileExists(currentUser.data.user, facebookResult?.role)
-        console.log('🔍 Fetching user profile from fallback...')
-        const userWithProfile = await fetchUserWithProfile(currentUser.data.user)
-        setUser(userWithProfile)
-        console.log('✅ User with profile set from fallback:', userWithProfile)
-        return userWithProfile
-      }
-
-      console.log('❌ No user found after Facebook authentication')
-      throw new Error('Facebook authentication failed')
-    } catch (err) {
-      console.error('❌ Facebook login error:', err)
-      setError(err.message)
-      throw err
-    } finally {
-      setLoading(false)
-    }
-  }
 
   const getCurrentUser = () => {
     return user
@@ -630,9 +548,7 @@ export const AuthProvider = ({ children }) => {
     resendVerification,
     getCurrentUser,
     getUserProfile,
-    signInWithFacebook,
     signInWithGoogle,
-    loginWithFacebook,
     requireAuthSession,
     ensureAuthenticated
   }), [
@@ -645,9 +561,7 @@ export const AuthProvider = ({ children }) => {
     resetPassword,
     updatePassword,
     resendVerification,
-    signInWithFacebook,
     signInWithGoogle,
-    loginWithFacebook,
     requireAuthSession,
     ensureAuthenticated
   ])

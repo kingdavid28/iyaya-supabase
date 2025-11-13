@@ -466,7 +466,7 @@ const JobPostingModal = ({ visible, onClose, onJobPosted, childrenList = [] }) =
               <Text style={styles.label}>Job Title *</Text>
               <TextInput
                 style={[styles.input, errors.title && styles.inputError]}
-                placeholder="e.g., Full-time Nanny Needed"
+                placeholder="e.g., Full-time Yaya Needed"
                 value={jobData.title}
                 onChangeText={(text) => setJobData(prev => ({ ...prev, title: text }))}
               />

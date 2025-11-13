@@ -2,12 +2,12 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 
 import { Ionicons } from '@expo/vector-icons';
 import {
-    Image,
-    RefreshControl,
-    ScrollView,
-    Text,
-    TouchableOpacity,
-    View
+  Image,
+  RefreshControl,
+  ScrollView,
+  Text,
+  TouchableOpacity,
+  View
 } from 'react-native';
 import { useAuth } from '../contexts/AuthContext';
 // Removed old import - using updated Supabase service
@@ -15,6 +15,13 @@ import RatingsReviewsModal from '../components/ui/modals/RatingsReviewsModal';
 import { getCurrentSocketURL } from '../config/api';
 import { supabase } from '../config/supabase';
 import { reviewService } from '../services';
+import {
+  PORTFOLIO_CATEGORY_LABELS,
+  formatDateDisplay,
+  normalizeDocumentEntry,
+  normalizePortfolio,
+  parseJsonSafe
+} from '../utils/profileAssets';
 import { normalizeCaregiverReviewsForList } from '../utils/reviews';
 import { getRatingStats } from './CaregiverDashboard/utils';
 
@@ -38,81 +45,192 @@ const CaregiverProfileComplete = ({ navigation, route }) => {
       console.log(' No user ID available');
       return;
     }
-    
+
     try {
       setLoading(true);
       console.log(' Loading profile for user:', profileUserId);
-      
+
+      const parseNullableArray = (rawValue, fallback = []) => {
+        if (!rawValue && rawValue !== 0) {
+          return fallback;
+        }
+
+        const resolved = parseJsonSafe(rawValue);
+
+        if (Array.isArray(resolved)) {
+          return resolved;
+        }
+
+        if (resolved && typeof resolved === 'object') {
+          return resolved;
+        }
+
+        return fallback;
+      };
+
+      const parseNullableObject = (rawValue, fallback = {}) => {
+        if (!rawValue && rawValue !== 0) {
+          return fallback;
+        }
+
+        const resolved = parseJsonSafe(rawValue);
+        if (resolved && typeof resolved === 'object' && !Array.isArray(resolved)) {
+          return resolved;
+        }
+
+        return fallback;
+      };
+
+      const coerceDocument = (doc, index = 0) => normalizeDocumentEntry(doc, index);
+
+      const coercePortfolioImage = (item, index = 0) => {
+        if (!item || typeof item !== 'object') {
+          return null;
+        }
+
+        const resolvedCategory = item.category || 'other';
+        const normalizedCategory = PORTFOLIO_CATEGORY_LABELS[resolvedCategory] ? resolvedCategory : 'other';
+
+        return {
+          id: item.id || `${resolvedCategory}-${index}`,
+          url: item.url || item.imageUrl || null,
+          caption: item.caption || item.description || '',
+          category: normalizedCategory,
+          categoryLabel: PORTFOLIO_CATEGORY_LABELS[normalizedCategory],
+          uploadedAt: formatDateDisplay(item.uploadedAt || item.created_at || item.createdAt),
+        };
+      };
+
+      const coercePortfolio = (rawPortfolio) => normalizePortfolio(rawPortfolio);
+
+      const coerceName = (userRow) => {
+        if (userRow?.name) {
+          return userRow.name;
+        }
+
+        const first = userRow?.first_name || userRow?.firstName;
+        const last = userRow?.last_name || userRow?.lastName;
+        const candidate = `${first || ''} ${last || ''}`.trim();
+        if (candidate) {
+          return candidate;
+        }
+
+        if (userRow?.email) {
+          return userRow.email.split('@')[0];
+        }
+
+        return 'Caregiver';
+      };
+
+      const coerceExperience = (rawExperience, fallbackDescription) => {
+        if (!rawExperience) {
+          return { description: fallbackDescription || '' };
+        }
+
+        if (typeof rawExperience === 'string') {
+          return { description: rawExperience };
+        }
+
+        const resolved = parseNullableObject(rawExperience, {});
+        return {
+          years: resolved.years || 0,
+          months: resolved.months || 0,
+          description: resolved.description || fallbackDescription || '',
+        };
+      };
+
       // Get user data from users table
       const { data: userData, error: userError } = await supabase
         .from('users')
         .select('*')
         .eq('id', profileUserId)
-        .single();
-      
+        .maybeSingle();
+
       console.log(' User data:', userData);
       console.log(' User error:', userError);
-      
+
       if (userError) throw userError;
-      
+
       // Get caregiver profile data from caregiver_profiles table
       const { data: caregiverData, error: caregiverError } = await supabase
         .from('caregiver_profiles')
         .select('*')
         .eq('user_id', profileUserId)
-        .single();
-      
+        .maybeSingle();
+
       console.log(' Caregiver data:', caregiverData);
       console.log(' Caregiver error:', caregiverError);
-      
-      // The issue is that EnhancedCaregiverProfileWizard saves complex data but it's not being stored properly
-      // Let's check if the data exists in any format and extract it
-      
-      // Try to get complex data from any available source
-      const getComplexData = (field) => {
-        // Check caregiver_profiles table first
-        if (caregiverData?.[field] && Array.isArray(caregiverData[field]) && caregiverData[field].length > 0) {
-          return caregiverData[field];
-        }
-        // Check snake_case version
-        const snakeField = field.replace(/([A-Z])/g, '_$1').toLowerCase();
-        if (caregiverData?.[snakeField] && Array.isArray(caregiverData[snakeField]) && caregiverData[snakeField].length > 0) {
-          return caregiverData[snakeField];
-        }
-        // Check users table
-        if (userData?.[field] && Array.isArray(userData[field]) && userData[field].length > 0) {
-          return userData[field];
-        }
-        if (userData?.[snakeField] && Array.isArray(userData[snakeField]) && userData[snakeField].length > 0) {
-          return userData[snakeField];
-        }
-        return [];
-      };
-      
+
+      if (caregiverError && caregiverError.code !== 'PGRST116') {
+        throw caregiverError;
+      }
+
+      const userAddress = parseNullableObject(userData?.address, {});
+      const caregiverAddress = parseNullableObject(caregiverData?.address, {});
+
+      const availability = parseNullableObject(
+        caregiverData?.availability || userData?.availability,
+        { days: [] }
+      );
+
       const combinedProfile = {
-        // Basic info from users table
-        name: userData?.name,
-        bio: userData?.bio,
-        profileImage: userData?.profile_image,
-        skills: userData?.skills || [],
-        hourlyRate: userData?.hourly_rate,
-        
-        // Experience from caregiver_profiles table (preferred) or users table (fallback)
-        experience: caregiverData?.experience ? 
-          (typeof caregiverData.experience === 'string' ? 
-            { description: caregiverData.experience } : 
-            caregiverData.experience
-          ) : 
-          { description: userData?.experience },
-        
-        // Complex data with comprehensive fallback
-        certifications: getComplexData('certifications'),
-        availability: caregiverData?.availability || userData?.availability || { days: [] },
-        ageCareRanges: getComplexData('ageCareRanges'),
-        emergencyContacts: getComplexData('emergencyContacts'),
-        backgroundCheckStatus: caregiverData?.background_check_status
+        name: coerceName(userData),
+        bio: userData?.bio || caregiverData?.bio || '',
+        profileImage: userData?.profile_image || userData?.profileImage || caregiverData?.profileImage || null,
+        skills: parseNullableArray(caregiverData?.skills || userData?.skills, []),
+        hourlyRate: caregiverData?.hourly_rate ?? userData?.hourly_rate ?? null,
+        certifications: parseNullableArray(caregiverData?.certifications || userData?.certifications, [])
+          .map((cert, index) => {
+            if (!cert || typeof cert !== 'object') {
+              return cert;
+            }
+            return {
+              ...cert,
+              id: cert.id || `cert-${index}`,
+              name: cert.name || cert.title || cert.label || 'Certification',
+              issuedBy: cert.issuedBy || cert.issuer || cert.organization || null,
+              issuedOn: formatDateDisplay(cert.issuedOn || cert.issueDate || cert.issued_at),
+              expiresOn: formatDateDisplay(cert.expiresOn || cert.expirationDate || cert.expiryDate),
+              verified: Boolean(cert.verified || cert.isVerified || cert.status === 'verified'),
+            };
+          })
+          .filter(Boolean),
+        availability,
+        ageCareRanges: parseNullableArray(caregiverData?.age_care_ranges || caregiverData?.ageCareRanges || userData?.ageCareRanges, []),
+        emergencyContacts: parseNullableArray(caregiverData?.emergency_contacts || caregiverData?.emergencyContacts || userData?.emergencyContacts, [])
+          .map((contact, index) => {
+            if (!contact || typeof contact !== 'object') {
+              return null;
+            }
+            return {
+              id: contact.id || `contact-${index}`,
+              name: contact.name || 'Emergency Contact',
+              relationship: contact.relationship || contact.relation || 'Relationship not specified',
+              phone: contact.phone || contact.phoneNumber || 'No phone provided',
+              email: contact.email || null,
+            };
+          })
+          .filter(Boolean),
+        backgroundCheckStatus: caregiverData?.background_check_status || caregiverData?.backgroundCheckStatus || null,
+        experience: coerceExperience(
+          caregiverData?.experience || caregiverData?.experience_details,
+          userData?.experience
+        ),
+        documents: parseNullableArray(caregiverData?.documents || caregiverData?.legal_documents, [])
+          .map(coerceDocument)
+          .filter(Boolean),
+        portfolio: coercePortfolio(caregiverData?.portfolio || userData?.portfolio),
+        education: caregiverData?.education || userData?.education || null,
+        languages: parseNullableArray(caregiverData?.languages || userData?.languages, []),
+        address: {
+          street: caregiverAddress.street || caregiverAddress.addressLine1 || userAddress.street || '',
+          city: caregiverAddress.city || userAddress.city || '',
+          province: caregiverAddress.province || caregiverAddress.state || userAddress.province || '',
+          zipCode: caregiverAddress.zipCode || caregiverAddress.zipcode || userAddress.zipCode || '',
+          country: caregiverAddress.country || userAddress.country || 'Philippines',
+        },
       };
-      
+
       console.log(' Combined profile data:', combinedProfile);
       setProfile(combinedProfile);
     } catch (error) {
@@ -196,7 +314,7 @@ const CaregiverProfileComplete = ({ navigation, route }) => {
     if (!profile) return 0;
     let completed = 0;
     const total = 10;
-    
+
     if (profile.name) completed++;
     if (profile.bio) completed++;
     if (profile.profileImage) completed++;
@@ -207,7 +325,7 @@ const CaregiverProfileComplete = ({ navigation, route }) => {
     if (profile.availability?.days?.length > 0) completed++;
     if (profile.emergencyContacts?.length > 0) completed++;
     if (profile.ageCareRanges?.length > 0) completed++;
-    
+
     return Math.round((completed / total) * 100);
   };
 
@@ -240,49 +358,53 @@ const CaregiverProfileComplete = ({ navigation, route }) => {
   const completionPercentage = getCompletionPercentage();
 
   return (
-    <>
-      <ScrollView 
-        style={styles.container}
+    <View style={styles.container}>
+      {/* Header */}
+      <View style={styles.header}>
+        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
+          <Ionicons name="arrow-back" size={24} color="#333" />
+        </TouchableOpacity>
+        <Text style={styles.headerTitle}>{isViewingOwnProfile ? 'My Profile' : 'Caregiver Profile'}</Text>
+        {isViewingOwnProfile && (
+          <TouchableOpacity
+            onPress={() => navigation.navigate('EnhancedCaregiverProfileWizard', { isEdit: true, existingProfile: profile })}
+            style={styles.editButton}
+          >
+            <Ionicons name="create" size={24} color="#2196F3" />
+          </TouchableOpacity>
+        )}
+      </View>
+
+      {/* Profile Completion */}
+      <View style={styles.completionCard}>
+        <Text style={styles.completionTitle}>Profile Completion</Text>
+        <View style={styles.progressBar}>
+          <View style={[styles.progressFill, { width: `${completionPercentage}%` }]} />
+        </View>
+        <Text style={styles.completionText}>{completionPercentage}% Complete</Text>
+        {completionPercentage < 100 && (
+          <BestPracticesTip tip="Complete your profile to increase visibility and trust with families" />
+        )}
+      </View>
+
+      <ScrollView
+        style={styles.scrollContent}
+        contentContainerStyle={styles.scrollContentContainer}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
       >
-        {/* Header */}
-        <View style={styles.header}>
-          <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
-            <Ionicons name="arrow-back" size={24} color="#333" />
-          </TouchableOpacity>
-          <Text style={styles.headerTitle}>{isViewingOwnProfile ? 'My Profile' : 'Caregiver Profile'}</Text>
-          {isViewingOwnProfile && (
-            <TouchableOpacity onPress={() => navigation.navigate('EnhancedCaregiverProfileWizard', { isEdit: true, existingProfile: profile })} style={styles.editButton}>
-              <Ionicons name="create" size={24} color="#2196F3" />
-            </TouchableOpacity>
-          )}
-        </View>
-
-        {/* Profile Completion */}
-        <View style={styles.completionCard}>
-          <Text style={styles.completionTitle}>Profile Completion</Text>
-          <View style={styles.progressBar}>
-            <View style={[styles.progressFill, { width: `${completionPercentage}%` }]} />
-          </View>
-          <Text style={styles.completionText}>{completionPercentage}% Complete</Text>
-          {completionPercentage < 100 && (
-            <BestPracticesTip tip="Complete your profile to increase visibility and trust with families" />
-          )}
-        </View>
-
         {/* Basic Information */}
-        <ProfileSection 
-          title="Basic Information" 
-          icon="person" 
+        <ProfileSection
+          title="Basic Information"
+          icon="person"
           isComplete={profile?.name && profile?.bio && profile?.profileImage}
         >
           <View style={styles.basicInfo}>
             <View style={styles.profileImageContainer}>
               {profile?.profileImage ? (
-                <Image 
-                  source={{ 
-                    uri: profile.profileImage.startsWith('/') 
-                      ? `${getCurrentSocketURL() || ''}${profile.profileImage}` 
+                <Image
+                  source={{
+                    uri: profile.profileImage.startsWith('/')
+                      ? `${getCurrentSocketURL() || ''}${profile.profileImage}`
                       : profile.profileImage
                   }}
                   style={styles.profileImage}
@@ -325,9 +447,9 @@ const CaregiverProfileComplete = ({ navigation, route }) => {
         </ProfileSection>
 
         {/* Skills & Experience */}
-        <ProfileSection 
-          title="Skills & Experience" 
-          icon="school" 
+        <ProfileSection
+          title="Skills & Experience"
+          icon="school"
           isComplete={profile?.skills?.length > 0 && profile?.experience?.description}
         >
           <View style={styles.skillsContainer}>
@@ -340,7 +462,7 @@ const CaregiverProfileComplete = ({ navigation, route }) => {
               )) || <Text style={styles.emptyText}>No skills added</Text>}
             </View>
           </View>
-          
+
           <View style={styles.experienceContainer}>
             <Text style={styles.subTitle}>Experience</Text>
             {profile?.experience?.years || profile?.experience?.months ? (
@@ -352,23 +474,23 @@ const CaregiverProfileComplete = ({ navigation, route }) => {
               {profile?.experience?.description || 'Add your experience description'}
             </Text>
           </View>
-          
+
           {(!profile?.skills?.length || !profile?.experience?.description) && (
             <BestPracticesTip tip="Highlight specific childcare skills and detailed experience to stand out" />
           )}
         </ProfileSection>
 
         {/* Rates & Availability */}
-        <ProfileSection 
-          title="Rates & Availability" 
-          icon="time" 
+        <ProfileSection
+          title="Rates & Availability"
+          icon="time"
           isComplete={profile?.hourlyRate && profile?.availability?.days?.length > 0}
         >
           <View style={styles.ratesContainer}>
             <Text style={styles.subTitle}>Hourly Rate</Text>
             <Text style={styles.hourlyRate}>₱{profile?.hourlyRate || '0'}/hour</Text>
           </View>
-          
+
           <View style={styles.availabilityContainer}>
             <Text style={styles.subTitle}>Available Days</Text>
             <View style={styles.daysList}>
@@ -379,16 +501,16 @@ const CaregiverProfileComplete = ({ navigation, route }) => {
               )) || <Text style={styles.emptyText}>No availability set</Text>}
             </View>
           </View>
-          
+
           {(!profile?.hourlyRate || !profile?.availability?.days?.length) && (
             <BestPracticesTip tip="Set competitive rates and clear availability to get more bookings" />
           )}
         </ProfileSection>
 
         {/* Age Care Ranges */}
-        <ProfileSection 
-          title="Age Care Specialization" 
-          icon="heart" 
+        <ProfileSection
+          title="Age Care Specialization"
+          icon="heart"
           isComplete={profile?.ageCareRanges?.length > 0}
         >
           <View style={styles.ageRangesList}>
@@ -398,16 +520,16 @@ const CaregiverProfileComplete = ({ navigation, route }) => {
               </View>
             )) || <Text style={styles.emptyText}>No age ranges specified</Text>}
           </View>
-          
+
           {!profile?.ageCareRanges?.length && (
             <BestPracticesTip tip="Specify age ranges you're comfortable with to match with suitable families" />
           )}
         </ProfileSection>
 
         {/* Certifications */}
-        <ProfileSection 
-          title="Certifications" 
-          icon="ribbon" 
+        <ProfileSection
+          title="Certifications"
+          icon="ribbon"
           isComplete={profile?.certifications?.length > 0}
         >
           {profile?.certifications?.length > 0 ? (
@@ -425,14 +547,14 @@ const CaregiverProfileComplete = ({ navigation, route }) => {
           ) : (
             <Text style={styles.emptyText}>No certifications added</Text>
           )}
-          
+
           <BestPracticesTip tip="Add relevant certifications like First Aid, CPR, or childcare training to build trust" />
         </ProfileSection>
 
         {/* Emergency Contacts */}
-        <ProfileSection 
-          title="Emergency Contacts" 
-          icon="call" 
+        <ProfileSection
+          title="Emergency Contacts"
+          icon="call"
           isComplete={profile?.emergencyContacts?.length > 0}
         >
           {profile?.emergencyContacts?.length > 0 ? (
@@ -446,7 +568,7 @@ const CaregiverProfileComplete = ({ navigation, route }) => {
           ) : (
             <Text style={styles.emptyText}>No emergency contacts added</Text>
           )}
-          
+
           {!profile?.emergencyContacts?.length && (
             <BestPracticesTip tip="Add emergency contacts to provide families with peace of mind" />
           )}
@@ -464,6 +586,7 @@ const CaregiverProfileComplete = ({ navigation, route }) => {
           <BestPracticesTip tip="Maintain a 4.5+ star rating" />
         </View>
       </ScrollView>
+
       <RatingsReviewsModal
         visible={showRatingsModal}
         onClose={closeRatingsModal}
@@ -475,7 +598,7 @@ const CaregiverProfileComplete = ({ navigation, route }) => {
         error={reviewsError}
         onPreload={loadReviews}
       />
-    </>
+    </View>
   );
 };
 
@@ -484,6 +607,12 @@ const styles = {
     flex: 1,
     backgroundColor: '#f5f5f5',
   },
+  scrollContent: {
+    flex: 1,
+  },
+  scrollContentContainer: {
+    paddingBottom: 24,
+  },
   loadingContainer: {
     flex: 1,
     justifyContent: 'center',
@@ -491,6 +620,7 @@ const styles = {
   },
   header: {
     flexDirection: 'row',
+    marginTop: 30,
     alignItems: 'center',
     justifyContent: 'space-between',
     padding: 16,

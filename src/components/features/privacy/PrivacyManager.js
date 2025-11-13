@@ -147,7 +147,7 @@ export const PrivacyProvider = ({ children }) => {
     return ALLOWED_REQUEST_FIELDS.includes(snake) ? snake : null;
   };
 
-  const requestInformation = useCallback(async (targetUserId, requestedFields, reason) => {
+  const requestInformation = useCallback(async (targetUserId, requestedFields, reason, options = {}) => {
     try {
       const normalizedFields = Array.from(
         new Set(
@@ -167,8 +167,48 @@ export const PrivacyProvider = ({ children }) => {
 
       console.log('Requested fields →', normalizedFields);
 
+      const normalizedTargetId = typeof targetUserId === 'string'
+        ? targetUserId.trim()
+        : targetUserId != null
+          ? String(targetUserId).trim()
+          : '';
+
+      if (!normalizedTargetId || normalizedTargetId === 'sample') {
+        Alert.alert(
+          'Invalid recipient',
+          'We need a valid user to send your request. Please choose a real profile before submitting.'
+        );
+        return false;
+      }
+
+      const currentUser = await tokenManager.getUser?.();
+      const currentUserId = currentUser?.id || currentUser?.userId || null;
+
+      if (currentUserId && normalizedTargetId === String(currentUserId)) {
+        Alert.alert(
+          'Unavailable recipient',
+          'You cannot request private information from your own profile.'
+        );
+        return false;
+      }
+
+      const { allowedTargetIds } = options || {};
+      if (Array.isArray(allowedTargetIds) && allowedTargetIds.length > 0) {
+        const normalizedAllowedTargets = allowedTargetIds
+          .map((id) => (id != null ? String(id).trim() : ''))
+          .filter((id) => id.length > 0);
+
+        if (!normalizedAllowedTargets.includes(normalizedTargetId)) {
+          Alert.alert(
+            'Unavailable recipient',
+            'You can only request information from families connected through your bookings or job applications.'
+          );
+          return false;
+        }
+      }
+
       const request = await informationRequestService.createRequest({
-        targetId: targetUserId,
+        targetId: normalizedTargetId,
         requestedFields: normalizedFields,
         reason,
       });

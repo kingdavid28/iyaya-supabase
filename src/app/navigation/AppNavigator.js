@@ -21,8 +21,6 @@ import EmailVerificationScreen from "../../screens/EmailVerificationScreen";
 import CaregiverReviewsScreen from "../../screens/CaregiverReviewsScreen";
 import Chat from "../../screens/Chat";
 
-// Debug screen imports
-import FacebookAuthTest from "../../components/debug/FacebookAuthTest";
 
 // Legacy screen imports (to be migrated)
 import EmailVerificationPendingScreen from "../../screens/EmailVerificationPendingScreen";
@@ -290,10 +288,9 @@ const AppNavigatorWithAuth = () => {
         <Stack.Screen name="VerificationSuccess" component={VerificationSuccessScreen} options={{ title: "Verification Complete", headerShown: false }} />
         <Stack.Screen name="EmailVerificationPending" component={EmailVerificationPendingScreen} options={{ title: "Verify Your Email", headerShown: false }} />
         <Stack.Screen name="CaregiverProfileComplete" component={CaregiverProfileComplete} options={{ headerShown: false }} />
-        <Stack.Screen name="ParentProfile" component={ParentProfile} options={{ title: "My Profile", headerBackTitle: "Back" }} />
+        <Stack.Screen name="ParentProfile" component={ParentProfile} options={{ paddingTop: 60, title: "My Profile", headerBackTitle: "Back" }} />
         <Stack.Screen name="Chat" component={Chat} options={{ headerShown: false }} />
         <Stack.Screen name="CaregiverReviews" component={CaregiverReviewsScreen} options={{ title: "Caregiver Reviews" }} />
-        <Stack.Screen name="FacebookAuthTest" component={FacebookAuthTest} options={{ title: "Facebook Auth Test", headerShown: false }} />
         <Stack.Screen name="CaregiverProfile" component={CaregiverProfileComplete} options={{ title: "Caregiver Profile", headerBackTitle: "Back" }} />
       </Stack.Navigator>
     </NavigationContainer>

@@ -143,11 +143,6 @@ const SearchTabComponent = ({
                   ? `${displayData.length} results found`
                   : `${displayData.length} caregivers available`}
               </Text>
-              {displayData.length > 0 && (
-                <TouchableOpacity style={searchTabStyles.sortButton}>
-                  <Text style={searchTabStyles.sortText}>Sort by Rating</Text>
-                </TouchableOpacity>
-              )}
             </View>
           }
 

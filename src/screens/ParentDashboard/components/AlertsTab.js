@@ -7,7 +7,7 @@ import {
   MessageCircle,
   Shield
 } from 'lucide-react-native';
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import {
   ActivityIndicator,
   RefreshControl,
@@ -20,75 +20,102 @@ import {
 import { useAuth } from '../../../contexts/AuthContext';
 import { notificationService } from '../../../services/supabase';
 
+// Utility functions
+const normalizeType = (value) => (typeof value === 'string' ? value.toLowerCase() : '');
+const enhanceAlert = (alert = {}) => ({
+  ...alert,
+  type: normalizeType(alert?.type)
+});
+const hasAlertContent = (alert = {}) => {
+  const title = typeof alert?.title === 'string' ? alert.title.trim() : '';
+  const message = typeof alert?.message === 'string' ? alert.message.trim() : '';
+  return Boolean(title || message);
+};
+
+const parseAlertData = (data) => {
+  if (!data) return {};
+  if (typeof data === 'string') {
+    try {
+      return JSON.parse(data);
+    } catch (error) {
+      console.warn('⚠️ Failed to parse alert data:', error);
+      return {};
+    }
+  }
+  return data;
+};
+
+// Constants
+const CONTRACT_NOTIFICATION_TYPES = new Set([
+  'contract_created',
+  'contract_status',
+  'contract_signed',
+  'contract_active',
+  'contract_resent'
+]);
+
 const AlertsTab = ({ navigation, onNavigateTab }) => {
   const { user } = useAuth();
   const [alerts, setAlerts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [error, setError] = useState(null);
 
-  useEffect(() => {
-    console.log('🚨 AlertsTab useEffect - user:', user?.id);
-    loadAlerts();
-  }, [user?.id]);
-
-  const loadAlerts = async () => {
+  // Load alerts function
+  const loadAlerts = useCallback(async () => {
     if (!user?.id) {
       console.log('❌ AlertsTab - No user ID');
       setLoading(false);
+      setError('No user found');
       return;
     }
-    
+
     try {
-      setLoading(true);
+      setError(null);
       console.log('🚨 Loading alerts for user:', user.id);
       const notifications = await notificationService.getNotifications(user.id, { limit: 25 });
       console.log('🚨 Received notifications:', notifications);
-      
-      // Filter and categorize alerts for parents
-      const parentAlerts = notifications.filter(notif => 
-        ['job_application', 'booking_confirmed', 'booking_cancelled', 'message', 'system', 'payment', 'safety'].includes(notif.type)
-      );
-      console.log('🚨 Filtered parent alerts:', parentAlerts);
-      
+
+      const normalizedAlerts = (notifications || []).map(enhanceAlert);
+      const parentAlerts = normalizedAlerts.filter(hasAlertContent);
+      console.log('🚨 Normalized alerts:', parentAlerts);
+
       setAlerts(parentAlerts);
     } catch (error) {
       console.error('❌ Error loading alerts:', error);
+      setError('Failed to load alerts');
     } finally {
       setLoading(false);
     }
-  };
+  }, [user?.id]);
 
-  const handleRefresh = async () => {
+  // Load alerts on mount
+  useEffect(() => {
+    console.log('🚨 AlertsTab useEffect - user:', user?.id);
+    loadAlerts();
+  }, [loadAlerts]);
+
+  // Refresh handler
+  const handleRefresh = useCallback(async () => {
     setRefreshing(true);
     await loadAlerts();
     setRefreshing(false);
-  };
+  }, [loadAlerts]);
 
-  const markAsRead = async (alertId) => {
+  // Mark as read function
+  const markAsRead = useCallback(async (alertId) => {
     try {
       await notificationService.markNotificationAsRead(alertId);
-      setAlerts(prev => prev.map(alert => 
+      setAlerts(prev => prev.map(alert =>
         alert.id === alertId ? { ...alert, read: true } : alert
       ));
     } catch (error) {
       console.error('Error marking alert as read:', error);
     }
-  };
+  }, []);
 
-  const parseAlertData = (data) => {
-    if (!data) return {};
-    if (typeof data === 'string') {
-      try {
-        return JSON.parse(data);
-      } catch (error) {
-        console.warn('⚠️ Failed to parse alert data:', error);
-        return {};
-      }
-    }
-    return data;
-  };
-
-  const handleAlertPress = async (alert) => {
+  // Alert press handler
+  const handleAlertPress = useCallback(async (alert) => {
     if (!alert.read) {
       await markAsRead(alert.id);
     }
@@ -98,15 +125,9 @@ const AlertsTab = ({ navigation, onNavigateTab }) => {
     const bookingId = alertData?.bookingId || alertData?.booking_id;
     const jobId = alertData?.jobId || alertData?.job_id;
     const applicationId = alertData?.applicationId || alertData?.application_id;
-    const contractNotificationTypes = new Set([
-      'contract_created',
-      'contract_status',
-      'contract_signed',
-      'contract_active',
-      'contract_resent'
-    ]);
+    
     const isContractNotification = contractId && (
-      contractNotificationTypes.has(alertData?.notificationType) || alert.type === 'system'
+      CONTRACT_NOTIFICATION_TYPES.has(alertData?.notificationType) || alert.type === 'system'
     );
 
     if (isContractNotification) {
@@ -132,80 +153,87 @@ const AlertsTab = ({ navigation, onNavigateTab }) => {
       return;
     }
 
-    // Navigate based on alert type - use existing navigation structure
+    // Navigate based on alert type
     switch (alert.type) {
       case 'job_application':
-        // Navigate back to parent dashboard jobs tab
-        if (navigation?.canGoBack?.()) {
-          navigation.goBack();
-        } else {
-          onNavigateTab?.('jobs');
-        }
+        onNavigateTab?.('jobs');
         break;
       case 'booking_confirmed':
       case 'booking_cancelled':
-        // Navigate back to parent dashboard bookings tab
-        if (navigation?.canGoBack?.()) {
-          navigation.goBack();
-        } else {
-          onNavigateTab?.('bookings');
-        }
+        onNavigateTab?.('bookings');
         break;
       case 'message':
-        // Navigate back to parent dashboard messages tab
-        if (navigation?.canGoBack?.()) {
-          navigation.goBack();
-        } else {
-          onNavigateTab?.('messages');
-        }
+        onNavigateTab?.('messages');
         break;
       default:
+        console.log('Unhandled alert type:', alert.type);
         break;
     }
-  };
+  }, [markAsRead, onNavigateTab]);
 
-  const getAlertIcon = (type) => {
-    switch (type) {
-      case 'job_application':
-        return <Briefcase size={20} color="#3b82f6" />;
-      case 'booking_confirmed':
-      case 'booking_cancelled':
-        return <Calendar size={20} color="#10b981" />;
-      case 'message':
-        return <MessageCircle size={20} color="#8b5cf6" />;
-      case 'system':
-        return <AlertTriangle size={20} color="#f59e0b" />;
-      case 'payment':
-        return <DollarSign size={20} color="#ef4444" />;
-      case 'safety':
-        return <Shield size={20} color="#dc2626" />;
-      default:
-        return <AlertTriangle size={20} color="#6b7280" />;
-    }
-  };
+  // Icon and color helpers
+  const getAlertIcon = useCallback((type) => {
+    const normalizedType = normalizeType(type);
 
-  const getAlertColor = (type) => {
-    switch (type) {
-      case 'job_application':
-        return '#dbeafe';
-      case 'booking_confirmed':
-      case 'booking_cancelled':
-        return '#d1fae5';
-      case 'message':
-        return '#ede9fe';
-      case 'system':
-        return '#fef3c7';
-      case 'payment':
-        return '#fee2e2';
-      case 'safety':
-        return '#fecaca';
-      default:
-        return '#f3f4f6';
-    }
-  };
+    const iconConfig = {
+      'job_application': { icon: Briefcase, color: "#3b82f6" },
+      'application': { icon: Briefcase, color: "#3b82f6" },
+      'booking_confirmed': { icon: Calendar, color: "#10b981" },
+      'booking_cancelled': { icon: Calendar, color: "#10b981" },
+      'booking_request': { icon: Calendar, color: "#10b981" },
+      'message': { icon: MessageCircle, color: "#8b5cf6" },
+      'messages': { icon: MessageCircle, color: "#8b5cf6" },
+      'system': { icon: Shield, color: "#f59e0b" },
+      'contract_created': { icon: Shield, color: "#f59e0b" },
+      'contract_status': { icon: Shield, color: "#f59e0b" },
+      'contract_signed': { icon: Shield, color: "#f59e0b" },
+      'contract_active': { icon: Shield, color: "#f59e0b" },
+      'contract_updated': { icon: Shield, color: "#f59e0b" },
+      'contract_resent': { icon: Shield, color: "#f59e0b" },
+      'contract_activated': { icon: Shield, color: "#f59e0b" },
+      'payment': { icon: DollarSign, color: "#ef4444" },
+      'safety': { icon: AlertTriangle, color: "#dc2626" },
+      'safety_alert': { icon: AlertTriangle, color: "#dc2626" }
+    };
 
-  const formatTime = (timestamp) => {
+    const config = iconConfig[normalizedType] || { icon: AlertTriangle, color: "#6b7280" };
+    const IconComponent = config.icon;
+    return <IconComponent size={20} color={config.color} />;
+  }, []);
+
+  const getAlertColor = useCallback((type) => {
+    const normalizedType = normalizeType(type);
+
+    const colorConfig = {
+      'job_application': '#dbeafe',
+      'application': '#dbeafe',
+      'booking_confirmed': '#d1fae5',
+      'booking_cancelled': '#d1fae5',
+      'booking_request': '#d1fae5',
+      'message': '#ede9fe',
+      'messages': '#ede9fe',
+      'system': '#fef3c7',
+      'contract_created': '#fef3c7',
+      'contract_status': '#fef3c7',
+      'contract_signed': '#fef3c7',
+      'contract_active': '#fef3c7',
+      'contract_updated': '#fef3c7',
+      'contract_resent': '#fef3c7',
+      'contract_activated': '#fef3c7',
+      'payment': '#fee2e2',
+      'safety': '#fecaca',
+      'safety_alert': '#fecaca'
+    };
+
+    return colorConfig[normalizedType] || '#f3f4f6';
+  }, []);
+
+  const formatTime = useCallback((timestamp) => {
+    if (!timestamp) return 'Unknown time';
+    
     const date = new Date(timestamp);
+    if (isNaN(date.getTime())) return 'Invalid date';
+
     const now = new Date();
     const diff = now - date;
     const hours = Math.floor(diff / (1000 * 60 * 60));
@@ -215,9 +243,10 @@ const AlertsTab = ({ navigation, onNavigateTab }) => {
     if (hours < 24) return `${hours}h ago`;
     if (days < 7) return `${days}d ago`;
     return date.toLocaleDateString();
-  };
+  }, []);
 
-  const renderAlert = (alert) => (
+  // Alert renderer
+  const renderAlert = useCallback((alert) => (
     <TouchableOpacity
       key={alert.id}
       style={[
@@ -233,11 +262,13 @@ const AlertsTab = ({ navigation, onNavigateTab }) => {
         </View>
         <View style={styles.alertContent}>
           <Text style={[styles.alertTitle, !alert.read && styles.unreadText]}>
-            {alert.title}
+            {alert.title || 'Notification'}
           </Text>
-          <Text style={styles.alertMessage}>
-            {alert.message}
-          </Text>
+          {alert.message ? (
+            <Text style={styles.alertMessage}>
+              {alert.message}
+            </Text>
+          ) : null}
           <Text style={styles.alertTime}>
             {formatTime(alert.created_at)}
           </Text>
@@ -245,8 +276,33 @@ const AlertsTab = ({ navigation, onNavigateTab }) => {
         {!alert.read && <View style={styles.unreadDot} />}
       </View>
     </TouchableOpacity>
-  );
+  ), [getAlertColor, getAlertIcon, handleAlertPress, formatTime]);
 
+  // Loading state
+  if (loading) {
+    return (
+      <View style={styles.loadingContainer}>
+        <ActivityIndicator size="large" color="#3b82f6" />
+        <Text style={styles.loadingText}>Loading alerts...</Text>
+      </View>
+    );
+  }
+
+  // Error state
+  if (error) {
+    return (
+      <View style={styles.errorContainer}>
+        <AlertTriangle size={64} color="#ef4444" />
+        <Text style={styles.errorTitle}>Unable to load alerts</Text>
+        <Text style={styles.errorSubtitle}>{error}</Text>
+        <TouchableOpacity style={styles.retryButton} onPress={loadAlerts}>
+          <Text style={styles.retryButtonText}>Try Again</Text>
+        </TouchableOpacity>
+      </View>
+    );
+  }
+
+  // Empty state
   const EmptyState = () => (
     <View style={styles.emptyContainer}>
       <AlertTriangle size={64} color="#9ca3af" />
@@ -256,15 +312,6 @@ const AlertsTab = ({ navigation, onNavigateTab }) => {
       </Text>
     </View>
   );
-
-  if (loading) {
-    return (
-      <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#3b82f6" />
-        <Text style={styles.loadingText}>Loading alerts...</Text>
-      </View>
-    );
-  }
 
   return (
     <ScrollView
@@ -342,6 +389,37 @@ const styles = StyleSheet.create({
     marginTop: 16,
     fontSize: 16,
     color: '#6b7280',
+  },
+  errorContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 40,
+    minHeight: 400,
+  },
+  errorTitle: {
+    fontSize: 20,
+    fontWeight: '600',
+    color: '#374151',
+    marginTop: 16,
+    marginBottom: 8,
+  },
+  errorSubtitle: {
+    fontSize: 16,
+    color: '#6b7280',
+    textAlign: 'center',
+    lineHeight: 24,
+    marginBottom: 20,
+  },
+  retryButton: {
+    backgroundColor: '#3b82f6',
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    borderRadius: 8,
+  },
+  retryButtonText: {
+    color: '#fff',
+    fontWeight: '600',
   },
   alertsList: {
     padding: 16,

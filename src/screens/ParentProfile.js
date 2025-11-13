@@ -321,7 +321,7 @@ const ParentProfile = ({ navigation }) => {
   };
 
   return (
-    <ScrollView style={styles.container}>
+    <View style={styles.container}>
       {/* Header Section */}
       <Card style={styles.headerCard}>
         <Card.Content style={styles.headerContent}>
@@ -542,12 +542,14 @@ const ParentProfile = ({ navigation }) => {
           </View>
         </View>
       </Modal>
-    </ScrollView>
+    </View>
   );
 };
 
 const styles = StyleSheet.create({
   container: {
+    marginTop: 30,
+    padding: 16,
     flex: 1,
     backgroundColor: '#f5f5f5',
   },

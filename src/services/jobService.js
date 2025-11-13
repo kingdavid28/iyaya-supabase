@@ -1,8 +1,10 @@
 import axios from 'axios';
-import { API_CONFIG } from '../config/constants';
 import { API_BASE_URL } from '../config/api';
+import { API_CONFIG } from '../config/constants';
+import { supabase } from '../config/supabase';
 import { getAuthToken } from '../utils/auth';
 import { logger } from '../utils/logger';
+import { supabaseService } from './supabase';
 
 /**
  * Consolidated Job Service
@@ -27,17 +29,17 @@ class JobService {
   // ✅ Secure token validation to prevent timing attacks
   validateToken(token) {
     if (!token || typeof token !== 'string') return false;
-    
+
     // Constant-time validation to prevent timing attacks
     const minLength = 10;
     let isValid = true;
-    
+
     // Always check length to avoid early returns
     isValid = isValid && (token.length >= minLength);
-    
+
     // Always check format to maintain constant time
     isValid = isValid && token.includes('.');
-    
+
     // Return result without early exits
     return isValid;
   }
@@ -47,7 +49,7 @@ class JobService {
     try {
       const authToken = await this.getToken(token);
       const url = `${this.contractsAPI}${endpoint}`;
-      
+
       const config = {
         headers: {
           'Authorization': `Bearer ${authToken}`,
@@ -69,7 +71,7 @@ class JobService {
     try {
       const token = await getAuthToken();
       const url = `${this.jobsAPI}${endpoint}`;
-      
+
       const config = {
         method: 'GET',
         headers: {
@@ -107,9 +109,9 @@ class JobService {
   }
 
   async createJob(jobData, token) {
-    return await this.makeContractRequest('', { 
-      method: 'post', 
-      data: jobData 
+    return await this.makeContractRequest('', {
+      method: 'post',
+      data: jobData
     }, token);
   }
 
@@ -126,7 +128,7 @@ class JobService {
       console.error('[jobService] getJobs called with missing or undefined role:', role ?? '(undefined)');
       throw new Error('User role is missing. Please log in again.');
     }
-    
+
     if (role === 'parent' || role === 'client') {
       return await this.getJobsForClient(token);
     } else if (role === 'caregiver' || role === 'provider') {
@@ -140,12 +142,9 @@ class JobService {
   // Modern jobs API methods
   async getAllJobs(filters = {}) {
     try {
-      // Import supabaseService dynamically to avoid circular imports
-      const { supabaseService } = await import('./supabase');
-      
       console.log('📋 Fetching all jobs with filters:', filters);
       const jobs = await supabaseService.jobs.getJobs(filters);
-      
+
       console.log('📋 JobService - Fetched all jobs:', jobs?.length || 0);
       return jobs || [];
     } catch (error) {
@@ -167,28 +166,24 @@ class JobService {
 
   async createJobPost(jobData) {
     try {
-      // Import supabaseService dynamically to avoid circular imports
-      const { supabaseService } = await import('./supabase');
-      const { supabase } = await import('../config/supabase');
-      
       const { data: { user }, error } = await supabase.auth.getUser();
       if (error || !user) {
         throw new Error('User not authenticated');
       }
-      
+
       // Get user profile to get name
       const profile = await supabaseService.user.getProfile(user.id);
-      
+
       const jobPayload = {
         ...jobData,
         client_id: user.id,
         client_name: profile?.name || user.email || 'Unknown Client'
       };
-      
+
       console.log('📝 Creating job with data:', jobPayload);
       const result = await supabaseService.jobs.createJob(jobPayload);
       console.log('✅ Job created successfully:', result);
-      
+
       return { data: result };
     } catch (error) {
       logger.error('Create job post failed:', error);
@@ -212,13 +207,10 @@ class JobService {
 
   async updateJobPost(jobId, jobData) {
     try {
-      // Import supabaseService dynamically to avoid circular imports
-      const { supabaseService } = await import('./supabase');
-      
       console.log('📝 Updating job with ID:', jobId, 'Data:', jobData);
       const result = await supabaseService.jobs.updateJob(jobId, jobData);
       console.log('✅ Job updated successfully:', result);
-      
+
       return { data: result };
     } catch (error) {
       logger.error('Update job post failed:', error);
@@ -244,15 +236,15 @@ class JobService {
       // Import supabaseService dynamically to avoid circular imports
       const { supabaseService } = await import('./supabase');
       const { supabase } = await import('../config/supabase');
-      
+
       const { data: { user }, error } = await supabase.auth.getUser();
       if (error || !user) {
         throw new Error('User not authenticated');
       }
-      
+
       console.log('📋 Fetching jobs for user:', user.id);
       const jobs = await supabaseService.jobs.getMyJobs(user.id);
-      
+
       console.log('📋 JobService - Fetched jobs:', jobs?.length || 0);
       return { jobs: jobs || [] };
     } catch (error) {

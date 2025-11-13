@@ -19,6 +19,14 @@ const InformationRequestModal = ({ visible, onClose, targetUser, userType = 'par
 
   const disallowedFields = DISALLOWED_FIELDS_BY_USER_TYPE[userType] || EMPTY_SET;
 
+  const allowedTargetIds = useMemo(
+    () =>
+      (Array.isArray(availableTargets) ? availableTargets : [])
+        .map((target) => (target?.id != null ? String(target.id).trim() : ''))
+        .filter((id) => id.length > 0),
+    [availableTargets],
+  );
+
   // Use existing profile data classification from ProfileDataManager
   const fields = useMemo(() => {
     const shouldOmitChildFields = userType === 'parent';
@@ -125,7 +133,9 @@ const InformationRequestModal = ({ visible, onClose, targetUser, userType = 'par
       return;
     }
 
-    const targetId = activeTarget?.id;
+    const targetIdRaw = activeTarget?.id;
+    const targetId = typeof targetIdRaw === 'string' ? targetIdRaw.trim() : targetIdRaw != null ? String(targetIdRaw).trim() : '';
+
     if (!targetId || targetId === 'sample') {
       Alert.alert(
         'Invalid recipient',
@@ -134,9 +144,19 @@ const InformationRequestModal = ({ visible, onClose, targetUser, userType = 'par
       return;
     }
 
+    if (userType === 'caregiver' && !allowedTargetIds.includes(targetId)) {
+      Alert.alert(
+        'Unavailable recipient',
+        'You can only request information from families connected through your bookings or job applications.'
+      );
+      return;
+    }
+
     setLoading(true);
     try {
-      const success = await requestInformation(targetId, selectedFields, reason.trim());
+      const success = await requestInformation(targetId, selectedFields, reason.trim(), {
+        allowedTargetIds: userType === 'caregiver' ? allowedTargetIds : undefined,
+      });
       if (success) {
         setSelectedFields([]);
         setReason('');

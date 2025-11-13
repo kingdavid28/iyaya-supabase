@@ -1,18 +1,14 @@
 import React from 'react';
-import { Modal, View, TouchableOpacity, StyleSheet } from 'react-native';
+import { Modal, Pressable, StyleSheet, View } from 'react-native';
 
 const ModalWrapper = ({ visible, onClose, children, animationType = 'slide', style }) => (
-  <Modal
-    visible={visible}
-    animationType={animationType}
-    transparent
-    onRequestClose={onClose}
-  >
-    <TouchableOpacity style={styles.overlay} activeOpacity={1} onPress={onClose}>
-      <TouchableOpacity style={[styles.content, style]} activeOpacity={1}>
+  <Modal visible={visible} animationType={animationType} transparent onRequestClose={onClose}>
+    <View style={styles.overlay}>
+      <Pressable style={styles.backdrop} onPress={onClose} />
+      <View style={[styles.content, style]}>
         {children}
-      </TouchableOpacity>
-    </TouchableOpacity>
+      </View>
+    </View>
   </Modal>
 );
 
@@ -22,6 +18,9 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0, 0, 0, 0.5)',
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  backdrop: {
+    ...StyleSheet.absoluteFillObject,
   },
   content: {
     backgroundColor: 'white',

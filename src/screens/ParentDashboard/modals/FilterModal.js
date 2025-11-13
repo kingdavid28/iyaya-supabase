@@ -1,17 +1,18 @@
-import React, { useState, useEffect } from 'react';
+import { Slider } from '@miblanchard/react-native-slider';
+import { RotateCcw, X } from 'lucide-react-native';
+import React, { useEffect, useState } from 'react';
 import {
-  View,
-  Text,
+  Dimensions,
+  Modal,
   ScrollView,
-  TouchableOpacity,
   StyleSheet,
   Switch,
-  Modal,
-  Dimensions,
+  Text,
+  TouchableOpacity,
+  View,
 } from 'react-native';
-import { Slider } from '@miblanchard/react-native-slider';
-import { X, RotateCcw } from 'lucide-react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { getDefaultFilters } from '../../../utils/filterUtils';
 
 const { height: screenHeight } = Dimensions.get('window');
 
@@ -34,21 +35,42 @@ const CERTIFICATIONS = [
   'Montessori Training',
 ];
 
-const defaultFilters = {
-  availability: { availableNow: false, days: [] },
-  location: { distance: 25 },
-  rate: { min: 15, max: 50 },
-  experience: { min: 1 },
-  certifications: [],
-  rating: 4.0,
+const mergeWithDefaultFilters = (overrides = {}) => {
+  const defaults = getDefaultFilters();
+
+  return {
+    ...defaults,
+    ...overrides,
+    availability: {
+      ...defaults.availability,
+      ...(overrides?.availability || {}),
+    },
+    location: {
+      ...defaults.location,
+      ...(overrides?.location || {}),
+    },
+    rate: {
+      ...defaults.rate,
+      ...(overrides?.rate || {}),
+    },
+    experience: {
+      ...defaults.experience,
+      ...(overrides?.experience || {}),
+    },
+    certifications: Array.isArray(overrides?.certifications)
+      ? [...overrides.certifications]
+      : [],
+    rating: overrides?.rating ?? defaults.rating,
+  };
 };
 
 const FilterModal = ({ visible, onClose, filters = {}, onApplyFilters }) => {
-  const [localFilters, setLocalFilters] = useState(defaultFilters);
+  const [localFilters, setLocalFilters] = useState(() => mergeWithDefaultFilters(filters));
   const [hasChanges, setHasChanges] = useState(false);
 
   useEffect(() => {
-    setLocalFilters({ ...defaultFilters, ...filters });
+    setLocalFilters(mergeWithDefaultFilters(filters));
+    setHasChanges(false);
   }, [filters, visible]);
 
   const updateFilter = (category, field, value) => {
@@ -67,7 +89,7 @@ const FilterModal = ({ visible, onClose, filters = {}, onApplyFilters }) => {
     const newDays = currentDays.includes(day)
       ? currentDays.filter(d => d !== day)
       : [...currentDays, day];
-    
+
     updateFilter('availability', 'days', newDays);
   };
 
@@ -76,13 +98,13 @@ const FilterModal = ({ visible, onClose, filters = {}, onApplyFilters }) => {
     const updated = current.includes(cert)
       ? current.filter(c => c !== cert)
       : [...current, cert];
-    
+
     setLocalFilters(prev => ({ ...prev, certifications: updated }));
     setHasChanges(true);
   };
 
   const resetFilters = () => {
-    setLocalFilters(defaultFilters);
+    setLocalFilters(mergeWithDefaultFilters());
     setHasChanges(true);
   };
 
@@ -125,191 +147,191 @@ const FilterModal = ({ visible, onClose, filters = {}, onApplyFilters }) => {
             </View>
           </View>
 
-        <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
-          {/* Instructions */}
-          <View style={styles.instructionsContainer}>
-            <Text style={styles.instructionsTitle}>How to use filters:</Text>
-            <Text style={styles.instructionsText}>• Toggle "Available Now" for immediate booking</Text>
-            <Text style={styles.instructionsText}>• Select days when you need care</Text>
-            <Text style={styles.instructionsText}>• Set your budget range with rate slider</Text>
-            <Text style={styles.instructionsText}>• Choose minimum experience and rating</Text>
-            <Text style={styles.instructionsText}>• Select required certifications</Text>
-          </View>
+          <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
+            {/* Instructions */}
+            <View style={styles.instructionsContainer}>
+              <Text style={styles.instructionsTitle}>How to use filters:</Text>
+              <Text style={styles.instructionsText}>• Toggle "Available Now" for immediate booking</Text>
+              <Text style={styles.instructionsText}>• Select days when you need care</Text>
+              <Text style={styles.instructionsText}>• Set your budget range with rate slider</Text>
+              <Text style={styles.instructionsText}>• Choose minimum experience and rating</Text>
+              <Text style={styles.instructionsText}>• Select required certifications</Text>
+            </View>
 
-          {/* Availability Section */}
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Availability</Text>
-            
-            <View style={styles.switchRow}>
-              <Text style={styles.switchLabel}>Available Now</Text>
-              <Switch
-                value={localFilters.availability.availableNow}
-                onValueChange={(value) => updateFilter('availability', 'availableNow', value)}
-                trackColor={{ false: '#E5E7EB', true: '#8B5CF6' }}
-                thumbColor={localFilters.availability.availableNow ? '#FFFFFF' : '#F3F4F6'}
+            {/* Availability Section */}
+            <View style={styles.section}>
+              <Text style={styles.sectionTitle}>Availability</Text>
+
+              <View style={styles.switchRow}>
+                <Text style={styles.switchLabel}>Available Now</Text>
+                <Switch
+                  value={localFilters.availability.availableNow}
+                  onValueChange={(value) => updateFilter('availability', 'availableNow', value)}
+                  trackColor={{ false: '#E5E7EB', true: '#8B5CF6' }}
+                  thumbColor={localFilters.availability.availableNow ? '#FFFFFF' : '#F3F4F6'}
+                />
+              </View>
+
+              <Text style={styles.subLabel}>Available Days</Text>
+              <View style={styles.daysContainer}>
+                {DAYS_OF_WEEK.map(day => (
+                  <TouchableOpacity
+                    key={day.key}
+                    style={[
+                      styles.dayButton,
+                      localFilters.availability.days.includes(day.key) && styles.dayButtonActive
+                    ]}
+                    onPress={() => toggleDay(day.key)}
+                  >
+                    <Text style={[
+                      styles.dayButtonText,
+                      localFilters.availability.days.includes(day.key) && styles.dayButtonTextActive
+                    ]}>
+                      {day.label}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </View>
+
+            {/* Distance Section */}
+            <View style={styles.section}>
+              <Text style={styles.sectionTitle}>Distance</Text>
+              <Text style={styles.valueLabel}>Within {localFilters.location.distance} miles</Text>
+              <Slider
+                value={[localFilters.location.distance]}
+                onValueChange={([value]) => updateFilter('location', 'distance', Math.round(value))}
+                minimumValue={5}
+                maximumValue={50}
+                step={5}
+                trackStyle={styles.sliderTrack}
+                thumbStyle={styles.sliderThumb}
+                minimumTrackTintColor="#8B5CF6"
+                maximumTrackTintColor="#E5E7EB"
               />
+              <View style={styles.sliderLabels}>
+                <Text style={styles.sliderLabel}>5 mi</Text>
+                <Text style={styles.sliderLabel}>50 mi</Text>
+              </View>
             </View>
 
-            <Text style={styles.subLabel}>Available Days</Text>
-            <View style={styles.daysContainer}>
-              {DAYS_OF_WEEK.map(day => (
-                <TouchableOpacity
-                  key={day.key}
-                  style={[
-                    styles.dayButton,
-                    localFilters.availability.days.includes(day.key) && styles.dayButtonActive
-                  ]}
-                  onPress={() => toggleDay(day.key)}
-                >
-                  <Text style={[
-                    styles.dayButtonText,
-                    localFilters.availability.days.includes(day.key) && styles.dayButtonTextActive
-                  ]}>
-                    {day.label}
-                  </Text>
-                </TouchableOpacity>
-              ))}
+            {/* Rate Range Section */}
+            <View style={styles.section}>
+              <Text style={styles.sectionTitle}>Hourly Rate</Text>
+              <Text style={styles.valueLabel}>
+                ${localFilters.rate.min} - ${localFilters.rate.max} per hour
+              </Text>
+              <Slider
+                value={[localFilters.rate.min, localFilters.rate.max]}
+                onValueChange={([min, max]) => {
+                  setLocalFilters(prev => ({
+                    ...prev,
+                    rate: { min: Math.round(min), max: Math.round(max) }
+                  }));
+                  setHasChanges(true);
+                }}
+                minimumValue={10}
+                maximumValue={100}
+                step={5}
+                trackStyle={styles.sliderTrack}
+                thumbStyle={styles.sliderThumb}
+                minimumTrackTintColor="#8B5CF6"
+                maximumTrackTintColor="#E5E7EB"
+              />
+              <View style={styles.sliderLabels}>
+                <Text style={styles.sliderLabel}>$10</Text>
+                <Text style={styles.sliderLabel}>$100</Text>
+              </View>
             </View>
+
+            {/* Experience Section */}
+            <View style={styles.section}>
+              <Text style={styles.sectionTitle}>Minimum Experience</Text>
+              <Text style={styles.valueLabel}>
+                {localFilters.experience.min} {localFilters.experience.min === 1 ? 'year' : 'years'}
+              </Text>
+              <Slider
+                value={[localFilters.experience.min]}
+                onValueChange={([value]) => updateFilter('experience', 'min', Math.round(value))}
+                minimumValue={0}
+                maximumValue={20}
+                step={1}
+                trackStyle={styles.sliderTrack}
+                thumbStyle={styles.sliderThumb}
+                minimumTrackTintColor="#8B5CF6"
+                maximumTrackTintColor="#E5E7EB"
+              />
+              <View style={styles.sliderLabels}>
+                <Text style={styles.sliderLabel}>0 years</Text>
+                <Text style={styles.sliderLabel}>20+ years</Text>
+              </View>
+            </View>
+
+            {/* Rating Section */}
+            <View style={styles.section}>
+              <Text style={styles.sectionTitle}>Minimum Rating</Text>
+              <Text style={styles.valueLabel}>{localFilters.rating.toFixed(1)} stars & above</Text>
+              <Slider
+                value={[localFilters.rating]}
+                onValueChange={([value]) => {
+                  setLocalFilters(prev => ({ ...prev, rating: Math.round(value * 2) / 2 }));
+                  setHasChanges(true);
+                }}
+                minimumValue={0}
+                maximumValue={5}
+                step={0.5}
+                trackStyle={styles.sliderTrack}
+                thumbStyle={styles.sliderThumb}
+                minimumTrackTintColor="#8B5CF6"
+                maximumTrackTintColor="#E5E7EB"
+              />
+              <View style={styles.sliderLabels}>
+                <Text style={styles.sliderLabel}>0 ⭐</Text>
+                <Text style={styles.sliderLabel}>5 ⭐</Text>
+              </View>
+            </View>
+
+            {/* Certifications Section */}
+            <View style={styles.section}>
+              <Text style={styles.sectionTitle}>Certifications</Text>
+              <View style={styles.certificationsContainer}>
+                {CERTIFICATIONS.map(cert => (
+                  <TouchableOpacity
+                    key={cert}
+                    style={[
+                      styles.certificationButton,
+                      localFilters.certifications.includes(cert) && styles.certificationButtonActive
+                    ]}
+                    onPress={() => toggleCertification(cert)}
+                  >
+                    <Text style={[
+                      styles.certificationButtonText,
+                      localFilters.certifications.includes(cert) && styles.certificationButtonTextActive
+                    ]}>
+                      {cert}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </View>
+          </ScrollView>
+
+          {/* Footer */}
+          <View style={styles.footer}>
+            <TouchableOpacity style={styles.cancelButton} onPress={onClose}>
+              <Text style={styles.cancelButtonText}>Cancel</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.applyButton, !hasChanges && styles.applyButtonDisabled]}
+              onPress={handleApply}
+              disabled={!hasChanges}
+            >
+              <Text style={styles.applyButtonText}>
+                Apply {getActiveFilterCount() > 0 ? `(${getActiveFilterCount()})` : ''}
+              </Text>
+            </TouchableOpacity>
           </View>
-
-          {/* Distance Section */}
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Distance</Text>
-            <Text style={styles.valueLabel}>Within {localFilters.location.distance} miles</Text>
-            <Slider
-              value={[localFilters.location.distance]}
-              onValueChange={([value]) => updateFilter('location', 'distance', Math.round(value))}
-              minimumValue={5}
-              maximumValue={50}
-              step={5}
-              trackStyle={styles.sliderTrack}
-              thumbStyle={styles.sliderThumb}
-              minimumTrackTintColor="#8B5CF6"
-              maximumTrackTintColor="#E5E7EB"
-            />
-            <View style={styles.sliderLabels}>
-              <Text style={styles.sliderLabel}>5 mi</Text>
-              <Text style={styles.sliderLabel}>50 mi</Text>
-            </View>
-          </View>
-
-          {/* Rate Range Section */}
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Hourly Rate</Text>
-            <Text style={styles.valueLabel}>
-              ${localFilters.rate.min} - ${localFilters.rate.max} per hour
-            </Text>
-            <Slider
-              value={[localFilters.rate.min, localFilters.rate.max]}
-              onValueChange={([min, max]) => {
-                setLocalFilters(prev => ({
-                  ...prev,
-                  rate: { min: Math.round(min), max: Math.round(max) }
-                }));
-                setHasChanges(true);
-              }}
-              minimumValue={10}
-              maximumValue={100}
-              step={5}
-              trackStyle={styles.sliderTrack}
-              thumbStyle={styles.sliderThumb}
-              minimumTrackTintColor="#8B5CF6"
-              maximumTrackTintColor="#E5E7EB"
-            />
-            <View style={styles.sliderLabels}>
-              <Text style={styles.sliderLabel}>$10</Text>
-              <Text style={styles.sliderLabel}>$100</Text>
-            </View>
-          </View>
-
-          {/* Experience Section */}
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Minimum Experience</Text>
-            <Text style={styles.valueLabel}>
-              {localFilters.experience.min} {localFilters.experience.min === 1 ? 'year' : 'years'}
-            </Text>
-            <Slider
-              value={[localFilters.experience.min]}
-              onValueChange={([value]) => updateFilter('experience', 'min', Math.round(value))}
-              minimumValue={0}
-              maximumValue={20}
-              step={1}
-              trackStyle={styles.sliderTrack}
-              thumbStyle={styles.sliderThumb}
-              minimumTrackTintColor="#8B5CF6"
-              maximumTrackTintColor="#E5E7EB"
-            />
-            <View style={styles.sliderLabels}>
-              <Text style={styles.sliderLabel}>0 years</Text>
-              <Text style={styles.sliderLabel}>20+ years</Text>
-            </View>
-          </View>
-
-          {/* Rating Section */}
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Minimum Rating</Text>
-            <Text style={styles.valueLabel}>{localFilters.rating.toFixed(1)} stars & above</Text>
-            <Slider
-              value={[localFilters.rating]}
-              onValueChange={([value]) => {
-                setLocalFilters(prev => ({ ...prev, rating: Math.round(value * 2) / 2 }));
-                setHasChanges(true);
-              }}
-              minimumValue={0}
-              maximumValue={5}
-              step={0.5}
-              trackStyle={styles.sliderTrack}
-              thumbStyle={styles.sliderThumb}
-              minimumTrackTintColor="#8B5CF6"
-              maximumTrackTintColor="#E5E7EB"
-            />
-            <View style={styles.sliderLabels}>
-              <Text style={styles.sliderLabel}>0 ⭐</Text>
-              <Text style={styles.sliderLabel}>5 ⭐</Text>
-            </View>
-          </View>
-
-          {/* Certifications Section */}
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Certifications</Text>
-            <View style={styles.certificationsContainer}>
-              {CERTIFICATIONS.map(cert => (
-                <TouchableOpacity
-                  key={cert}
-                  style={[
-                    styles.certificationButton,
-                    localFilters.certifications.includes(cert) && styles.certificationButtonActive
-                  ]}
-                  onPress={() => toggleCertification(cert)}
-                >
-                  <Text style={[
-                    styles.certificationButtonText,
-                    localFilters.certifications.includes(cert) && styles.certificationButtonTextActive
-                  ]}>
-                    {cert}
-                  </Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-          </View>
-        </ScrollView>
-
-        {/* Footer */}
-        <View style={styles.footer}>
-          <TouchableOpacity style={styles.cancelButton} onPress={onClose}>
-            <Text style={styles.cancelButtonText}>Cancel</Text>
-          </TouchableOpacity>
-          <TouchableOpacity 
-            style={[styles.applyButton, !hasChanges && styles.applyButtonDisabled]} 
-            onPress={handleApply}
-            disabled={!hasChanges}
-          >
-            <Text style={styles.applyButtonText}>
-              Apply {getActiveFilterCount() > 0 ? `(${getActiveFilterCount()})` : ''}
-            </Text>
-          </TouchableOpacity>
         </View>
-      </View>
       </SafeAreaView>
     </Modal>
   );

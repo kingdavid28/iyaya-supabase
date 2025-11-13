@@ -15,6 +15,10 @@ import { contractService as supabaseContractService } from '../../services/supab
 
 // Utility imports
 import { childService } from '../../services/childService';
+import {
+  countActiveFilters,
+  getDefaultFilters,
+} from '../../utils/filterUtils';
 import { styles } from '../styles/ParentDashboard.styles';
 
 // Component imports
@@ -42,14 +46,7 @@ import PaymentModal from './modals/PaymentModal';
 import ProfileModal from './modals/ProfileModal';
 
 // Constants
-const DEFAULT_FILTERS = {
-  availability: { availableNow: false, days: [] },
-  location: { distance: 10, location: '' },
-  rate: { min: 0, max: 1000 },
-  experience: { min: 0, max: 30 },
-  certifications: [],
-  rating: 0,
-};
+const DEFAULT_FILTERS = getDefaultFilters();
 
 const DEFAULT_CAREGIVER = {
   _id: null,
@@ -60,6 +57,42 @@ const DEFAULT_CAREGIVER = {
   reviewCount: 0,
   hourlyRate: 0,
   rate: '₱0/hr'
+};
+
+const QUICK_FILTER_DEFAULTS = Object.freeze({
+  availableNow: false,
+  nearMe: false,
+  topRated: false,
+  certified: false,
+});
+
+const buildNormalizedFilters = (overrides = {}) => {
+  const defaults = getDefaultFilters();
+
+  return {
+    ...defaults,
+    ...overrides,
+    availability: {
+      ...defaults.availability,
+      ...(overrides?.availability || {}),
+    },
+    location: {
+      ...defaults.location,
+      ...(overrides?.location || {}),
+    },
+    rate: {
+      ...defaults.rate,
+      ...(overrides?.rate || {}),
+    },
+    experience: {
+      ...defaults.experience,
+      ...(overrides?.experience || {}),
+    },
+    certifications: Array.isArray(overrides?.certifications)
+      ? [...overrides.certifications]
+      : [...defaults.certifications],
+    rating: overrides?.rating ?? defaults.rating,
+  };
 };
 
 // Memoized utility functions outside component
@@ -294,14 +327,10 @@ const ParentDashboard = () => {
   const [searchResults, setSearchResults] = useState([]);
   const [filteredCaregivers, setFilteredCaregivers] = useState([]);
   const [searchLoading, setSearchLoading] = useState(false);
-  const [filters, setFilters] = useState(DEFAULT_FILTERS);
-  const [activeFilters, setActiveFilters] = useState(0);
-  const [quickFilters, setQuickFilters] = useState({
-    availableNow: false,
-    nearMe: false,
-    topRated: false,
-    certified: false
-  });
+  const [filters, setFilters] = useState(() => buildNormalizedFilters());
+  const [activeFilters, setActiveFilters] = useState(() => countActiveFilters(buildNormalizedFilters()));
+
+  const [quickFilters, setQuickFilters] = useState(() => ({ ...QUICK_FILTER_DEFAULTS }));
 
   // Form states
   const [childForm, setChildForm] = useState({
@@ -905,29 +934,31 @@ const ParentDashboard = () => {
   // Search and filter functions
   const handleSearch = useCallback((text) => {
     setSearchQuery(text);
-    if (!text.trim()) {
-      setFilteredCaregivers(caregivers);
+  }, []);
+
+  const handleApplyFilters = useCallback((newFilters) => {
+    setFilters(buildNormalizedFilters(newFilters));
+    setActiveFilters(countActiveFilters(buildNormalizedFilters(newFilters)));
+  }, []);
+
+  const handleQuickFilter = useCallback((filterKey) => {
+    if (filterKey === 'clear') {
+      setFilters(buildNormalizedFilters());
+      setActiveFilters(countActiveFilters(buildNormalizedFilters()));
+      setQuickFilters({ ...QUICK_FILTER_DEFAULTS });
+      setSearchQuery('');
       return;
     }
 
-    const normalized = text.toLowerCase();
-    const results = caregivers.filter(caregiver =>
-      caregiver.name?.toLowerCase().includes(normalized) ||
-      caregiver.location?.toLowerCase().includes(normalized)
-    );
-    setFilteredCaregivers(results);
-  }, [caregivers]);
-
-  const handleApplyFilters = useCallback((newFilters) => {
-    setFilters(newFilters);
-    setFilteredCaregivers(caregivers);
-  }, [caregivers]);
-
-  const handleQuickFilter = useCallback((filterKey) => {
-    setQuickFilters(prev => ({
-      ...prev,
-      [filterKey]: !prev[filterKey]
-    }));
+    setQuickFilters((prev) => {
+      if (!Object.prototype.hasOwnProperty.call(prev, filterKey)) {
+        return prev;
+      }
+      return {
+        ...prev,
+        [filterKey]: !prev[filterKey],
+      };
+    });
   }, []);
 
   // Job management functions
@@ -1361,15 +1392,17 @@ const ParentDashboard = () => {
           navigation={navigation}
           onProfilePress={() => toggleModal('profile', true)}
           onSignOut={signOut}
-          greetingName={profile?.firstName || profile?.name}
+          greetingName={greetingName}
           onProfileEdit={() => toggleModal('profile', true)}
           profileName={profile?.name}
-          profileImage={profile?.profileImage}
+          profileImage={profile?.profileImage || profile?.profile_image}
           profileContact={profile?.email}
           profileLocation={profile?.location}
           setActiveTab={setActiveTab}
           tabNotificationCounts={tabNotificationCounts}
           onRequestInfo={handleOpenRequestInfoFromHeader}
+          user={user}
+          userType="parent"
         />
 
         <NavigationTabs

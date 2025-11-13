@@ -1,7 +1,7 @@
 export default {
   expo: {
     name: "iYaya",
-    slug: "iyaya-supabase",
+    slug: "iyaya-caregiver-app",
     version: "1.0.0",
     orientation: "portrait",
     icon: "./assets/icon.png",
@@ -20,16 +20,7 @@ export default {
       jsEngine: "hermes",
       associatedDomains: [
         "applinks:iyaya-app.page.link"
-      ],
-      infoPlist: {
-        CFBundleURLTypes: [
-          {
-            CFBundleURLSchemes: [
-              "fb1976692839796722"
-            ]
-          }
-        ]
-      }
+      ]
     },
     android: {
       adaptiveIcon: {
@@ -44,21 +35,6 @@ export default {
         "ACCESS_NETWORK_STATE",
         "ACCESS_FINE_LOCATION",
         "ACCESS_COARSE_LOCATION"
-      ],
-      intentFilters: [
-        {
-          action: "VIEW",
-          autoVerify: true,
-          data: [
-            {
-              scheme: "fb1976692839796722"
-            }
-          ],
-          category: [
-            "BROWSABLE",
-            "DEFAULT"
-          ]
-        }
       ]
     },
     web: {
@@ -66,19 +42,9 @@ export default {
     },
     plugins: [
       "expo-secure-store",
-      "expo-font",
-      [
-        "expo-facebook",
-        {
-          appId: "1976692839796722",
-          scheme: "fb1976692839796722"
-        }
-      ]
+      "expo-font"
     ],
     scheme: "com.iyaya.app",
-    facebookScheme: "fb1976692839796722",
-    facebookAppId: "1976692839796722",
-    facebookDisplayName: "iYaya",
     extra: {
       supabaseUrl: process.env.EXPO_PUBLIC_SUPABASE_URL ?? null,
       supabaseAnonKey: process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY ?? null,

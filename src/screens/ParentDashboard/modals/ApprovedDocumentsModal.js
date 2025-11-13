@@ -30,6 +30,12 @@ import {
 } from 'react-native';
 
 import { privacyAPI } from '../../../config/api';
+import {
+    DOCUMENT_TYPE_LABELS,
+    formatDateDisplay,
+    normalizeDocumentEntry,
+    normalizePortfolio,
+} from '../../../utils/profileAssets';
 
 const CATEGORIES = {
     DOCUMENTS: 'documents',
@@ -42,7 +48,13 @@ const SKELETON_ROWS = Array.from({ length: 3 }).map((_, index) => ({
 }));
 
 const getDocumentCategory = (document) => {
-    const type = String(document?.type || document?.category || '').toLowerCase();
+    const type = String(
+        document?.type ||
+        document?.category ||
+        document?.metadata?.category ||
+        document?.source?.category ||
+        '',
+    ).toLowerCase();
     const filename = String(document?.fileName || document?.label || document?.name || '').toLowerCase();
 
     const imageExtensions = ['.png', '.jpg', '.jpeg', '.gif', '.bmp', '.webp', '.heic', '.heif'];
@@ -210,9 +222,16 @@ const SkeletonTile = () => (
 const DocumentTile = ({ document, onDownload, onOpenInNewTab, isDownloading, onPreview }) => {
     const category = getDocumentCategory(document);
     const isImagePreview = category === CATEGORIES.IMAGES && document?.url;
-    const uploadedAt = document?.uploadedAt || document?.createdAt || document?.created_at;
-    const uploadedLabel = uploadedAt
-        ? `Uploaded ${new Date(uploadedAt).toLocaleDateString()}`
+    const uploadedRaw = document?.uploadedAtRaw || document?.createdAt || document?.created_at;
+    const fallbackDate = uploadedRaw ? new Date(uploadedRaw) : null;
+    const fallbackDateDisplay = fallbackDate && !Number.isNaN(fallbackDate.getTime())
+        ? fallbackDate.toLocaleDateString()
+        : null;
+    const uploadedDisplay = typeof document?.uploadedAt === 'string' && document.uploadedAt.trim().length > 0
+        ? document.uploadedAt
+        : formatDateDisplay(uploadedRaw) || fallbackDateDisplay;
+    const uploadedLabel = uploadedDisplay
+        ? `Uploaded ${uploadedDisplay}`
         : 'Upload date unavailable';
 
     return (
@@ -252,7 +271,11 @@ const DocumentTile = ({ document, onDownload, onOpenInNewTab, isDownloading, onP
                 </View>
 
                 <Text style={styles.tileMeta} numberOfLines={2}>
-                    {document?.type || document?.category || 'Document'}
+                    {document?.typeLabel
+                        || DOCUMENT_TYPE_LABELS[document?.type]
+                        || document?.type
+                        || document?.category
+                        || 'Document'}
                 </Text>
                 <Text style={styles.tileMetaSecondary}>{uploadedLabel}</Text>
 
@@ -311,6 +334,16 @@ const ApprovedDocumentsModal = ({ visible, onClose, caregiver = {}, viewerId = n
 
     const documents = useMemo(() => sharedPayload?.documents || [], [sharedPayload]);
 
+    const portfolio = useMemo(
+        () => sharedPayload?.shared?.portfolio || { images: [], videos: [] },
+        [sharedPayload],
+    );
+
+    const hasPortfolioMedia = useMemo(
+        () => (portfolio?.images?.length || 0) > 0 || (portfolio?.videos?.length || 0) > 0,
+        [portfolio],
+    );
+
     const backgroundInfo = sharedPayload?.shared || {};
 
     const categoryOptions = useMemo(() => {
@@ -341,7 +374,31 @@ const ApprovedDocumentsModal = ({ visible, onClose, caregiver = {}, viewerId = n
             setLoading(true);
             setError(null);
             const response = await privacyAPI.getSharedCaregiverData(caregiverId, viewerId, { includeExpired: false });
-            setSharedPayload(response);
+
+            if (!response) {
+                setSharedPayload({
+                    documents: [],
+                    shared: { portfolio: normalizePortfolio(null) },
+                });
+                return;
+            }
+
+            const normalizedDocuments = Array.isArray(response.documents)
+                ? response.documents
+                    .map((doc, index) => normalizeDocumentEntry(doc, index))
+                    .filter(Boolean)
+                : [];
+
+            const normalizedShared = {
+                ...(response.shared || {}),
+                portfolio: normalizePortfolio(response.shared?.portfolio),
+            };
+
+            setSharedPayload({
+                ...response,
+                documents: normalizedDocuments,
+                shared: normalizedShared,
+            });
         } catch (fetchError) {
             console.error('Failed to load shared caregiver documents', fetchError);
             setError(fetchError?.message || 'Failed to load shared documents.');
@@ -377,6 +434,19 @@ const ApprovedDocumentsModal = ({ visible, onClose, caregiver = {}, viewerId = n
         }
 
         setPreviewDocument(document);
+    }, []);
+
+    const handleOpenVideo = useCallback(async (video) => {
+        if (!video?.url) {
+            return;
+        }
+
+        try {
+            await Linking.openURL(video.url);
+        } catch (openError) {
+            console.warn('Failed to open portfolio video', openError);
+            Alert.alert('Unable to open video', 'This video link appears to be invalid or has expired.');
+        }
     }, []);
 
     const handleDismissPreview = useCallback(() => {
@@ -656,11 +726,79 @@ const ApprovedDocumentsModal = ({ visible, onClose, caregiver = {}, viewerId = n
                         </Text>
                     )}
                 </View>
+
+                {hasPortfolioMedia && (
+                    <View style={styles.portfolioSection}>
+                        <Text style={styles.portfolioTitle}>Portfolio Gallery</Text>
+
+                        {portfolio?.images?.length > 0 && (
+                            <>
+                                <Text style={styles.portfolioSubtitle}>Images</Text>
+                                <View style={styles.portfolioGrid}>
+                                    {portfolio.images
+                                        .filter((image) => image?.url)
+                                        .map((image, index) => (
+                                            <TouchableOpacity
+                                                key={image.id || `portfolio-image-${index}`}
+                                                style={styles.portfolioImageWrapper}
+                                                accessibilityRole="button"
+                                                accessibilityLabel={`Preview portfolio image ${image.caption || index + 1}`}
+                                                onPress={() =>
+                                                    setPreviewDocument({
+                                                        ...image,
+                                                        url: image.url,
+                                                        label: image.caption || `Portfolio image ${index + 1}`,
+                                                    })
+                                                }
+                                            >
+                                                <Image source={{ uri: image.url }} style={styles.portfolioImage} resizeMode="cover" />
+                                            </TouchableOpacity>
+                                        ))}
+                                </View>
+                            </>
+                        )}
+
+                        {portfolio?.videos?.length > 0 && (
+                            <>
+                                <Text style={styles.portfolioSubtitle}>Videos</Text>
+                                <View style={styles.portfolioVideoList}>
+                                    {portfolio.videos
+                                        .filter((video) => video?.url)
+                                        .map((video, index) => (
+                                            <TouchableOpacity
+                                                key={video.id || `portfolio-video-${index}`}
+                                                style={styles.portfolioVideoItem}
+                                                onPress={() => handleOpenVideo(video)}
+                                                accessibilityRole="button"
+                                                accessibilityLabel={`Open portfolio video ${video.caption || index + 1}`}
+                                            >
+                                                <View style={styles.portfolioVideoIcon}>
+                                                    <Maximize2 size={16} color="#2563eb" />
+                                                </View>
+                                                <View style={{ flex: 1, marginRight: 12 }}>
+                                                    <Text style={styles.portfolioVideoTitle} numberOfLines={1}>
+                                                        {video.caption || `Video ${index + 1}`}
+                                                    </Text>
+                                                    {(video.uploadedAt || video.uploadedAtRaw) && (
+                                                        <Text style={styles.portfolioVideoMeta}>
+                                                            Shared {video.uploadedAt || formatDateDisplay(video.uploadedAtRaw)}
+                                                        </Text>
+                                                    )}
+                                                </View>
+                                                <ExternalLink size={16} color="#2563eb" />
+                                            </TouchableOpacity>
+                                        ))}
+                                </View>
+                            </>
+                        )}
+                    </View>
+                )}
             </ScrollView>
         );
     };
 
     const caregiverName = caregiver?.name || caregiver?.fullName || 'Caregiver';
+
     const caregiverInitials = caregiverName
         .split(' ')
         .map((n) => n[0])
@@ -899,7 +1037,7 @@ const styles = StyleSheet.create({
         position: 'absolute',
         inset: 0,
         backgroundColor: 'rgba(255, 255, 255, 0.7)',
-        flexDirection: 'row',
+        flexDirection: 'column',
         alignItems: 'center',
         justifyContent: 'center',
         gap: 6,

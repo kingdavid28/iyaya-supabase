@@ -43,7 +43,6 @@
     "expo-constants": "~18.0.10",
     "expo-crypto": "~15.0.7",
     "expo-document-picker": "~14.0.7",
-    "expo-facebook": "^12.2.0",
     "expo-file-system": "~19.0.17",
     "expo-font": "^14.0.9",
     "expo-image-manipulator": "~14.0.7",

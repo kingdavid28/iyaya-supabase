@@ -3,6 +3,7 @@ import { CommonActions, useFocusEffect } from '@react-navigation/native';
 import { LinearGradient } from "expo-linear-gradient";
 import React, { useState } from 'react';
 import {
+  Alert,
   Image,
   KeyboardAvoidingView,
   Platform,
@@ -10,36 +11,32 @@ import {
   StyleSheet,
   Text,
   TouchableOpacity,
-  View,
-  Alert
+  View
 } from 'react-native';
 import { Button, TextInput, useTheme } from "react-native-paper";
 import { useApp } from "../contexts/AppContext";
 import { useAuth } from '../contexts/AuthContext';
 import { useAuthForm } from '../hooks/useAuthForm';
 import { useAuthSubmit } from '../hooks/useAuthSubmit';
-import { tokenManager } from '../utils/tokenManager';
-import { supabase } from '../config/supabase';
 import CustomDateTimePicker from '../shared/ui/inputs/DateTimePicker';
-import FacebookSignInButton from '../components/auth/FacebookSignInButton';
 
 const ParentAuth = ({ navigation, route }) => {
   const theme = useTheme();
   const { dispatch } = useApp();
   const { user: authUser, signIn, signUp, verifyEmailToken } = useAuth();
-  
+
   // Use focus effect for navigation to ensure proper timing
   useFocusEffect(
     React.useCallback(() => {
       if (authUser) {
-        console.log('Auth user detected on focus:', { 
-          email: authUser.email, 
-          role: authUser.role 
+        console.log('Auth user detected on focus:', {
+          email: authUser.email,
+          role: authUser.role
         });
-        
+
         // Navigate based on user role
         const dashboardRoute = authUser.role === 'caregiver' ? 'CaregiverDashboard' : 'ParentDashboard';
-        
+
         // Use setTimeout to ensure navigation happens after render
         const timer = setTimeout(() => {
           navigation.dispatch(
@@ -49,12 +46,12 @@ const ParentAuth = ({ navigation, route }) => {
             })
           );
         }, 50);
-        
+
         return () => clearTimeout(timer);
       }
     }, [authUser, navigation])
   );
-  
+
   const [mode, setMode] = useState(route.params?.mode || 'login');
   const { formData, formErrors, handleChange, validateForm: validateCurrentForm, resetForm } = useAuthForm();
   const { handleSubmit: handleFormSubmit, handleManualVerification, isSubmitting } = useAuthSubmit(navigation);
@@ -89,7 +86,7 @@ const ParentAuth = ({ navigation, route }) => {
             return;
           }
         }
-        
+
         const userData = {
           name: `${formData.firstName} ${formData.lastName}`,
           firstName: formData.firstName,
@@ -98,7 +95,7 @@ const ParentAuth = ({ navigation, route }) => {
           role: 'parent'
         };
         await signUp(formData.email, formData.password, userData);
-        
+
         // Show email verification notification
         Alert.alert(
           'Check Your Email',
@@ -137,12 +134,12 @@ const ParentAuth = ({ navigation, route }) => {
   };
 
   return (
-    <KeyboardAvoidingView 
+    <KeyboardAvoidingView
       style={styles.container}
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       keyboardVerticalOffset={Platform.select({ ios: 0, android: 0 })}
     >
-      <LinearGradient 
+      <LinearGradient
         colors={["#fce8f4", "#f3e8ff"]}
         style={styles.container}
         start={{ x: 0, y: 0 }}
@@ -154,8 +151,8 @@ const ParentAuth = ({ navigation, route }) => {
           showsVerticalScrollIndicator={false}
         >
           <View style={styles.header}>
-            <TouchableOpacity 
-              onPress={() => navigation.goBack()} 
+            <TouchableOpacity
+              onPress={() => navigation.goBack()}
               style={styles.backButton}
               accessibilityLabel="Go back"
             >
@@ -163,12 +160,12 @@ const ParentAuth = ({ navigation, route }) => {
             </TouchableOpacity>
 
             <View style={styles.logoContainer}>
-              <LinearGradient 
+              <LinearGradient
                 colors={["#fbcfe8", "#f9a8d4"]}
                 style={styles.logoBackground}
               >
-                <Image 
-                  source={require('../../assets/icon.png')} 
+                <Image
+                  source={require('../../assets/icon.png')}
                   style={styles.logo}
                   resizeMode="contain"
                   accessibilityLabel="iYaya logo"
@@ -181,7 +178,7 @@ const ParentAuth = ({ navigation, route }) => {
           <View style={styles.authContainer}>
             <View style={[styles.authCard, styles.parentCard]}>
               <View style={styles.userTypeIndicator}>
-                <LinearGradient 
+                <LinearGradient
                   colors={["#fce7f3", "#fbcfe8"]}
                   style={styles.parentIconContainer}
                 >
@@ -196,7 +193,7 @@ const ParentAuth = ({ navigation, route }) => {
                 <Text style={styles.requiredFieldsNote}>* Required fields</Text>
                 <Text style={styles.emailNote}>Please use a unique email address that hasn't been registered before.</Text>
                 <Text style={styles.passwordNote}>Password must be at least 12 characters with uppercase, lowercase, number, and symbol.</Text>
-                
+
                 {/* Name fields for signup */}
                 {mode === 'signup' && (
                   <>
@@ -211,7 +208,7 @@ const ParentAuth = ({ navigation, route }) => {
                       error={!!formErrors.firstName}
                     />
                     {formErrors.firstName && <Text style={styles.errorText}>{formErrors.firstName}</Text>}
-                    
+
                     <View style={styles.nameRow}>
                       <TextInput
                         label="Last Name *"
@@ -233,7 +230,7 @@ const ParentAuth = ({ navigation, route }) => {
                       />
                     </View>
                     {formErrors.lastName && <Text style={styles.errorText}>{formErrors.lastName}</Text>}
-                    
+
                     <CustomDateTimePicker
                       label="Birth Date *"
                       value={formData.birthDate ? new Date(formData.birthDate) : null}
@@ -249,7 +246,7 @@ const ParentAuth = ({ navigation, route }) => {
                       style={styles.input}
                     />
                     {formErrors.birthDate && <Text style={styles.errorText}>{formErrors.birthDate}</Text>}
-                    
+
                     <TextInput
                       label="Phone Number *"
                       value={formData.phone}
@@ -293,8 +290,8 @@ const ParentAuth = ({ navigation, route }) => {
                       style={styles.input}
                       secureTextEntry={!showPassword}
                       right={
-                        <TextInput.Icon 
-                          icon={showPassword ? "eye-off" : "eye"} 
+                        <TextInput.Icon
+                          icon={showPassword ? "eye-off" : "eye"}
                           onPress={() => setShowPassword(!showPassword)}
                           color="#db2777"
                         />
@@ -315,8 +312,8 @@ const ParentAuth = ({ navigation, route }) => {
                           style={styles.input}
                           secureTextEntry={!showConfirmPassword}
                           right={
-                            <TextInput.Icon 
-                              icon={showConfirmPassword ? "eye-off" : "eye"} 
+                            <TextInput.Icon
+                              icon={showConfirmPassword ? "eye-off" : "eye"}
                               onPress={() => setShowConfirmPassword(!showConfirmPassword)}
                               color="#db2777"
                             />
@@ -332,8 +329,8 @@ const ParentAuth = ({ navigation, route }) => {
                 )}
 
                 {/* Primary action button */}
-                <Button 
-                  mode="contained" 
+                <Button
+                  mode="contained"
                   onPress={handleSubmit}
                   loading={isSubmitting}
                   disabled={isSubmitting}
@@ -345,58 +342,16 @@ const ParentAuth = ({ navigation, route }) => {
                   {mode === 'signup' ? 'Create Account' : mode === 'reset' ? 'Send Reset Link' : 'Sign In'}
                 </Button>
 
-                {/* Social Login Options */}
-                {mode !== 'reset' && (
-                  <>
-                    <View style={styles.divider}>
-                      <View style={styles.dividerLine} />
-                      <Text style={styles.dividerText}>or</Text>
-                      <View style={styles.dividerLine} />
-                    </View>
-
-                    <FacebookSignInButton
-                      userRole="parent"
-                      onSuccess={async (result) => {
-                        console.log('Facebook sign-in successful:', result);
-
-                        // Debug authentication state after login
-                        const checkAuthAfterLogin = async () => {
-                          const token = await tokenManager.getValidToken(false);
-                          console.log('Token after login:', token ? 'present' : 'missing');
-                          const session = await supabase.auth.getSession();
-                          console.log('Session after login:', session?.session ? 'present' : 'missing');
-                        };
-
-                        // Run the debugging function after a short delay
-                        setTimeout(() => {
-                          checkAuthAfterLogin().catch(console.error);
-                        }, 1000);
-
-                        // Navigation will be handled by the auth context
-                      }}
-                      onError={(error) => {
-                        console.error('Facebook sign-in error:', error);
-                        Alert.alert(
-                          'Facebook Sign-In Failed',
-                          error.message || 'Unable to sign in with Facebook. Please try again.',
-                          [{ text: 'OK' }]
-                        );
-                      }}
-                      style={styles.facebookButton}
-                    />
-                  </>
-                )}
-
                 {/* Footer links */}
                 {mode !== 'reset' ? (
                   <>
-                    <TouchableOpacity 
-                      onPress={() => setMode('reset')} 
+                    <TouchableOpacity
+                      onPress={() => setMode('reset')}
                       accessibilityLabel="Reset password"
                     >
                       <Text style={styles.smallLink}>Forgot password?</Text>
                     </TouchableOpacity>
-                    
+
                     <View style={styles.authFooter}>
                       <Text style={styles.authFooterText}>
                         {mode === 'signup' ? 'Already have an account?' : "Don't have an account?"}
@@ -413,8 +368,8 @@ const ParentAuth = ({ navigation, route }) => {
                     </View>
                   </>
                 ) : (
-                  <TouchableOpacity 
-                    onPress={() => setMode('login')} 
+                  <TouchableOpacity
+                    onPress={() => setMode('login')}
                     accessibilityLabel="Back to sign in"
                   >
                     <Text style={styles.smallLink}>Back to Sign In</Text>
@@ -467,11 +422,11 @@ const styles = StyleSheet.create({
     color: '#db2777',
     marginTop: 8,
   },
-  authContainer: { 
-    flex: 1, 
-    justifyContent: 'center', 
-    paddingHorizontal: 24, 
-    paddingBottom: 40 
+  authContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    paddingHorizontal: 24,
+    paddingBottom: 40
   },
   authCard: {
     backgroundColor: 'white',
@@ -493,29 +448,29 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     marginBottom: 16,
   },
-  authTitle: { 
-    fontSize: 18, 
-    fontWeight: '600', 
-    color: '#db2777', 
-    textAlign: 'center' 
+  authTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#db2777',
+    textAlign: 'center'
   },
   formContainer: { marginTop: 16 },
   input: { marginBottom: 8, backgroundColor: 'white' },
-  authButton: { 
-    marginTop: 16, 
-    borderRadius: 8, 
-    paddingVertical: 8 
+  authButton: {
+    marginTop: 16,
+    borderRadius: 8,
+    paddingVertical: 8
   },
   parentAuthButton: { backgroundColor: '#db2777' },
   authButtonLabel: { color: 'white', fontWeight: 'bold' },
-  authFooter: { 
-    flexDirection: 'row', 
-    justifyContent: 'center', 
+  authFooter: {
+    flexDirection: 'row',
+    justifyContent: 'center',
     alignItems: 'center',
     marginTop: 16,
     flexWrap: 'wrap'
   },
-  authFooterText: { 
+  authFooterText: {
     color: '#6b7280',
     marginRight: 8
   },
@@ -538,10 +493,10 @@ const styles = StyleSheet.create({
   signInButtonLabel: {
     color: '#db2777', // Pink for sign in
   },
-  smallLink: { 
-    color: '#db2777', 
-    textAlign: 'center', 
-    marginTop: 8 
+  smallLink: {
+    color: '#db2777',
+    textAlign: 'center',
+    marginTop: 8
   },
   requiredFieldsNote: {
     fontSize: 12,
@@ -577,24 +532,6 @@ const styles = StyleSheet.create({
     color: '#db2777',
     marginBottom: 12,
     fontStyle: 'italic',
-  },
-  divider: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginVertical: 16,
-  },
-  dividerLine: {
-    flex: 1,
-    height: 1,
-    backgroundColor: '#e5e7eb',
-  },
-  dividerText: {
-    marginHorizontal: 16,
-    color: '#6b7280',
-    fontSize: 14,
-  },
-  facebookButton: {
-    marginTop: 8,
   },
 });
 
