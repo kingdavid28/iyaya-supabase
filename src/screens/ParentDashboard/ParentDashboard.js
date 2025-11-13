@@ -663,6 +663,35 @@ const ParentDashboard = () => {
   }, [navigation]);
 
   const handleMessageCaregiver = useCallback(async (caregiver) => {
+    const resolveAllowDirectMessages = (value) => {
+      if (value === false || value === 0) return false;
+      if (value === true || value === 1) return true;
+      if (typeof value === 'string') {
+        const normalized = value.trim().toLowerCase();
+        if (['false', '0', 'off', 'no'].includes(normalized)) return false;
+        if (['true', '1', 'on', 'yes'].includes(normalized)) return true;
+      }
+      return undefined;
+    };
+
+    const allowDirectMessages = resolveAllowDirectMessages(caregiver?.allowDirectMessages);
+    const allowDirectMessagesFallback =
+      resolveAllowDirectMessages(caregiver?.privacySettings?.allowDirectMessages) ??
+      resolveAllowDirectMessages(caregiver?.privacySettings?.allow_direct_messages);
+
+    const effectiveAllowDirectMessages =
+      allowDirectMessages ??
+      allowDirectMessagesFallback ??
+      true;
+
+    if (effectiveAllowDirectMessages === false) {
+      const caregiverNameFallback = caregiver?.name || 'Caregiver';
+      Alert.alert('Messaging disabled', `${caregiverNameFallback} is not accepting direct messages.`);
+      return;
+    }
+
+    const caregiverName = caregiver?.name || 'Caregiver';
+
     if (!user?.id) {
       Alert.alert('Error', 'User authentication required. Please log out and back in.');
       return;
@@ -673,8 +702,6 @@ const ParentDashboard = () => {
       Alert.alert('Error', 'Caregiver information not available');
       return;
     }
-
-    const caregiverName = caregiver?.name || 'Caregiver';
 
     try {
       await supabaseService.getOrCreateConversation(user.id, caregiverId);

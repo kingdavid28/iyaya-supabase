@@ -355,12 +355,26 @@ const Chat = () => {
 
       setSending(true);
       try {
-        await messagingService.sendMessage(
+        const sentRecord = await messagingService.sendMessage(
           conversation.id,
           currentUserId,
           content,
           attachment,
         );
+
+        if (sentRecord) {
+          const mappedMessage = mapMessageRecord(sentRecord, currentUserId);
+          setMessages((prev) => {
+            if (prev.some((message) => message.id === mappedMessage.id)) {
+              return prev;
+            }
+            const next = [...prev, mappedMessage].sort(
+              (a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime(),
+            );
+            return next;
+          });
+        }
+
         typingStateRef.current = false;
         await realtimeService.setTypingStatus(
           conversation.id,

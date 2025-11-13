@@ -9,7 +9,6 @@ export function PrivacySettings({ user, userType, data, onSave, isLoading, isSav
     showOnlineStatus: true,
     allowDirectMessages: true,
     showRatings: true,
-    dataSharing: false,
   });
   const [showPolicyModal, setShowPolicyModal] = useState(false);
 
@@ -20,7 +19,6 @@ export function PrivacySettings({ user, userType, data, onSave, isLoading, isSav
         showOnlineStatus: data.showOnlineStatus ?? true,
         allowDirectMessages: data.allowDirectMessages ?? true,
         showRatings: data.showRatings ?? true,
-        dataSharing: data.dataSharing ?? false,
       });
     }
   }, [data]);
@@ -41,7 +39,6 @@ export function PrivacySettings({ user, userType, data, onSave, isLoading, isSav
     { key: 'showOnlineStatus', label: 'Show Online Status', desc: 'Let others know when you are online' },
     { key: 'allowDirectMessages', label: 'Direct Messages', desc: 'Allow others to message you directly' },
     { key: 'showRatings', label: 'Show Ratings', desc: 'Display your ratings and reviews publicly' },
-    { key: 'dataSharing', label: 'Data Sharing', desc: 'Share anonymized data to improve service' }
   ];
   if (isLoading) {
     return (

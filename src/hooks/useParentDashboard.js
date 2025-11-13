@@ -141,13 +141,34 @@ const normalizeCaregivers = (caregiversList = []) => {
   return caregiversList.map((caregiver) => {
     const experience = parseExperience(caregiver);
     const verification = parseVerification(caregiver);
+    const privacySettings = {
+      profileVisibility: caregiver.privacySettings?.profileVisibility ?? caregiver.privacySettings?.profile_visibility ?? true,
+      showOnlineStatus: caregiver.privacySettings?.showOnlineStatus ?? caregiver.privacySettings?.show_online_status ?? true,
+      allowDirectMessages: caregiver.privacySettings?.allowDirectMessages ?? caregiver.privacySettings?.allow_direct_messages ?? true,
+      showRatings: caregiver.privacySettings?.showRatings ?? caregiver.privacySettings?.show_ratings ?? true,
+    };
+
+    const showRatings = privacySettings.showRatings !== false;
+    const allowDirectMessages = privacySettings.allowDirectMessages !== false;
+    const ratingRaw = caregiver.rating ?? caregiver.average_rating;
+    const normalizedRating = showRatings && Number.isFinite(Number(ratingRaw))
+      ? Math.round(Number(ratingRaw) * 10) / 10
+      : null;
+    const reviewCountRaw = caregiver.reviewCount ?? caregiver.review_count ?? 0;
+    const reviewCount = showRatings ? reviewCountRaw : 0;
+    const trustScoreValue = showRatings ? verification.trustScore : null;
+
+    const verificationData = {
+      ...verification,
+      trustScore: trustScoreValue,
+    };
 
     return {
       id: caregiver.id,
       _id: caregiver.id,
       name: caregiver.name || 'Caregiver',
-      rating: Number(caregiver.rating ?? caregiver.average_rating ?? 0) || 0,
-      reviewCount: caregiver.reviewCount ?? caregiver.review_count ?? 0,
+      rating: normalizedRating,
+      reviewCount,
       hourlyRate: Number(caregiver.hourly_rate ?? caregiver.hourlyRate ?? 0) || 0,
       experience: {
         years: experience.years,
@@ -162,18 +183,16 @@ const normalizeCaregivers = (caregiversList = []) => {
       profileImage: caregiver.profile_image || caregiver.avatar,
       bio: caregiver.bio || 'Experienced caregiver',
       createdAt: caregiver.created_at || new Date().toISOString(),
-      trustScore: verification.trustScore,
+      trustScore: trustScoreValue,
       verified: verification.verified,
-      verification: {
-        trustScore: verification.trustScore,
-        verified: verification.verified,
-        backgroundCheck: verification.backgroundCheck,
-        certifications: verification.certifications,
-        documentsVerified: verification.documentsVerified,
-      },
+      verification: verificationData,
       completedJobs: caregiver.completedJobs || caregiver.completed_jobs || 0,
       responseRate: caregiver.responseRate || caregiver.response_rate || '0%',
       hasCompletedJobs: Boolean(caregiver.completedJobs || caregiver.completed_jobs),
+      privacySettings,
+      allowDirectMessages,
+      showRatings,
+      showOnlineStatus: privacySettings.showOnlineStatus !== false,
     };
   });
 };

@@ -21,12 +21,23 @@ const CaregiverCard = ({ caregiver, onPress, onMessage, onBook, onPressRatings, 
     distance,
     trustScore,
     verification,
+    privacySettings,
+    allowDirectMessages = true,
+    showRatings = true,
   } = caregiver;
 
-  const renderStars = (rating) => {
+  const normalizedRating = Number.isFinite(Number(rating)) ? Number(rating) : null;
+  const showRatingsUI = showRatings && normalizedRating !== null;
+  const computedReviewCount = showRatingsUI ? reviewCount : 0;
+
+  const renderStars = (value) => {
+    if (!showRatingsUI || value == null) {
+      return null;
+    }
+
     const stars = [];
-    const fullStars = Math.floor(rating);
-    const hasHalfStar = rating % 1 !== 0;
+    const fullStars = Math.floor(value);
+    const hasHalfStar = value % 1 !== 0;
 
     for (let i = 0; i < fullStars; i++) {
       stars.push(<Ionicons key={i} name="star" size={14} color="#fbbf24" />);
@@ -36,13 +47,20 @@ const CaregiverCard = ({ caregiver, onPress, onMessage, onBook, onPressRatings, 
       stars.push(<Ionicons key="half" name="star-half" size={14} color="#fbbf24" />);
     }
 
-    const emptyStars = 5 - Math.ceil(rating);
+    const emptyStars = 5 - Math.ceil(value);
     for (let i = 0; i < emptyStars; i++) {
       stars.push(<Ionicons key={`empty-${i}`} name="star-outline" size={14} color="#d1d5db" />);
     }
 
     return stars;
   };
+
+  const ratingDisabled = !showRatingsUI;
+  const messageDisabled = !allowDirectMessages;
+
+  const messageAccessibilityLabel = messageDisabled
+    ? `${name} is not accepting direct messages`
+    : `Message ${name}`;
 
   return (
     <TouchableOpacity style={styles.card} onPress={onPress}>
@@ -65,31 +83,35 @@ const CaregiverCard = ({ caregiver, onPress, onMessage, onBook, onPressRatings, 
 
           <View style={styles.nameSection}>
             <Text style={styles.name}>{name}</Text>
-            <TouchableOpacity
-              style={styles.ratingRow}
-              onPress={onPressRatings}
-              disabled={!onPressRatings}
-              accessibilityRole={onPressRatings ? 'button' : undefined}
-              accessibilityLabel={onPressRatings ? 'View ratings and reviews' : undefined}
-              activeOpacity={onPressRatings ? 0.7 : 1}
-            >
-              {reviewCount > 0 ? (
-                <>
-                  <View style={styles.stars}>
-                    {renderStars(rating)}
-                  </View>
-                  <Text style={styles.reviewText}>({reviewCount})</Text>
-                </>
-              ) : (
-                <Text style={[styles.reviewText, { fontStyle: 'italic' }]}>New caregiver</Text>
-              )}
-            </TouchableOpacity>
-            <TrustScoreBadge
-              trustScore={trustScore ?? verification?.trustScore ?? 0}
-              verified={verified ?? verification?.verified ?? false}
-              size="small"
-              onPress={onPressRatings}
-            />
+            {showRatingsUI ? (
+              <TouchableOpacity
+                style={styles.ratingRow}
+                onPress={onPressRatings}
+                disabled={!onPressRatings}
+                accessibilityRole={onPressRatings ? 'button' : undefined}
+                accessibilityLabel={onPressRatings ? 'View ratings and reviews' : undefined}
+                activeOpacity={onPressRatings ? 0.7 : 1}
+              >
+                {computedReviewCount > 0 ? (
+                  <>
+                    <View style={styles.stars}>
+                      {renderStars(normalizedRating)}
+                    </View>
+                    <Text style={styles.reviewText}>({computedReviewCount})</Text>
+                  </>
+                ) : (
+                  <Text style={[styles.reviewText, { fontStyle: 'italic' }]}>New caregiver</Text>
+                )}
+              </TouchableOpacity>
+            ) : null}
+            {showRatingsUI ? (
+              <TrustScoreBadge
+                trustScore={trustScore ?? verification?.trustScore ?? 0}
+                verified={verified ?? verification?.verified ?? false}
+                size="small"
+                onPress={onPressRatings}
+              />
+            ) : null}
           </View>
         </View>
 
@@ -135,9 +157,21 @@ const CaregiverCard = ({ caregiver, onPress, onMessage, onBook, onPressRatings, 
 
       {showActions && (
         <View style={styles.actions}>
-          <TouchableOpacity style={styles.messageButton} onPress={onMessage}>
-            <Ionicons name="chatbubble" size={16} color="#3b82f6" />
-            <Text style={styles.messageText}>Message</Text>
+          <TouchableOpacity
+            style={[
+              styles.messageButton,
+              messageDisabled && styles.messageButtonDisabled,
+            ]}
+            onPress={messageDisabled ? undefined : onMessage}
+            disabled={messageDisabled}
+            accessibilityState={{ disabled: messageDisabled }}
+            accessibilityLabel={messageAccessibilityLabel}
+            activeOpacity={messageDisabled ? 1 : 0.7}
+          >
+            <Ionicons name="chatbubble" size={16} color={messageDisabled ? '#9ca3af' : '#3b82f6'} />
+            <Text style={[styles.messageText, messageDisabled && styles.messageTextDisabled]}>
+              Message
+            </Text>
           </TouchableOpacity>
 
           <TouchableOpacity style={styles.bookButton} onPress={onBook}>
@@ -282,11 +316,18 @@ const styles = {
     borderWidth: 1,
     borderColor: '#3b82f6',
   },
+  messageButtonDisabled: {
+    borderColor: '#d1d5db',
+    backgroundColor: '#f9fafb',
+  },
   messageText: {
     color: '#3b82f6',
     fontSize: 14,
     fontWeight: '500',
     marginLeft: 4,
+  },
+  messageTextDisabled: {
+    color: '#9ca3af',
   },
   bookButton: {
     flex: 1,

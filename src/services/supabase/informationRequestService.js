@@ -34,16 +34,16 @@ const SENSITIVE_PERMISSION_FIELDS = new Set([
 ])
 
 const snakeToCamel = (input = '') =>
-  String(input).replace(/_([a-z])/g, (_, group) => group.toUpperCase());
+    String(input).replace(/_([a-z])/g, (_, group) => group.toUpperCase());
 
 const toSnake = (input = '') =>
-  String(input)
-    .trim()
-    .replace(/([a-z\d])([A-Z])/g, '$1_$2')
-    .replace(/[^a-z\d_]+/gi, '_')
-    .replace(/__+/g, '_')
-    .replace(/^_+|_+$/g, '')
-    .toLowerCase();
+    String(input)
+        .trim()
+        .replace(/([a-z\d])([A-Z])/g, '$1_$2')
+        .replace(/[^a-z\d_]+/gi, '_')
+        .replace(/__+/g, '_')
+        .replace(/^_+|_+$/g, '')
+        .toLowerCase();
 
 class InformationRequestService extends SupabaseBase {
     _profileSummary(profile, fallbackId) {
@@ -331,13 +331,34 @@ class InformationRequestService extends SupabaseBase {
                 )
             )
 
-            let filteredFields = normalizedFields
+            let targetId = null
+            let viewerId = null
 
             if (approved && normalizedFields.length) {
-                const targetId = requestMeta?.targetUserId || requestMeta?.target?.id || requestMeta?.targetId?.id
-                const viewerId = requestMeta?.requesterUserId || requestMeta?.requester?.id || requestMeta?.requesterId?.id
+                targetId = requestMeta?.targetUserId || requestMeta?.target?.id || requestMeta?.targetId?.id
+                viewerId = requestMeta?.requesterUserId || requestMeta?.requester?.id || requestMeta?.requesterId?.id
+            }
 
-                filteredFields = await this._filterNewPermissionFields(targetId, viewerId, normalizedFields)
+            const filteredFields = approved && normalizedFields.length && targetId && viewerId
+                ? await this._filterNewPermissionFields(targetId, viewerId, normalizedFields)
+                : normalizedFields
+
+            if (approved && filteredFields.length === 0) {
+                const existing = requestMeta || (await this._getRequestById(requestId))
+
+                if (existing) {
+                    const targetCacheKey = existing?.targetUserId || existing?.target?.id || existing?.targetId?.id
+                    if (targetCacheKey) {
+                        invalidateCache(this._cacheKey('pending', targetCacheKey))
+                    }
+
+                    const requesterCacheKey = existing?.requesterUserId || existing?.requester?.id || existing?.requesterId?.id
+                    if (requesterCacheKey) {
+                        invalidateCache(this._cacheKey('sent', requesterCacheKey))
+                    }
+                }
+
+                return existing
             }
 
             const payload = {

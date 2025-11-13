@@ -184,8 +184,24 @@ export class UserService extends SupabaseBase {
 
         const caregiverIds = (data || []).map(caregiver => caregiver?.id).filter(Boolean)
         let reviewStatsMap = new Map()
+        let privacySettingsMap = new Map()
 
         if (caregiverIds.length) {
+          try {
+            const { data: privacyRows, error: privacyError } = await supabase
+              .from('privacy_settings')
+              .select('*')
+              .in('user_id', caregiverIds)
+
+            if (privacyError) {
+              console.warn('Error fetching privacy settings for caregivers:', privacyError)
+            } else if (Array.isArray(privacyRows)) {
+              privacySettingsMap = new Map(privacyRows.map((row) => [row.user_id, row]))
+            }
+          } catch (privacyFetchError) {
+            console.warn('Error loading privacy settings:', privacyFetchError)
+          }
+
           try {
             const { data: reviewRows, error: reviewRowsError } = await supabase
               .from('reviews')
@@ -231,29 +247,46 @@ export class UserService extends SupabaseBase {
           }
         }
 
-        const caregiversWithStats = (data || []).map((caregiver) => {
-          const stats = reviewStatsMap.get(caregiver.id)
-          const averageRating = stats?.averageRating ?? caregiver.average_rating ?? caregiver.rating
-          const resolvedRating = Number.isFinite(Number(averageRating))
-            ? Math.round(Number(averageRating) * 10) / 10
-            : 0
-          const reviewCount = stats?.reviewCount ?? caregiver.reviewCount ?? caregiver.review_count ?? 0
+        const caregiversWithStats = (data || [])
+          .map((caregiver) => {
+            const privacyRow = privacySettingsMap.get(caregiver.id) || {}
+            const profileVisibility = privacyRow.profile_visibility ?? privacyRow.profileVisibility
 
-          const computedTrustScore = reviewCount > 0
-            ? Math.min(100, Math.round(((resolvedRating / 5) * 80) + Math.min(reviewCount, 20)))
-            : null
+            if (profileVisibility === false) {
+              return null
+            }
 
-          const trustScore = computedTrustScore ?? 0
+            const showOnlineStatus = privacyRow.show_online_status ?? privacyRow.showOnlineStatus ?? true
+            const allowDirectMessages = privacyRow.allow_direct_messages ?? privacyRow.allowDirectMessages ?? true
+            const showRatings = privacyRow.show_ratings ?? privacyRow.showRatings ?? true
 
-          return {
-            ...caregiver,
-            rating: resolvedRating,
-            average_rating: resolvedRating,
-            reviewCount,
-            review_count: reviewCount,
-            trustScore,
-          }
-        })
+            const stats = reviewStatsMap.get(caregiver.id)
+            const averageRating = stats?.averageRating ?? caregiver.average_rating ?? caregiver.rating
+            const resolvedRating = Number.isFinite(Number(averageRating))
+              ? Math.round(Number(averageRating) * 10) / 10
+              : 0
+            const reviewCount = stats?.reviewCount ?? caregiver.reviewCount ?? caregiver.review_count ?? 0
+
+            const computedTrustScore = showRatings && reviewCount > 0
+              ? Math.min(100, Math.round(((resolvedRating / 5) * 80) + Math.min(reviewCount, 20)))
+              : null
+
+            return {
+              ...caregiver,
+              rating: showRatings ? resolvedRating : null,
+              average_rating: showRatings ? resolvedRating : null,
+              reviewCount: showRatings ? reviewCount : 0,
+              review_count: showRatings ? reviewCount : 0,
+              trustScore: showRatings ? computedTrustScore ?? 0 : null,
+              privacySettings: {
+                profileVisibility: profileVisibility ?? true,
+                showOnlineStatus,
+                allowDirectMessages,
+                showRatings,
+              },
+            }
+          })
+          .filter(Boolean)
 
         console.log('✅ Fetched caregivers from Supabase:', caregiversWithStats?.length || 0)
         return caregiversWithStats || []

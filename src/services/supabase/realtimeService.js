@@ -76,6 +76,21 @@ export class RealtimeService extends SupabaseBase {
   }
 
   subscribeToMessages(conversationId, callback) {
+    if (conversationId === '*' || conversationId === 'all' || conversationId == null) {
+      return supabase
+        .channel('messages:all')
+        .on(
+          'postgres_changes',
+          {
+            event: '*',
+            schema: 'public',
+            table: 'messages',
+          },
+          callback,
+        )
+        .subscribe()
+    }
+
     const normalizedId = this._normalizeConversationId(conversationId)
 
     return supabase

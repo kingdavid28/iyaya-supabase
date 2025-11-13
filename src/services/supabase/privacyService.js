@@ -15,6 +15,15 @@ const CACHE_TTL_MS = 30 * 1000
 
 // Canonical set of supported privacy toggles
 const DEFAULT_SETTINGS = {
+    // High-level visibility toggles
+    profileVisibility: true,
+    showOnlineStatus: true,
+    allowDirectMessages: true,
+    showRatings: true,
+
+    // Data sharing toggle intentionally omitted until analytics pipeline honors it
+
+    // Legacy granular toggles
     sharePhone: false,
     shareAddress: false,
     shareEmergencyContact: false,
@@ -50,7 +59,7 @@ const normalizeSettingsRow = (row) => {
 
     return Object.keys(DEFAULT_SETTINGS).reduce((acc, key) => {
         const snakeKey = toSnake(key)
-        acc[key] = row?.[snakeKey] ?? DEFAULT_SETTINGS[key]
+        acc[key] = row?.[snakeKey] ?? row?.[key] ?? DEFAULT_SETTINGS[key]
         return acc
     }, {})
 }
@@ -99,9 +108,62 @@ const isMissingTableError = (error, tableName) => {
     return message.includes('could not find the table') || hint.includes(`'public.${tableName?.toLowerCase?.()}'`)
 }
 
+const isMissingColumnError = (error) => {
+    if (!error) return false
+    const code = String(error.code || '')
+    if (code === '42703' || code === 'PGRST204') return true
+    const message = String(error.message || '').toLowerCase()
+    return message.includes('column') && (message.includes('does not exist') || message.includes('could not find'))
+}
+
+const extractMissingColumnName = (error) => {
+    if (!error) return null
+    const message = String(error.message || '')
+    const match = message.match(/'([^']+)'/)
+    return match ? match[1] : null
+}
+
 class PrivacyService extends SupabaseBase {
+    constructor() {
+        super()
+        this._settingsSchema = null
+        this._missingColumnsBySchema = {
+            camel: new Set(),
+            snake: new Set()
+        }
+    }
+
     _settingsCacheKey(userId) {
         return `privacy-settings:${userId}`
+    }
+
+    async _detectSettingsSchema() {
+        if (this._settingsSchema) {
+            return this._settingsSchema
+        }
+
+        try {
+            const { data } = await supabase
+                .from(TABLE_SETTINGS)
+                .select('*')
+                .limit(1)
+                .maybeSingle()
+
+            if (data && typeof data === 'object') {
+                const hasCamel = Object.prototype.hasOwnProperty.call(data, 'userId')
+                    || Object.keys(data).some((key) => !key.includes('_') && key !== key.toLowerCase())
+
+                this._settingsSchema = hasCamel ? 'camel' : 'snake'
+                return this._settingsSchema
+            }
+        } catch (error) {
+            if (!isMissingTableError(error, TABLE_SETTINGS)) {
+                console.warn('Unable to detect privacy settings schema:', error)
+            }
+        }
+
+        this._settingsSchema = 'snake'
+        return this._settingsSchema
     }
 
     _permissionsCacheKey(targetId, viewerId) {
@@ -163,29 +225,98 @@ class PrivacyService extends SupabaseBase {
     async updatePrivacySettings(userId = null, settings = {}) {
         try {
             const targetId = await this._resolveTargetUserId(userId)
+            const preferredSchema = await this._detectSettingsSchema()
+            const schemasToTry = preferredSchema === 'camel' ? ['camel', 'snake'] : ['snake', 'camel']
+            let lastError = null
 
-            const payload = {
-                user_id: targetId,
-                settings: Object.keys(DEFAULT_SETTINGS).reduce((acc, key) => {
-                    const snakeKey = toSnake(key)
-                    if (settings[key] !== undefined) {
-                        acc[snakeKey] = Boolean(settings[key])
-                    } else {
-                        acc[snakeKey] = DEFAULT_SETTINGS[key]
+            const buildPayload = (schema) => {
+                const userIdKey = schema === 'camel' ? 'userId' : 'user_id'
+                const updatedAtKey = schema === 'camel' ? 'updatedAt' : 'updated_at'
+                const missingColumns = this._missingColumnsBySchema[schema] ?? (this._missingColumnsBySchema[schema] = new Set())
+
+                const row = {
+                    [userIdKey]: targetId,
+                    [updatedAtKey]: new Date().toISOString()
+                }
+
+                Object.keys(DEFAULT_SETTINGS).forEach((key) => {
+                    const columnKey = schema === 'camel' ? key : toSnake(key)
+                    if (missingColumns.has(columnKey)) return
+                    row[columnKey] = settings[key] !== undefined ? Boolean(settings[key]) : DEFAULT_SETTINGS[key]
+                })
+
+                return { row, userIdKey }
+            }
+
+            const attemptSchema = async (schema) => {
+                const missingColumns = this._missingColumnsBySchema[schema] ?? (this._missingColumnsBySchema[schema] = new Set())
+
+                let shouldRetry = true
+                while (shouldRetry) {
+                    shouldRetry = false
+                    const { row, userIdKey } = buildPayload(schema)
+                    const { data, error } = await supabase
+                        .from(TABLE_SETTINGS)
+                        .upsert(row, { onConflict: userIdKey })
+                        .select('*')
+                        .maybeSingle()
+
+                    if (error) {
+                        if (isMissingColumnError(error)) {
+                            const missingColumnRaw = extractMissingColumnName(error)
+                            if (missingColumnRaw) {
+                                const normalizedColumn = schema === 'camel' ? missingColumnRaw : toSnake(missingColumnRaw)
+                                if (!missingColumns.has(normalizedColumn)) {
+                                    missingColumns.add(normalizedColumn)
+                                    shouldRetry = true
+                                    continue
+                                }
+                            }
+                        }
+                        throw error
                     }
-                    return acc
-                }, {})
+
+                    let storedRow = data
+                    if (!storedRow) {
+                        const { data: fetched, error: fetchError } = await supabase
+                            .from(TABLE_SETTINGS)
+                            .select('*')
+                            .eq(userIdKey, targetId)
+                            .maybeSingle()
+
+                        if (fetchError) throw fetchError
+                        storedRow = fetched
+                    }
+
+                    invalidateCache(this._settingsCacheKey(targetId))
+                    this._settingsSchema = schema
+
+                    return {
+                        storedRow
+                    }
+                }
             }
 
-            const { data, error } = await supabase.rpc(RPC_UPSERT_SETTINGS, payload)
-            if (error) throw error
+            for (let index = 0; index < schemasToTry.length; index += 1) {
+                const schema = schemasToTry[index]
+                try {
+                    const { storedRow } = await attemptSchema(schema)
 
-            invalidateCache(this._settingsCacheKey(targetId))
-
-            return {
-                userId: targetId,
-                data: normalizeSettingsRow(Array.isArray(data) ? data[0] : data)
+                    return {
+                        userId: targetId,
+                        data: normalizeSettingsRow(storedRow)
+                    }
+                } catch (schemaError) {
+                    lastError = schemaError
+                    if (isMissingColumnError(schemaError) && index < schemasToTry.length - 1) {
+                        this._settingsSchema = null
+                        continue
+                    }
+                    break
+                }
             }
+
+            throw lastError
         } catch (error) {
             return this._handleError('updatePrivacySettings', error)
         }

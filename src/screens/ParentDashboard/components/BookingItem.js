@@ -98,8 +98,24 @@ const BookingItem = ({
     return ['pending', 'pending_confirmation', 'awaiting_payment', 'confirmed'].includes(lowerStatus);
   };
 
-  const caregiverData = user || booking?.caregiver || booking?.caregiverId || booking?.assignedCaregiver || null;
-  const caregiverIdValue = caregiverData?._id || caregiverData?.id || caregiverData?.caregiver_id || booking?.caregiver_id;
+  const caregiverData = booking.caregiver || booking.caregiverProfile || booking.assignedCaregiver;
+  const caregiver = {
+    ...(typeof caregiverData === 'object' && caregiverData !== null ? caregiverData : {}),
+    _id: caregiverData?.id || caregiverData?._id || booking.caregiver_id || booking.caregiverId,
+    allowDirectMessages: caregiverData?.allowDirectMessages ?? caregiverData?.privacySettings?.allowDirectMessages ?? true,
+    showRatings: caregiverData?.showRatings ?? caregiverData?.privacySettings?.showRatings ?? true,
+  };
+
+  const caregiverIdValue =
+    caregiver?._id ||
+    caregiver?.id ||
+    caregiverData?.id ||
+    caregiverData?._id ||
+    caregiverData?.caregiver_id ||
+    caregiverData?.caregiverId ||
+    booking?.caregiver_id ||
+    booking?.caregiverId ||
+    null;
 
   // Debug logging for booking status
   console.log('🔍 BookingItem Debug:', {
@@ -144,35 +160,55 @@ const BookingItem = ({
     console.log('🔍 BookingItem - Message button pressed');
     console.log('🔍 BookingItem - User data:', user);
     console.log('🔍 BookingItem - Booking data:', booking);
-    
+
     if (!onMessageCaregiver) {
       console.warn('⚠️ BookingItem - onMessageCaregiver not provided');
       return;
     }
-    
+
     // Extract caregiver info from user prop or booking data
     if (!caregiverData) {
       console.warn('⚠️ BookingItem - No caregiver data available');
       Alert.alert('Error', 'Caregiver information not available');
       return;
     }
-    
+
     // Create normalized caregiver object
+    const resolveAllowDirectMessages = (value) => {
+      if (value === false || value === 0) return false;
+      if (value === true || value === 1) return true;
+      if (typeof value === 'string') {
+        const normalized = value.trim().toLowerCase();
+        if (['false', '0', 'off', 'no'].includes(normalized)) return false;
+        if (['true', '1', 'on', 'yes'].includes(normalized)) return true;
+      }
+      return undefined;
+    };
+
+    const allowDirectMessages =
+      resolveAllowDirectMessages(caregiverData?.allowDirectMessages) ??
+      resolveAllowDirectMessages(caregiverData?.privacySettings?.allowDirectMessages) ??
+      resolveAllowDirectMessages(caregiverData?.privacySettings?.allow_direct_messages) ??
+      resolveAllowDirectMessages(caregiver?.allowDirectMessages) ??
+      true;
+
     const normalizedCaregiver = {
       _id: caregiverData._id || caregiverData.id || caregiverData.caregiver_id,
       id: caregiverData.id || caregiverData._id || caregiverData.caregiver_id,
       name: caregiverData.name || caregiverData.caregiver_name || 'Caregiver',
-      avatar: caregiverData.avatar || caregiverData.profileImage || caregiverData.profile_image
+      avatar: caregiverData.avatar || caregiverData.profileImage || caregiverData.profile_image,
+      allowDirectMessages,
+      privacySettings: caregiverData?.privacySettings || caregiver?.privacySettings,
     };
-    
+
     console.log('🔍 BookingItem - Normalized caregiver:', normalizedCaregiver);
-    
+
     if (!normalizedCaregiver._id && !normalizedCaregiver.id) {
       console.warn('⚠️ BookingItem - No valid caregiver ID found');
       Alert.alert('Error', 'Caregiver ID not available');
       return;
     }
-    
+
     onMessageCaregiver(normalizedCaregiver);
   };
 
@@ -341,8 +377,8 @@ const BookingItem = ({
                 name={contract ? 'document-text-outline' : 'document-outline'}
                 size={20}
                 color={contractStatusCopy.intent === 'primary' ? '#3B82F6' :
-                       contractStatusCopy.intent === 'success' ? '#10B981' :
-                       contractStatusCopy.intent === 'neutral' ? '#6B7280' : '#4338CA'}
+                  contractStatusCopy.intent === 'success' ? '#10B981' :
+                    contractStatusCopy.intent === 'neutral' ? '#6B7280' : '#4338CA'}
               />
             </View>
             <View style={styles.contractInfo}>
@@ -429,15 +465,21 @@ const BookingItem = ({
             <Text style={styles.viewDetailsButtonText}>View Details</Text>
           </TouchableOpacity>
 
-          <TouchableOpacity
-            style={styles.messageButton}
-            onPress={handleMessagePress}
-            accessibilityLabel={`Message ${caregiverName}`}
-            accessibilityRole="button"
-          >
-            <Ionicons name="chatbubble-outline" size={18} color="#FFFFFF" />
-            <Text style={styles.messageButtonText}>Message</Text>
-          </TouchableOpacity>
+          {onMessageCaregiver && (
+            <TouchableOpacity
+              style={[
+                styles.messageButton,
+                caregiver.allowDirectMessages === false && styles.messageButtonDisabled,
+              ]}
+              onPress={caregiver.allowDirectMessages === false ? undefined : () => onMessageCaregiver(caregiver)}
+              accessibilityState={{ disabled: caregiver.allowDirectMessages === false }}
+            >
+              <Ionicons name="chatbubble-outline" size={18} color="#FFFFFF" />
+              <Text style={[styles.messageButtonText, caregiver.allowDirectMessages === false && styles.messageButtonTextDisabled]}>
+                Message
+              </Text>
+            </TouchableOpacity>
+          )}
 
           {caregiverData?.phone && (
             <TouchableOpacity
@@ -498,23 +540,23 @@ const BookingItem = ({
           )}
 
           {canCancelBooking(booking?.status) && (
-              <TouchableOpacity
-                style={styles.cancelButton}
-                onPress={() => {
-                  if (onCancelBooking) {
-                    onCancelBooking(booking?.id || booking?._id);
-                  } else {
-                    Alert.alert('Error', 'Cancel functionality not available');
-                  }
-                }}
-                accessibilityLabel="Cancel this booking"
-                accessibilityRole="button"
-                accessibilityHint="This action cannot be undone"
-              >
-                <Ionicons name="close-outline" size={18} color="#FFFFFF" />
-                <Text style={styles.cancelButtonText}>Cancel Booking</Text>
-              </TouchableOpacity>
-            )}
+            <TouchableOpacity
+              style={styles.cancelButton}
+              onPress={() => {
+                if (onCancelBooking) {
+                  onCancelBooking(booking?.id || booking?._id);
+                } else {
+                  Alert.alert('Error', 'Cancel functionality not available');
+                }
+              }}
+              accessibilityLabel="Cancel this booking"
+              accessibilityRole="button"
+              accessibilityHint="This action cannot be undone"
+            >
+              <Ionicons name="close-outline" size={18} color="#FFFFFF" />
+              <Text style={styles.cancelButtonText}>Cancel Booking</Text>
+            </TouchableOpacity>
+          )}
         </View>
       </View>
     </View>
@@ -821,6 +863,13 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     marginLeft: 6,
   },
+  messageButtonDisabled: {
+    borderColor: '#d1d5db',
+    backgroundColor: '#f3f4f6',
+  },
+  messageButtonTextDisabled: {
+    color: '#9CA3AF',
+  },
   callButton: {
     flex: 1,
     minWidth: 80,
@@ -910,27 +959,27 @@ const styles = StyleSheet.create({
     marginLeft: 2,
   },
   cancelButton: {
-  flex: 1,
-  minWidth: 120,
-  flexDirection: 'row',
-  alignItems: 'center',
-  justifyContent: 'center',
-  paddingVertical: 12,
-  paddingHorizontal: 5,
-  borderRadius: 12,
-  backgroundColor: '#EF4444',
-  shadowColor: '#EF4444',
-  shadowOffset: { width: 0, height: 2 },
-  shadowOpacity: 0.15,
-  shadowRadius: 4,
-  elevation: 3,
-},
-cancelButtonText: {
-  color: '#FFFFFF',
-  fontSize: 13,
-  fontWeight: '600',
-  marginLeft: 2,
-},
+    flex: 1,
+    minWidth: 120,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 12,
+    paddingHorizontal: 5,
+    borderRadius: 12,
+    backgroundColor: '#EF4444',
+    shadowColor: '#EF4444',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.15,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  cancelButtonText: {
+    color: '#FFFFFF',
+    fontSize: 13,
+    fontWeight: '600',
+    marginLeft: 2,
+  },
   contractRow: {
     flexDirection: 'row',
     alignItems: 'center',

@@ -46,10 +46,12 @@ const CaregiverCardComponent = ({ caregiver = {}, onPress, onMessagePress, onVie
     caregiver?.profileImage ||
     caregiver?.user?.profileImage ||
     "";
-  const rating = typeof caregiver?.rating === "number" ? caregiver.rating : 0;
-  const reviewCount =
-    typeof caregiver?.reviewCount === "number" ? caregiver.reviewCount : 0;
-  const trustScoreSource = caregiver?.trustScore ?? caregiver?.verification?.trustScore;
+  const showRatings = caregiver?.showRatings !== false;
+  const rating = showRatings && typeof caregiver?.rating === "number" ? caregiver.rating : null;
+  const reviewCount = showRatings && typeof caregiver?.reviewCount === "number" ? caregiver.reviewCount : 0;
+  const trustScoreSource = showRatings
+    ? caregiver?.trustScore ?? caregiver?.verification?.trustScore
+    : null;
   const trustScore = Number.isFinite(Number(trustScoreSource)) ? Number(trustScoreSource) : 0;
   const verified = Boolean(caregiver?.verified ?? caregiver?.verification?.verified);
 
@@ -87,15 +89,22 @@ const CaregiverCardComponent = ({ caregiver = {}, onPress, onMessagePress, onVie
   // Use centralized image URL handling
   const avatar = avatarRaw || caregiver?.profileImage || caregiver?.user?.profileImage;
 
+  const allowDirectMessages = caregiver?.allowDirectMessages !== false;
   const accessibilityLabel = `${name}${specialties.length ? `, ${specialties.join(", ")}` : ""}, ${rating} star rating`;
   const bookButtonLabel = `Book ${name} for a session`;
-  const messageButtonLabel = `Message ${name}`;
+  const messageButtonLabel = allowDirectMessages
+    ? `Message ${name}`
+    : `${name} is not accepting direct messages`;
 
   // Format the location before rendering
   const locationText = getLocationString(locationSource);
-  const ratingValue = Number.isFinite(Number(rating)) ? Number(rating).toFixed(1) : "0.0";
+  const ratingValue = Number.isFinite(Number(rating)) ? Number(rating).toFixed(1) : null;
   const hasReviews = reviewCount > 0;
-  const ratingLabel = hasReviews ? `${ratingValue} • ${reviewCount} review${reviewCount === 1 ? "" : "s"}` : "New caregiver";
+  const ratingLabel = showRatings
+    ? (hasReviews && ratingValue != null
+      ? `${ratingValue} • ${reviewCount} review${reviewCount === 1 ? "" : "s"}`
+      : "New caregiver")
+    : "Ratings hidden";
   const experienceLabel = `${typeof experience === "number" && !Number.isNaN(experience) ? experience : 0} yrs exp`;
   const hourlyRateLabel = hourlyRate ? `₱${hourlyRate}/hr` : "Rate TBD";
   const displaySpecialties = specialties.slice(0, 3);
@@ -106,9 +115,18 @@ const CaregiverCardComponent = ({ caregiver = {}, onPress, onMessagePress, onVie
   const RatingComponent = canViewReviews ? TouchableOpacity : View;
 
   const handleMessagePress = () => {
-    if (canMessage) {
-      onMessagePress(caregiver);
+    if (!canMessage) {
+      return;
     }
+
+    onMessagePress({
+      ...caregiver,
+      allowDirectMessages,
+      privacySettings: {
+        ...caregiver?.privacySettings,
+        allowDirectMessages,
+      },
+    });
   };
 
   const handleViewReviews = () => {
@@ -176,27 +194,36 @@ const CaregiverCardComponent = ({ caregiver = {}, onPress, onMessagePress, onVie
               </View>
 
               <View style={caregiverCardStyles.badgesRow}>
-                <RatingComponent
-                  style={caregiverCardStyles.ratingRow}
-                  accessibilityRole={canViewReviews ? "button" : undefined}
-                  accessibilityLabel={canViewReviews ? `View reviews for ${name}` : undefined}
-                  onPress={canViewReviews ? handleViewReviews : undefined}
-                >
-                  <Star
-                    size={14}
-                    color={hasReviews ? '#FDE68A' : 'rgba(255,255,255,0.9)'}
-                    fill={hasReviews ? '#FDE68A' : 'transparent'}
-                  />
-                  <Text style={caregiverCardStyles.ratingText}>{ratingLabel}</Text>
-                </RatingComponent>
+                {showRatings ? (
+                  <RatingComponent
+                    style={caregiverCardStyles.ratingRow}
+                    accessibilityRole={canViewReviews ? "button" : undefined}
+                    accessibilityLabel={canViewReviews ? `View reviews for ${name}` : undefined}
+                    onPress={canViewReviews ? handleViewReviews : undefined}
+                  >
+                    <Star
+                      size={14}
+                      color={hasReviews ? '#FDE68A' : 'rgba(255,255,255,0.9)'}
+                      fill={hasReviews ? '#FDE68A' : 'transparent'}
+                    />
+                    <Text style={caregiverCardStyles.ratingText}>{ratingLabel}</Text>
+                  </RatingComponent>
+                ) : (
+                  <View style={[caregiverCardStyles.ratingRow, caregiverCardStyles.ratingHiddenBadge]}>
+                    <Star size={14} color='rgba(255,255,255,0.6)' />
+                    <Text style={caregiverCardStyles.ratingText}>Hidden by caregiver</Text>
+                  </View>
+                )}
 
-                <TrustScoreBadge
-                  trustScore={trustScore}
-                  verified={verified}
-                  size="small"
-                  onPress={canViewReviews ? handleViewReviews : undefined}
-                  style={caregiverCardStyles.trustBadgeSpacing}
-                />
+                {showRatings ? (
+                  <TrustScoreBadge
+                    trustScore={trustScore}
+                    verified={verified}
+                    size="small"
+                    onPress={canViewReviews ? handleViewReviews : undefined}
+                    style={caregiverCardStyles.trustBadgeSpacing}
+                  />
+                ) : null}
               </View>
 
               {locationText ? (
@@ -251,16 +278,26 @@ const CaregiverCardComponent = ({ caregiver = {}, onPress, onMessagePress, onVie
 
           {(canMessage || canViewReviews || canRequestInfo) && (
             <View style={caregiverCardStyles.actionsRow}>
-              {canMessage && (
+              {typeof onMessagePress === "function" && (
                 <TouchableOpacity
-                  style={[caregiverCardStyles.secondaryButton, caregiverCardStyles.messageButton]}
+                  style={[
+                    caregiverCardStyles.secondaryButton,
+                    caregiverCardStyles.messageButton,
+                    !allowDirectMessages && caregiverCardStyles.messageButtonDisabled,
+                  ]}
                   onPress={handleMessagePress}
                   accessibilityLabel={messageButtonLabel}
                   accessibilityRole="button"
-                  activeOpacity={0.92}
+                  accessibilityState={{ disabled: !allowDirectMessages }}
+                  activeOpacity={allowDirectMessages ? 0.92 : 1}
                 >
-                  <MessageCircle size={18} color={colors.primary} />
-                  <Text style={caregiverCardStyles.secondaryButtonText}>Message</Text>
+                  <MessageCircle size={18} color={allowDirectMessages ? colors.primary : colors.textSecondary} />
+                  <Text style={[
+                    caregiverCardStyles.secondaryButtonText,
+                    !allowDirectMessages && caregiverCardStyles.messageButtonTextDisabled,
+                  ]}>
+                    Message
+                  </Text>
                 </TouchableOpacity>
               )}
               {canRequestInfo && (
@@ -275,7 +312,7 @@ const CaregiverCardComponent = ({ caregiver = {}, onPress, onMessagePress, onVie
                   <Text style={caregiverCardStyles.secondaryButtonText}>Request Info</Text>
                 </TouchableOpacity>
               )}
-              {canViewReviews && (
+              {showRatings && canViewReviews && (
                 <TouchableOpacity
                   style={[caregiverCardStyles.secondaryButton, caregiverCardStyles.reviewButton]}
                   onPress={handleViewReviews}
@@ -417,6 +454,10 @@ const caregiverCardStyles = StyleSheet.create({
     backgroundColor: 'rgba(255,255,255,0.16)',
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.3)',
+  },
+  ratingHiddenBadge: {
+    opacity: 0.8,
+    borderStyle: 'dashed',
   },
   ratingText: {
     marginLeft: spacing.xs,
