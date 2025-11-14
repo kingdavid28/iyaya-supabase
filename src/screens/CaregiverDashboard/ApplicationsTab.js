@@ -11,7 +11,7 @@ import {
 import { EmptyState } from '../../shared/ui';
 import { styles } from '../styles/CaregiverDashboard.styles';
 
-const ApplicationCard = React.memo(({ application, onViewJob, onWithdraw, onOpenContract }) => {
+const ApplicationCard = React.memo(({ application, bookings = [], onViewJob, onWithdraw, onOpenContract }) => {
   const getStatusColor = (status) => {
     switch (status?.toLowerCase()) {
       case 'pending': return '#F59E0B';
@@ -35,9 +35,59 @@ const ApplicationCard = React.memo(({ application, onViewJob, onWithdraw, onOpen
   const statusColor = getStatusColor(application.status);
   const appliedDate = application?.appliedDate || application?.applied_at || application?.appliedAt || application?.created_at;
   const baseRateLabel = application?.hourlyRateLabel || (job?.hourly_rate ? `₱${Number(job.hourly_rate)}/hr` : null);
-  const contractStatusLabel = application?.contractId
-    ? `Status: ${String(application?.contractStatus || 'pending').replace(/_/g, ' ')}`
+
+  const jobId = application?.jobId || application?.job_id || job?.id;
+  const initialBookingId = application?.bookingId || application?.booking_id;
+
+  const relatedBooking = Array.isArray(bookings)
+    ? bookings.find((booking) => {
+      const bookingKey = booking.id || booking._id;
+      const bookingJobId = booking.jobId || booking.job_id || booking.job?.id || null;
+
+      if (initialBookingId && bookingKey && String(bookingKey) === String(initialBookingId)) {
+        return true;
+      }
+
+      if (!initialBookingId && jobId && bookingJobId && String(bookingJobId) === String(jobId)) {
+        return true;
+      }
+
+      return false;
+    })
+    : null;
+
+  const bookingContract = relatedBooking?.contract || relatedBooking?.latestContract || null;
+  const contractFromApplication = application?.contract || null;
+  const contract = bookingContract || contractFromApplication || null;
+
+  const contractId = contract?.id || application?.contractId || application?.contract_id || null;
+
+  const rawContractStatus = contract?.status || application?.contractStatus || null;
+  const contractStatus = rawContractStatus || (contractId ? 'draft' : null);
+  const isActiveContract = String(contractStatus || '').toLowerCase() === 'active';
+
+  const parentSignedAt = contract?.parentSignedAt || contract?.parent_signed_at;
+  const caregiverSignedAt = contract?.caregiverSignedAt || contract?.caregiver_signed_at;
+  const bothSigned = Boolean(parentSignedAt && caregiverSignedAt);
+  const finalizedStatuses = ['active', 'completed', 'cancelled'];
+  const contractStatusNormalized = String(contractStatus || '').toLowerCase();
+
+  const supersededBy = contract?.metadata?.supersededBy || contract?.metadata?.superseded_by;
+  const isSuperseded = Boolean(supersededBy);
+  const effectiveContractId = isSuperseded && supersededBy ? supersededBy : contractId;
+
+  const canCaregiverSignFromCard =
+    Boolean(effectiveContractId) &&
+    !isSuperseded &&
+    !caregiverSignedAt &&
+    !bothSigned &&
+    !finalizedStatuses.includes(contractStatusNormalized);
+
+  const contractStatusLabel = contractId
+    ? `Status: ${String(contractStatus || 'pending').replace(/_/g, ' ')}`
     : 'Not created yet';
+
+  const contractCtaText = canCaregiverSignFromCard ? 'Review & Sign' : 'View contract';
   const proposedRateLabel = application?.proposedRateLabel || null;
   const showProposedRate = Boolean(proposedRateLabel && proposedRateLabel !== baseRateLabel);
   const jobRateLabel = baseRateLabel || 'Rate not specified';
@@ -76,104 +126,117 @@ const ApplicationCard = React.memo(({ application, onViewJob, onWithdraw, onOpen
 
       <View style={applicationCardStyles.body}>
         <View style={applicationCardStyles.details}>
-        <View style={applicationCardStyles.detailRow}>
-          <Ionicons name="cash-outline" size={16} color="#6b7280" />
-          <Text style={applicationCardStyles.detailText}>{jobRateLabel}</Text>
-        </View>
-
-        {showProposedRate && (
           <View style={applicationCardStyles.detailRow}>
-            <Ionicons name="trending-up" size={16} color="#2563EB" />
-            <Text style={[applicationCardStyles.detailText, { color: '#2563EB' }]}>{proposedRateLabel}</Text>
+            <Ionicons name="cash-outline" size={16} color="#6b7280" />
+            <Text style={applicationCardStyles.detailText}>{jobRateLabel}</Text>
           </View>
-        )}
-        
-        <View style={applicationCardStyles.detailRow}>
-          <Ionicons name="people-outline" size={16} color="#6b7280" />
-          <Text style={applicationCardStyles.detailText}>
-            {childrenSummary}
-          </Text>
-        </View>
-        
-        <View style={applicationCardStyles.detailRow}>
-          <Ionicons name="calendar-outline" size={16} color="#6b7280" />
-          <Text style={applicationCardStyles.detailText}>
-            Applied {appliedDate ? new Date(appliedDate).toLocaleDateString() : 'recently'}
-          </Text>
-        </View>
-        
-        {scheduleLabel && (
+
+          {showProposedRate && (
+            <View style={applicationCardStyles.detailRow}>
+              <Ionicons name="trending-up" size={16} color="#2563EB" />
+              <Text style={[applicationCardStyles.detailText, { color: '#2563EB' }]}>{proposedRateLabel}</Text>
+            </View>
+          )}
+
           <View style={applicationCardStyles.detailRow}>
-            <Ionicons name="time-outline" size={16} color="#6b7280" />
-            <Text style={applicationCardStyles.detailText}>{scheduleLabel}</Text>
-          </View>
-        )}
-      </View>
-
-      {messagePreview && (
-        <View style={applicationCardStyles.messageContainer}>
-          <Text style={applicationCardStyles.messageLabel}>Your message:</Text>
-          <Text style={applicationCardStyles.messageText} numberOfLines={2}>
-            "{messagePreview}"
-          </Text>
-        </View>
-      )}
-
-      {normalizeStatus(application?.status) === 'accepted' && (
-        <View style={applicationCardStyles.contractSection}>
-          <View style={applicationCardStyles.contractInfoRow}>
-            <View style={applicationCardStyles.contractIconWrap}>
-              <Ionicons name="document-text-outline" size={16} color="#4F46E5" />
-            </View>
-            <View style={applicationCardStyles.contractCopy}>
-              <Text style={applicationCardStyles.contractLabel}>Contract</Text>
-              <Text style={applicationCardStyles.contractStatus}>{contractStatusLabel}</Text>
-            </View>
-          </View>
-          <TouchableOpacity
-            style={[applicationCardStyles.contractButton, !application?.contractId && applicationCardStyles.contractButtonDisabled]}
-            activeOpacity={application?.contractId ? 0.85 : 1}
-            disabled={!application?.contractId}
-            onPress={() => onOpenContract?.({
-              contractId: application?.contractId,
-              bookingId: application?.bookingId,
-              application
-            })}
-          >
-            <Ionicons name="create-outline" size={16} color={application?.contractId ? '#4F46E5' : '#9CA3AF'} />
-            <Text
-              style={[applicationCardStyles.contractButtonText, !application?.contractId && applicationCardStyles.contractButtonTextDisabled]}
-            >
-              Review & Sign
+            <Ionicons name="people-outline" size={16} color="#6b7280" />
+            <Text style={applicationCardStyles.detailText}>
+              {childrenSummary}
             </Text>
-          </TouchableOpacity>
+          </View>
+
+          <View style={applicationCardStyles.detailRow}>
+            <Ionicons name="calendar-outline" size={16} color="#6b7280" />
+            <Text style={applicationCardStyles.detailText}>
+              Applied {appliedDate ? new Date(appliedDate).toLocaleDateString() : 'recently'}
+            </Text>
+          </View>
+
+          {scheduleLabel && (
+            <View style={applicationCardStyles.detailRow}>
+              <Ionicons name="time-outline" size={16} color="#6b7280" />
+              <Text style={applicationCardStyles.detailText}>{scheduleLabel}</Text>
+            </View>
+          )}
         </View>
-      )}
-      
-      <View style={applicationCardStyles.footer}>
-        <TouchableOpacity 
-          style={applicationCardStyles.viewButton}
-          onPress={() => {
-            console.log('🔍 View Job clicked:', { job, application });
-            onViewJob && onViewJob(job, application);
-          }}
-        >
-          <Ionicons name="eye-outline" size={16} color="#3B82F6" />
-          <Text style={applicationCardStyles.viewButtonText}>View Job</Text>
-        </TouchableOpacity>
-        
-        {application.status === 'pending' && (
-          <TouchableOpacity 
-            style={applicationCardStyles.withdrawButton}
-            onPress={() => onWithdraw && onWithdraw(application.id || application._id)}
-          >
-            <Ionicons name="close-outline" size={16} color="#EF4444" />
-            <Text style={applicationCardStyles.withdrawButtonText}>Withdraw</Text>
-          </TouchableOpacity>
+
+        {messagePreview && (
+          <View style={applicationCardStyles.messageContainer}>
+            <Text style={applicationCardStyles.messageLabel}>Your message:</Text>
+            <Text style={applicationCardStyles.messageText} numberOfLines={2}>
+              "{messagePreview}"
+            </Text>
+          </View>
         )}
+
+        {(normalizeStatus(application?.status) === 'accepted' || contractId) && (
+          <View style={applicationCardStyles.contractSection}>
+            <View style={applicationCardStyles.contractInfoRow}>
+              <View style={applicationCardStyles.contractIconWrap}>
+                <Ionicons name="document-text-outline" size={16} color="#4F46E5" />
+              </View>
+              <View style={applicationCardStyles.contractCopy}>
+                {contractId && (isActiveContract || isSuperseded) && (
+                  <View
+                    style={[
+                      applicationCardStyles.contractBadge,
+                      isActiveContract && applicationCardStyles.contractBadge_active,
+                      isSuperseded && applicationCardStyles.contractBadge_replaced
+                    ]}
+                  >
+                    <Text style={applicationCardStyles.contractBadgeText}>
+                      {isSuperseded ? 'Replaced contract' : 'Active contract'}
+                    </Text>
+                  </View>
+                )}
+                <Text style={applicationCardStyles.contractLabel}>Contract</Text>
+                <Text style={applicationCardStyles.contractStatus}>{contractStatusLabel}</Text>
+              </View>
+            </View>
+            <TouchableOpacity
+              style={[applicationCardStyles.contractButton, !effectiveContractId && applicationCardStyles.contractButtonDisabled]}
+              activeOpacity={effectiveContractId ? 0.85 : 1}
+              disabled={!effectiveContractId}
+              onPress={() => onOpenContract?.({
+                contractId: effectiveContractId,
+                bookingId: initialBookingId || relatedBooking?.id || relatedBooking?._id || null,
+                application
+              })}
+            >
+              <Ionicons name="create-outline" size={16} color={effectiveContractId ? '#4F46E5' : '#9CA3AF'} />
+              <Text
+                style={[applicationCardStyles.contractButtonText, !effectiveContractId && applicationCardStyles.contractButtonTextDisabled]}
+              >
+                {contractCtaText}
+              </Text>
+            </TouchableOpacity>
+          </View>
+        )}
+
+        <View style={applicationCardStyles.footer}>
+          <TouchableOpacity
+            style={applicationCardStyles.viewButton}
+            onPress={() => {
+              console.log('🔍 View Job clicked:', { job, application });
+              onViewJob && onViewJob(job, application);
+            }}
+          >
+            <Ionicons name="eye-outline" size={16} color="#3B82F6" />
+            <Text style={applicationCardStyles.viewButtonText}>View Job</Text>
+          </TouchableOpacity>
+
+          {application.status === 'pending' && (
+            <TouchableOpacity
+              style={applicationCardStyles.withdrawButton}
+              onPress={() => onWithdraw && onWithdraw(application.id || application._id)}
+            >
+              <Ionicons name="close-outline" size={16} color="#EF4444" />
+              <Text style={applicationCardStyles.withdrawButtonText}>Withdraw</Text>
+            </TouchableOpacity>
+          )}
+        </View>
       </View>
     </View>
-  </View>
   );
 });
 
@@ -305,6 +368,24 @@ const applicationCardStyles = {
     fontSize: 12,
     color: '#4338CA',
   },
+  contractBadge: {
+    alignSelf: 'flex-start',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 999,
+    marginBottom: 4,
+  },
+  contractBadge_active: {
+    backgroundColor: '#DCFCE7',
+  },
+  contractBadge_replaced: {
+    backgroundColor: '#FEF3C7',
+  },
+  contractBadgeText: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#111827',
+  },
   contractButton: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -396,7 +477,7 @@ const getFilteredApplications = (applications, activeFilter) => {
 
   return applications.filter((app) => {
     const status = normalizeStatus(app?.status);
-    
+
     switch (activeFilter) {
       case 'pending':
         return status === 'pending';
@@ -422,6 +503,7 @@ const buildFilterOptions = (metrics) => ([
 
 export default function ApplicationsTab({
   applications,
+  bookings = [],
   onViewJob,
   onWithdrawApplication,
   onOpenContract,
@@ -472,6 +554,7 @@ export default function ApplicationsTab({
     return (
       <ApplicationCard
         application={item}
+        bookings={bookings}
         onViewJob={onViewJob}
         onWithdraw={onWithdrawApplication}
         onOpenContract={onOpenContract}

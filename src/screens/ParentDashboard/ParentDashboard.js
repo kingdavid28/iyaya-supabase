@@ -657,6 +657,17 @@ const ParentDashboard = () => {
     }
   }, [loadProfile, fetchJobs, fetchCaregivers, fetchBookings, fetchChildren]);
 
+  const handleApplicationsRefresh = useCallback(async () => {
+    try {
+      await Promise.all([
+        fetchApplications({ force: true }),
+        fetchBookings({ force: true })
+      ]);
+    } catch (error) {
+      console.error('Error refreshing applications data:', error);
+    }
+  }, [fetchApplications, fetchBookings]);
+
   // Caregiver interaction functions
   const handleViewCaregiver = useCallback((caregiver) => {
     navigation.navigate('CaregiverProfile', { caregiverId: caregiver._id });
@@ -765,10 +776,13 @@ const ParentDashboard = () => {
 
   // Contract signing function
   const handleContractSign = useCallback(async ({ signature, acknowledged }) => {
-    if (!selectedContract || !selectedBooking) return;
+    if (!selectedContract) return;
 
     try {
-      const bookingIdentifier = selectedBooking.id || selectedBooking._id || selectedContract.bookingId;
+      const bookingIdentifier =
+        (selectedBooking && (selectedBooking.id || selectedBooking._id)) ||
+        selectedContract.bookingId ||
+        null;
       let existingContract = null;
 
       try {
@@ -780,7 +794,7 @@ const ParentDashboard = () => {
           errorMessage: error?.message,
           bookingIdentifier,
           selectedContractId: selectedContract.id,
-          selectedBookingId: selectedBooking.id || selectedBooking._id
+          selectedBookingId: (selectedBooking && (selectedBooking.id || selectedBooking._id)) || null
         });
 
         if (!isNotFound) {
@@ -1070,7 +1084,6 @@ const ParentDashboard = () => {
     await fetchJobs();
   }, [toggleModal, fetchJobs]);
 
-  // Application management functions
   const handleApplicationStatusUpdate = useCallback(async (applicationId, status, jobId, contractTemplateOverride = null) => {
     if (!applicationId) {
       Alert.alert('Error', 'Missing application identifier.');
@@ -1079,16 +1092,42 @@ const ParentDashboard = () => {
 
     setApplicationsMutatingId(applicationId);
     try {
-      await supabaseService.applications.updateApplicationStatus(applicationId, status, jobId);
-      await Promise.all([fetchJobs(), fetchBookings(), fetchApplications()]);
-      Alert.alert('Success', `Application ${status} successfully`);
+      if (status === 'accepted') {
+        const application = Array.isArray(applications)
+          ? applications.find((app) => String(app.id) === String(applicationId))
+          : null;
+
+        const contractTerms = buildPromotionContractTerms(application || {}, contractTemplateOverride);
+
+        await supabaseService.applications.promoteApplication(applicationId, {
+          contractTerms,
+          createdBy: user?.id || null
+        });
+
+        await Promise.all([
+          fetchJobs(),
+          fetchBookings(),
+          fetchApplications()
+        ]);
+
+        Alert.alert('Success', 'Application accepted and booking created successfully.');
+      } else {
+        await supabaseService.applications.updateApplicationStatus(applicationId, status, jobId);
+        await Promise.all([
+          fetchJobs(),
+          fetchBookings(),
+          fetchApplications()
+        ]);
+        Alert.alert('Success', `Application ${status} successfully`);
+      }
     } catch (error) {
       console.error('Failed to update application status:', error);
       Alert.alert('Error', error?.message || 'Failed to update application status.');
     } finally {
       setApplicationsMutatingId(null);
+      setPendingApplicationForContract(null);
     }
-  }, [fetchJobs, fetchBookings, fetchApplications]);
+  }, [applications, fetchJobs, fetchBookings, fetchApplications, user?.id]);
 
   const handleOpenContract = useCallback((booking, contract) => {
     setSelectedBooking(booking);
@@ -1377,12 +1416,14 @@ const ParentDashboard = () => {
         return (
           <JobApplicationsTab
             applications={applications}
+            bookings={bookings}
             loading={applicationsLoading}
             mutatingApplicationId={applicationsMutatingId}
             refreshing={refreshing}
-            onRefresh={async () => await fetchApplications()}
+            onRefresh={handleApplicationsRefresh}
             onViewCaregiver={handleViewCaregiver}
             onMessageCaregiver={handleMessageCaregiver}
+            onOpenContractTypeSelector={openContractTypeSelector}
             onUpdateStatus={handleApplicationStatusUpdate}
             onOpenContract={openContractByIds}
             onCallCaregiver={handleCallCaregiver}

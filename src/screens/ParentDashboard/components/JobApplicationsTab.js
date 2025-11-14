@@ -20,12 +20,14 @@ const statusMeta = {
 
 const JobApplicationsTab = ({
   applications = [],
+  bookings = [],
   loading = false,
   mutatingApplicationId = null,
   refreshing = false,
   onRefresh,
   onViewCaregiver,
   onMessageCaregiver,
+  onOpenContractTypeSelector,
   onUpdateStatus,
   onOpenContract
 }) => {
@@ -88,13 +90,51 @@ const JobApplicationsTab = ({
     const status = (item.status || '').toLowerCase();
     const applicationId = item.id || item._id;
     const jobId = item.jobId || item.job?.id || item.job_id;
-    const contractId = item.contractId || item.contract_id || item.contract?.id;
-    const bookingId = item.bookingId || item.booking_id || item.booking?.id;
-    const contractStatus = item.contractStatus || item.contract?.status || (contractId ? 'draft' : null);
-    const contract = item.contract || null;
+    const bookingIdFromApplication = item.bookingId || item.booking_id || item.booking?.id || null;
+
+    const relatedBooking = Array.isArray(bookings)
+      ? bookings.find((booking) => {
+        const bookingKey = booking.id || booking._id;
+        const bookingJobId = booking.jobId || booking.job_id || booking.job?.id || null;
+
+        if (bookingIdFromApplication && bookingKey && String(bookingKey) === String(bookingIdFromApplication)) {
+          return true;
+        }
+
+        if (!bookingIdFromApplication && jobId && bookingJobId && String(bookingJobId) === String(jobId)) {
+          return true;
+        }
+
+        return false;
+      })
+      : null;
+
+    const bookingContract = relatedBooking?.contract || relatedBooking?.latestContract || null;
+    const contractFromItem = item.contract || null;
+    const contract = bookingContract || contractFromItem || null;
+
+    const contractId = contract?.id || item.contractId || item.contract_id || null;
+    const bookingId = bookingIdFromApplication || relatedBooking?.id || relatedBooking?._id || null;
+    const rawContractStatus = contract?.status || item.contractStatus || null;
+    const contractStatus = rawContractStatus || (contractId ? 'draft' : null);
     const supersededBy = contract?.metadata?.supersededBy || contract?.metadata?.superseded_by;
     const isSuperseded = Boolean(supersededBy);
     const isActiveContract = String(contractStatus || '').toLowerCase() === 'active';
+    const effectiveContractId = isSuperseded && supersededBy ? supersededBy : contractId;
+
+    const parentSignedAt = contract?.parentSignedAt || contract?.parent_signed_at;
+    const caregiverSignedAt = contract?.caregiverSignedAt || contract?.caregiver_signed_at;
+    const bothSigned = Boolean(parentSignedAt && caregiverSignedAt);
+    const finalizedStatuses = ['active', 'completed', 'cancelled'];
+    const contractStatusNormalized = String(contractStatus || '').toLowerCase();
+    const canParentSignFromCard =
+      Boolean(effectiveContractId) &&
+      !isSuperseded &&
+      !parentSignedAt &&
+      !bothSigned &&
+      !finalizedStatuses.includes(contractStatusNormalized);
+
+    const contractCtaText = canParentSignFromCard ? 'Review & Sign' : 'View contract';
     let appliedAgo = 'Recently';
     if (item.appliedAt || item.createdAt || item.updatedAt) {
       const rawDate = item.appliedAt || item.createdAt || item.updatedAt;
@@ -213,7 +253,13 @@ const JobApplicationsTab = ({
           <View style={styles.decisionRow}>
             <TouchableOpacity
               style={[styles.decisionButton, styles.acceptButton, isMutating && styles.decisionButtonDisabled]}
-              onPress={() => safeUpdateStatus('accepted')}
+              onPress={() => {
+                if (onOpenContractTypeSelector) {
+                  onOpenContractTypeSelector(item);
+                } else {
+                  safeUpdateStatus('accepted');
+                }
+              }}
               disabled={isMutating}
             >
               {isMutating ? (
@@ -234,7 +280,7 @@ const JobApplicationsTab = ({
           </View>
         )}
 
-        {status === 'accepted' && (
+        {contractId && (
           <View style={styles.contractSection}>
             <View style={styles.contractStatusRow}>
               <FileText size={16} color={colors.info} />
@@ -259,22 +305,22 @@ const JobApplicationsTab = ({
               </View>
             </View>
             <TouchableOpacity
-              style={[styles.reviewContractButton, !contractId && styles.reviewContractButtonDisabled]}
-              disabled={!contractId || isMutating}
+              style={[styles.reviewContractButton, !effectiveContractId && styles.reviewContractButtonDisabled]}
+              disabled={!effectiveContractId || isMutating}
               onPress={() => {
-                if (!contractId) {
+                if (!effectiveContractId) {
                   Alert.alert('Contract unavailable', 'We could not locate a contract for this application yet. Please wait a moment or try refreshing.');
                   return;
                 }
                 onOpenContract?.({
-                  contractId,
+                  contractId: effectiveContractId,
                   bookingId,
                   application: item
                 });
               }}
             >
-              <Text style={[styles.reviewContractButtonText, !contractId && styles.reviewContractButtonTextDisabled]}>
-                Review & Sign
+              <Text style={[styles.reviewContractButtonText, !effectiveContractId && styles.reviewContractButtonTextDisabled]}>
+                {contractCtaText}
               </Text>
             </TouchableOpacity>
           </View>

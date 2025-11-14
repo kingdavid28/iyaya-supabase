@@ -1846,6 +1846,7 @@ const CaregiverDashboard = () => {
             console.log('🔍 Applications tab is active') ||
             <ApplicationsTab
               applications={applications}
+              bookings={bookings}
               onOpenContract={handleOpenContractFromApplication}
               onViewJob={(job, application) => {
                 // Merge job data with application data for complete view
