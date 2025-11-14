@@ -20,7 +20,10 @@ export default {
       jsEngine: "hermes",
       associatedDomains: [
         "applinks:iyaya-app.page.link"
-      ]
+      ],
+      infoPlist: {
+        ITSAppUsesNonExemptEncryption: false
+      }
     },
     android: {
       adaptiveIcon: {
