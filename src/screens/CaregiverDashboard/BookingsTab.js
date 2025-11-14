@@ -124,6 +124,9 @@ const BookingCard = React.memo(({ booking, onMessageFamily, onConfirmBooking, on
   };
 
   const contractInfo = getContractStatus(contract);
+  const supersededBy = contract?.metadata?.supersededBy || contract?.metadata?.superseded_by;
+  const isSuperseded = Boolean(supersededBy);
+  const isActiveContract = String(contract?.status || '').toLowerCase() === 'active';
 
   const handleContractPress = () => {
     if (!onOpenContract) return;
@@ -204,6 +207,19 @@ const BookingCard = React.memo(({ booking, onMessageFamily, onConfirmBooking, on
               />
             </View>
             <View style={bookingCardStyles.contractInfo}>
+              {contract && (isActiveContract || isSuperseded) && (
+                <View
+                  style={[
+                    bookingCardStyles.contractStatusBadge,
+                    isActiveContract && bookingCardStyles.contractStatusBadge_active,
+                    isSuperseded && bookingCardStyles.contractStatusBadge_replaced
+                  ]}
+                >
+                  <Text style={bookingCardStyles.contractStatusBadgeText}>
+                    {isSuperseded ? 'Replaced contract' : 'Active contract'}
+                  </Text>
+                </View>
+              )}
               <Text style={bookingCardStyles.contractTitle}>
                 {String(contractInfo.label || 'No contract')}
               </Text>
@@ -504,6 +520,24 @@ const bookingCardStyles = {
   },
   contractInfo: {
     flex: 1,
+  },
+  contractStatusBadge: {
+    alignSelf: 'flex-start',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 999,
+    marginBottom: 4,
+  },
+  contractStatusBadge_active: {
+    backgroundColor: '#DCFCE7',
+  },
+  contractStatusBadge_replaced: {
+    backgroundColor: '#FEF3C7',
+  },
+  contractStatusBadgeText: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#111827',
   },
   contractTitle: {
     fontSize: 15,
@@ -880,12 +914,36 @@ const CaregiverBookingsTabWithModal = ({ pendingContract, onPendingContractHandl
         return;
       }
 
-      const result = await contractService.signContract(existing.id, 'caregiver', {
-        signature,
-        signatureHash: btoa(signature),
-        ipAddress: null,
-        acknowledged
-      });
+      let result;
+      try {
+        result = await contractService.signContract(existing.id, 'caregiver', {
+          signature,
+          signatureHash: btoa(signature),
+          ipAddress: null,
+          acknowledged
+        });
+      } catch (error) {
+        if (error?.code === 'CONTRACT_NOT_FOUND') {
+          Alert.alert('Contract unavailable', 'This contract could not be found. Please refresh and try again.');
+          setContractModalVisible(false);
+          setSelectedContract(null);
+          setSelectedBookingForContract(null);
+          return;
+        }
+
+        if (error?.code === 'CONTRACT_ACTIVE_CONFLICT') {
+          Alert.alert(
+            'Contract already active',
+            'There is already an active contract for this booking. Please view or sign that contract instead.'
+          );
+          setContractModalVisible(false);
+          setSelectedContract(null);
+          setSelectedBookingForContract(null);
+          return;
+        }
+
+        throw error;
+      }
 
       if (result) {
         Alert.alert('Success', 'Contract signed successfully!');

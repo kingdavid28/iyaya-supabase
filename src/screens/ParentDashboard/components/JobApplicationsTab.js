@@ -91,6 +91,10 @@ const JobApplicationsTab = ({
     const contractId = item.contractId || item.contract_id || item.contract?.id;
     const bookingId = item.bookingId || item.booking_id || item.booking?.id;
     const contractStatus = item.contractStatus || item.contract?.status || (contractId ? 'draft' : null);
+    const contract = item.contract || null;
+    const supersededBy = contract?.metadata?.supersededBy || contract?.metadata?.superseded_by;
+    const isSuperseded = Boolean(supersededBy);
+    const isActiveContract = String(contractStatus || '').toLowerCase() === 'active';
     let appliedAgo = 'Recently';
     if (item.appliedAt || item.createdAt || item.updatedAt) {
       const rawDate = item.appliedAt || item.createdAt || item.updatedAt;
@@ -235,6 +239,19 @@ const JobApplicationsTab = ({
             <View style={styles.contractStatusRow}>
               <FileText size={16} color={colors.info} />
               <View style={styles.contractStatusTextGroup}>
+                {contractId && (isActiveContract || isSuperseded) && (
+                  <View
+                    style={[
+                      styles.contractBadge,
+                      isActiveContract && styles.contractBadge_active,
+                      isSuperseded && styles.contractBadge_replaced
+                    ]}
+                  >
+                    <Text style={styles.contractBadgeText}>
+                      {isSuperseded ? 'Replaced contract' : 'Active contract'}
+                    </Text>
+                  </View>
+                )}
                 <Text style={styles.contractStatusLabel}>Contract</Text>
                 <Text style={styles.contractStatusValue}>
                   {contractId ? `Status: ${String(contractStatus || 'draft').replace(/_/g, ' ')}` : 'Not created yet'}
@@ -688,6 +705,24 @@ const styles = StyleSheet.create({
   },
   contractStatusTextGroup: {
     flex: 1,
+  },
+  contractBadge: {
+    alignSelf: 'flex-start',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 999,
+    marginBottom: 4,
+  },
+  contractBadge_active: {
+    backgroundColor: '#DCFCE7',
+  },
+  contractBadge_replaced: {
+    backgroundColor: '#FEF3C7',
+  },
+  contractBadgeText: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: colors.textPrimary,
   },
   contractStatusLabel: {
     fontSize: 12,

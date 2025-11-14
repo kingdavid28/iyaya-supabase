@@ -69,6 +69,10 @@ const ContractModal = ({
   const bothSigned = Boolean(parentSignedAt && caregiverSignedAt);
   const isFinalized = ['active', 'completed', 'cancelled'].includes(status) || bothSigned;
 
+  const supersededBy = contract?.metadata?.supersededBy || contract?.metadata?.superseded_by;
+  const supersedes = contract?.metadata?.audit?.supersedes || contract?.metadata?.supersedes;
+  const isSuperseded = Boolean(supersededBy);
+
   const allowEditingHandlers = [onUpdate, onSaveDraft, onSendForSignature].some((handler) => typeof handler === 'function');
   const allowEditing = allowEditingHandlers && (typeof canEditProp === 'boolean' ? canEditProp : true);
   const editingAllowed = allowEditing && !isFinalized;
@@ -174,6 +178,7 @@ const ContractModal = ({
 
   const canSign = useMemo(() => {
     if (isEditing) return false;
+    if (isSuperseded) return false;
     const role = (viewerRole || '').toLowerCase();
     if (role === 'parent') {
       return !parentSignedAt;
@@ -182,7 +187,7 @@ const ContractModal = ({
       return !caregiverSignedAt;
     }
     return false;
-  }, [viewerRole, parentSignedAt, caregiverSignedAt, isEditing]);
+  }, [viewerRole, parentSignedAt, caregiverSignedAt, isEditing, isSuperseded]);
 
   const readyToSign = acknowledged && signature.trim().length >= 2 && !signing;
 
@@ -509,7 +514,13 @@ const ContractModal = ({
             ) : (
               <View style={styles.section}>
                 <Text style={styles.sectionTitle}>Status</Text>
-                <Text style={styles.statusCopy}>All done! You can keep a copy of this contract or send a reminder if the other party still needs to sign.</Text>
+                {isSuperseded ? (
+                  <Text style={styles.statusCopy}>
+                    This contract has been replaced by a newer version. You can review it here, but signing is disabled. Please use the latest contract for this booking.
+                  </Text>
+                ) : (
+                  <Text style={styles.statusCopy}>All done! You can keep a copy of this contract or send a reminder if the other party still needs to sign.</Text>
+                )}
               </View>
             )}
 

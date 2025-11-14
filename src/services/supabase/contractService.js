@@ -626,6 +626,7 @@ class ContractService extends SupabaseBase {
   }
 
   async signContract(contractId, signer, { signature, signatureHash, ipAddress } = {}) {
+    let existing
     try {
       this._validateId(contractId, 'Contract ID')
       if (!['parent', 'caregiver'].includes(signer)) {
@@ -640,7 +641,6 @@ class ContractService extends SupabaseBase {
         [`${columnPrefix}_signed_ip`]: ipAddress || null,
       }
 
-      let existing
       try {
         existing = await this.getContractById(contractId)
       } catch (error) {
@@ -730,6 +730,45 @@ class ContractService extends SupabaseBase {
         const notFoundError = new Error('Contract not found')
         notFoundError.code = 'CONTRACT_NOT_FOUND'
         throw notFoundError
+      }
+
+      if (error?.code === 'P0001' && typeof error?.message === 'string' && error.message.includes('A job contract is already active for booking')) {
+        console.warn('Job contract already active for this booking in signContract.', {
+          code: error?.code,
+          message: error?.message,
+          contractId,
+          bookingId: existing?.bookingId
+        })
+
+        let conflictError = null
+
+        if (existing?.bookingId) {
+          try {
+            const relatedContracts = await this.getContractsByBooking(existing.bookingId)
+            const activeStatuses = ACTIVE_STATUSES
+
+            if (Array.isArray(relatedContracts)) {
+              const conflictingContract = relatedContracts.find((c) => c.id !== contractId && activeStatuses.includes(c.status))
+
+              if (conflictingContract) {
+                conflictError = new Error('Another contract is already active for this booking. Please use that contract instead.')
+                conflictError.code = 'CONTRACT_ACTIVE_CONFLICT'
+                conflictError.bookingId = existing.bookingId
+                conflictError.conflictingContractId = conflictingContract.id
+              }
+            }
+          } catch (lookupError) {
+            console.warn('Failed to evaluate active contract after P0001 error in signContract.', lookupError)
+          }
+        }
+
+        if (!conflictError) {
+          conflictError = new Error('Another contract is already active for this booking. Please use that contract instead.')
+          conflictError.code = 'CONTRACT_ACTIVE_CONFLICT'
+          conflictError.bookingId = existing?.bookingId ?? null
+        }
+
+        throw conflictError
       }
 
       return this._handleError('signContract', error)

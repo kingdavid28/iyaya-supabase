@@ -1,5 +1,6 @@
 import React from 'react';
-import { View, SafeAreaView, StatusBar } from 'react-native';
+import { View, StatusBar } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import colors from '../../constants/colors';
 
 const Screen = ({ 

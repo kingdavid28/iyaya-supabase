@@ -2,8 +2,9 @@
 import { AlertCircle, Baby, Calendar, CheckCircle, Clock, Mail, MapPin, MessageCircle, Navigation, Phone, Star, User, X } from 'lucide-react-native';
 import PropTypes from 'prop-types';
 import React from 'react';
-import { Alert, Linking, Modal, Platform, Pressable, SafeAreaView, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Alert, Linking, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { formatCurrency as formatCurrencyPHP } from '../../utils/currency';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 // Simple i18n helper - replace with proper i18n library in production
 const t = (key) => {

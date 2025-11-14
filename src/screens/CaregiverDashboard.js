@@ -835,12 +835,36 @@ const CaregiverDashboard = () => {
         return;
       }
 
-      await contractService.signContract(contractRecord.id, 'caregiver', {
-        signature,
-        signatureHash: btoa(signature),
-        ipAddress: null,
-        acknowledged
-      });
+      try {
+        await contractService.signContract(contractRecord.id, 'caregiver', {
+          signature,
+          signatureHash: btoa(signature),
+          ipAddress: null,
+          acknowledged
+        });
+      } catch (error) {
+        if (error?.code === 'CONTRACT_NOT_FOUND') {
+          Alert.alert('Contract unavailable', 'This contract could not be found. Please refresh and try again.');
+          handleCloseContractModal();
+          return;
+        }
+
+        if (error?.code === 'CONTRACT_ACTIVE_CONFLICT') {
+          Alert.alert(
+            'Contract already active',
+            'There is already an active contract for this booking. Please view or sign that contract instead.'
+          );
+          handleCloseContractModal();
+          await Promise.all([
+            fetchApplications?.(),
+            fetchContracts?.(),
+            fetchBookings?.()
+          ]);
+          return;
+        }
+
+        throw error;
+      }
 
       Alert.alert('Success', 'Contract signed successfully!');
       handleCloseContractModal();

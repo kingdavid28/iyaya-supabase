@@ -462,6 +462,24 @@ const BookingsTab = ({
           setSelectedBookingForContract(null);
           return;
         }
+
+        if (error?.code === 'CONTRACT_ACTIVE_CONFLICT') {
+          Alert.alert(
+            'Contract already active',
+            'There is already an active contract for this booking. Please view or sign that contract instead.'
+          );
+          setContractModalVisible(false);
+          setSelectedContract(null);
+          setSelectedBookingForContract(null);
+
+          if (typeof refreshBookings === 'function') {
+            await refreshBookings();
+          }
+
+          await fetchContractsForBookings(bookings || []);
+          return;
+        }
+
         throw error;
       }
 

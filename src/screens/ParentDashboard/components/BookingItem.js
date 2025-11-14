@@ -228,6 +228,9 @@ const BookingItem = ({
   };
 
   const contract = useMemo(() => contractProp || booking?.contract || booking?.latestContract || null, [contractProp, booking?.contract, booking?.latestContract]);
+  const supersededBy = contract?.metadata?.supersededBy || contract?.metadata?.superseded_by;
+  const isSuperseded = Boolean(supersededBy);
+  const isActiveContract = String(contract?.status || '').toLowerCase() === 'active';
   const caregiverName = caregiverData?.name || caregiverData?.caregiver_name || booking?.caregiver_name || 'Unknown Caregiver';
   const caregiverImage = caregiverData?.profileImage || caregiverData?.avatar || caregiverData?.profile_image;
   const bookingDate = formatDate(booking?.date);
@@ -382,6 +385,19 @@ const BookingItem = ({
               />
             </View>
             <View style={styles.contractInfo}>
+              {contract && (isActiveContract || isSuperseded) && (
+                <View
+                  style={[
+                    styles.contractStatusBadge,
+                    isActiveContract && styles.contractStatusBadge_active,
+                    isSuperseded && styles.contractStatusBadge_replaced
+                  ]}
+                >
+                  <Text style={styles.contractStatusBadgeText}>
+                    {isSuperseded ? 'Replaced contract' : 'Active contract'}
+                  </Text>
+                </View>
+              )}
               <Text style={styles.contractTitle}>{contractStatusCopy.label}</Text>
               <Text style={styles.contractSubtitle} numberOfLines={1}>
                 {contract ? `Version ${contract.version || 1}` : 'Tap to start a contract'}
@@ -1029,6 +1045,24 @@ const styles = StyleSheet.create({
   },
   contractInfo: {
     flex: 1,
+  },
+  contractStatusBadge: {
+    alignSelf: 'flex-start',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 999,
+    marginBottom: 4,
+  },
+  contractStatusBadge_active: {
+    backgroundColor: '#DCFCE7',
+  },
+  contractStatusBadge_replaced: {
+    backgroundColor: '#FEF3C7',
+  },
+  contractStatusBadgeText: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#111827',
   },
   contractTitle: {
     fontSize: 15,
