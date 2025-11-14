@@ -344,21 +344,7 @@ class InformationRequestService extends SupabaseBase {
                 : normalizedFields
 
             if (approved && filteredFields.length === 0) {
-                const existing = requestMeta || (await this._getRequestById(requestId))
-
-                if (existing) {
-                    const targetCacheKey = existing?.targetUserId || existing?.target?.id || existing?.targetId?.id
-                    if (targetCacheKey) {
-                        invalidateCache(this._cacheKey('pending', targetCacheKey))
-                    }
-
-                    const requesterCacheKey = existing?.requesterUserId || existing?.requester?.id || existing?.requesterId?.id
-                    if (requesterCacheKey) {
-                        invalidateCache(this._cacheKey('sent', requesterCacheKey))
-                    }
-                }
-
-                return existing
+                console.log('ℹ️ Approving information request without new fields to share.');
             }
 
             const payload = {
@@ -388,24 +374,42 @@ class InformationRequestService extends SupabaseBase {
             return updated
         } catch (error) {
             if (error?.code === '23505') {
-                console.warn('Duplicate permission detected during respondToRequest, skipping insert.', error)
+                console.warn('Duplicate permission detected during respondToRequest, treating as already approved.', error)
 
                 try {
-                    const existing = requestMeta || (await this._getRequestById(requestId))
+                    // Ensure the information request row is marked as approved even if permissions already exist
+                    const { data: updatedRow, error: updateError } = await supabase
+                        .from(TABLE_REQUESTS)
+                        .update({
+                            status: 'approved',
+                            responded_at: new Date().toISOString(),
+                        })
+                        .eq('id', requestId)
+                        .select(REQUEST_SELECT)
+                        .single()
 
-                    const targetCacheKey = existing?.targetUserId || existing?.target?.id || existing?.targetId?.id
+                    let updatedRequest = null
+
+                    if (updateError) {
+                        console.warn('Failed to update request status after duplicate permission error, falling back to existing row.', updateError)
+                        updatedRequest = requestMeta || (await this._getRequestById(requestId))
+                    } else {
+                        updatedRequest = this._normalizeRequest(updatedRow)
+                    }
+
+                    const targetCacheKey = updatedRequest?.targetUserId || updatedRequest?.target?.id || updatedRequest?.targetId?.id
                     if (targetCacheKey) {
                         invalidateCache(this._cacheKey('pending', targetCacheKey))
                     }
 
-                    const requesterCacheKey = existing?.requesterUserId || existing?.requester?.id || existing?.requesterId?.id
+                    const requesterCacheKey = updatedRequest?.requesterUserId || updatedRequest?.requester?.id || updatedRequest?.requesterId?.id
                     if (requesterCacheKey) {
                         invalidateCache(this._cacheKey('sent', requesterCacheKey))
                     }
 
-                    return existing
+                    return updatedRequest
                 } catch (fetchError) {
-                    console.warn('Failed to refetch request after duplicate permission error.', fetchError)
+                    console.warn('Failed to finalize approval after duplicate permission error.', fetchError)
                     return { id: requestId }
                 }
             }
