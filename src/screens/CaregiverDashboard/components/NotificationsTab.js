@@ -22,6 +22,7 @@ import {
   TouchableOpacity,
   View
 } from 'react-native';
+import { Swipeable } from 'react-native-gesture-handler';
 import {
   SkeletonBlock,
   SkeletonCard,
@@ -134,6 +135,31 @@ const NotificationsTab = ({ navigation, onNavigateTab }) => {
       console.error('Error marking notification as read:', error);
     }
   }, []);
+
+  const handleDeleteNotification = useCallback(async (notificationId) => {
+    try {
+      await notificationService.deleteNotification(notificationId);
+      setNotifications((prev) => prev.filter((notif) => notif.id !== notificationId));
+    } catch (error) {
+      console.error('Error deleting notification:', error);
+      Alert.alert('Error', 'Failed to delete notification. Please try again.');
+    }
+  }, []);
+
+  const confirmDeleteNotification = useCallback((notification) => {
+    Alert.alert(
+      'Delete notification',
+      'This will remove this notification from your inbox. This action cannot be undone.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: () => handleDeleteNotification(notification.id)
+        }
+      ]
+    );
+  }, [handleDeleteNotification]);
 
   // Parse notification data safely
   const parseNotificationData = useCallback((data) => {
@@ -557,44 +583,58 @@ const NotificationsTab = ({ navigation, onNavigateTab }) => {
     }
 
     return (
-      <TouchableOpacity
+      <Swipeable
         key={notification.id}
-        style={[
-          styles.notificationCard,
-          { backgroundColor: getNotificationColor(notification.type) },
-          !notification.read && styles.unreadNotification
-        ]}
-        onPress={() => handleNotificationPress(notification)}
+        renderRightActions={() => (
+          <View style={styles.swipeActionsContainer}>
+            <TouchableOpacity
+              style={styles.deleteAction}
+              onPress={() => confirmDeleteNotification(notification)}
+            >
+              <Text style={styles.deleteActionText}>Delete</Text>
+            </TouchableOpacity>
+          </View>
+        )}
+        overshootRight={false}
       >
-        <View style={styles.notificationHeader}>
-          <View style={styles.notificationIcon}>
-            {getNotificationIcon(notification.type)}
+        <TouchableOpacity
+          style={[
+            styles.notificationCard,
+            { backgroundColor: getNotificationColor(notification.type) },
+            !notification.read && styles.unreadNotification,
+          ]}
+          onPress={() => handleNotificationPress(notification)}
+        >
+          <View style={styles.notificationHeader}>
+            <View style={styles.notificationIcon}>
+              {getNotificationIcon(notification.type)}
+            </View>
+            <View style={styles.notificationContent}>
+              <Text style={[styles.notificationTitle, !notification.read && styles.unreadText]}>
+                {notification.title}
+              </Text>
+              <Text style={styles.notificationMessage}>
+                {notification.message}
+              </Text>
+              {isPaymentProof && paymentMetaLines.length > 0 && (
+                <View style={styles.paymentMetaContainer}>
+                  {paymentMetaLines.map((line, index) => (
+                    <Text key={`${notification.id}-meta-${index}`} style={styles.paymentMetaText}>
+                      {line}
+                    </Text>
+                  ))}
+                </View>
+              )}
+              <Text style={styles.notificationTime}>
+                {formatTime(notification.created_at)}
+              </Text>
+            </View>
+            {!notification.read && <View style={styles.unreadDot} />}
           </View>
-          <View style={styles.notificationContent}>
-            <Text style={[styles.notificationTitle, !notification.read && styles.unreadText]}>
-              {notification.title}
-            </Text>
-            <Text style={styles.notificationMessage}>
-              {notification.message}
-            </Text>
-            {isPaymentProof && paymentMetaLines.length > 0 && (
-              <View style={styles.paymentMetaContainer}>
-                {paymentMetaLines.map((line, index) => (
-                  <Text key={`${notification.id}-meta-${index}`} style={styles.paymentMetaText}>
-                    {line}
-                  </Text>
-                ))}
-              </View>
-            )}
-            <Text style={styles.notificationTime}>
-              {formatTime(notification.created_at)}
-            </Text>
-          </View>
-          {!notification.read && <View style={styles.unreadDot} />}
-        </View>
-      </TouchableOpacity>
+        </TouchableOpacity>
+      </Swipeable >
     );
-  }, [parseNotificationData, getNotificationColor, getNotificationIcon, handleNotificationPress, formatTime]);
+  }, [parseNotificationData, getNotificationColor, getNotificationIcon, handleNotificationPress, formatTime, confirmDeleteNotification]);
 
   // Empty state component
   const EmptyState = () => {
@@ -875,6 +915,23 @@ const styles = StyleSheet.create({
     padding: 16,
     borderWidth: 1,
     borderColor: '#e5e7eb',
+  },
+  swipeActionsContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'flex-end',
+    paddingHorizontal: 16,
+  },
+  deleteAction: {
+    backgroundColor: '#EF4444',
+    borderRadius: 8,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+  },
+  deleteActionText: {
+    color: '#FFFFFF',
+    fontWeight: '600',
+    fontSize: 14,
   },
   unreadNotification: {
     borderLeftWidth: 4,

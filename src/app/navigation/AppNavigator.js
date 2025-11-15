@@ -288,10 +288,19 @@ const AppNavigatorWithAuth = () => {
         <Stack.Screen name="VerificationSuccess" component={VerificationSuccessScreen} options={{ title: "Verification Complete", headerShown: false }} />
         <Stack.Screen name="EmailVerificationPending" component={EmailVerificationPendingScreen} options={{ title: "Verify Your Email", headerShown: false }} />
         <Stack.Screen name="CaregiverProfileComplete" component={CaregiverProfileComplete} options={{ headerShown: false }} />
-        <Stack.Screen name="ParentProfile" component={ParentProfile} options={{ paddingTop: 60, title: "My Profile", headerBackTitle: "Back" }} />
+        <Stack.Screen name="ParentProfile" component={ParentProfile} options={{ title: "My Profile", headerBackTitle: "Back", headerShown: false }} />
         <Stack.Screen name="Chat" component={Chat} options={{ headerShown: false }} />
-        <Stack.Screen name="CaregiverReviews" component={CaregiverReviewsScreen} options={{ title: "Caregiver Reviews" }} />
-        <Stack.Screen name="CaregiverProfile" component={CaregiverProfileComplete} options={{ title: "Caregiver Profile", headerBackTitle: "Back" }} />
+        <Stack.Screen
+  name="CaregiverReviews"
+  component={CaregiverReviewsScreen}
+  options={{
+    title: "Caregiver Reviews",
+    headerShown: false,
+    headerTitleStyle: { marginTop: 18 },     // adjust 8 to whatever looks good
+    contentStyle: { paddingTop: 50 },      // keeps the content pushed down
+  }}
+/>
+        <Stack.Screen name="CaregiverProfile" component={CaregiverProfileComplete} options={{ title: "Caregiver Profile", headerBackTitle: "Back", contentStyle: { paddingTop: 16 }, }} />
       </Stack.Navigator>
     </NavigationContainer>
   );

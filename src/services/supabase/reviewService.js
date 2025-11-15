@@ -1,5 +1,5 @@
-import { SupabaseBase, supabase } from './base'
-import { getCachedOrFetch, invalidateCache } from './cache'
+import { SupabaseBase, supabase } from './base';
+import { getCachedOrFetch, invalidateCache } from './cache';
 
 export class ReviewService extends SupabaseBase {
   _normalizeRating(rawRating) {
@@ -126,10 +126,34 @@ export class ReviewService extends SupabaseBase {
     }
   }
 
+  async deleteReview(reviewId) {
+    try {
+      this._validateId(reviewId, 'Review ID')
+
+      const { data, error } = await supabase
+        .from('reviews')
+        .delete()
+        .eq('id', reviewId)
+        .select('id, reviewee_id')
+        .maybeSingle()
+
+      if (error) throw error
+
+      if (data?.reviewee_id) {
+        await this._updateCaregiverRating(data.reviewee_id)
+        invalidateCache(`reviews:${data.reviewee_id}`)
+      }
+
+      return data
+    } catch (error) {
+      return this._handleError('deleteReview', error)
+    }
+  }
+
   async getReviewsByParent(parentId) {
     try {
       this._validateId(parentId, 'Parent ID')
-      
+
       const { data, error } = await supabase
         .from('reviews')
         .select(`
@@ -138,9 +162,9 @@ export class ReviewService extends SupabaseBase {
         `)
         .eq('reviewer_id', parentId)
         .order('created_at', { ascending: false })
-      
+
       if (error) throw error
-      
+
       return data?.map(review => ({
         ...review,
         caregiver_name: review.reviewee?.name || 'Caregiver',

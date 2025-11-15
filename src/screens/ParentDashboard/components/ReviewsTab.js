@@ -1,18 +1,18 @@
-import React, { useState, useEffect, useMemo } from 'react';
-import { View, Text, ScrollView, TouchableOpacity, StyleSheet, Alert, Modal, ActivityIndicator } from 'react-native';
-import { Star, TrendingUp, MessageCircle } from 'lucide-react-native';
-import { reviewService, bookingService } from '../../../services/supabase';
-import { useAuth } from '../../../contexts/AuthContext';
+import { MessageCircle, Star, TrendingUp } from 'lucide-react-native';
+import React, { useEffect, useMemo, useState } from 'react';
+import { ActivityIndicator, Alert, Modal, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import {
-  SkeletonCard,
   SkeletonBlock,
+  SkeletonButton,
+  SkeletonCard,
   SkeletonCircle,
-  SkeletonPill,
-  SkeletonButton
+  SkeletonPill
 } from '../../../components/common/SkeletonPlaceholder';
 import ReviewList from '../../../components/features/profile/ReviewList';
 import ReviewForm from '../../../components/forms/ReviewForm';
-import { normalizeCaregiverReviewsForList, normalizeCaregiverReviews } from '../../../utils/reviews';
+import { useAuth } from '../../../contexts/AuthContext';
+import { bookingService, reviewService } from '../../../services/supabase';
+import { normalizeCaregiverReviews, normalizeCaregiverReviewsForList } from '../../../utils/reviews';
 
 const ReviewsTab = ({ navigation }) => {
   // TODO: Replace bespoke review rendering with shared `ReviewList` and `ReviewForm`
@@ -131,6 +131,44 @@ const ReviewsTab = ({ navigation }) => {
     }
     setSelectedReview(original);
     setModalMode('edit');
+  };
+
+  const handleDeleteReview = (reviewItem) => {
+    if (!reviewItem?.id) return;
+
+    Alert.alert(
+      'Delete review',
+      "Are you sure you want to delete this review? This will update the caregiver's rating.",
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await reviewService.deleteReview(reviewItem.id);
+            } catch (error) {
+              console.error('Error deleting review from server, applying local hide fallback:', error);
+            }
+
+            try {
+              const stored = await AsyncStorage.getItem(STORAGE_KEYS.HIDDEN_REVIEWS);
+              const allHidden = stored ? JSON.parse(stored) : {};
+              const hiddenForUser = new Set(allHidden[user.id] || []);
+              hiddenForUser.add(reviewItem.id);
+              allHidden[user.id] = Array.from(hiddenForUser);
+              await AsyncStorage.setItem(STORAGE_KEYS.HIDDEN_REVIEWS, JSON.stringify(allHidden));
+            } catch (storageError) {
+              console.error('Failed to hide review locally:', storageError);
+              Alert.alert('Error', 'Failed to update review visibility. Please try again.');
+              return;
+            }
+
+            await loadReviews();
+          }
+        }
+      ]
+    );
   };
 
   const handleCloseModal = () => {
@@ -296,6 +334,7 @@ const ReviewsTab = ({ navigation }) => {
         reviews={normalizedReviews}
         currentUserId={user?.id}
         onEditReview={handleEditReview}
+        onDeleteReview={handleDeleteReview}
         ListEmptyComponent={<EmptyState />}
         ListHeaderComponent={renderReviewsHeader}
         contentContainerStyle={styles.listContent}

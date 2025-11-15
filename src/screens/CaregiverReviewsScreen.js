@@ -1,20 +1,20 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
-  View,
+  ActivityIndicator,
+  Alert,
+  StyleSheet,
   Text,
   TextInput,
   TouchableOpacity,
-  StyleSheet,
-  Alert,
-  ActivityIndicator
+  View
 } from 'react-native';
 import StarRating, { StarRatingDisplay } from 'react-native-star-rating-widget';
+import ReviewList from '../components/features/profile/ReviewList';
 import { useAuth } from '../contexts/AuthContext';
 import { reviewService } from '../services';
-import ReviewList from '../components/features/profile/ReviewList';
 import { normalizeCaregiverReviews } from '../utils/reviews';
 
-const CaregiverReviewsScreen = ({ route }) => {
+const CaregiverReviewsScreen = ({ route, navigation }) => {
   const { caregiverId, bookingId, caregiverName: caregiverNameFromRoute } = route.params || {};
   const { user } = useAuth();
   const [reviews, setReviews] = useState([]);
@@ -98,12 +98,22 @@ const CaregiverReviewsScreen = ({ route }) => {
 
   return (
     <View style={styles.container}>
-      <View style={styles.headerSection}>
-        <Text style={styles.headerTitle}>{caregiverNameFromRoute || 'Caregiver Reviews'}</Text>
-        <View style={styles.ratingSummary}>
-          <StarRatingDisplay rating={averageRating} starSize={24} color="#FFD700" />
-          <Text style={styles.ratingText}>{averageRating.toFixed(1)} • {reviews.length} reviews</Text>
+      <View style={styles.headerRow}>
+        <View style={styles.headerSection}>
+          <Text style={styles.headerTitle}>{caregiverNameFromRoute || 'Caregiver Reviews'}</Text>
+          <View style={styles.ratingSummary}>
+            <StarRatingDisplay rating={averageRating} starSize={24} color="#FFD700" />
+            <Text style={styles.ratingText}>{averageRating.toFixed(1)} • {reviews.length} reviews</Text>
+          </View>
         </View>
+        <TouchableOpacity
+          style={styles.closeButton}
+          onPress={() => navigation.goBack()}
+          accessibilityRole="button"
+          accessibilityLabel="Close caregiver reviews"
+        >
+          <Text style={styles.closeButtonText}>✕</Text>
+        </TouchableOpacity>
       </View>
 
       {!showReviewForm ? (
@@ -185,8 +195,14 @@ const styles = StyleSheet.create({
     backgroundColor: '#F5F5F5',
     padding: 16,
   },
-  headerSection: {
+  headerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
     marginBottom: 16,
+  },
+  headerSection: {
+    flex: 1,
   },
   headerTitle: {
     fontSize: 20,
@@ -202,6 +218,14 @@ const styles = StyleSheet.create({
   ratingText: {
     fontSize: 16,
     color: '#374151',
+  },
+  closeButton: {
+    padding: 8,
+    marginLeft: 8,
+  },
+  closeButtonText: {
+    fontSize: 28,
+    color: '#6B7280',
   },
   emptyContainer: {
     flex: 1,

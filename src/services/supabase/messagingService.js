@@ -506,6 +506,25 @@ export class MessagingService extends SupabaseBase {
     return await this.getOrCreateConversation(participant1, participant2)
   }
 
+  async deleteConversation(conversationId) {
+    try {
+      this._validateId(conversationId, 'Conversation ID')
+
+      const { error } = await supabase
+        .from('conversations')
+        .delete()
+        .eq('id', conversationId)
+
+      if (error) throw error
+
+      invalidateCache('conversations:')
+      invalidateCache('messages:')
+      return { success: true }
+    } catch (error) {
+      return this._handleError('deleteConversation', error)
+    }
+  }
+
   subscribeToMessages(conversationId, callback) {
     if (typeof conversationId === 'object' && conversationId !== null) {
       if (conversationId.id) {

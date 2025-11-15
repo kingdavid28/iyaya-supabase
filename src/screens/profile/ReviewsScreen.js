@@ -1,7 +1,9 @@
-import React, { useState, useEffect } from 'react';
-import { View, StyleSheet, Alert, ActivityIndicator } from 'react-native';
-import { Text, Button, useTheme, FAB, Appbar } from 'react-native-paper';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useNavigation, useRoute } from '@react-navigation/native';
+import React, { useEffect, useState } from 'react';
+import { ActivityIndicator, Alert, StyleSheet, View } from 'react-native';
+import { Appbar, Button, FAB, Text, useTheme } from 'react-native-paper';
+import { STORAGE_KEYS } from '../../../config/constants';
 import { useAuth } from '../../../contexts/AuthContext';
 import { reviewService } from '../../../services/reviewService';
 import ReviewList from '../../components/features/profile/ReviewList';
@@ -12,22 +14,28 @@ const ReviewsScreen = () => {
   const navigation = useNavigation();
   const route = useRoute();
   const { user } = useAuth();
-  
+
   const [reviews, setReviews] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showReviewForm, setShowReviewForm] = useState(false);
   const [editingReview, setEditingReview] = useState(null);
-  
+
   // Get the user ID from route params or use current user's ID
   const targetUserId = route.params?.userId || user.uid;
   const isCurrentUser = targetUserId === user.uid;
-  
+
   // Load reviews
   const loadReviews = async () => {
     try {
       setLoading(true);
       const userReviews = await reviewService.getUserReviews(targetUserId);
-      setReviews(userReviews);
+
+      const stored = await AsyncStorage.getItem(STORAGE_KEYS.HIDDEN_REVIEWS);
+      const allHidden = stored ? JSON.parse(stored) : {};
+      const hiddenForUser = new Set(allHidden[targetUserId] || []);
+
+      const visibleReviews = userReviews.filter((review) => !hiddenForUser.has(review.id));
+      setReviews(visibleReviews);
     } catch (error) {
       console.error('Failed to load reviews:', error);
       Alert.alert('Error', 'Failed to load reviews. Please try again.');
@@ -35,7 +43,7 @@ const ReviewsScreen = () => {
       setLoading(false);
     }
   };
-  
+
   // Handle review submission
   const handleSubmitReview = async (reviewData) => {
     try {
@@ -57,7 +65,7 @@ const ReviewsScreen = () => {
         });
         Alert.alert('Success', 'Thank you for your review!');
       }
-      
+
       // Refresh reviews and close form
       await loadReviews();
       setShowReviewForm(false);
@@ -67,52 +75,63 @@ const ReviewsScreen = () => {
       Alert.alert('Error', 'Failed to submit review. Please try again.');
     }
   };
-  
+
   // Handle review deletion
   const handleDeleteReview = async (reviewId) => {
-    try {
-      Alert.alert(
-        'Delete Review',
-        'Are you sure you want to delete this review?',
-        [
-          { text: 'Cancel', style: 'cancel' },
-          {
-            text: 'Delete',
-            style: 'destructive',
-            onPress: async () => {
+    Alert.alert(
+      'Delete Review',
+      'Are you sure you want to delete this review?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            try {
               await reviewService.deleteReview(reviewId);
               await loadReviews();
               Alert.alert('Success', 'Review deleted successfully');
-            },
+            } catch (error) {
+              console.error('Failed to delete review from server, applying local hide fallback:', error);
+              try {
+                const stored = await AsyncStorage.getItem(STORAGE_KEYS.HIDDEN_REVIEWS);
+                const allHidden = stored ? JSON.parse(stored) : {};
+                const userHidden = new Set(allHidden[targetUserId] || []);
+                userHidden.add(reviewId);
+                allHidden[targetUserId] = Array.from(userHidden);
+                await AsyncStorage.setItem(STORAGE_KEYS.HIDDEN_REVIEWS, JSON.stringify(allHidden));
+                setReviews((prev) => prev.filter((review) => review.id !== reviewId));
+              } catch (storageError) {
+                console.error('Failed to hide review locally:', storageError);
+                Alert.alert('Error', 'Failed to delete review. Please try again.');
+              }
+            }
           },
-        ]
-      );
-    } catch (error) {
-      console.error('Failed to delete review:', error);
-      Alert.alert('Error', 'Failed to delete review. Please try again.');
-    }
+        },
+      ]
+    );
   };
-  
+
   // Load reviews on component mount
   useEffect(() => {
     loadReviews();
   }, [targetUserId]);
-  
+
   // Calculate average rating
   const averageRating = reviews.length > 0
     ? reviews.reduce((sum, review) => sum + review.rating, 0) / reviews.length
     : 0;
-  
+
   // Check if current user has already reviewed
   const userReview = reviews.find(review => review.reviewerId === user.uid);
-  
+
   return (
     <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
       <Appbar.Header>
         <Appbar.BackAction onPress={() => navigation.goBack()} />
         <Appbar.Content title={isCurrentUser ? "My Reviews" : "Reviews"} />
       </Appbar.Header>
-      
+
       {loading ? (
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color={theme.colors.primary} />
@@ -129,7 +148,7 @@ const ReviewsScreen = () => {
                 {reviews.length} {reviews.length === 1 ? 'review' : 'reviews'}
               </Text>
             </View>
-            
+
             {!isCurrentUser && !userReview && (
               <Button
                 mode="contained"
@@ -140,9 +159,9 @@ const ReviewsScreen = () => {
               </Button>
             )}
           </View>
-          
+
           {/* Reviews List */}
-          <ReviewList 
+          <ReviewList
             reviews={reviews}
             currentUserId={user.uid}
             onEditReview={(review) => {
@@ -151,7 +170,7 @@ const ReviewsScreen = () => {
             }}
             onDeleteReview={handleDeleteReview}
           />
-          
+
           {/* Review Form Modal */}
           {showReviewForm && (
             <View style={styles.modalContainer}>
@@ -170,7 +189,7 @@ const ReviewsScreen = () => {
           )}
         </>
       )}
-      
+
       {/* FAB for adding a new review (only if it's the current user's profile) */}
       {!isCurrentUser && !userReview && !showReviewForm && (
         <FAB

@@ -379,6 +379,27 @@ export class NotificationService extends SupabaseBase {
     }
   }
 
+  async deleteNotification(notificationId) {
+    try {
+      this._validateId(notificationId, 'Notification ID')
+
+      const { data, error } = await supabase
+        .from('notifications')
+        .delete()
+        .eq('id', notificationId)
+        .select('id, user_id')
+        .maybeSingle()
+
+      if (error) throw error
+      if (data?.user_id) {
+        invalidateCache(`notification-counts:${data.user_id}`)
+      }
+      return data
+    } catch (error) {
+      return this._handleError('deleteNotification', error)
+    }
+  }
+
   async markAllNotificationsAsRead(userId) {
     try {
       const resolvedUserId = await this._ensureUserId(userId, 'User ID')

@@ -7,9 +7,10 @@ import {
   MessageCircle,
   Shield
 } from 'lucide-react-native';
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import {
   ActivityIndicator,
+  Alert,
   RefreshControl,
   ScrollView,
   StyleSheet,
@@ -17,6 +18,7 @@ import {
   TouchableOpacity,
   View
 } from 'react-native';
+import { Swipeable } from 'react-native-gesture-handler';
 import { useAuth } from '../../../contexts/AuthContext';
 import { notificationService } from '../../../services/supabase';
 
@@ -114,6 +116,31 @@ const AlertsTab = ({ navigation, onNavigateTab }) => {
     }
   }, []);
 
+  const handleDeleteAlert = useCallback(async (alertId) => {
+    try {
+      await notificationService.deleteNotification(alertId);
+      setAlerts((prev) => prev.filter((alert) => alert.id !== alertId));
+    } catch (error) {
+      console.error('Error deleting alert:', error);
+      Alert.alert('Error', 'Failed to delete alert. Please try again.');
+    }
+  }, []);
+
+  const confirmDeleteAlert = useCallback((alert) => {
+    Alert.alert(
+      'Delete alert',
+      'This will remove this alert from your inbox. This action cannot be undone.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: () => handleDeleteAlert(alert.id)
+        }
+      ]
+    );
+  }, [handleDeleteAlert]);
+
   // Alert press handler
   const handleAlertPress = useCallback(async (alert) => {
     if (!alert.read) {
@@ -125,7 +152,20 @@ const AlertsTab = ({ navigation, onNavigateTab }) => {
     const bookingId = alertData?.bookingId || alertData?.booking_id;
     const jobId = alertData?.jobId || alertData?.job_id;
     const applicationId = alertData?.applicationId || alertData?.application_id;
-    
+
+    // Detect information request alerts (privacy-related)
+    const isInformationRequest =
+      alert.type === 'information_request' ||
+      alertData?.notificationType === 'information_request' ||
+      alertData?.type === 'information_request' ||
+      alertData?.category === 'information_request';
+
+    if (isInformationRequest) {
+      console.log('🛡️ Parent information request alert tapped - opening privacy requests');
+      onNavigateTab?.('alerts', { ...alert, data: alertData, openPrivacyRequests: true });
+      return;
+    }
+
     const isContractNotification = contractId && (
       CONTRACT_NOTIFICATION_TYPES.has(alertData?.notificationType) || alert.type === 'system'
     );
@@ -230,7 +270,7 @@ const AlertsTab = ({ navigation, onNavigateTab }) => {
 
   const formatTime = useCallback((timestamp) => {
     if (!timestamp) return 'Unknown time';
-    
+
     const date = new Date(timestamp);
     if (isNaN(date.getTime())) return 'Invalid date';
 
@@ -246,37 +286,55 @@ const AlertsTab = ({ navigation, onNavigateTab }) => {
   }, []);
 
   // Alert renderer
-  const renderAlert = useCallback((alert) => (
-    <TouchableOpacity
-      key={alert.id}
-      style={[
-        styles.alertCard,
-        { backgroundColor: getAlertColor(alert.type) },
-        !alert.read && styles.unreadAlert
-      ]}
-      onPress={() => handleAlertPress(alert)}
-    >
-      <View style={styles.alertHeader}>
-        <View style={styles.alertIcon}>
-          {getAlertIcon(alert.type)}
-        </View>
-        <View style={styles.alertContent}>
-          <Text style={[styles.alertTitle, !alert.read && styles.unreadText]}>
-            {alert.title || 'Notification'}
-          </Text>
-          {alert.message ? (
-            <Text style={styles.alertMessage}>
-              {alert.message}
-            </Text>
-          ) : null}
-          <Text style={styles.alertTime}>
-            {formatTime(alert.created_at)}
-          </Text>
-        </View>
-        {!alert.read && <View style={styles.unreadDot} />}
+  const renderAlert = useCallback((alert) => {
+    const renderRightActions = () => (
+      <View style={styles.swipeActionsContainer}>
+        <TouchableOpacity
+          style={styles.deleteAction}
+          onPress={() => confirmDeleteAlert(alert)}
+        >
+          <Text style={styles.deleteActionText}>Delete</Text>
+        </TouchableOpacity>
       </View>
-    </TouchableOpacity>
-  ), [getAlertColor, getAlertIcon, handleAlertPress, formatTime]);
+    );
+
+    return (
+      <Swipeable
+        key={alert.id}
+        renderRightActions={renderRightActions}
+        overshootRight={false}
+      >
+        <TouchableOpacity
+          style={[
+            styles.alertCard,
+            { backgroundColor: getAlertColor(alert.type) },
+            !alert.read && styles.unreadAlert
+          ]}
+          onPress={() => handleAlertPress(alert)}
+        >
+          <View style={styles.alertHeader}>
+            <View style={styles.alertIcon}>
+              {getAlertIcon(alert.type)}
+            </View>
+            <View style={styles.alertContent}>
+              <Text style={[styles.alertTitle, !alert.read && styles.unreadText]}>
+                {alert.title || 'Notification'}
+              </Text>
+              {alert.message ? (
+                <Text style={styles.alertMessage}>
+                  {alert.message}
+                </Text>
+              ) : null}
+              <Text style={styles.alertTime}>
+                {formatTime(alert.created_at)}
+              </Text>
+            </View>
+            {!alert.read && <View style={styles.unreadDot} />}
+          </View>
+        </TouchableOpacity>
+      </Swipeable>
+    );
+  }, [getAlertColor, getAlertIcon, handleAlertPress, formatTime, confirmDeleteAlert]);
 
   // Loading state
   if (loading) {
@@ -430,6 +488,23 @@ const styles = StyleSheet.create({
     padding: 16,
     borderWidth: 1,
     borderColor: '#e5e7eb',
+  },
+  swipeActionsContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'flex-end',
+    paddingHorizontal: 16,
+  },
+  deleteAction: {
+    backgroundColor: '#EF4444',
+    borderRadius: 8,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+  },
+  deleteActionText: {
+    color: '#FFFFFF',
+    fontWeight: '600',
+    fontSize: 14,
   },
   unreadAlert: {
     borderLeftWidth: 4,

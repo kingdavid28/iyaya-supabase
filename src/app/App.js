@@ -4,6 +4,7 @@ import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
 import React, { useEffect, useState } from 'react';
 import { ActivityIndicator, AppState, Platform, Text, View } from 'react-native';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 if (!global.Buffer) {
@@ -185,23 +186,25 @@ export default function App() {
   }
 
   return (
-    <ErrorBoundary>
-      <QueryClientProvider client={queryClient}>
-        <SafeAreaProvider>
-          <AppProvider>
-            <ProfileDataProvider>
-              <PrivacyProvider>
-                <SupabaseAuthProvider>
-                  <AppIntegration>
-                    <AppNavigator />
-                    <StatusBar style="auto" />
-                  </AppIntegration>
-                </SupabaseAuthProvider>
-              </PrivacyProvider>
-            </ProfileDataProvider>
-          </AppProvider>
-        </SafeAreaProvider>
-      </QueryClientProvider>
-    </ErrorBoundary>
+    <GestureHandlerRootView style={{ flex: 1 }}>
+      <ErrorBoundary>
+        <QueryClientProvider client={queryClient}>
+          <SafeAreaProvider>
+            <AppProvider>
+              <ProfileDataProvider>
+                <PrivacyProvider>
+                  <SupabaseAuthProvider>
+                    <AppIntegration>
+                      <AppNavigator />
+                      <StatusBar style="auto" />
+                    </AppIntegration>
+                  </SupabaseAuthProvider>
+                </PrivacyProvider>
+              </ProfileDataProvider>
+            </AppProvider>
+          </SafeAreaProvider>
+        </QueryClientProvider>
+      </ErrorBoundary>
+    </GestureHandlerRootView>
   );
 }

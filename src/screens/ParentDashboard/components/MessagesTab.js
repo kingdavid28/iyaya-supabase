@@ -1,6 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import React, { useEffect, useState } from 'react';
 import {
+  Alert,
   FlatList,
   Image,
   StyleSheet,
@@ -8,6 +9,7 @@ import {
   TouchableOpacity,
   View
 } from 'react-native';
+import { Swipeable } from 'react-native-gesture-handler';
 import { useAuth } from '../../../contexts/AuthContext';
 import { supabaseService } from '../../../services/supabase';
 
@@ -73,6 +75,31 @@ const MessagesTab = ({ navigation, refreshing, onRefresh }) => {
     await loadConversations();
   };
 
+  const handleDeleteConversation = async (conversationId) => {
+    try {
+      await supabaseService.messaging.deleteConversation(conversationId);
+      setConversations((prev) => prev.filter((conv) => conv.id !== conversationId));
+    } catch (error) {
+      console.error('Error deleting conversation:', error);
+      Alert.alert('Error', 'Failed to delete conversation. Please try again.');
+    }
+  };
+
+  const confirmDeleteConversation = (item) => {
+    Alert.alert(
+      'Delete conversation',
+      'This will remove this conversation from your inbox. Messages may still be visible to the other user.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: () => handleDeleteConversation(item.id)
+        }
+      ]
+    );
+  };
+
   const EmptyState = () => (
     <View style={styles.emptyContainer}>
       <Ionicons name="chatbubble-ellipses-outline" size={64} color="#9CA3AF" />
@@ -96,26 +123,42 @@ const MessagesTab = ({ navigation, refreshing, onRefresh }) => {
     });
   };
 
-  const ConversationItem = ({ item }) => (
-    <TouchableOpacity style={styles.conversationItem} onPress={() => handleConversationPress(item)}>
-      <View style={styles.avatar}>
-        {item.avatar ? (
-          <Image source={{ uri: item.avatar }} style={{ width: 40, height: 40, borderRadius: 20 }} />
-        ) : (
-          <Ionicons name="person-circle" size={40} color="#3B82F6" />
-        )}
+  const ConversationItem = ({ item }) => {
+    const renderRightActions = () => (
+      <View style={styles.swipeActionsContainer}>
+        <TouchableOpacity
+          style={styles.deleteAction}
+          onPress={() => confirmDeleteConversation(item)}
+        >
+          <Ionicons name="trash-outline" size={20} color="#FFFFFF" />
+          <Text style={styles.deleteActionText}>Delete</Text>
+        </TouchableOpacity>
       </View>
-      <View style={styles.conversationInfo}>
-        <Text style={styles.conversationName}>{item.name || 'User'}</Text>
-        <Text style={styles.lastMessage}>
-          {item.lastMessage || 'No messages yet'}
-        </Text>
-      </View>
-      <Text style={styles.timestamp}>
-        {item.timestamp ? new Date(item.timestamp).toLocaleDateString() : ''}
-      </Text>
-    </TouchableOpacity>
-  );
+    );
+
+    return (
+      <Swipeable renderRightActions={renderRightActions} overshootRight={false}>
+        <TouchableOpacity style={styles.conversationItem} onPress={() => handleConversationPress(item)}>
+          <View style={styles.avatar}>
+            {item.avatar ? (
+              <Image source={{ uri: item.avatar }} style={{ width: 40, height: 40, borderRadius: 20 }} />
+            ) : (
+              <Ionicons name="person-circle" size={40} color="#3B82F6" />
+            )}
+          </View>
+          <View style={styles.conversationInfo}>
+            <Text style={styles.conversationName}>{item.name || 'User'}</Text>
+            <Text style={styles.lastMessage}>
+              {item.lastMessage || 'No messages yet'}
+            </Text>
+          </View>
+          <Text style={styles.timestamp}>
+            {item.timestamp ? new Date(item.timestamp).toLocaleDateString() : ''}
+          </Text>
+        </TouchableOpacity>
+      </Swipeable>
+    );
+  };
 
   return (
     <View style={styles.container}>
@@ -172,6 +215,26 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.1,
     shadowRadius: 2,
     elevation: 2,
+  },
+  swipeActionsContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'flex-end',
+    marginHorizontal: 16,
+  },
+  deleteAction: {
+    backgroundColor: '#EF4444',
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    borderRadius: 12,
+    flexDirection: 'row',
+    gap: 6,
+  },
+  deleteActionText: {
+    color: '#FFFFFF',
+    fontWeight: '600',
+    fontSize: 14,
   },
   avatar: {
     marginRight: 12,

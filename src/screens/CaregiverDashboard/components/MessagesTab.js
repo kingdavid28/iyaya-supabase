@@ -1,6 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import React, { useEffect, useState } from 'react';
 import { Alert, FlatList, Image, KeyboardAvoidingView, Platform, RefreshControl, Text, TouchableOpacity, View } from 'react-native';
+import { Swipeable } from 'react-native-gesture-handler';
 import { Card } from 'react-native-paper';
 import { useAuth } from '../../../contexts/AuthContext';
 import { supabaseService } from '../../../services/supabase';
@@ -114,6 +115,31 @@ const MessagesTab = ({ navigation, refreshing, onRefresh }) => {
     }
   };
 
+  const handleDeleteConversation = async (conversationId) => {
+    try {
+      await supabaseService.messaging.deleteConversation(conversationId);
+      setConversations((prev) => prev.filter((conv) => conv.id !== conversationId));
+    } catch (error) {
+      console.error('Error deleting conversation:', error);
+      Alert.alert('Error', 'Failed to delete conversation. Please try again.');
+    }
+  };
+
+  const confirmDeleteConversation = (conversation) => {
+    Alert.alert(
+      'Delete conversation',
+      'This will remove this conversation from your inbox. Messages may still be visible to the other user.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: () => handleDeleteConversation(conversation.id),
+        },
+      ],
+    );
+  };
+
   const handleConversationPress = async (conversation) => {
     console.log('🔍 MessagesTab: handleConversationPress called with:', {
       user: user,
@@ -156,53 +182,69 @@ const MessagesTab = ({ navigation, refreshing, onRefresh }) => {
     });
   };
 
-  const renderConversationItem = ({ item }) => (
-    <TouchableOpacity onPress={() => handleConversationPress(item)}>
-      <View style={messageStyles.conversationItem}>
-        <View style={messageStyles.conversationAccent} />
-        <View style={messageStyles.conversationContent}>
-          <View style={messageStyles.avatarContainer}>
-            {item.parentAvatar ? (
-              <Image
-                source={{ uri: item.parentAvatar }}
-                style={messageStyles.avatar}
-              />
-            ) : (
-              <View style={messageStyles.defaultAvatar}>
-                <Text style={messageStyles.avatarInitials}>{getInitials(item.parentName)}</Text>
-              </View>
-            )}
-            {!item.isRead && <View style={messageStyles.unreadDot} />}
-          </View>
-
-          <View style={messageStyles.messageInfo}>
-            <View style={messageStyles.messageHeader}>
-              <Text style={messageStyles.parentName}>{getDisplayName(item.parentName)}</Text>
-              <Text style={messageStyles.messageDate}>{formatMessageDate(item.lastMessageTime)}</Text>
-            </View>
-            <View style={messageStyles.messagePreviewRow}>
-              <Ionicons name="chatbubble-ellipses-outline" size={16} color="#6B7280" style={messageStyles.previewIcon} />
-              <View style={messageStyles.messagePreviewTextGroup}>
-                <Text style={messageStyles.previewPrompt}>Tap to view messages</Text>
-                {getPreviewMessage(item.lastMessage) && (
-                  <Text
-                    style={[
-                      messageStyles.lastMessage,
-                      !item.isRead && messageStyles.unreadMessage
-                    ]}
-                    numberOfLines={2}
-                  >
-                    {getPreviewMessage(item.lastMessage)}
-                  </Text>
-                )}
-              </View>
-            </View>
-          </View>
-
-        </View>
+  const renderConversationItem = ({ item }) => {
+    const renderRightActions = () => (
+      <View style={messageStyles.swipeActionsContainer}>
+        <TouchableOpacity
+          style={messageStyles.deleteAction}
+          onPress={() => confirmDeleteConversation(item)}
+        >
+          <Ionicons name="trash-outline" size={18} color="#FFFFFF" />
+          <Text style={messageStyles.deleteActionText}>Delete</Text>
+        </TouchableOpacity>
       </View>
-    </TouchableOpacity>
-  );
+    );
+
+    return (
+      <Swipeable renderRightActions={renderRightActions} overshootRight={false}>
+        <TouchableOpacity onPress={() => handleConversationPress(item)}>
+          <View style={messageStyles.conversationItem}>
+            <View style={messageStyles.conversationAccent} />
+            <View style={messageStyles.conversationContent}>
+              <View style={messageStyles.avatarContainer}>
+                {item.parentAvatar ? (
+                  <Image
+                    source={{ uri: item.parentAvatar }}
+                    style={messageStyles.avatar}
+                  />
+                ) : (
+                  <View style={messageStyles.defaultAvatar}>
+                    <Text style={messageStyles.avatarInitials}>{getInitials(item.parentName)}</Text>
+                  </View>
+                )}
+                {!item.isRead && <View style={messageStyles.unreadDot} />}
+              </View>
+
+              <View style={messageStyles.messageInfo}>
+                <View style={messageStyles.messageHeader}>
+                  <Text style={messageStyles.parentName}>{getDisplayName(item.parentName)}</Text>
+                  <Text style={messageStyles.messageDate}>{formatMessageDate(item.lastMessageTime)}</Text>
+                </View>
+                <View style={messageStyles.messagePreviewRow}>
+                  <Ionicons name="chatbubble-ellipses-outline" size={16} color="#6B7280" style={messageStyles.previewIcon} />
+                  <View style={messageStyles.messagePreviewTextGroup}>
+                    <Text style={messageStyles.previewPrompt}>Tap to view messages</Text>
+                    {getPreviewMessage(item.lastMessage) && (
+                      <Text
+                        style={[
+                          messageStyles.lastMessage,
+                          !item.isRead && messageStyles.unreadMessage
+                        ]}
+                        numberOfLines={2}
+                      >
+                        {getPreviewMessage(item.lastMessage)}
+                      </Text>
+                    )}
+                  </View>
+                </View>
+              </View>
+
+            </View>
+          </View>
+        </TouchableOpacity>
+      </Swipeable>
+    );
+  };
 
   if (loading) {
     return (
@@ -287,6 +329,26 @@ const messageStyles = {
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.08,
     shadowRadius: 6,
+  },
+  swipeActionsContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'flex-end',
+    marginHorizontal: 16,
+  },
+  deleteAction: {
+    backgroundColor: '#EF4444',
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    borderRadius: 14,
+    flexDirection: 'row',
+    gap: 6,
+  },
+  deleteActionText: {
+    color: '#FFFFFF',
+    fontWeight: '600',
+    fontSize: 14,
   },
   conversationAccent: {
     width: 4,

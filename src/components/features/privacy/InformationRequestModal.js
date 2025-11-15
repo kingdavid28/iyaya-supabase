@@ -9,7 +9,15 @@ const DISALLOWED_FIELDS_BY_USER_TYPE = {
   caregiver: new Set(['ageCareRanges']),
 };
 
-const InformationRequestModal = ({ visible, onClose, targetUser, userType = 'parent', availableTargets = [], onTargetChange, onSuccess }) => {
+const InformationRequestModal = ({
+  visible,
+  onClose,
+  targetUser,
+  userType = 'parent',
+  availableTargets = [],
+  onTargetChange,
+  onSuccess,
+}) => {
   const { requestInformation, DATA_LEVELS } = usePrivacy();
   const { dataClassification } = useProfileData();
   const [selectedFields, setSelectedFields] = useState([]);
@@ -47,26 +55,73 @@ const InformationRequestModal = ({ visible, onClose, targetUser, userType = 'par
         let icon = '📄';
 
         switch (key) {
-          case 'phone': label = 'Phone Number'; icon = '📞'; break;
-          case 'address': label = 'Full Address'; icon = '🏠'; break;
-          case 'profileImage': label = 'Profile Photo'; icon = '📸'; break;
-          case 'portfolio': label = 'Portfolio & Gallery'; icon = '🖼️'; break;
-          case 'availability': label = 'Availability Schedule'; icon = '📅'; break;
-          case 'languages': label = 'Languages Spoken'; icon = '🗣️'; break;
-          case 'emergencyContacts': label = 'Emergency Contacts'; icon = '🚨'; break;
-          case 'documents': label = 'Legal Documents'; icon = '📋'; break;
-          case 'backgroundCheck': label = 'Background Check Details'; icon = '🔍'; break;
+          case 'phone':
+            label = 'Phone Number';
+            icon = '📞';
+            break;
+          case 'address':
+            label = 'Full Address';
+            icon = '🏠';
+            break;
+          case 'profileImage':
+            label = 'Profile Photo';
+            icon = '📸';
+            break;
+          case 'portfolio':
+            label = 'Portfolio & Gallery';
+            icon = '🖼️';
+            break;
+          case 'availability':
+            label = 'Availability Schedule';
+            icon = '📅';
+            break;
+          case 'languages':
+            label = 'Languages Spoken';
+            icon = '🗣️';
+            break;
+          case 'emergencyContacts':
+            label = 'Emergency Contacts';
+            icon = '🚨';
+            break;
+          case 'documents':
+            label = 'Legal Documents';
+            icon = '📋';
+            break;
+          case 'backgroundCheck':
+            label = 'Background Check Details';
+            icon = '🔍';
+            break;
           case 'ageCareRanges':
             if (disallowedFields.has(key)) return acc;
             label = 'Age Care Specialization';
             icon = '👶';
             break;
-          case 'emergencyContact': label = 'Emergency Contact'; icon = '🚨'; break;
-          case 'childMedicalInfo': label = 'Child Medical Information'; icon = '🏥'; break;
-          case 'childAllergies': label = 'Child Allergies'; icon = '⚠️'; break;
-          case 'childBehaviorNotes': label = 'Child Behavior Notes'; icon = '📝'; break;
-          case 'financialInfo': label = 'Financial Information'; icon = '💰'; break;
-          default: label = key.charAt(0).toUpperCase() + key.slice(1).replace(/([A-Z])/g, ' $1'); break;
+          case 'emergencyContact':
+            label = 'Emergency Contact';
+            icon = '🚨';
+            break;
+          case 'childMedicalInfo':
+            label = 'Child Medical Information';
+            icon = '🏥';
+            break;
+          case 'childAllergies':
+            label = 'Child Allergies';
+            icon = '⚠️';
+            break;
+          case 'childBehaviorNotes':
+            label = 'Child Behavior Notes';
+            icon = '📝';
+            break;
+          case 'financialInfo':
+            label = 'Financial Information';
+            icon = '💰';
+            break;
+          default:
+            label = key
+              .charAt(0)
+              .toUpperCase() +
+              key.slice(1).replace(/([A-Z])/g, ' $1');
+            break;
         }
 
         if (shouldOmitChildFields && key.toLowerCase().includes('child')) {
@@ -84,10 +139,10 @@ const InformationRequestModal = ({ visible, onClose, targetUser, userType = 'par
     }, []);
   }, [DATA_LEVELS.PRIVATE, DATA_LEVELS.SENSITIVE, dataClassification, disallowedFields, userType]);
 
-  const allowedFieldKeys = useMemo(() => fields.map(field => field.key), [fields]);
+  const allowedFieldKeys = useMemo(() => fields.map((field) => field.key), [fields]);
 
   useEffect(() => {
-    setSelectedFields(prev => prev.filter(key => allowedFieldKeys.includes(key)));
+    setSelectedFields((prev) => prev.filter((key) => allowedFieldKeys.includes(key)));
   }, [allowedFieldKeys]);
 
   useEffect(() => {
@@ -115,10 +170,10 @@ const InformationRequestModal = ({ visible, onClose, targetUser, userType = 'par
       return;
     }
 
-    setSelectedFields(prev =>
+    setSelectedFields((prev) =>
       prev.includes(fieldKey)
-        ? prev.filter(key => key !== fieldKey)
-        : [...prev, fieldKey]
+        ? prev.filter((key) => key !== fieldKey)
+        : [...prev, fieldKey],
     );
   };
 
@@ -134,12 +189,17 @@ const InformationRequestModal = ({ visible, onClose, targetUser, userType = 'par
     }
 
     const targetIdRaw = activeTarget?.id;
-    const targetId = typeof targetIdRaw === 'string' ? targetIdRaw.trim() : targetIdRaw != null ? String(targetIdRaw).trim() : '';
+    const targetId =
+      typeof targetIdRaw === 'string'
+        ? targetIdRaw.trim()
+        : targetIdRaw != null
+          ? String(targetIdRaw).trim()
+          : '';
 
     if (!targetId || targetId === 'sample') {
       Alert.alert(
         'Invalid recipient',
-        'We need a valid user to send your request. Please choose a real profile before submitting.'
+        'We need a valid user to send your request. Please choose a real profile before submitting.',
       );
       return;
     }
@@ -147,7 +207,7 @@ const InformationRequestModal = ({ visible, onClose, targetUser, userType = 'par
     if (userType === 'caregiver' && !allowedTargetIds.includes(targetId)) {
       Alert.alert(
         'Unavailable recipient',
-        'You can only request information from families connected through your bookings or job applications.'
+        'You can only request information from families connected through your bookings or job applications.',
       );
       return;
     }
@@ -171,96 +231,158 @@ const InformationRequestModal = ({ visible, onClose, targetUser, userType = 'par
 
   const getLevelColor = (level) => {
     switch (level) {
-      case DATA_LEVELS.PRIVATE: return '#f59e0b';
-      case DATA_LEVELS.SENSITIVE: return '#ef4444';
-      default: return '#10b981';
+      case DATA_LEVELS.PRIVATE:
+        return '#f59e0b';
+      case DATA_LEVELS.SENSITIVE:
+        return '#ef4444';
+      default:
+        return '#10b981';
     }
   };
 
   const getLevelIcon = (level) => {
     switch (level) {
-      case DATA_LEVELS.PRIVATE: return <Eye size={16} color="#f59e0b" />;
-      case DATA_LEVELS.SENSITIVE: return <Shield size={16} color="#ef4444" />;
-      default: return <Lock size={16} color="#10b981" />;
+      case DATA_LEVELS.PRIVATE:
+        return <Eye size={16} color="#f59e0b" />;
+      case DATA_LEVELS.SENSITIVE:
+        return <Shield size={16} color="#ef4444" />;
+      default:
+        return <Lock size={16} color="#10b981" />;
     }
   };
 
+  const headerSubtitleText = useMemo(() => {
+    if (userType === 'caregiver') {
+      return 'Ask a family to securely share details you need for upcoming care.';
+    }
+    return 'Send a structured request for specific information in a secure way.';
+  }, [userType]);
+
   return (
-    <Modal visible={visible} animationType="slide" presentationStyle="pageSheet">
+    <Modal
+      visible={visible}
+      animationType="slide"
+      presentationStyle="pageSheet"
+      onRequestClose={onClose}
+    >
       <View style={styles.container}>
+        {/* Header */}
         <View style={styles.header}>
-          <Text style={styles.title}>Request Information</Text>
-          <TouchableOpacity onPress={onClose} style={styles.closeButton}>
+          <View style={styles.headerTitleGroup}>
+            <Text style={styles.title}>Request Information</Text>
+            <Text style={styles.headerSubtitle}>{headerSubtitleText}</Text>
+          </View>
+          <TouchableOpacity
+            onPress={onClose}
+            style={styles.closeButton}
+            accessibilityRole="button"
+            accessibilityLabel="Close request information modal"
+          >
             <X size={24} color="#374151" />
           </TouchableOpacity>
         </View>
 
+        {/* User info */}
         <View style={styles.userInfo}>
           <Text style={styles.userInfoText}>
-            Requesting information from: <Text style={styles.userName}>{activeTarget?.name || 'Select a family'}</Text>
+            Requesting information from:{' '}
+            <Text style={styles.userName}>
+              {activeTarget?.name || 'Select a family'}
+            </Text>
           </Text>
           <Text style={styles.privacyNote}>
             🔒 All requests require approval and follow privacy guidelines
           </Text>
         </View>
 
+        {/* Target selector chips */}
         {availableTargets.length > 1 && (
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={styles.targetSelector}
+  <ScrollView
+    horizontal
+    style={styles.targetSelectorScroll}
+    showsHorizontalScrollIndicator={false}
+    contentContainerStyle={styles.targetSelector}
+  >
+    {availableTargets.map((target) => {
+      const isSelected = activeTarget?.id === target.id;
+      return (
+        <TouchableOpacity
+          key={target.id}
+          style={[
+            styles.targetChip,
+            isSelected && styles.targetChipSelected,
+          ]}
+          onPress={() => handleSelectTarget(target)}
+        >
+          <Text
+            style={[
+              styles.targetChipText,
+              isSelected && styles.targetChipTextSelected,
+            ]}
           >
-            {availableTargets.map((target) => {
-              const isSelected = activeTarget?.id === target.id;
-              return (
-                <TouchableOpacity
-                  key={target.id}
-                  style={[styles.targetChip, isSelected && styles.targetChipSelected]}
-                  onPress={() => handleSelectTarget(target)}
-                >
-                  <Text style={[styles.targetChipText, isSelected && styles.targetChipTextSelected]}>
-                    {target.name || 'Family'}
-                  </Text>
-                </TouchableOpacity>
-              );
-            })}
-          </ScrollView>
-        )}
+            {target.name || 'Family'}
+          </Text>
+        </TouchableOpacity>
+      );
+    })}
+  </ScrollView>
+)}
 
+        {/* Main content */}
         <ScrollView style={styles.content}>
           <Text style={styles.sectionTitle}>Select Information to Request:</Text>
 
-          {fields.map((field) => (
-            <TouchableOpacity
-              key={field.key}
-              style={[
-                styles.fieldItem,
-                selectedFields.includes(field.key) && styles.fieldItemSelected
-              ]}
-              onPress={() => toggleField(field.key)}
-            >
-              <View style={styles.fieldHeader}>
-                <View style={styles.fieldInfo}>
-                  <Text style={styles.fieldIcon}>{field.icon}</Text>
-                  <Text style={styles.fieldLabel}>{field.label}</Text>
+          {fields.length === 0 ? (
+            <View style={styles.emptyState}>
+              <Text style={styles.emptyTitle}>No private information available</Text>
+              <Text style={styles.emptySubtitle}>
+                There are no additional details marked as private or sensitive on
+                this profile yet.
+              </Text>
+            </View>
+          ) : (
+            fields.map((field) => (
+              <TouchableOpacity
+                key={field.key}
+                style={[
+                  styles.fieldItem,
+                  selectedFields.includes(field.key) && styles.fieldItemSelected,
+                ]}
+                onPress={() => toggleField(field.key)}
+              >
+                <View style={styles.fieldHeader}>
+                  <View style={styles.fieldInfo}>
+                    <Text style={styles.fieldIcon}>{field.icon}</Text>
+                    <Text style={styles.fieldLabel}>{field.label}</Text>
+                  </View>
+                  <View style={styles.fieldLevel}>
+                    {getLevelIcon(field.level)}
+                    <Text
+                      style={[
+                        styles.levelText,
+                        { color: getLevelColor(field.level) },
+                      ]}
+                    >
+                      {field.level.toUpperCase()}
+                    </Text>
+                  </View>
                 </View>
-                <View style={styles.fieldLevel}>
-                  {getLevelIcon(field.level)}
-                  <Text style={[styles.levelText, { color: getLevelColor(field.level) }]}>
-                    {field.level.toUpperCase()}
-                  </Text>
-                </View>
-              </View>
-              {selectedFields.includes(field.key) && (
-                <View style={styles.selectedIndicator}>
-                  <Text style={styles.selectedText}>✓ Selected</Text>
-                </View>
-              )}
-            </TouchableOpacity>
-          ))}
+                {selectedFields.includes(field.key) && (
+                  <View style={styles.selectedIndicator}>
+                    <Text style={styles.selectedText}>✓ Selected</Text>
+                  </View>
+                )}
+              </TouchableOpacity>
+            ))
+          )}
 
+          {/* Reason section */}
           <View style={styles.reasonSection}>
             <Text style={styles.sectionTitle}>Reason for Request:</Text>
+            <Text style={styles.sectionDescription}>
+              This reason will be shared with the recipient so they understand why
+              you're asking.
+            </Text>
             <TextInput
               style={styles.reasonInput}
               placeholder="Please explain why you need this information..."
@@ -273,18 +395,29 @@ const InformationRequestModal = ({ visible, onClose, targetUser, userType = 'par
           </View>
         </ScrollView>
 
+        {/* Footer actions */}
         <View style={styles.footer}>
           <TouchableOpacity
             style={[styles.button, styles.cancelButton]}
             onPress={onClose}
+            accessibilityRole="button"
+            accessibilityLabel="Cancel information request"
           >
             <Text style={styles.cancelButtonText}>Cancel</Text>
           </TouchableOpacity>
 
           <TouchableOpacity
-            style={[styles.button, styles.submitButton, loading && styles.buttonDisabled]}
+            style={[
+              styles.button,
+              styles.submitButton,
+              loading && styles.buttonDisabled,
+            ]}
             onPress={handleSubmitRequest}
             disabled={loading}
+            accessibilityRole="button"
+            accessibilityLabel={
+              loading ? 'Sending information request' : 'Send information request'
+            }
           >
             <Text style={styles.submitButtonText}>
               {loading ? 'Sending...' : 'Send Request'}
@@ -297,32 +430,43 @@ const InformationRequestModal = ({ visible, onClose, targetUser, userType = 'par
 };
 
 const styles = {
-  targetSelector: {
-    paddingHorizontal: 20,
-    paddingBottom: 12,
-    gap: 8,
-  },
+targetSelectorScroll: {
+  // keeps the horizontal row compact
+  maxHeight: 54,      // adjust up/down if needed
+},
+targetSelector: {
+  paddingHorizontal: 20,
+  paddingTop: 10,
+  paddingBottom: 0,
+  gap: 4,
+},
   targetChip: {
-    marginRight: 8,
-    borderWidth: 1,
-    borderColor: '#d1d5db',
-    borderRadius: 999,
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    backgroundColor: '#fff',
-  },
-  targetChipSelected: {
-    backgroundColor: '#fdf2f8',
-    borderColor: '#db2777',
-  },
-  targetChipText: {
-    fontSize: 14,
-    fontWeight: '500',
-    color: '#4b5563',
-  },
-  targetChipTextSelected: {
-    color: '#db2777',
-  },
+  flexDirection: 'row',
+  alignItems: 'center',
+  marginRight: 8,
+  paddingHorizontal: 14,
+  paddingVertical: 6,
+  height: 36,
+  borderWidth: 1,
+  borderColor: '#e5e7eb',
+  borderRadius: 16,
+  backgroundColor: '#fff',
+},
+
+targetChipSelected: {
+  backgroundColor: '#fdf2f8',
+  borderColor: '#db2777',
+},
+
+targetChipText: {
+  fontSize: 14,
+  fontWeight: '500',
+  color: '#4b5563',
+},
+
+targetChipTextSelected: {
+  color: '#db2777',
+},
   container: {
     flex: 1,
     backgroundColor: '#fff',
@@ -340,15 +484,24 @@ const styles = {
     fontWeight: '600',
     color: '#111827',
   },
+  headerTitleGroup: {
+    flex: 1,
+  },
+  headerSubtitle: {
+    marginTop: 14,
+    fontSize: 13,
+    color: '#6b7280',
+  },
   closeButton: {
     padding: 4,
   },
   userInfo: {
-    padding: 20,
-    backgroundColor: '#f9fafb',
-    borderBottomWidth: 1,
-    borderBottomColor: '#e5e7eb',
-  },
+  paddingHorizontal: 20,
+  paddingVertical: 12,   // was 20
+  backgroundColor: '#f9fafb',
+  borderBottomWidth: 1,
+  borderBottomColor: '#e5e7eb',
+},
   userInfoText: {
     fontSize: 16,
     color: '#374151',
@@ -364,14 +517,34 @@ const styles = {
     fontStyle: 'italic',
   },
   content: {
-    flex: 1,
-    padding: 20,
-  },
+  flex: 1,
+  paddingHorizontal: 20,
+  paddingTop: 8,        // was 20
+  paddingBottom: 20,
+},
   sectionTitle: {
     fontSize: 18,
     fontWeight: '600',
     color: '#111827',
     marginBottom: 16,
+  },
+  emptyState: {
+    borderWidth: 1,
+    borderColor: '#e5e7eb',
+    borderRadius: 12,
+    padding: 16,
+    backgroundColor: '#f9fafb',
+    marginBottom: 16,
+  },
+  emptyTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#111827',
+    marginBottom: 16,
+  },
+  emptySubtitle: {
+    fontSize: 14,
+    color: '#6b7280',
   },
   fieldItem: {
     borderWidth: 1,
@@ -430,6 +603,12 @@ const styles = {
   },
   reasonSection: {
     marginTop: 24,
+  },
+  sectionDescription: {
+    marginTop: 4,
+    marginBottom: 12,
+    fontSize: 14,
+    color: '#6b7280',
   },
   reasonInput: {
     borderWidth: 1,

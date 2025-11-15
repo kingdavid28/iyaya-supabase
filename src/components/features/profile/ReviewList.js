@@ -1,8 +1,9 @@
-import React from 'react';
-import { View, StyleSheet, FlatList, Image, ScrollView, RefreshControl } from 'react-native';
-import { Text, Avatar, Divider, useTheme, IconButton } from 'react-native-paper';
-import { Rating } from 'react-native-ratings';
 import { format } from 'date-fns';
+import React from 'react';
+import { FlatList, Image, RefreshControl, ScrollView, StyleSheet, TouchableOpacity, View } from 'react-native';
+import { Swipeable } from 'react-native-gesture-handler';
+import { Avatar, Divider, IconButton, Text, useTheme } from 'react-native-paper';
+import { Rating } from 'react-native-ratings';
 
 const ReviewList = ({
   reviews = [],
@@ -20,91 +21,110 @@ const ReviewList = ({
     const isCurrentUser = item.reviewerId === currentUserId;
     const canEdit = Boolean(
       onEditReview &&
-        (item.canEdit !== false) &&
-        (!currentUserId || item.reviewerId === currentUserId)
+      (item.canEdit !== false) &&
+      (!currentUserId || item.reviewerId === currentUserId)
     );
     const canDelete = Boolean(
       onDeleteReview &&
-        (item.canDelete !== false)
+      (item.canDelete !== false)
     );
 
+    const renderRightActions = () => {
+      if (!onDeleteReview) return null;
+      return (
+        <View style={styles.swipeActionsContainer}>
+          <TouchableOpacity
+            style={styles.deleteAction}
+            onPress={() => onDeleteReview?.(item)}
+          >
+            <Text style={styles.deleteActionText}>Delete</Text>
+          </TouchableOpacity>
+        </View>
+      );
+    };
+
     return (
-      <View style={styles.reviewContainer}>
-        <View style={styles.reviewHeader}>
-          <Avatar.Image 
-            size={40} 
-            source={item.reviewerAvatar ? { uri: item.reviewerAvatar } : require('../../../../assets/profile-placeholder.png')}
-            style={styles.avatar}
-          />
-          <View style={styles.reviewerInfo}>
-            <Text style={styles.reviewerName}>
-              {isCurrentUser ? 'You' : item.reviewerName}
-            </Text>
-            <Text style={styles.reviewDate}>
-              {format(new Date(item.createdAt), 'MMM d, yyyy')}
-            </Text>
-            {item.subjectName && (
-              <Text style={styles.subjectName}>{item.subjectName}</Text>
-            )}
-            {item.subjectSubtitle && (
-              <Text style={styles.subjectSubtitle}>{item.subjectSubtitle}</Text>
-            )}
-          </View>
-          <View style={styles.ratingContainer}>
-            <Rating
-              type="star"
-              ratingCount={5}
-              imageSize={16}
-              readonly
-              startingValue={item.rating}
-              style={styles.ratingStars}
+      <Swipeable
+        renderRightActions={renderRightActions}
+        overshootRight={false}
+      >
+        <View style={styles.reviewContainer}>
+          <View style={styles.reviewHeader}>
+            <Avatar.Image
+              size={40}
+              source={item.reviewerAvatar ? { uri: item.reviewerAvatar } : require('../../../../assets/profile-placeholder.png')}
+              style={styles.avatar}
             />
-          </View>
-          {(canEdit || canDelete) && (
-            <View style={styles.actions}>
-              {canEdit && (
-                <IconButton
-                  icon="pencil"
-                  size={18}
-                  onPress={() => onEditReview?.(item)}
-                  accessibilityLabel="Edit review"
-                />
+            <View style={styles.reviewerInfo}>
+              <Text style={styles.reviewerName}>
+                {isCurrentUser ? 'You' : item.reviewerName}
+              </Text>
+              <Text style={styles.reviewDate}>
+                {format(new Date(item.createdAt), 'MMM d, yyyy')}
+              </Text>
+              {item.subjectName && (
+                <Text style={styles.subjectName}>{item.subjectName}</Text>
               )}
-              {canDelete && (
-                <IconButton
-                  icon="delete"
-                  size={18}
-                  onPress={() => onDeleteReview?.(item)}
-                  accessibilityLabel="Delete review"
-                />
+              {item.subjectSubtitle && (
+                <Text style={styles.subjectSubtitle}>{item.subjectSubtitle}</Text>
               )}
             </View>
-          )}
-        </View>
-        
-        {item.comment && (
-          <Text style={styles.comment}>{item.comment}</Text>
-        )}
-        
-        {item.images && item.images.length > 0 && (
-          <FlatList
-            horizontal
-            data={item.images}
-            keyExtractor={(_, index) => `image-${index}`}
-            renderItem={({ item: imageUri }) => (
-              <Image 
-                source={{ uri: imageUri }} 
-                style={styles.reviewImage}
-                resizeMode="cover"
+            <View style={styles.ratingContainer}>
+              <Rating
+                type="star"
+                ratingCount={5}
+                imageSize={16}
+                readonly
+                startingValue={item.rating}
+                style={styles.ratingStars}
               />
+            </View>
+            {(canEdit || canDelete) && (
+              <View style={styles.actions}>
+                {canEdit && (
+                  <IconButton
+                    icon="pencil"
+                    size={18}
+                    onPress={() => onEditReview?.(item)}
+                    accessibilityLabel="Edit review"
+                  />
+                )}
+                {canDelete && (
+                  <IconButton
+                    icon="delete"
+                    size={18}
+                    onPress={() => onDeleteReview?.(item)}
+                    accessibilityLabel="Delete review"
+                  />
+                )}
+              </View>
             )}
-            contentContainerStyle={styles.imagesContainer}
-            showsHorizontalScrollIndicator={false}
-          />
-        )}
-        
-        <Divider style={[styles.divider, { backgroundColor: theme.colors.surfaceVariant }]} />
-      </View>
+          </View>
+
+          {item.comment && (
+            <Text style={styles.comment}>{item.comment}</Text>
+          )}
+
+          {item.images && item.images.length > 0 && (
+            <FlatList
+              horizontal
+              data={item.images}
+              keyExtractor={(_, index) => `image-${index}`}
+              renderItem={({ item: imageUri }) => (
+                <Image
+                  source={{ uri: imageUri }}
+                  style={styles.reviewImage}
+                  resizeMode="cover"
+                />
+              )}
+              contentContainerStyle={styles.imagesContainer}
+              showsHorizontalScrollIndicator={false}
+            />
+          )}
+
+          <Divider style={[styles.divider, { backgroundColor: theme.colors.surfaceVariant }]} />
+        </View>
+      </Swipeable>
     );
   };
 
@@ -142,13 +162,13 @@ const ReviewList = ({
 
     const refreshControl = onRefresh
       ? (
-          <RefreshControl
-            refreshing={Boolean(refreshing)}
-            onRefresh={onRefresh}
-            colors={['#3B82F6']}
-            tintColor="#3B82F6"
-          />
-        )
+        <RefreshControl
+          refreshing={Boolean(refreshing)}
+          onRefresh={onRefresh}
+          colors={['#3B82F6']}
+          tintColor="#3B82F6"
+        />
+      )
       : undefined;
 
     const hasReviews = reviews.length > 0;
@@ -163,10 +183,10 @@ const ReviewList = ({
         {renderNode(ListHeaderComponent)}
         {hasReviews
           ? reviews.map((review) => (
-              <React.Fragment key={review.id}>
-                {renderReview({ item: review })}
-              </React.Fragment>
-            ))
+            <React.Fragment key={review.id}>
+              {renderReview({ item: review })}
+            </React.Fragment>
+          ))
           : (ListEmptyComponent ?? defaultEmptyComponent)}
         {renderNode(ListFooterComponent)}
       </ScrollView>
@@ -192,6 +212,23 @@ const styles = StyleSheet.create({
   },
   reviewContainer: {
     marginBottom: 16,
+  },
+  swipeActionsContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'flex-end',
+    paddingHorizontal: 16,
+  },
+  deleteAction: {
+    backgroundColor: '#EF4444',
+    borderRadius: 8,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+  },
+  deleteActionText: {
+    color: '#FFFFFF',
+    fontWeight: '600',
+    fontSize: 14,
   },
   reviewHeader: {
     flexDirection: 'row',
