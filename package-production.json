@@ -1,0 +1,40 @@
+{
+  "name": "iyaya-production",
+  "version": "1.0.0",
+  "description": "Iyaya - Nanny & Employer Matching App (Production Build)",
+  "main": "index.js",
+  "scripts": {
+    "start": "expo start --no-dev --minify",
+    "start:prod": "expo start --no-dev --minify --clear",
+    "build:android": "eas build --platform android --profile production",
+    "build:ios": "eas build --platform ios --profile production",
+    "build:all": "eas build --platform all --profile production",
+    "submit:android": "eas submit --platform android",
+    "submit:ios": "eas submit --platform ios",
+    "preview": "expo export && npx serve dist",
+    "test:production": "jest --coverage --watchAll=false",
+    "lint:fix": "eslint . --fix",
+    "security:audit": "npm audit --audit-level moderate",
+    "clean": "expo r -c && npm run clean:deps",
+    "clean:deps": "rm -rf node_modules && npm install",
+    "validate": "npm run lint:fix && npm run test:production && npm run security:audit"
+  },
+  "productionOptimizations": {
+    "analytics": true,
+    "crashReporting": true,
+    "performanceMonitoring": true,
+    "securityHardening": true,
+    "codeObfuscation": true,
+    "bundleOptimization": true
+  },
+  "buildProfiles": {
+    "production": {
+      "env": {
+        "EXPO_PUBLIC_API_URL": "https://api.iyaya.app",
+        "EXPO_PUBLIC_SOCKET_URL": "https://api.iyaya.app",
+        "EXPO_PUBLIC_ANALYTICS_ENABLED": "true",
+        "EXPO_PUBLIC_DEBUG_MODE": "false"
+      }
+    }
+  }
+}
