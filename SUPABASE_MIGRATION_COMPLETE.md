@@ -199,7 +199,6 @@ https://github.com/kingdavid28/iyaya-supabase.git
 
 npx eas build --platform android --profile development   # or production
 npx eas build --platform android --profile production
-git remote set-url origin https://github.com/kingdavid28/iyaya-parentchildcare.git
 git remote -v
 git add package.json package-lock.json
 git commit -m "Add vercel-build script"
