@@ -1,80 +1,157 @@
 import { Ionicons } from '@expo/vector-icons';
 import React from 'react';
 import {
-    Alert,
-    Modal,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TouchableOpacity,
-    View
+  Alert,
+  Modal,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View
 } from 'react-native';
+
+// Shared compliance snippets reused across templates
+const DISCIPLINARY_CLAUSE =
+  'Employer enforces DOLE two-notice rule: (1) verbal/written warning, (2) written warning with corrective plan, (3) possible suspension/termination after investigation.';
+const TERMINATION_CLAUSE =
+  'Termination applies only for just/authorized causes with documentation, due process, and final pay. Caregiver may resign with notice or immediately for abuse/non-payment.';
+const GOVERNMENT_BENEFITS =
+  'Employer registers worker with SSS, PhilHealth, Pag-IBIG within 30 days, remits contributions monthly, and issues proof per RA 8282/RA 11223/RA 9679.';
 
 // Contract type definitions with templates
 export const CONTRACT_TYPES = {
-  STANDARD: {
-    id: 'standard',
-    title: 'Standard Employment',
-    subtitle: 'Basic employment agreement',
-    description: 'Standard terms and conditions for childcare services with basic protections and requirements.',
+  REGULAR: {
+    id: 'regular',
+    title: 'Regular Employment',
+    subtitle: 'Full-time nanny contract',
+    description: 'Long-term engagement with complete statutory benefits and disciplinary safeguards.',
     icon: 'document-text-outline',
     color: '#3B82F6',
     terms: {
-      'Employment Type': 'Independent Contractor',
-      'Work Schedule': 'As agreed per booking',
-      'Payment Terms': 'Payment upon completion of services',
-      'Cancellation Policy': '24 hours notice required',
-      'Background Check': 'Required before first assignment',
-      'Confidentiality': 'Client information must be kept confidential',
-      'Professional Conduct': 'Maintain professional standards at all times',
-      'Emergency Procedures': 'Follow established emergency protocols',
-      'Communication': 'Maintain regular communication with parents',
-      'Child Safety': 'Prioritize child safety and well-being above all else'
+      'Contract Title': 'Regular Employment Contract for Child Care Worker',
+      'Position': 'Full-Time Nanny',
+      'Start Date': '[Insert Date]',
+      'Work Schedule': 'Mon–Fri, 8AM–5PM (adjust as needed)',
+      'Compensation': '₱[Amount]/month + 13th month pay',
+      'Benefits': 'SSS, PhilHealth, Pag-IBIG, leave, 13th month pay',
+      'Duties': 'Child supervision, hygiene, feeding, educational play',
+      'Disciplinary Action': DISCIPLINARY_CLAUSE,
+      'Termination Clause': TERMINATION_CLAUSE,
+      'Government Compliance': GOVERNMENT_BENEFITS
     }
   },
-  TRIAL: {
-    id: 'trial',
-    title: 'Trial Period',
-    subtitle: '30-day probationary period',
-    description: 'Initial trial period with evaluation terms and performance expectations.',
+  PROBATIONARY: {
+    id: 'probationary',
+    title: 'Probationary Employment',
+    subtitle: 'Up to 6 months trial',
+    description: 'Evaluation contract that converts to regular upon satisfactory performance.',
     icon: 'time-outline',
     color: '#F59E0B',
     terms: {
-      'Trial Period': '30 days from first assignment',
-      'Performance Review': 'Weekly check-ins during trial period',
-      'Training Support': 'Additional training provided as needed',
-      'Early Termination': 'Either party may terminate with 48 hours notice',
-      'Evaluation Criteria': 'Reliability, communication, child care quality',
-      'Feedback Sessions': 'Regular feedback and improvement discussions',
-      'Work Schedule': 'As agreed per booking',
-      'Payment Terms': 'Payment upon completion of services',
-      'Professional Development': 'Access to training resources',
-      'Support System': 'Dedicated support during trial period'
+      'Contract Title': 'Probationary Employment Contract for Child Care Worker',
+      'Duration': '6 months from Start Date',
+      'Performance Standards': '[List measurable criteria]',
+      'Compensation': '₱[Amount]/month (pro-rated benefits)',
+      'Benefits': 'SSS, PhilHealth, Pag-IBIG, prorated leave',
+      'Conversion Clause': 'Becomes regular upon satisfactory performance',
+      'Disciplinary Action': DISCIPLINARY_CLAUSE,
+      'Termination Clause': 'May end for failure to meet standards plus ' + TERMINATION_CLAUSE,
+      'Government Compliance': GOVERNMENT_BENEFITS
     }
   },
-  COMPREHENSIVE: {
-    id: 'comprehensive',
-    title: 'Comprehensive Agreement',
-    subtitle: 'Full employment with benefits',
-    description: 'Detailed employment agreement with comprehensive terms, benefits, and long-term commitment.',
-    icon: 'shield-checkmark-outline',
-    color: '#10B981',
+  FIXED_TERM: {
+    id: 'fixed-term',
+    title: 'Fixed-Term / Project',
+    subtitle: 'Temporary assignment',
+    description: 'Defines start/end dates for seasonal or project-based care.',
+    icon: 'calendar-outline',
+    color: '#14B8A6',
     terms: {
-      'Employment Type': 'Preferred Caregiver Status',
-      'Contract Duration': '12 months with automatic renewal',
-      'Work Schedule': 'Priority booking access',
-      'Payment Terms': 'Competitive rates with performance bonuses',
-      'Health Benefits': 'Health insurance contribution available',
-      'Paid Time Off': '10 days paid vacation per year',
-      'Professional Development': 'Continued education and training support',
-      'Performance Bonuses': 'Based on parent satisfaction and reliability',
-      'Equipment Allowance': 'Annual allowance for child care supplies',
-      'Retirement Contribution': 'Matching retirement savings plan',
-      'Emergency Procedures': 'Comprehensive emergency response training',
-      'Background Check': 'Annual verification required',
-      'Confidentiality': 'Enhanced confidentiality requirements',
-      'Non-Compete': '6-month non-compete clause',
-      'Termination Notice': '30 days written notice required'
+      'Contract Title': 'Fixed-Term Contract for Temporary Child Care',
+      'Project Name': '[Holiday Babysitting / Summer Vacation]',
+      'Duration': '[Start Date] to [End Date]',
+      'Compensation': '₱[Amount]/day or ₱[Amount]/project',
+      'No Regularization Clause': 'Engagement is project-specific and non-habitual',
+      'Duties': '[List specific tasks]',
+      'Disciplinary Action': DISCIPLINARY_CLAUSE,
+      'Termination Clause': 'Automatically ends on project completion; ' + TERMINATION_CLAUSE,
+      'Government Compliance': GOVERNMENT_BENEFITS
+    }
+  },
+  CASUAL: {
+    id: 'casual',
+    title: 'Casual Employment',
+    subtitle: 'Irregular / one-off care',
+    description: 'For occasional babysitting or duties not integral to the business.',
+    icon: 'flash-outline',
+    color: '#EF4444',
+    terms: {
+      'Contract Title': 'Casual Employment Agreement for Child Care Services',
+      'Nature': 'One-time or irregular engagement',
+      'Date of Service': '[Insert Date]',
+      'Compensation': '₱[Amount]/hour or ₱[Amount]/day',
+      'Relationship Clause': 'Work not necessary nor desirable to employer’s usual business',
+      'Duties': '[e.g., emergency babysitting]',
+      'Disciplinary Action': DISCIPLINARY_CLAUSE,
+      'Termination Clause': 'Ends after service date; ' + TERMINATION_CLAUSE,
+      'Government Compliance': 'Benefits required if engagement exceeds 1 month; otherwise clarify voluntary contributions.'
+    }
+  },
+  PART_TIME: {
+    id: 'part-time',
+    title: 'Part-Time Employment',
+    subtitle: '<8 hours/day or <6 days/week',
+    description: 'Flexible schedule with pro-rated statutory benefits.',
+    icon: 'hourglass-outline',
+    color: '#8B5CF6',
+    terms: {
+      'Contract Title': 'Part-Time Employment Contract for Child Care Worker',
+      'Schedule': 'e.g., Saturdays & Sundays, 9AM–3PM',
+      'Compensation': '₱[Amount]/hour with rest breaks',
+      'Benefits': 'Pro-rated SSS, PhilHealth, Pag-IBIG',
+      'Duties': '[Weekend supervision, playtime]',
+      'Disciplinary Action': DISCIPLINARY_CLAUSE,
+      'Termination Clause': '15-day mutual notice plus ' + TERMINATION_CLAUSE,
+      'Government Compliance': GOVERNMENT_BENEFITS
+    }
+  },
+  SEASONAL: {
+    id: 'seasonal',
+    title: 'Seasonal Employment',
+    subtitle: 'Recurring period contract',
+    description: 'For recurring seasons (summer camp, school breaks).',
+    icon: 'sunny-outline',
+    color: '#F97316',
+    terms: {
+      'Contract Title': 'Seasonal Employment Contract for Child Care Worker',
+      'Season': '[e.g., Summer 2026]',
+      'Duration': '[Start Date] to [End Date]',
+      'Compensation': '₱[Amount]/month or per season',
+      'Rehire Clause': 'No guarantee of future employment beyond this season',
+      'Duties': '[Summer camp caregiving, etc.]',
+      'Disciplinary Action': DISCIPLINARY_CLAUSE,
+      'Termination Clause': 'Ends when the season concludes; ' + TERMINATION_CLAUSE,
+      'Government Compliance': GOVERNMENT_BENEFITS
+    }
+  },
+  INDEPENDENT_CONTRACTOR: {
+    id: 'independent',
+    title: 'Independent Contractor',
+    subtitle: 'Service-based engagement',
+    description: 'For self-employed caregivers handling their own contributions.',
+    icon: 'briefcase-outline',
+    color: '#0EA5E9',
+    terms: {
+      'Contract Title': 'Independent Contractor Agreement for Child Care Services',
+      'Parties': 'Client and Contractor',
+      'Scope of Work': '[Freelance nanny services]',
+      'Duration': '[Start Date] to [End Date] or ongoing',
+      'Compensation': '₱[Amount]/hour or per engagement',
+      'Relationship Clause': 'No employer-employee relationship; contractor is self-employed',
+      'Tax Responsibility': 'Contractor handles taxes and voluntary SSS/PhilHealth/Pag-IBIG contributions',
+      'Termination Clause': '7-day notice by either party; no separation pay',
+      'Disciplinary Action': 'Breach of service standards allows immediate termination of engagement',
+      'Government Compliance': 'Contractor may self-remit government benefits'
     }
   }
 };

@@ -87,55 +87,60 @@ const extractAddressComponent = (components, type) => {
   );
 };
 
-const formatPlacesResult = (place) => {
-  if (!place) {
+const getGeocodeComponent = (components, ...types) => {
+  if (!components) return '';
+  for (const type of types) {
+    const match = components.find((component) => component.types?.includes(type));
+    if (match) {
+      return (
+        match.long_text ??
+        match.longText ??
+        match.long_name ??
+        match.name ??
+        match.text ??
+        match.longName ??
+        ''
+      );
+    }
+  }
+  return '';
+};
+
+const formatGeocodeResult = (result) => {
+  if (!result) {
     return null;
   }
 
-  const addressComponents = place.address_components || place.addressComponents;
-  const shortFormattedAddress =
-    typeof place.shortFormattedAddress === 'object'
-      ? place.shortFormattedAddress?.text
-      : place.shortFormattedAddress;
+  const components = result.address_components || [];
 
-  const formatted =
-    place.formattedAddress ||
-    place.formatted_address ||
-    shortFormattedAddress ||
-    place.vicinity ||
-    place.displayName?.text ||
-    place.displayName ||
-    place.name ||
-    '';
+  const streetNumber = getGeocodeComponent(components, 'street_number');
+  const route = getGeocodeComponent(components, 'route');
+  const barangay =
+    getGeocodeComponent(components, 'sublocality_level_1') ||
+    getGeocodeComponent(components, 'sublocality');
+  const city =
+    getGeocodeComponent(components, 'locality') ||
+    getGeocodeComponent(components, 'administrative_area_level_2') ||
+    barangay;
 
-  const cityFromPlusCode =
-    place.plus_code?.compound_code?.split(' ')?.slice(1).join(' ') ?? '';
-  const cityFromVicinity = place.vicinity
-    ? place.vicinity
-      .split(',')
-      .slice(1)
-      .map((segment) => segment.trim())
-      .filter(Boolean)
-      .join(', ')
-    : '';
-
-  const cityFromComponents =
-    extractAddressComponent(addressComponents, 'locality') ||
-    extractAddressComponent(addressComponents, 'administrative_area_level_2');
+  const street = [streetNumber, route].filter(Boolean).join(' ').trim() || barangay || '';
 
   return {
-    formatted,
-    street:
-      place.name ||
-      place.displayName?.text ||
-      extractAddressComponent(addressComponents, 'route') ||
-      place.vicinity?.split(',')[0]?.trim() ||
-      '',
-    city: cityFromComponents || cityFromPlusCode || cityFromVicinity,
-    province: extractAddressComponent(addressComponents, 'administrative_area_level_1') || '',
-    country: extractAddressComponent(addressComponents, 'country') || '',
-    postalCode: extractAddressComponent(addressComponents, 'postal_code') || '',
+    formatted: result.formatted_address || '',
+    street,
+    city,
+    province: getGeocodeComponent(components, 'administrative_area_level_1') || '',
+    country: getGeocodeComponent(components, 'country') || '',
+    postalCode: getGeocodeComponent(components, 'postal_code') || '',
   };
+};
+
+const selectBestGeocodeResult = (results = []) => {
+  return (
+    results.find((item) => item.types?.includes('street_address')) ||
+    results.find((item) => item.types?.some((type) => ['premise', 'subpremise', 'route'].includes(type))) ||
+    results[0]
+  );
 };
 
 const fetchAddressFromPlaces = async ({ latitude, longitude }) => {
@@ -145,56 +150,24 @@ const fetchAddressFromPlaces = async ({ latitude, longitude }) => {
     return null;
   }
 
-  if (Platform.OS === 'web') {
-    try {
-      const googleMaps = await ensureGoogleMapsPlacesLibrary(apiKey);
-      if (!googleMaps?.places) {
-        console.warn('Google Maps Places library is unavailable in the current environment.');
-        return null;
-      }
-
-      const placesService = createPlacesService(googleMaps);
-      if (!placesService) {
-        return null;
-      }
-
-      const firstResult = await new Promise((resolve) => {
-        placesService.nearbySearch(
-          {
-            location: new googleMaps.LatLng(latitude, longitude),
-            radius: 75,
-          },
-          (results, status) => {
-            if (status !== googleMaps.places.PlacesServiceStatus.OK || !results?.length) {
-              resolve(null);
-              return;
-            }
-
-            resolve(results[0]);
-          },
-        );
-      });
-
-      return formatPlacesResult(firstResult);
-    } catch (error) {
-      console.error('Places JS lookup failed:', error);
-      return null;
-    }
-  }
-
   try {
-    const response = await axios.get('https://maps.googleapis.com/maps/api/place/nearbysearch/json', {
+    const response = await axios.get('https://maps.googleapis.com/maps/api/geocode/json', {
       params: {
         key: apiKey,
-        location: `${latitude},${longitude}`,
-        radius: 75,
+        latlng: `${latitude},${longitude}`,
+        result_type: 'street_address|premise|subpremise|route|neighborhood|locality',
       },
     });
 
-    const firstResult = response.data?.results?.[0];
-    return formatPlacesResult(firstResult);
+    const results = response.data?.results || [];
+    if (!results.length) {
+      return null;
+    }
+
+    const bestResult = selectBestGeocodeResult(results);
+    return formatGeocodeResult(bestResult);
   } catch (error) {
-    console.error('Places REST lookup failed:', error);
+    console.error('Geocode lookup failed:', error);
     return null;
   }
 };

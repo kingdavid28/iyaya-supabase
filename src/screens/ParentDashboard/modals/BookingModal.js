@@ -9,7 +9,7 @@ import {
   User,
   X
 } from 'lucide-react-native';
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -30,6 +30,7 @@ import SimpleDatePicker from '../../../shared/ui/inputs/SimpleDatePicker';
 import TimePicker from '../../../shared/ui/inputs/TimePicker';
 import { getImageSource } from '../../../utils/imageUtils';
 import { getCurrentDeviceLocation } from '../../../utils/locationUtils';
+import { clampToMinimumWage } from '../../../utils/minWage';
 
 const BookingModal = ({ caregiver, childrenList = [], onConfirm, onClose, visible }) => {
   const [currentStep, setCurrentStep] = useState(1);
@@ -53,6 +54,15 @@ const BookingModal = ({ caregiver, childrenList = [], onConfirm, onClose, visibl
   const [keyboardVisible, setKeyboardVisible] = useState(false);
   const [keyboardHeight, setKeyboardHeight] = useState(0);
 
+  const isTablet = Platform.OS === 'ios' && Platform.isPad;
+
+  const deriveLocationForWage = () => {
+    if (bookingData.address?.trim()) return bookingData.address;
+    if (caregiver?.serviceArea) return caregiver.serviceArea;
+    if (caregiver?.address) return caregiver.address;
+    return '';
+  };
+
   useEffect(() => {
     const keyboardWillShowListener = Keyboard.addListener('keyboardWillShow', (e) => {
       setKeyboardVisible(true);
@@ -68,6 +78,16 @@ const BookingModal = ({ caregiver, childrenList = [], onConfirm, onClose, visibl
       keyboardWillHideListener?.remove();
     };
   }, []);
+
+  const scrollContentStyle = useMemo(() => {
+    const basePadding = 100;
+    const dynamicPadding = keyboardVisible ? keyboardHeight + 60 : basePadding;
+    return [
+      styles.scrollContent,
+      { paddingBottom: Math.max(basePadding, dynamicPadding) },
+      isTablet && styles.scrollContentTablet
+    ];
+  }, [keyboardVisible, keyboardHeight, isTablet]);
 
   // Helper function to convert time to 24-hour format
   const convertTo24Hour = (input) => {
@@ -110,12 +130,16 @@ const BookingModal = ({ caregiver, childrenList = [], onConfirm, onClose, visibl
   };
 
   const resolveHourlyRate = () => {
-    if (typeof caregiver?.hourlyRate === 'number' && caregiver.hourlyRate > 0) return caregiver.hourlyRate;
-    if (typeof caregiver?.rate === 'string') {
+    let derivedRate = 150;
+
+    if (typeof caregiver?.hourlyRate === 'number' && caregiver.hourlyRate > 0) {
+      derivedRate = caregiver.hourlyRate;
+    } else if (typeof caregiver?.rate === 'string') {
       const n = parseFloat(caregiver.rate.replace(/[^0-9.]/g, ''));
-      return isNaN(n) || n <= 0 ? 150 : n;
+      derivedRate = !isNaN(n) && n > 0 ? n : derivedRate;
     }
-    return 150;
+
+    return clampToMinimumWage(derivedRate, deriveLocationForWage());
   };
 
   const calculateTotalCost = () => {
@@ -149,9 +173,11 @@ const BookingModal = ({ caregiver, childrenList = [], onConfirm, onClose, visibl
       setLocationLoading(true);
       const locationData = await getCurrentDeviceLocation();
 
-      if (locationData && locationData.address) {
-        const formattedAddress = `${locationData.address.street || ''} ${locationData.address.city || ''}, ${locationData.address.province || ''}`;
-        setBookingData(prev => ({ ...prev, address: formattedAddress.trim() }));
+      if (locationData?.address) {
+        const { address } = locationData;
+        const fallback = `${address.street || ''} ${address.city || ''}, ${address.province || ''}`.trim();
+        const formattedAddress = address.formatted?.trim() || fallback;
+        setBookingData(prev => ({ ...prev, address: formattedAddress }));
       }
     } catch (error) {
       Alert.alert('Location Error', error.message || 'Failed to get current location.');
@@ -189,6 +215,7 @@ const BookingModal = ({ caregiver, childrenList = [], onConfirm, onClose, visibl
       caregiverId: caregiver._id || caregiver.id || caregiver.userId,
       hourlyRate: resolveHourlyRate(),
       totalCost: calculateTotalCost(),
+      minimumWageApplied: resolveHourlyRate(),
       time: `${bookingData.startTime} - ${bookingData.endTime}`,
       status: 'pending',
       createdAt: new Date().toISOString(),
@@ -441,34 +468,45 @@ const BookingModal = ({ caregiver, childrenList = [], onConfirm, onClose, visibl
       <View>
         <Text style={styles.subsectionTitle}>Emergency Contact</Text>
         <View style={styles.emergencyContactContainer}>
-          <TextInput
-            value={bookingData.emergencyContact.name}
-            onChangeText={(text) => setBookingData(prev => ({
-              ...prev,
-              emergencyContact: { ...prev.emergencyContact, name: text }
-            }))}
-            style={styles.input}
-            placeholder="Emergency contact name"
-          />
-          <TextInput
-            value={bookingData.emergencyContact.phone}
-            onChangeText={(text) => setBookingData(prev => ({
-              ...prev,
-              emergencyContact: { ...prev.emergencyContact, phone: text }
-            }))}
-            style={styles.input}
-            placeholder="Emergency contact phone"
-            keyboardType="phone-pad"
-          />
-          <TextInput
-            value={bookingData.emergencyContact.relation}
-            onChangeText={(text) => setBookingData(prev => ({
-              ...prev,
-              emergencyContact: { ...prev.emergencyContact, relation: text }
-            }))}
-            style={styles.input}
-            placeholder="Relationship (e.g., Spouse, Parent, Friend)"
-          />
+          <View style={styles.emergencyField}>
+            <Text style={styles.emergencyLabel}>Full Name</Text>
+            <TextInput
+              value={bookingData.emergencyContact.name}
+              onChangeText={(text) => setBookingData(prev => ({
+                ...prev,
+                emergencyContact: { ...prev.emergencyContact, name: text }
+              }))}
+              style={styles.input}
+              placeholder="Emergency contact name"
+              autoCapitalize="words"
+            />
+          </View>
+          <View style={styles.emergencyField}>
+            <Text style={styles.emergencyLabel}>Phone Number</Text>
+            <TextInput
+              value={bookingData.emergencyContact.phone}
+              onChangeText={(text) => setBookingData(prev => ({
+                ...prev,
+                emergencyContact: { ...prev.emergencyContact, phone: text }
+              }))}
+              style={styles.input}
+              placeholder="Emergency contact phone"
+              keyboardType="phone-pad"
+            />
+          </View>
+          <View style={styles.emergencyField}>
+            <Text style={styles.emergencyLabel}>Relationship</Text>
+            <TextInput
+              value={bookingData.emergencyContact.relation}
+              onChangeText={(text) => setBookingData(prev => ({
+                ...prev,
+                emergencyContact: { ...prev.emergencyContact, relation: text }
+              }))}
+              style={styles.input}
+              placeholder="e.g., Spouse, Parent, Friend"
+              autoCapitalize="words"
+            />
+          </View>
         </View>
       </View>
 
@@ -675,12 +713,12 @@ const BookingModal = ({ caregiver, childrenList = [], onConfirm, onClose, visibl
       visible={visible}
       onClose={onClose}
       animationType="slide"
-      style={styles.modalContainer}
+      style={[styles.modalContainer, isTablet && styles.modalContainerTablet]}
     >
       <KeyboardAvoidingView
         style={{ flex: 1 }}
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        keyboardVerticalOffset={Platform.OS === 'ios' ? 120 : 0}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? (isTablet ? 40 : 120) : 0}
       >
         {/* Header */}
         <View style={styles.modalHeader}>
@@ -750,7 +788,7 @@ const BookingModal = ({ caregiver, childrenList = [], onConfirm, onClose, visibl
         {/* Content with Navigation */}
         <ScrollView
           style={styles.contentContainer}
-          contentContainerStyle={styles.scrollContent}
+          contentContainerStyle={scrollContentStyle}
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
         >
@@ -818,6 +856,13 @@ const styles = StyleSheet.create({
     maxHeight: '95%',
     paddingHorizontal: 0, // Ensure no horizontal padding conflicts
   },
+  modalContainerTablet: {
+    maxWidth: 720,
+    width: '90%',
+    maxHeight: '98%',
+    marginTop: 0,
+  },
+
   modalHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -934,6 +979,9 @@ const styles = StyleSheet.create({
   scrollContent: {
     padding: 16,
     paddingBottom: 100,
+  },
+  scrollContentTablet: {
+    paddingHorizontal: 24,
   },
   stepContainer: {
     gap: 16,
@@ -1053,6 +1101,15 @@ const styles = StyleSheet.create({
   },
   emergencyContactContainer: {
     gap: 12,
+  },
+  emergencyField: {
+    marginBottom: 4,
+  },
+  emergencyLabel: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: '#374151',
+    marginBottom: 6,
   },
   stepNavigation: {
     flexDirection: 'row',

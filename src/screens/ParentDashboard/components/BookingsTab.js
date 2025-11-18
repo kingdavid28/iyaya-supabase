@@ -9,6 +9,131 @@ import { contractService } from '../../../services/supabase/contractService';
 import { colors, styles } from '../../styles/ParentDashboard.styles';
 import BookingItem from './BookingItem';
 
+const DATE_FORMATTER = new Intl.DateTimeFormat('en-PH', {
+  month: 'long',
+  day: 'numeric',
+  year: 'numeric'
+});
+
+const formatDateLabel = (value) => {
+  if (!value) return null;
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return null;
+  return DATE_FORMATTER.format(date);
+};
+
+const formatCurrencyLabel = (value) => {
+  const amount = Number(value);
+  if (!Number.isFinite(amount)) return null;
+  return `₱${amount.toLocaleString('en-PH', {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2
+  })}`;
+};
+
+const resolveBookingLocation = (booking) => (
+  booking?.address ||
+  booking?.location ||
+  booking?.jobLocation ||
+  booking?.job?.location ||
+  booking?.caregiver?.serviceArea ||
+  ''
+);
+
+const getSanitizedHourlyRate = (booking) => {
+  const candidate = booking?.hourlyRate ?? booking?.hourly_rate ?? booking?.rate ?? booking?.salary;
+  const numeric = Number(candidate);
+  if (!Number.isFinite(numeric) || numeric <= 0) return null;
+  return clampToMinimumWage(numeric, resolveBookingLocation(booking));
+};
+
+const buildDurationTerm = (booking) => {
+  const start = booking?.startDate || booking?.date;
+  const end = booking?.endDate || null;
+  const formattedStart = formatDateLabel(start);
+  const formattedEnd = formatDateLabel(end);
+
+  if (formattedStart && formattedEnd) {
+    if (formattedStart === formattedEnd) {
+      return `${formattedStart} (single-day engagement)`;
+    }
+    return `${formattedStart} to ${formattedEnd}`;
+  }
+
+  if (formattedStart) {
+    return `${formattedStart} onward`;
+  }
+
+  return 'Duration aligns with confirmed Iyaya bookings.';
+};
+
+const buildScheduleTerm = (booking) => {
+  const startTime = booking?.startTime || booking?.start_time;
+  const endTime = booking?.endTime || booking?.end_time;
+
+  if (startTime && endTime) {
+    return `${startTime} – ${endTime}`;
+  }
+
+  if (startTime) {
+    return `${startTime} onwards`;
+  }
+
+  return null;
+};
+
+const buildCompensationTerm = (booking) => {
+  const sanitizedHourlyRate = getSanitizedHourlyRate(booking);
+  const hourlyRate = sanitizedHourlyRate ? formatCurrencyLabel(sanitizedHourlyRate) : null;
+  const engagementTotal = formatCurrencyLabel(
+    booking?.totalAmount || booking?.total_amount || booking?.totalCost
+  );
+
+  if (hourlyRate && engagementTotal) {
+    return `${hourlyRate}/hour; approx. ${engagementTotal} per engagement.`;
+  }
+
+  if (hourlyRate) {
+    return `${hourlyRate}/hour (per confirmed shift).`;
+  }
+
+  if (engagementTotal) {
+    return `${engagementTotal} per engagement (see latest invoice).`;
+  }
+
+  return 'Compensation follows confirmed booking invoices inside Iyaya.';
+};
+
+const buildPerformanceStandardsTerm = (booking) => {
+  const scheduleLabel = buildScheduleTerm(booking) || 'each scheduled shift';
+
+  const standards = [
+    `Arrive no later than 15 minutes before ${scheduleLabel} and confirm attendance in the Iyaya app.`,
+    'Complete childcare tasks (feeding, hygiene, learning, medication) logged by the parent and mark them done in-app.',
+    'Submit an end-of-shift summary plus any incident report before clocking out.',
+    'Follow household rules, Kasambahay Law protections, and child-safety protocols at all times.'
+  ];
+
+  return `• ${standards.join('\n• ')}`;
+};
+
+const buildBookingDrivenTerms = (booking) => {
+  if (!booking) return {};
+
+  const derivedTerms = {};
+  const duration = buildDurationTerm(booking);
+  const schedule = buildScheduleTerm(booking);
+  const compensation = buildCompensationTerm(booking);
+  const performance = buildPerformanceStandardsTerm(booking);
+
+  if (duration) derivedTerms.Duration = duration;
+  if (schedule) derivedTerms['Work Schedule'] = schedule;
+  if (compensation) derivedTerms.Compensation = compensation;
+  if (performance) derivedTerms['Performance Standards'] = performance;
+
+  return derivedTerms;
+};
+
 const BOOKING_ITEM_HEIGHT = 320;
 const SKELETON_ITEMS = 5;
 
@@ -334,11 +459,14 @@ const BookingsTab = ({
       setContractTypeSelectorVisible(false);
       console.log('🔍 BookingsTab - Creating contract with type:', contractType);
 
+      const bookingDrivenTerms = buildBookingDrivenTerms(selectedBookingForContract);
+
       // Generate contract terms based on selected type
       const contractTerms = {
         contractType: contractType.id,
         contractTitle: contractType.title,
         ...contractType.terms,
+        ...bookingDrivenTerms,
         createdAt: new Date().toISOString(),
         version: 1
       };
