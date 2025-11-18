@@ -168,7 +168,7 @@ const searchTabStyles = {
     borderBottomLeftRadius: 24,
     borderBottomRightRadius: 24,
     paddingHorizontal: 16,
-    paddingVertical: 20,
+    paddingVertical: 2,
   },
   headerContainer: {
     flexDirection: 'row',
@@ -241,7 +241,7 @@ const searchTabStyles = {
     width: '100%',
     paddingLeft: 48,
     paddingRight: 16,
-    paddingVertical: 14,
+    paddingVertical: 10,
     backgroundColor: 'white',
     borderWidth: 2,
     borderColor: '#e5e7eb',

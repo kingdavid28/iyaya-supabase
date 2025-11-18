@@ -1,5 +1,6 @@
 import { LinearGradient } from "expo-linear-gradient";
 import {
+  Award,
   Calendar,
   CheckCircle,
   Clock,
@@ -24,6 +25,7 @@ import {
   styles,
   typography,
 } from "../../styles/ParentDashboard.styles";
+import PesoSign from "@/components/ui/feedback/PesoSign";
 
 /**
  * CaregiverCard Component
@@ -82,6 +84,24 @@ const CaregiverCardComponent = ({ caregiver = {}, onPress, onMessagePress, onVie
     typeof caregiver?.experience === "number"
       ? caregiver.experience
       : caregiver?.experience?.years || 0;
+  const completedSessions =
+    caregiver?.completedBookings ??
+    caregiver?.completedJobs ??
+    caregiver?.stats?.completed ??
+    caregiver?.bookingsCount ??
+    0;
+  const responseRateRaw =
+    caregiver?.responseRate ??
+    caregiver?.stats?.responseRate ??
+    caregiver?.metrics?.responseRate;
+  const availabilityStatus =
+    caregiver?.availabilityStatus ||
+    caregiver?.availability ||
+    caregiver?.status ||
+    "";
+  const availabilityIsLimited =
+    typeof availabilityStatus === "string" &&
+    availabilityStatus.toLowerCase().includes("unavailable");
 
   // Track image load failure for graceful fallback
   const [imageError, setImageError] = useState(false);
@@ -109,6 +129,15 @@ const CaregiverCardComponent = ({ caregiver = {}, onPress, onMessagePress, onVie
   const hourlyRateLabel = hourlyRate ? `₱${hourlyRate}/hr` : "Rate TBD";
   const displaySpecialties = specialties.slice(0, 3);
   const remainingSpecialties = specialties.length - displaySpecialties.length;
+  const responseRateLabel =
+    Number.isFinite(Number(responseRateRaw)) && Number(responseRateRaw) > 0
+      ? `Response ${Math.round(Number(responseRateRaw))}%`
+      : null;
+  const statTiles = [
+    { icon: Clock, label: "Experience", value: experienceLabel },
+    { icon: PesoSign, label: "Hourly Rate", value: hourlyRateLabel },
+    
+  ];
   const canMessage = typeof onMessagePress === "function";
   const canViewReviews = typeof onViewReviews === "function" && hasReviews;
   const canRequestInfo = typeof onRequestInfo === "function";
@@ -226,6 +255,33 @@ const CaregiverCardComponent = ({ caregiver = {}, onPress, onMessagePress, onVie
                 ) : null}
               </View>
 
+              <View style={caregiverCardStyles.headerMetaRow}>
+                {availabilityStatus ? (
+                  <View
+                    style={[
+                      caregiverCardStyles.availabilityChip,
+                      availabilityIsLimited && caregiverCardStyles.availabilityChipMuted,
+                    ]}
+                  >
+                    <CheckCircle
+                      size={14}
+                      color={availabilityIsLimited ? 'rgba(255,255,255,0.85)' : '#10B981'}
+                    />
+                    <Text style={caregiverCardStyles.chipText} numberOfLines={1}>
+                      {availabilityStatus}
+                    </Text>
+                  </View>
+                ) : null}
+                {responseRateLabel ? (
+                  <View style={caregiverCardStyles.responseChip}>
+                    <Clock size={14} color="#6366F1" />
+                    <Text style={caregiverCardStyles.responseText} numberOfLines={1}>
+                      {responseRateLabel}
+                    </Text>
+                  </View>
+                ) : null}
+              </View>
+
               {locationText ? (
                 <View style={caregiverCardStyles.locationRow}>
                   <MapPin size={14} color="rgba(255,255,255,0.85)" />
@@ -243,36 +299,40 @@ const CaregiverCardComponent = ({ caregiver = {}, onPress, onMessagePress, onVie
         </LinearGradient>
 
         <View style={caregiverCardStyles.body}>
-          <View style={caregiverCardStyles.metaRow}>
-            <View style={caregiverCardStyles.metaChip}>
-              <Clock size={14} color={colors.textSecondary} />
-              <Text style={caregiverCardStyles.metaChipText}>{experienceLabel}</Text>
-            </View>
-            <View style={caregiverCardStyles.metaChip}>
-              <DollarSign size={14} color={colors.textSecondary} />
-              <Text style={caregiverCardStyles.metaChipText}>{hourlyRateLabel}</Text>
-            </View>
+          <View style={caregiverCardStyles.statGrid}>
+            {statTiles.map(({ icon: StatIcon, label, value }) => (
+              <View key={label} style={caregiverCardStyles.statCard}>
+                <View style={caregiverCardStyles.statIconWrap}>
+                  <StatIcon size={16} color={colors.primary} />
+                </View>
+                <Text style={caregiverCardStyles.statLabel}>{label}</Text>
+                <Text style={caregiverCardStyles.statValue}>{value}</Text>
+              </View>
+            ))}
           </View>
 
+          <View style={caregiverCardStyles.divider} />
+
           {displaySpecialties.length > 0 && (
-            <View style={caregiverCardStyles.specialtiesRow}>
-              {displaySpecialties.map((specialty, index) => (
-                <View
-                  key={index}
-                  style={[styles.tag, caregiverCardStyles.specialtyTag]}
-                >
-                  <Text style={[typography.caption, { color: colors.primary }]}>
-                    {specialty}
-                  </Text>
-                </View>
-              ))}
-              {remainingSpecialties > 0 && (
-                <View style={[styles.tag, caregiverCardStyles.moreTag]}>
-                  <Text style={[typography.caption, { color: colors.textSecondary }]}>
-                    +{remainingSpecialties} more
-                  </Text>
-                </View>
-              )}
+            <View style={caregiverCardStyles.specialtiesSection}>
+              <View style={caregiverCardStyles.sectionHeaderRow}>
+                <Text style={caregiverCardStyles.sectionLabel}>Focus Areas</Text>
+                {remainingSpecialties > 0 && (
+                  <Text style={caregiverCardStyles.sectionBadge}>+{remainingSpecialties} more</Text>
+                )}
+              </View>
+              <View style={caregiverCardStyles.specialtiesRow}>
+                {displaySpecialties.map((specialty, index) => (
+                  <View
+                    key={index}
+                    style={[styles.tag, caregiverCardStyles.specialtyTag]}
+                  >
+                    <Text style={[typography.caption, caregiverCardStyles.specialtyText]}>
+                      {specialty}
+                    </Text>
+                  </View>
+                ))}
+              </View>
             </View>
           )}
 
@@ -378,10 +438,10 @@ const caregiverCardStyles = StyleSheet.create({
   },
   wrapper: {
     overflow: 'hidden',
-    backgroundColor: colors.secondaryLight,
+    borderRadius: 22,
+    backgroundColor: 'rgba(8, 184, 128, 0.15)',
   },
   gradientHeader: {
-    backgroundColor: colors.secondaryLight,
     borderRadius: 22,
     height: 128,
     paddingHorizontal: spacing.md,
@@ -479,44 +539,131 @@ const caregiverCardStyles = StyleSheet.create({
     paddingHorizontal: spacing.md,
     paddingBottom: spacing.lg,
     paddingTop: spacing.sm,
-    backgroundColor: colors.secondaryLight,
+    borderRadius: 22,
+    //backgroundColor: 'rgba(16,185,129,0.15)',
   },
-  metaRow: {
+  headerMetaRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    marginTop: spacing.sm,
-    marginBottom: spacing.sm,
+    gap: 8,
+    marginTop: spacing.xs,
   },
-  metaChip: {
+  availabilityChip: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: colors.backgroundLight,
-    borderRadius: 14,
+    //backgroundColor: 'rgba(16,185,129,0.15)',
+    borderRadius: 999,
     paddingHorizontal: spacing.sm,
-    paddingVertical: 6,
-    marginRight: spacing.sm,
-    marginBottom: spacing.sm,
+    paddingVertical: 4,
+    borderWidth: 1,
+    borderColor: 'rgba(16,185,129,0.4)',
   },
-  metaChipText: {
+  availabilityChipMuted: {
+    backgroundColor: 'rgba(255,255,255,0.08)',
+    borderColor: 'rgba(255,255,255,0.25)',
+  },
+  chipText: {
     marginLeft: spacing.xs,
-    color: colors.textSecondary,
+    color: '#F9FAFB',
     fontSize: 12,
     fontWeight: '600',
+  },
+  responseChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderRadius: 999,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 4,
+    backgroundColor: 'rgba(99,102,241,0.15)',
+    borderWidth: 1,
+    borderColor: 'rgba(99,102,241,0.35)',
+  },
+  responseText: {
+    marginLeft: spacing.xs,
+    color: '#E0E7FF',
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  statGrid: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    paddingVertical: spacing.sm,
+  },
+  statCard: {
+    flex: 1,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.sm,
+    marginRight: spacing.sm,
+    shadowColor: '#00000012',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.08,
+    shadowRadius: 8,
+    elevation: 2,
+  },
+  statIconWrap: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: 'rgba(99,102,241,0.12)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 6,
+  },
+  statLabel: {
+    fontSize: 12,
+    color: colors.textSecondary,
+    fontWeight: '600',
+  },
+  statValue: {
+    marginTop: 2,
+    fontSize: 14,
+    fontWeight: '700',
+    color: colors.text,
+  },
+  divider: {
+    height: 1,
+    backgroundColor: 'rgba(15,23,42,0.08)',
+    marginVertical: spacing.md,
+  },
+  specialtiesSection: {
+    marginBottom: spacing.md,
+  },
+  sectionHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: spacing.xs,
+  },
+  sectionLabel: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: colors.text,
+    textTransform: 'uppercase',
+    letterSpacing: 0.4,
+  },
+  sectionBadge: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: colors.primary,
   },
   specialtiesRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    marginBottom: spacing.sm,
   },
   specialtyTag: {
     backgroundColor: `${colors.primary}12`,
-    borderColor: colors.primary,
-    marginRight: spacing.xs,
-    marginBottom: spacing.xs,
+    borderColor: 'transparent',
+    borderRadius: 12,
+    paddingVertical: 6,
+    paddingHorizontal: spacing.sm,
+    marginRight: spacing.sm,
+    marginBottom: spacing.sm,
   },
-  moreTag: {
-    borderColor: colors.border,
-    backgroundColor: colors.backgroundLight,
+  specialtyText: {
+    color: colors.primary,
+    fontWeight: '600',
   },
   actionsRow: {
     flexDirection: 'row',

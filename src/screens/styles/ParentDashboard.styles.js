@@ -966,13 +966,14 @@ export const styles = StyleSheet.create({
   // Add these styles to your existing styles object
 bookingsContent: {
   flex: 1,
-  padding: 16,
+  paddingHorizontal: 16,
+  paddingTop: 10,
 },
 bookingsHeader: {
   marginBottom: 16,
 },
 bookingsTitle: {
-  fontSize: 24,
+  fontSize: 20,
   fontWeight: 'bold',
   color: '#1f2937',
   marginBottom: 12,
