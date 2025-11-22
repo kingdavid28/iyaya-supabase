@@ -4,6 +4,18 @@ import { createClient } from '@supabase/supabase-js'
 const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL
 const supabaseAnonKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY
 
+const deriveStorageKey = () => {
+  try {
+    const projectRef = new URL(supabaseUrl).hostname.split('.')[0]
+    return `sb-${projectRef}-auth-token`
+  } catch (error) {
+    console.warn('⚠️ Unable to derive Supabase storage key:', error?.message)
+    return 'supabase.auth.token'
+  }
+}
+
+const SUPABASE_STORAGE_KEY = deriveStorageKey()
+
 // Diagnostic logging
 console.log('🔧 Supabase Configuration:')
 console.log('  - URL:', supabaseUrl ? `${supabaseUrl.substring(0, 30)}...` : 'MISSING')
@@ -38,18 +50,41 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   },
 })
 
-// Test connection on initialization
-supabase.auth.getSession()
-  .then(({ data, error }) => {
+const clearStaleSession = async () => {
+  try {
+    await supabase.auth.signOut({ scope: 'local' })
+  } catch (signOutError) {
+    console.warn('⚠️ Local sign-out failed while clearing stale session:', signOutError?.message)
+  }
+
+  try {
+    await AsyncStorage.removeItem(SUPABASE_STORAGE_KEY)
+  } catch (storageError) {
+    console.warn('⚠️ Failed to remove Supabase session storage key:', storageError?.message)
+  }
+}
+
+const runInitialSessionCheck = async () => {
+  try {
+    const { data, error } = await supabase.auth.getSession()
     if (error) {
       console.error('❌ Supabase session check failed:', error.message)
-    } else {
-      console.log('✅ Supabase client initialized successfully')
-      console.log('  - Session:', data.session ? 'Active' : 'No session')
+      const message = error.message?.toLowerCase() || ''
+      const isInvalidRefresh = message.includes('invalid refresh token') || message.includes('refresh token not found')
+      if (isInvalidRefresh) {
+        console.warn('🧹 Clearing invalid Supabase session from storage')
+        await clearStaleSession()
+      }
+      return
     }
-  })
-  .catch(err => {
+
+    console.log('✅ Supabase client initialized successfully')
+    console.log('  - Session:', data.session ? 'Active' : 'No session')
+  } catch (err) {
     console.error('❌ Supabase connection test failed:', err.message)
-  })
+  }
+}
+
+runInitialSessionCheck()
 
 export default supabase
