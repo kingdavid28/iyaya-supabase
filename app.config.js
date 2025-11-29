@@ -27,7 +27,7 @@ export default {
     },
     android: {
       adaptiveIcon: {
-        foregroundImage: "./assets/iconaa.png",
+        foregroundImage: "./assets/icona.png",
         backgroundColor: "#FFFFFF"
       },
       package: "com.iyaya.app",
