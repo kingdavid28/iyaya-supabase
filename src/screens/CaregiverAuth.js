@@ -389,9 +389,9 @@ const CaregiverAuth = ({ navigation }) => {
                     </View>
                     
                     <GoogleSignInButton
-                      onPress={async (googleUserInfo) => {
+                      onPress={async () => {
                         try {
-                          await signInWithGoogle(googleUserInfo)
+                          await signInWithGoogle()
                         } catch (error) {
                           Alert.alert('Google Sign In Failed', error.message)
                         }

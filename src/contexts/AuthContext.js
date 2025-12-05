@@ -457,30 +457,31 @@ export const AuthProvider = ({ children }) => {
     }
   }
 
-  const signInWithGoogle = async (googleUserInfo = null) => {
+  const signInWithGoogle = async () => {
     try {
       setError(null)
       setLoading(true)
+      
+      console.log('🔄 Starting Google Sign-In...')
 
-      if (googleUserInfo?.idToken) {
-        // Handle native Google Sign-In result
-        const { data, error } = await supabase.auth.signInWithIdToken({
-          provider: 'google',
-          token: googleUserInfo.idToken,
-        })
-        
-        if (error) throw error
-        
-        if (data.user) {
-          await ensureUserProfileExists(data.user, 'parent')
+      const { data, error } = await supabase.auth.signInWithOAuth({
+        provider: 'google',
+        options: {
+          redirectTo: `${window?.location?.origin || 'https://myiyrmiiywwgismcpith.supabase.co'}/auth/callback`,
         }
-        
-        return data
-      } else {
-        // Fallback to web OAuth
-        return await signInWithOAuth('google')
+      })
+
+      console.log('📊 Google OAuth response:', { data, error })
+
+      if (error) {
+        console.error('❌ Google OAuth error:', error)
+        throw error
       }
+      
+      console.log('✅ Google Sign-In initiated successfully')
+      return data
     } catch (err) {
+      console.error('❌ Google Sign-In failed:', err)
       setError(err.message)
       throw err
     } finally {
