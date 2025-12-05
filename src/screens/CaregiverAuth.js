@@ -21,12 +21,13 @@ import { useAuth } from '../contexts/AuthContext';
 import { useAuthForm } from '../hooks/useAuthForm';
 import { useAuthSubmit } from '../hooks/useAuthSubmit';
 import CustomDateTimePicker from '../shared/ui/inputs/DateTimePicker';
+import GoogleSignInButton from '../components/auth/GoogleSignInButton';
 import { navigateToUserDashboard } from '../utils/navigationUtils';
 
 const CaregiverAuth = ({ navigation }) => {
   const [mode, setMode] = useState('login');
   const { dispatch } = useApp();
-  const { user: authUser, signIn, signUp, verifyEmailToken } = useAuth();
+  const { user: authUser, signIn, signUp, signInWithGoogle, verifyEmailToken } = useAuth();
   const { formData, formErrors, handleChange, validateForm: validateCurrentForm, resetForm } = useAuthForm();
   const { handleSubmit: handleAuthSubmit, isSubmitting } = useAuthSubmit(navigation);
   const [showPassword, setShowPassword] = useState(false);
@@ -378,6 +379,28 @@ const CaregiverAuth = ({ navigation }) => {
                   {mode === 'signup' ? 'Create Account' : mode === 'reset' ? 'Send Reset Link' : 'Sign In'}
                 </Button>
 
+                {/* Google Sign In - only for login and signup */}
+                {mode !== 'reset' && (
+                  <>
+                    <View style={styles.divider}>
+                      <View style={styles.dividerLine} />
+                      <Text style={styles.dividerText}>or</Text>
+                      <View style={styles.dividerLine} />
+                    </View>
+                    
+                    <GoogleSignInButton
+                      onPress={async () => {
+                        try {
+                          await signInWithGoogle()
+                        } catch (error) {
+                          Alert.alert('Google Sign In Failed', error.message)
+                        }
+                      }}
+                      loading={isSubmitting}
+                    />
+                  </>
+                )}
+
                 {/* Footer links */}
                 {mode !== 'reset' ? (
                   <>
@@ -589,6 +612,21 @@ const styles = StyleSheet.create({
     marginBottom: 12,
     fontStyle: 'italic',
   },
+  divider: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginVertical: 16
+  },
+  dividerLine: {
+    flex: 1,
+    height: 1,
+    backgroundColor: '#e5e7eb'
+  },
+  dividerText: {
+    marginHorizontal: 16,
+    color: '#6b7280',
+    fontSize: 14
+  }
 });
 
 export default CaregiverAuth;

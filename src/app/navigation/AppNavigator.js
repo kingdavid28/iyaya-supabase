@@ -23,8 +23,11 @@ import Chat from "../../screens/Chat";
 
 
 // Legacy screen imports (to be migrated)
+import AppealScreen from "../../screens/AppealScreen";
+import CreateReportScreen from "../../screens/CreateReportScreen";
 import EmailVerificationPendingScreen from "../../screens/EmailVerificationPendingScreen";
 import JobSearchScreen from "../../screens/JobSearchScreen";
+import MyReportsScreen from "../../screens/MyReportsScreen";
 import OnboardingScreen from "../../screens/OnboardingScreen";
 
 // Primary screens (formerly lazy-loaded)
@@ -42,6 +45,7 @@ import ProfileScreen from "../../screens/profile/ProfileScreen";
 
 // Utils
 import DeepLinkHandler from "../../components/navigation/DeepLinkHandler";
+import StatusGuard from "../../components/auth/StatusGuard";
 import { hasSeenOnboarding } from "../../utils/onboarding";
 
 const ensureGlobalLocationPolyfill = () => {
@@ -227,27 +231,28 @@ const AppNavigatorWithAuth = () => {
   }
 
   return (
-    <NavigationContainer
-      theme={theme}
-      ref={navigationRef}
-      linking={{
-        prefixes: ['iyaya://'],
-        config: {
-          screens: {
-            ContractView: 'contract/:contractId',
+    <StatusGuard>
+      <NavigationContainer
+        theme={theme}
+        ref={navigationRef}
+        linking={{
+          prefixes: ['iyaya://'],
+          config: {
+            screens: {
+              ContractView: 'contract/:contractId',
+            },
           },
-        },
-      }}
-      onReady={() => {
-        if (fallbackTimeoutRef.current) {
-          clearTimeout(fallbackTimeoutRef.current);
-          fallbackTimeoutRef.current = null;
-        }
-        SplashScreen.hideAsync().catch(console.warn);
-      }}
-    >
-      {navigationRef.current && <DeepLinkHandler navigation={navigationRef.current} />}
-      <Stack.Navigator
+        }}
+        onReady={() => {
+          if (fallbackTimeoutRef.current) {
+            clearTimeout(fallbackTimeoutRef.current);
+            fallbackTimeoutRef.current = null;
+          }
+          SplashScreen.hideAsync().catch(console.warn);
+        }}
+      >
+        {navigationRef.current && <DeepLinkHandler navigation={navigationRef.current} />}
+        <Stack.Navigator
         initialRouteName={
           showOnboarding
             ? "Onboarding"
@@ -292,8 +297,12 @@ const AppNavigatorWithAuth = () => {
         <Stack.Screen name="Chat" component={Chat} options={{ headerShown: false }} />
         <Stack.Screen name="CaregiverReviews" component={CaregiverReviewsScreen} options={{ title: "Caregiver Reviews", headerShown: false, headerTitleStyle: { marginTop: 18 }, contentStyle: { paddingTop: 50 }, }} />
         <Stack.Screen name="CaregiverProfile" component={CaregiverProfileComplete} options={{ title: "Caregiver Profile", headerShown: false, headerBackTitle: "Back", contentStyle: { paddingTop: 16 }, }} />
+        <Stack.Screen name="Appeal" component={AppealScreen} options={{ title: "Appeal Suspension", headerBackTitle: "Back" }} />
+        <Stack.Screen name="CreateReport" component={CreateReportScreen} options={{ title: "Report User", headerBackTitle: "Back" }} />
+        <Stack.Screen name="MyReports" component={MyReportsScreen} options={{ title: "My Reports", headerBackTitle: "Back" }} />
       </Stack.Navigator>
     </NavigationContainer>
+    </StatusGuard>
   );
 };
 

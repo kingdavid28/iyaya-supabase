@@ -9,21 +9,24 @@ import { messagingService } from './messagingService'
 import { notificationService } from './notificationService'
 import { privacyService } from './privacyService'
 import { realtimeService } from './realtimeService'
+import { reportService } from './reportService'
 import { reviewService } from './reviewService'
 import { storageService } from './storageService'
 import { userService } from './userService'
+import { userStatusService } from './userStatusService'
 
 // Import the main supabaseService for upload functionality
 // Note: This creates a circular dependency issue since we're importing from parent directory
 // TODO: Move uploadProfileImage to storageService and remove this import
 
 // Export individual services (preferred approach)
-export { applicationService, bookingService, childrenService, contractService, informationRequestService, jobService, messagingService, notificationService, privacyService, realtimeService, reviewService, storageService, userService }
+export { applicationService, bookingService, childrenService, contractService, informationRequestService, jobService, messagingService, notificationService, privacyService, realtimeService, reportService, reviewService, storageService, userService, userStatusService }
 
 // Facade pattern for unified access (when needed)
 export class SupabaseServiceFacade {
   constructor() {
     this.user = userService
+    this.userStatus = userStatusService
     this.children = childrenService
     this.jobs = jobService
     this.applications = applicationService
@@ -34,6 +37,7 @@ export class SupabaseServiceFacade {
     this.storage = storageService
     this.realtime = realtimeService
     this.reviews = reviewService
+    this.reports = reportService
     this.contracts = contractService
     this.informationRequests = informationRequestService
   }

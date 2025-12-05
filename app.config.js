@@ -1,5 +1,7 @@
-export default {
+export default ({ config }) => ({
+  ...config,
   expo: {
+    ...config.expo,
     name: "iYaya",
     slug: "iyaya-caregiver-app",
     version: "1.0.0",
@@ -7,7 +9,7 @@ export default {
     icon: "./assets/icon.png",
     userInterfaceStyle: "light",
     splash: {
-      image: "./assets/logo.png",
+      image: "./assets/splash.png",
       resizeMode: "contain",
       backgroundColor: "#ffffff"
     },
@@ -22,22 +24,35 @@ export default {
         "applinks:iyaya-app.page.link"
       ],
       infoPlist: {
-        ITSAppUsesNonExemptEncryption: false
+        ITSAppUsesNonExemptEncryption: false,
+        CFBundleURLTypes: [
+          {
+            CFBundleURLName: "iyaya-app",
+            CFBundleURLSchemes: ["iyaya-app"]
+          }
+        ]
       }
     },
     android: {
       adaptiveIcon: {
-        foregroundImage: "./assets/icona.png",
+        foregroundImage: "./assets/adaptive-icon.png",
         backgroundColor: "#FFFFFF"
       },
       package: "com.iyaya.app",
       jsEngine: "hermes",
-      usesCleartextTraffic: true, // Allow HTTP traffic (for development/debugging)
+      usesCleartextTraffic: true,
       permissions: [
         "INTERNET",
         "ACCESS_NETWORK_STATE",
         "ACCESS_FINE_LOCATION",
         "ACCESS_COARSE_LOCATION"
+      ],
+      intentFilters: [
+        {
+          action: "VIEW",
+          category: ["DEFAULT", "BROWSABLE"],
+          data: { scheme: "iyaya-app" }
+        }
       ]
     },
     web: {
@@ -45,15 +60,24 @@ export default {
     },
     plugins: [
       "expo-secure-store",
-      "expo-font"
+      "expo-font",
+      [
+        "@react-native-google-signin/google-signin",
+        {
+          iosUrlScheme: process.env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID
+        }
+      ]
     ],
-    scheme: "com.iyaya.app",
+    scheme: "iyaya-app",
     extra: {
       supabaseUrl: process.env.EXPO_PUBLIC_SUPABASE_URL ?? null,
       supabaseAnonKey: process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY ?? null,
+      googleWebClientId: process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID ?? null,
+      googleAndroidClientId: process.env.EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID ?? null,
+      googleIosClientId: process.env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID ?? null,
       eas: {
         projectId: "583f6598-db53-4667-af75-fdd1f8104fab"
       }
     }
   }
-};
+});

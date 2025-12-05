@@ -6,6 +6,7 @@ import { ActivityIndicator, Platform, View } from 'react-native'
 
 import { supabase } from '../config/supabase'
 import { tokenManager } from '../utils/tokenManager'
+import { userStatusService } from '../services/supabase/userStatusService'
 
 export const AuthContext = createContext()
 
@@ -130,17 +131,27 @@ export const AuthProvider = ({ children }) => {
       const profile = data && data.length > 0 ? data[0] : null
       console.log('👤 User profile found:', profile)
 
+      // Check user status
+      const statusData = await userStatusService.checkUserStatus(authUser.id)
+      if (!statusData.canAccess) {
+        console.warn('⚠️ User access restricted:', statusData)
+        // Don't throw error here, let StatusGuard handle it
+      }
+
       const userWithProfile = {
         ...authUser,
         role: profile?.role || 'parent',
         name: profile?.name || authUser.user_metadata?.name,
-        profile
+        profile,
+        status: profile?.status || 'active',
+        statusData
       }
 
       console.log('✅ Final user object:', {
         id: userWithProfile.id,
         email: userWithProfile.email,
         role: userWithProfile.role,
+        status: userWithProfile.status,
         keys: Object.keys(userWithProfile)
       })
       return userWithProfile
@@ -204,6 +215,9 @@ export const AuthProvider = ({ children }) => {
         || authUser.email?.split('@')?.[0]
         || 'Iyaya User'
 
+      // Determine auth provider
+      const authProvider = authUser.app_metadata?.provider || 'supabase'
+      
       const profilePayload = {
         id: authUser.id,
         email: authUser.email,
@@ -212,7 +226,7 @@ export const AuthProvider = ({ children }) => {
         first_name: firstName,
         last_name: lastName,
         phone: authUser.user_metadata?.phone || null,
-        auth_provider: 'supabase',
+        auth_provider: authProvider,
         status: 'active',
         email_verified: !!authUser.email_confirmed_at,
         profile_image: authUser.user_metadata?.avatar_url || authUser.user_metadata?.picture || null,
