@@ -463,11 +463,17 @@ export const AuthProvider = ({ children }) => {
       setLoading(true)
       
       console.log('🔄 Starting Google Sign-In...')
+      
+      // Get the current origin for redirect
+      const origin = typeof window !== 'undefined' ? window.location.origin : 'https://iyaya-supabase.vercel.app'
+      const redirectTo = `${origin}/auth/callback`
+      
+      console.log('🔗 Redirect URL:', redirectTo)
 
       const { data, error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
         options: {
-          redirectTo: `${window?.location?.origin || 'https://myiyrmiiywwgismcpith.supabase.co'}/auth/callback`,
+          redirectTo,
         }
       })
 

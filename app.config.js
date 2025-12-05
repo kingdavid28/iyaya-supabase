@@ -72,9 +72,9 @@ export default ({ config }) => ({
     extra: {
       supabaseUrl: process.env.EXPO_PUBLIC_SUPABASE_URL ?? null,
       supabaseAnonKey: process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY ?? null,
-      googleWebClientId: process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID ?? null,
-      googleAndroidClientId: process.env.EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID ?? null,
-      googleIosClientId: process.env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID ?? null,
+      googleWebClientId: process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID ?? "998196800470-k3los9p540onooj79g69q9urln8lqbn3.apps.googleusercontent.com",
+      googleAndroidClientId: process.env.EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID ?? "998196800470-cng01lpqeq3ogq77mibb11psk1udedm8.apps.googleusercontent.com",
+      googleIosClientId: process.env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID ?? "998196800470-mguo8sj1ke7iv604mo1qmuq2565dnhv9.apps.googleusercontent.com",
       eas: {
         projectId: "583f6598-db53-4667-af75-fdd1f8104fab"
       }
