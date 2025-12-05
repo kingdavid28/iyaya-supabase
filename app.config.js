@@ -64,7 +64,7 @@ export default ({ config }) => ({
       [
         "@react-native-google-signin/google-signin",
         {
-          iosUrlScheme: process.env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID
+          iosUrlScheme: "com.googleusercontent.apps.998196800470-mguo8sj1ke7iv604mo1qmuq2565dnhv9"
         }
       ]
     ],

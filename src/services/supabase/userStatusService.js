@@ -4,6 +4,16 @@ import { getCachedOrFetch, invalidateCache } from './cache'
 export class UserStatusService extends SupabaseBase {
   async checkUserStatus(userId) {
     try {
+      if (!userId) {
+        return {
+          status: 'active',
+          isSuspended: false,
+          isBanned: false,
+          suspensionData: null,
+          canAccess: true
+        }
+      }
+
       const resolvedUserId = await this._ensureUserId(userId, 'User ID')
       
       const { data, error } = await supabase
@@ -12,7 +22,17 @@ export class UserStatusService extends SupabaseBase {
         .eq('id', resolvedUserId)
         .single()
 
-      if (error) throw error
+      if (error) {
+        console.warn('User status check failed:', error.message)
+        // Return safe defaults on error
+        return {
+          status: 'active',
+          isSuspended: false,
+          isBanned: false,
+          suspensionData: null,
+          canAccess: true
+        }
+      }
 
       const status = data?.status || 'active'
       const suspensionData = data?.profile_data?.suspension || null
@@ -25,7 +45,15 @@ export class UserStatusService extends SupabaseBase {
         canAccess: status === 'active'
       }
     } catch (error) {
-      return this._handleError('checkUserStatus', error, false)
+      console.warn('User status service error:', error.message)
+      // Return safe defaults on network/auth errors
+      return {
+        status: 'active',
+        isSuspended: false,
+        isBanned: false,
+        suspensionData: null,
+        canAccess: true
+      }
     }
   }
 
@@ -62,6 +90,10 @@ export class UserStatusService extends SupabaseBase {
 
   async subscribeToStatusChanges(userId, callback) {
     try {
+      if (!userId) {
+        return { unsubscribe: () => {} }
+      }
+
       const resolvedUserId = await this._ensureUserId(userId, 'User ID')
       
       const subscription = supabase
@@ -75,17 +107,21 @@ export class UserStatusService extends SupabaseBase {
             filter: `id=eq.${resolvedUserId}`
           },
           (payload) => {
-            const newData = payload.new
-            const oldData = payload.old
-            
-            if (newData.status !== oldData.status) {
-              callback({
-                userId: resolvedUserId,
-                oldStatus: oldData.status,
-                newStatus: newData.status,
-                suspensionData: newData.profile_data?.suspension,
-                timestamp: new Date().toISOString()
-              })
+            try {
+              const newData = payload.new
+              const oldData = payload.old
+              
+              if (newData.status !== oldData.status) {
+                callback({
+                  userId: resolvedUserId,
+                  oldStatus: oldData.status,
+                  newStatus: newData.status,
+                  suspensionData: newData.profile_data?.suspension,
+                  timestamp: new Date().toISOString()
+                })
+              }
+            } catch (callbackError) {
+              console.warn('Status change callback error:', callbackError)
             }
           }
         )
@@ -93,8 +129,9 @@ export class UserStatusService extends SupabaseBase {
 
       return subscription
     } catch (error) {
-      console.error('Error subscribing to status changes:', error)
-      return null
+      console.warn('Error subscribing to status changes:', error)
+      // Return mock subscription to prevent unsubscribe errors
+      return { unsubscribe: () => {} }
     }
   }
 

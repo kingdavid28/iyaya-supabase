@@ -231,26 +231,26 @@ const AppNavigatorWithAuth = () => {
   }
 
   return (
-    <StatusGuard>
-      <NavigationContainer
-        theme={theme}
-        ref={navigationRef}
-        linking={{
-          prefixes: ['iyaya://'],
-          config: {
-            screens: {
-              ContractView: 'contract/:contractId',
-            },
+    <NavigationContainer
+      theme={theme}
+      ref={navigationRef}
+      linking={{
+        prefixes: ['iyaya://'],
+        config: {
+          screens: {
+            ContractView: 'contract/:contractId',
           },
-        }}
-        onReady={() => {
-          if (fallbackTimeoutRef.current) {
-            clearTimeout(fallbackTimeoutRef.current);
-            fallbackTimeoutRef.current = null;
-          }
-          SplashScreen.hideAsync().catch(console.warn);
-        }}
-      >
+        },
+      }}
+      onReady={() => {
+        if (fallbackTimeoutRef.current) {
+          clearTimeout(fallbackTimeoutRef.current);
+          fallbackTimeoutRef.current = null;
+        }
+        SplashScreen.hideAsync().catch(console.warn);
+      }}
+    >
+      <StatusGuard>
         {navigationRef.current && <DeepLinkHandler navigation={navigationRef.current} />}
         <Stack.Navigator
         initialRouteName={
@@ -301,8 +301,8 @@ const AppNavigatorWithAuth = () => {
         <Stack.Screen name="CreateReport" component={CreateReportScreen} options={{ title: "Report User", headerBackTitle: "Back" }} />
         <Stack.Screen name="MyReports" component={MyReportsScreen} options={{ title: "My Reports", headerBackTitle: "Back" }} />
       </Stack.Navigator>
+      </StatusGuard>
     </NavigationContainer>
-    </StatusGuard>
   );
 };
 

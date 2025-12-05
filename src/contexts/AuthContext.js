@@ -1,4 +1,3 @@
-import * as AuthSession from 'expo-auth-session'
 import Constants from 'expo-constants'
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react'
 
@@ -436,19 +435,6 @@ export const AuthProvider = ({ children }) => {
   }
 
   const signInWithOAuth = async (provider) => {
-    const isExpoGo = Constants.appOwnership === 'expo'
-
-    const redirectTo = AuthSession.makeRedirectUri({
-      path: 'auth',
-      native: 'iyaya-app://auth',
-      preferLocalhost: false,
-      useProxy: isExpoGo,
-    })
-
-    console.log('🔁 OAuth redirect URI:', redirectTo)
-
-    const shouldUseAuthSession = Platform.OS !== 'web'
-
     try {
       setError(null)
       setLoading(true)
@@ -456,41 +442,13 @@ export const AuthProvider = ({ children }) => {
       const { data, error } = await supabase.auth.signInWithOAuth({
         provider,
         options: {
-          redirectTo,
-          skipBrowserRedirect: shouldUseAuthSession,
+          redirectTo: `${window?.location?.origin || 'https://myiyrmiiywwgismcpith.supabase.co'}/auth/callback`,
+          skipBrowserRedirect: false,
         }
       })
 
       if (error) throw error
-
-      if (!shouldUseAuthSession) {
-        return data
-      }
-
-      if (!data?.url) {
-        throw new Error('Unable to start authentication flow. Please try again.')
-      }
-
-      const authResult = await AuthSession.startAsync({
-        authUrl: data.url,
-        returnUrl: redirectTo,
-      })
-
-      if (authResult.type !== 'success') {
-        if (authResult.type === 'cancel' || authResult.type === 'dismiss') {
-          throw new Error('Authentication cancelled.')
-        }
-        throw new Error('Authentication failed. Please try again.')
-      }
-
-      const { data: sessionData } = await supabase.auth.getSession()
-      if (!sessionData.session?.user) {
-        throw new Error('No active session found after authentication.')
-      }
-
-      const userWithProfile = await fetchUserWithProfile(sessionData.session.user)
-      setUser(userWithProfile)
-      return userWithProfile
+      return data
     } catch (err) {
       setError(err.message)
       throw err
@@ -499,7 +457,36 @@ export const AuthProvider = ({ children }) => {
     }
   }
 
-  const signInWithGoogle = () => signInWithOAuth('google')
+  const signInWithGoogle = async (googleUserInfo = null) => {
+    try {
+      setError(null)
+      setLoading(true)
+
+      if (googleUserInfo?.idToken) {
+        // Handle native Google Sign-In result
+        const { data, error } = await supabase.auth.signInWithIdToken({
+          provider: 'google',
+          token: googleUserInfo.idToken,
+        })
+        
+        if (error) throw error
+        
+        if (data.user) {
+          await ensureUserProfileExists(data.user, 'parent')
+        }
+        
+        return data
+      } else {
+        // Fallback to web OAuth
+        return await signInWithOAuth('google')
+      }
+    } catch (err) {
+      setError(err.message)
+      throw err
+    } finally {
+      setLoading(false)
+    }
+  }
 
   const getCurrentUser = () => {
     return user

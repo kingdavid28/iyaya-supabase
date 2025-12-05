@@ -74,7 +74,6 @@ export const PrivacyProvider = ({ children }) => {
   const [loading, setLoading] = useState(false);
 
   const loadPrivacySettings = useCallback(async () => {
-    setLoading(true);
     try {
       const authenticated = await isAuthenticated();
       if (!authenticated) {
@@ -87,13 +86,8 @@ export const PrivacyProvider = ({ children }) => {
         setPrivacySettings(response.data);
       }
     } catch (error) {
-      console.error('Error loading privacy settings:', error);
-      if (error.response?.status === 401 || error.message === 'Authentication required') {
-        console.warn('Privacy settings unavailable - using defaults');
-        return;
-      }
-    } finally {
-      setLoading(false);
+      console.warn('Error loading privacy settings:', error);
+      // Use default settings on error
     }
   }, []);
 
@@ -333,7 +327,6 @@ export const PrivacyProvider = ({ children }) => {
   }, []);
 
   const loadPendingRequests = useCallback(async () => {
-    setLoading(true);
     try {
       const authenticated = await isAuthenticated();
       if (!authenticated) {
@@ -345,15 +338,13 @@ export const PrivacyProvider = ({ children }) => {
       const requests = await informationRequestService.getPendingRequests();
       setPendingRequests(Array.isArray(requests) ? requests : []);
     } catch (error) {
-      console.error('Error loading pending requests:', error);
-      Alert.alert('Error', error?.message || 'Failed to load pending requests.');
-    } finally {
-      setLoading(false);
+      console.warn('Error loading pending requests:', error);
+      setPendingRequests([]);
+      // Don't show alert on startup errors
     }
   }, []);
 
   const loadSentRequests = useCallback(async () => {
-    setLoading(true);
     try {
       const authenticated = await isAuthenticated();
       if (!authenticated) {
@@ -365,15 +356,13 @@ export const PrivacyProvider = ({ children }) => {
       const requests = await informationRequestService.getSentRequests();
       setSentRequests(Array.isArray(requests) ? requests : []);
     } catch (error) {
-      console.error('Error loading sent requests:', error);
-      Alert.alert('Error', error?.message || 'Failed to load sent requests.');
-    } finally {
-      setLoading(false);
+      console.warn('Error loading sent requests:', error);
+      setSentRequests([]);
+      // Don't show alert on startup errors
     }
   }, []);
 
   const loadNotifications = useCallback(async () => {
-    setLoading(true);
     try {
       const authenticated = await isAuthenticated();
       if (!authenticated) {
@@ -386,13 +375,8 @@ export const PrivacyProvider = ({ children }) => {
         setNotifications(response.data);
       }
     } catch (error) {
-      console.error('Error loading notifications:', error);
-      if (error.response?.status === 401 || error.message === 'Authentication required') {
-        console.warn('Privacy notifications unavailable - user not authenticated');
-        return;
-      }
-    } finally {
-      setLoading(false);
+      console.warn('Error loading notifications:', error);
+      // Silently fail on startup
     }
   }, []);
 
@@ -411,12 +395,22 @@ export const PrivacyProvider = ({ children }) => {
     }
   }, []);
 
+  // Only load data when user is authenticated
   useEffect(() => {
-    loadPrivacySettings();
-    loadPendingRequests();
-    loadSentRequests();
-    loadNotifications();
-  }, [loadNotifications, loadPendingRequests, loadPrivacySettings, loadSentRequests]);
+    const loadDataWhenReady = async () => {
+      const authenticated = await isAuthenticated();
+      if (authenticated) {
+        loadPrivacySettings();
+        loadPendingRequests();
+        loadSentRequests();
+        loadNotifications();
+      }
+    };
+    
+    // Delay initial load to avoid startup race conditions
+    const timer = setTimeout(loadDataWhenReady, 1000);
+    return () => clearTimeout(timer);
+  }, []);
 
   const value = {
     privacySettings,

@@ -12,7 +12,7 @@ const StatusGuard = ({ children }) => {
     return children
   }
 
-  // Show loading while checking status
+  // Show loading while checking status (with timeout)
   if (loading) {
     return (
       <View style={styles.loadingContainer}>
@@ -20,6 +20,11 @@ const StatusGuard = ({ children }) => {
         <Text style={styles.loadingText}>Checking account status...</Text>
       </View>
     )
+  }
+
+  // If statusData is null/undefined, allow access (fail-safe)
+  if (!statusData) {
+    return children
   }
 
   // Block access for suspended/banned users

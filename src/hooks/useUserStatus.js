@@ -13,7 +13,13 @@ export const useUserStatus = () => {
 
   const checkStatus = useCallback(async () => {
     if (!user?.id) {
-      setStatusData(null)
+      setStatusData({
+        status: 'active',
+        isSuspended: false,
+        isBanned: false,
+        suspensionData: null,
+        canAccess: true
+      })
       setLoading(false)
       return
     }
@@ -26,7 +32,15 @@ export const useUserStatus = () => {
         await handleStatusViolation(status)
       }
     } catch (error) {
-      console.error('Error checking user status:', error)
+      console.warn('Error checking user status:', error)
+      // Set safe defaults on error
+      setStatusData({
+        status: 'active',
+        isSuspended: false,
+        isBanned: false,
+        suspensionData: null,
+        canAccess: true
+      })
     } finally {
       setLoading(false)
     }
@@ -114,7 +128,7 @@ export const useUserStatus = () => {
     setSubscription(sub)
 
     return () => {
-      if (sub) {
+      if (sub && typeof sub.unsubscribe === 'function') {
         sub.unsubscribe()
       }
     }
