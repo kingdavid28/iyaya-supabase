@@ -1,12 +1,19 @@
 import React from 'react'
-import { TouchableOpacity, Text, StyleSheet, View } from 'react-native'
+import { TouchableOpacity, Text, StyleSheet, View, Platform } from 'react-native'
 import { Ionicons } from '@expo/vector-icons'
 
 const GoogleSignInButton = ({ onPress, loading, style, textStyle }) => {
+  const handlePress = () => {
+    console.log('🔘 Google Sign-In button pressed')
+    if (onPress) {
+      onPress()
+    }
+  }
+
   return (
     <TouchableOpacity
       style={[styles.button, style]}
-      onPress={onPress}
+      onPress={handlePress}
       disabled={loading}
       accessibilityLabel="Sign in with Google"
     >

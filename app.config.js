@@ -60,13 +60,7 @@ export default ({ config }) => ({
     },
     plugins: [
       "expo-secure-store",
-      "expo-font",
-      [
-        "@react-native-google-signin/google-signin",
-        {
-          iosUrlScheme: "com.googleusercontent.apps.998196800470-mguo8sj1ke7iv604mo1qmuq2565dnhv9"
-        }
-      ]
+      "expo-font"
     ],
     scheme: "iyaya-app",
     extra: {
