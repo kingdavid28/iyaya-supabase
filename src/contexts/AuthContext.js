@@ -462,25 +462,20 @@ export const AuthProvider = ({ children }) => {
       setError(null)
       setLoading(true)
       
-      console.log('🔄 Starting Google Sign-In...')
+      console.log('🔄 Starting Google Sign-In (Expo Go compatible)...')
+      console.log('🌍 Platform:', Platform.OS)
       
-      // Get the current origin for redirect
-      const origin = typeof window !== 'undefined' ? window.location.origin : 'https://iyaya-supabase.vercel.app'
-      const redirectTo = `${origin}/auth/callback`
-      
-      console.log('🔗 Redirect URL:', redirectTo)
-
       const { data, error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
         options: {
-          redirectTo,
+          redirectTo: 'https://iyaya-supabase.vercel.app/auth/callback',
         }
       })
 
-      console.log('📊 Google OAuth response:', { data, error })
+      console.log('📊 OAuth response:', { data, error })
 
       if (error) {
-        console.error('❌ Google OAuth error:', error)
+        console.error('❌ OAuth error:', error)
         throw error
       }
       

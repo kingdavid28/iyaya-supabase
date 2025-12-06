@@ -4,7 +4,6 @@ import { Ionicons } from '@expo/vector-icons'
 
 const GoogleSignInButton = ({ onPress, loading, style, textStyle }) => {
   const handlePress = () => {
-    console.log('🔘 Google Sign-In button pressed')
     if (onPress) {
       onPress()
     }

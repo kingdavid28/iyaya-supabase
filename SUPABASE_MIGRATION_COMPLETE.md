@@ -205,3 +205,21 @@ git commit -m "Add vercel-build script"
 git push origin main
 
 https://iyaya-supabase.vercel.app/
+
+To get native Google Sign-In in a standalone app, you'll need to:
+
+Build with EAS Build (not Expo Go)
+
+Re-add the @react-native-google-signin/google-signin plugin
+
+Configure proper iOS/Android OAuth credentials
+
+The current implementation works perfectly in Expo Go and will continue working in production builds.
+
+Build Commands:
+
+npm run build:android - Production APK
+
+npm run build:preview - Preview APK
+
+npm run vercel-build - Vercel deployment

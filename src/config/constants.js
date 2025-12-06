@@ -14,43 +14,27 @@ export const __PROD__ = !__DEV__;
 // Compute a cross-platform API base URL that works for Expo Web, Android emulator, iOS simulator, and physical devices.
 const getBaseHost = () => {
   try {
-    // 1) Environment variable takes priority
+    // 1) Supabase URL takes priority (fully migrated)
+    const supabaseUrl = process.env?.EXPO_PUBLIC_SUPABASE_URL;
+    if (supabaseUrl) {
+      const trimmed = supabaseUrl.trim().replace(/\/$/, "");
+      const withRest = trimmed.includes('/rest/v1') ? trimmed : `${trimmed}/rest/v1`;
+      return { mode: "supabase", url: withRest, appendApi: false };
+    }
+
+    // 2) Legacy API URL (deprecated - should not be used)
     const envUrlRaw = process.env?.EXPO_PUBLIC_API_URL || process.env?.REACT_APP_API_URL;
-    if (envUrlRaw) {
+    if (envUrlRaw && !envUrlRaw.includes('192.168.1.5')) {
       const trimmed = envUrlRaw.trim().replace(/\/$/, "");
       const withoutApi = trimmed.replace(/\/api$/i, "");
-      const isSupabase = /supabase\.co/i.test(withoutApi);
-      if (isSupabase) {
-        const withRest = withoutApi.includes('/rest/v1') ? withoutApi : `${withoutApi}/rest/v1`;
-        return { mode: "env", url: withRest, appendApi: false };
-      }
-      return { mode: "env", url: withoutApi, appendApi: true };
+      return { mode: "legacy-env", url: withoutApi, appendApi: true };
     }
 
-    // 2) Platform-specific defaults
-    try {
-      const rn = require("react-native");
-      const platform = rn?.Platform?.OS;
-      if (platform === "android") {
-        return { mode: "android-emulator", url: "http://10.0.2.2:5000", appendApi: true };
-      }
-      if (platform === "ios") {
-        return { mode: "ios-simulator", url: "http://127.0.0.1:5000", appendApi: true };
-      }
-    } catch (_) {
-      // Ignore require errors for react-native in web environments
-    }
-
-    // 3) Web fallback
-    if (typeof window !== "undefined") {
-      return { mode: "web", url: "http://localhost:5000", appendApi: true };
-    }
-
-    // 4) Default fallback
-    return { mode: "fallback", url: "http://localhost:5000", appendApi: true };
+    // 3) Default to Supabase fallback
+    return { mode: "supabase-fallback", url: "https://myiyrmiiywwgismcpith.supabase.co/rest/v1", appendApi: false };
   } catch (error) {
     console.error("Error determining base host:", error);
-    return { mode: "error-fallback", url: "http://localhost:5000", appendApi: true };
+    return { mode: "error-fallback", url: "https://myiyrmiiywwgismcpith.supabase.co/rest/v1", appendApi: false };
   }
 };
 
@@ -80,7 +64,7 @@ export const API_CONFIG = {
     METHODS: ["GET", "POST", "PUT", "DELETE"], // Methods to retry
   },
   CONNECTION: {
-    CHECK_URL: "/health", // Health check endpoint
+    CHECK_URL: "/rest/v1/", // Supabase REST API root (no /health endpoint)
     CHECK_TIMEOUT: 3000, // 3 second timeout for health check
     CHECK_INTERVAL: 30000, // Check every 30 seconds
     RECONNECT_ATTEMPTS: 3, // Number of reconnection attempts

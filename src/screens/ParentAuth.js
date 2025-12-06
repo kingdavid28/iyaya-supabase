@@ -353,13 +353,7 @@ const ParentAuth = ({ navigation, route }) => {
                     </View>
                     
                     <GoogleSignInButton
-                      onPress={async () => {
-                        try {
-                          await signInWithGoogle()
-                        } catch (error) {
-                          Alert.alert('Google Sign In Failed', error.message)
-                        }
-                      }}
+                      onPress={signInWithGoogle}
                       loading={isSubmitting}
                     />
                   </>

@@ -29,6 +29,10 @@ export default ({ config }) => ({
           {
             CFBundleURLName: "iyaya-app",
             CFBundleURLSchemes: ["iyaya-app"]
+          },
+          {
+            CFBundleURLName: "google-signin",
+            CFBundleURLSchemes: ["com.googleusercontent.apps.998196800470-mguo8sj1ke7iv604mo1qmuq2565dnhv9"]
           }
         ]
       }
@@ -60,11 +64,17 @@ export default ({ config }) => ({
     },
     plugins: [
       "expo-secure-store",
-      "expo-font"
+      "expo-font",
+      [
+        "@react-native-google-signin/google-signin",
+        {
+          iosUrlScheme: "com.googleusercontent.apps.998196800470-mguo8sj1ke7iv604mo1qmuq2565dnhv9"
+        }
+      ]
     ],
     scheme: "iyaya-app",
     extra: {
-      supabaseUrl: process.env.EXPO_PUBLIC_SUPABASE_URL ?? null,
+      supabaseUrl: process.env.EXPO_PUBLIC_SUPABASE_URL ?? "https://myiyrmiiywwgismcpith.supabase.co",
       supabaseAnonKey: process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY ?? null,
       googleWebClientId: process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID ?? "998196800470-k3los9p540onooj79g69q9urln8lqbn3.apps.googleusercontent.com",
       googleAndroidClientId: process.env.EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID ?? "998196800470-cng01lpqeq3ogq77mibb11psk1udedm8.apps.googleusercontent.com",
