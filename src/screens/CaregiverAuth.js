@@ -15,7 +15,7 @@ import {
   View
 } from 'react-native';
 import { Button, TextInput } from 'react-native-paper';
-import { authAPI } from '../config/api';
+// Removed old authAPI import - using useAuth hook instead
 import { useApp } from '../contexts/AppContext';
 import { useAuth } from '../contexts/AuthContext';
 import { useAuthForm } from '../hooks/useAuthForm';
@@ -27,7 +27,7 @@ import { navigateToUserDashboard } from '../utils/navigationUtils';
 const CaregiverAuth = ({ navigation }) => {
   const [mode, setMode] = useState('login');
   const { dispatch } = useApp();
-  const { user: authUser, signIn, signUp, signInWithGoogle, verifyEmailToken } = useAuth();
+  const { user: authUser, signIn, signUp, signInWithGoogle, resetPassword, verifyEmailToken } = useAuth();
   const { formData, formErrors, handleChange, validateForm: validateCurrentForm, resetForm } = useAuthForm();
   const { handleSubmit: handleAuthSubmit, isSubmitting } = useAuthSubmit(navigation);
   const [showPassword, setShowPassword] = useState(false);
@@ -133,8 +133,8 @@ const CaregiverAuth = ({ navigation }) => {
 
         return result;
       } else if (mode === 'reset') {
-        const result = await authAPI.resetPassword(email);
-        Alert.alert("Reset Link Sent", "If an account with that email exists, a password reset link has been sent. Check the server console for the reset URL in development mode.");
+        const result = await resetPassword(email);
+        Alert.alert("Reset Link Sent", "If an account with that email exists, a password reset link has been sent.");
         setMode('login');
         return result;
       } else {

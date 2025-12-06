@@ -45,6 +45,7 @@ export default ({ config }) => ({
       package: "com.iyaya.app",
       jsEngine: "hermes",
       usesCleartextTraffic: true,
+      allowBackup: false,
       permissions: [
         "INTERNET",
         "ACCESS_NETWORK_STATE",
