@@ -1,78 +1,87 @@
-export default ({ config }) => ({
-  ...config,
-  expo: {
-    ...config.expo,
-    name: "iYaya",
-    slug: "iyaya-caregiver-app",
-    version: "1.0.0",
-    orientation: "portrait",
-    icon: "./assets/logo.png",
-    userInterfaceStyle: "light",
-    splash: {
-      image: "./assets/splash.png",
-      resizeMode: "contain",
-      backgroundColor: "#ffffff"
-    },
-    assetBundlePatterns: [
-      "**/*"
-    ],
-    ios: {
-      supportsTablet: true,
-      bundleIdentifier: "com.iyaya.app",
-      jsEngine: "hermes",
-      associatedDomains: [
-        "applinks:iyaya-app.page.link"
+export default ({ config }) => {
+  const isWeb = process.env.EXPO_PLATFORM === 'web';
+  
+  const plugins = [
+    "expo-secure-store",
+    "expo-font"
+  ];
+  
+  // Only add Google Sign-In plugin for native builds
+  if (!isWeb) {
+    plugins.push([
+      "@react-native-google-signin/google-signin",
+      {
+        iosUrlScheme: "com.googleusercontent.apps.998196800470-mguo8sj1ke7iv604mo1qmuq2565dnhv9"
+      }
+    ]);
+  }
+  
+  return {
+    ...config,
+    expo: {
+      ...config.expo,
+      name: "iYaya",
+      slug: "iyaya-caregiver-app",
+      version: "1.0.0",
+      orientation: "portrait",
+      icon: "./assets/logo.png",
+      userInterfaceStyle: "light",
+      splash: {
+        image: "./assets/splash.png",
+        resizeMode: "contain",
+        backgroundColor: "#ffffff"
+      },
+      assetBundlePatterns: [
+        "**/*"
       ],
-      infoPlist: {
-        ITSAppUsesNonExemptEncryption: false,
-        CFBundleURLTypes: [
+      ios: {
+        supportsTablet: true,
+        bundleIdentifier: "com.iyaya.app",
+        jsEngine: "hermes",
+        associatedDomains: [
+          "applinks:iyaya-app.page.link"
+        ],
+        infoPlist: {
+          ITSAppUsesNonExemptEncryption: false,
+          CFBundleURLTypes: [
+            {
+              CFBundleURLName: "iyaya-app",
+              CFBundleURLSchemes: ["iyaya-app"]
+            },
+            {
+              CFBundleURLName: "google-signin",
+              CFBundleURLSchemes: ["com.googleusercontent.apps.998196800470-mguo8sj1ke7iv604mo1qmuq2565dnhv9"]
+            }
+          ]
+        }
+      },
+      android: {
+        adaptiveIcon: {
+          foregroundImage: "./assets/logo.png",
+          backgroundColor: "#FFFFFF"
+        },
+        package: "com.iyaya.app",
+        jsEngine: "hermes",
+        usesCleartextTraffic: true,
+        allowBackup: false,
+        permissions: [
+          "INTERNET",
+          "ACCESS_NETWORK_STATE",
+          "ACCESS_FINE_LOCATION",
+          "ACCESS_COARSE_LOCATION"
+        ],
+        intentFilters: [
           {
-            CFBundleURLName: "iyaya-app",
-            CFBundleURLSchemes: ["iyaya-app"]
-          },
-          {
-            CFBundleURLName: "google-signin",
-            CFBundleURLSchemes: ["com.googleusercontent.apps.998196800470-mguo8sj1ke7iv604mo1qmuq2565dnhv9"]
+            action: "VIEW",
+            category: ["DEFAULT", "BROWSABLE"],
+            data: { scheme: "iyaya-app" }
           }
         ]
-      }
-    },
-    android: {
-      adaptiveIcon: {
-        foregroundImage: "./assets/logo.png",
-        backgroundColor: "#FFFFFF"
       },
-      package: "com.iyaya.app",
-      jsEngine: "hermes",
-      usesCleartextTraffic: true,
-      allowBackup: false,
-      permissions: [
-        "INTERNET",
-        "ACCESS_NETWORK_STATE",
-        "ACCESS_FINE_LOCATION",
-        "ACCESS_COARSE_LOCATION"
-      ],
-      intentFilters: [
-        {
-          action: "VIEW",
-          category: ["DEFAULT", "BROWSABLE"],
-          data: { scheme: "iyaya-app" }
-        }
-      ]
-    },
-    web: {
-      favicon: "./assets/iconaa.png"
-    },
-    plugins: [
-      "expo-secure-store",
-      "expo-font",
-      [
-        "@react-native-google-signin/google-signin",
-        {
-          iosUrlScheme: "com.googleusercontent.apps.998196800470-mguo8sj1ke7iv604mo1qmuq2565dnhv9"
-        }
-      ]
-    ],
+      web: {
+        favicon: "./assets/iconaa.png"
+      },
+      plugins,
     scheme: "iyaya-app",
     extra: {
       supabaseUrl: process.env.EXPO_PUBLIC_SUPABASE_URL ?? "https://myiyrmiiywwgismcpith.supabase.co",
@@ -84,5 +93,5 @@ export default ({ config }) => ({
         projectId: "583f6598-db53-4667-af75-fdd1f8104fab"
       }
     }
-  }
-});
+  };
+};
