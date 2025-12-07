@@ -6,7 +6,7 @@ export default ({ config }) => ({
     slug: "iyaya-caregiver-app",
     version: "1.0.0",
     orientation: "portrait",
-    icon: "./assets/icon.png",
+    icon: "./assets/logo.png",
     userInterfaceStyle: "light",
     splash: {
       image: "./assets/splash.png",
@@ -39,7 +39,7 @@ export default ({ config }) => ({
     },
     android: {
       adaptiveIcon: {
-        foregroundImage: "./assets/adaptive-icon.png",
+        foregroundImage: "./assets/logo.png",
         backgroundColor: "#FFFFFF"
       },
       package: "com.iyaya.app",

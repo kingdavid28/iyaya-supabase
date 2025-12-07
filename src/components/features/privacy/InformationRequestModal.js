@@ -622,6 +622,7 @@ targetChipTextSelected: {
   footer: {
     flexDirection: 'row',
     padding: 20,
+    marginBottom: 20,
     borderTopWidth: 1,
     borderTopColor: '#e5e7eb',
     gap: 12,
