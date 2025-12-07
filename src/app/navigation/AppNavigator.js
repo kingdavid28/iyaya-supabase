@@ -29,6 +29,7 @@ import EmailVerificationPendingScreen from "../../screens/EmailVerificationPendi
 import JobSearchScreen from "../../screens/JobSearchScreen";
 import MyReportsScreen from "../../screens/MyReportsScreen";
 import OnboardingScreen from "../../screens/OnboardingScreen";
+import AuthCallbackScreen from "../../screens/AuthCallbackScreen";
 
 // Primary screens (formerly lazy-loaded)
 import AvailabilityManagementScreen from "../../screens/AvailabilityManagementScreen";
@@ -235,10 +236,11 @@ const AppNavigatorWithAuth = () => {
       theme={theme}
       ref={navigationRef}
       linking={{
-        prefixes: ['iyaya://'],
+        prefixes: ['iyaya://', 'https://iyaya-supabase.vercel.app'],
         config: {
           screens: {
             ContractView: 'contract/:contractId',
+            AuthCallback: 'auth/callback',
           },
         },
       }}
@@ -300,6 +302,7 @@ const AppNavigatorWithAuth = () => {
         <Stack.Screen name="Appeal" component={AppealScreen} options={{ title: "Appeal Suspension", headerBackTitle: "Back" }} />
         <Stack.Screen name="CreateReport" component={CreateReportScreen} options={{ title: "Report User", headerBackTitle: "Back" }} />
         <Stack.Screen name="MyReports" component={MyReportsScreen} options={{ title: "My Reports", headerBackTitle: "Back" }} />
+        <Stack.Screen name="AuthCallback" component={AuthCallbackScreen} options={{ headerShown: false }} />
       </Stack.Navigator>
       </StatusGuard>
     </NavigationContainer>
