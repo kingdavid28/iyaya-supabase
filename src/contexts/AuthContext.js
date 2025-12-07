@@ -1,11 +1,10 @@
-import Constants from 'expo-constants'
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react'
 
 import { ActivityIndicator, Platform, View } from 'react-native'
 
 import { supabase } from '../config/supabase'
-import { tokenManager } from '../utils/tokenManager'
 import { userStatusService } from '../services/supabase/userStatusService'
+import { tokenManager } from '../utils/tokenManager'
 
 export const AuthContext = createContext()
 
@@ -216,7 +215,7 @@ export const AuthProvider = ({ children }) => {
 
       // Determine auth provider
       const authProvider = authUser.app_metadata?.provider || 'supabase'
-      
+
       const profilePayload = {
         id: authUser.id,
         email: authUser.email,
@@ -461,24 +460,29 @@ export const AuthProvider = ({ children }) => {
     try {
       setError(null)
       setLoading(true)
-      
+
       console.log('🔄 Starting Google Sign-In (Expo Go compatible)...')
       console.log('🌍 Platform:', Platform.OS)
-      
+
+      // Use platform-specific redirect URLs
+      const isWeb = Platform.OS === 'web'
+      const redirectUrl = isWeb
+        ? 'https://iyaya-supabase.vercel.app/auth/callback'
+        : 'iyaya-app://auth/callback'
+
       const { data, error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
         options: {
-          redirectTo: 'https://iyaya-supabase.vercel.app/auth/callback',
+          redirectTo: redirectUrl,
+          skipBrowserRedirect: !isWeb, // Skip browser redirect for native, use deep link
         }
       })
 
       console.log('📊 OAuth response:', { data, error })
-
       if (error) {
         console.error('❌ OAuth error:', error)
         throw error
       }
-      
       console.log('✅ Google Sign-In initiated successfully')
       return data
     } catch (err) {

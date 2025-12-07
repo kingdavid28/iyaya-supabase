@@ -36,12 +36,18 @@ Error handling & return conventions
 
 Conventions to follow when editing or adding code
 
-- Keep Supabase access in `src/services/supabase/*` and prefer adding new helpers to `base` or `cache` when common functionality is needed.
-- Preserve existing query shapes and aliasing when extending selects so front-end consumers continue to receive expected nested objects (e.g., `reporter:reporter_id(...)`).
-- Follow the project's linting and type-check commands before pushing: run `npm run lint` and `npm run type-check`.
+Platform-specific code (web vs native)
+
+- This repo runs on **three platforms**: Android/iOS (Expo Go or EAS Build), and Web (Vercel/Next.js).
+- Use `Platform.OS === 'web'` to branch code. Example: `src/contexts/AuthContext.js` detects web to use `https://iyaya-supabase.vercel.app/auth/callback` for Vercel; native uses `iyaya-app://auth/callback` deep links.
+- Native modules (e.g., `@react-native-google-signin/google-signin`) are only loaded for native builds; see `app.config.js` `plugins` array which conditionally adds them based on `!isWeb`.
+- Web imports go through `react-native-web`; avoid importing RN-only modules directly in web-shared code.
 
 Testing and CI hints
 
+- **EAS Build** (`npm run build:android`): Produces standalone APK/IPA with native modules (Google Sign-In works). Requires `eas.json` config and EAS project ID in `app.config.js.extra.eas.projectId`.
+- **Expo Go** (`npm start`): Fast dev mode, no native modules required; Google OAuth works via Supabase's hosted flow.
+- **Vercel** (web): Deploy via `vercel deploy` after `npm run build`. Only web-compatible code runs; all `Platform.OS === 'native'` branches are stripped.
 - Unit tests use Jest; test files live under `__tests__/`. Use `npm test` or `npm run test:watch` locally.
 - If you change DB schema, update `db/migrations/` and related `supabase/` config files.
 
