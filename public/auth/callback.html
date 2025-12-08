@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Authenticating...</title>
+  <style>
+    body {
+      margin: 0;
+      padding: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Roboto", "Oxygen",
+        "Ubuntu", "Cantarell", "Fira Sans", "Droid Sans", "Helvetica Neue", sans-serif;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      height: 100vh;
+    }
+    .container {
+      text-align: center;
+      color: white;
+    }
+    .spinner {
+      border: 4px solid rgba(255, 255, 255, 0.3);
+      border-top: 4px solid white;
+      border-radius: 50%;
+      width: 50px;
+      height: 50px;
+      animation: spin 1s linear infinite;
+      margin: 0 auto 20px;
+    }
+    @keyframes spin {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+    h1 {
+      margin: 0 0 10px 0;
+      font-size: 24px;
+    }
+    p {
+      margin: 0;
+      font-size: 16px;
+      opacity: 0.9;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="spinner"></div>
+    <h1>Completing sign in...</h1>
+    <p>Please wait while we authenticate you.</p>
+  </div>
+
+  <script>
+    // Extract the OAuth callback data from the URL
+    const hash = window.location.hash;
+    const search = window.location.search;
+    
+    // Store the auth data for the app to retrieve
+    if (hash || search) {
+      // The Supabase OAuth flow includes #access_token=... in the URL
+      // We need to pass this back to the app
+      const params = new URLSearchParams(hash.substring(1) || search.substring(1));
+      const accessToken = params.get('access_token');
+      const refreshToken = params.get('refresh_token');
+      const expiresIn = params.get('expires_in');
+      
+      // Store in localStorage for the app to access
+      if (accessToken) {
+        localStorage.setItem('supabase-auth-callback', JSON.stringify({
+          access_token: accessToken,
+          refresh_token: refreshToken,
+          expires_in: expiresIn,
+          hash: hash,
+          search: search
+        }));
+      }
+      
+      // Redirect to home page with the full hash/search intact
+      // This allows the app to capture the OAuth data
+      window.location.href = `/${hash}${search}`;
+    } else {
+      // No auth params, go straight home
+      window.location.href = '/';
+    }
+  </script>
+</body>
+</html>
