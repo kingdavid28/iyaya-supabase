@@ -160,7 +160,13 @@ export default function App() {
         setInitError(e);
       } finally {
         setAppReady(true);
-        // Note: SplashScreen.hideAsync() is now handled by NavigationContainer's onReady
+        // Ensure splash is hidden once app is ready
+        try {
+          await SplashScreen.hideAsync();
+        } catch (splashErr) {
+          console.warn('⚠️ SplashScreen.hideAsync failed:', splashErr?.message || splashErr);
+        }
+
         focusManager.setEventListener((handleFocus) => {
           const subscription = AppState.addEventListener('change', (status) => {
             handleFocus(status === 'active');
