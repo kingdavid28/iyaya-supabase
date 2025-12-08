@@ -57,10 +57,10 @@
     </div>
 
     <script>
-      console.log('🔐 OAuth Callback Page Loaded');
-      console.log('URL:', window.location.href);
-      console.log('Hash:', window.location.hash);
-      console.log('Search:', window.location.search);
+      console.log("🔐 OAuth Callback Page Loaded");
+      console.log("URL:", window.location.href);
+      console.log("Hash:", window.location.hash);
+      console.log("Search:", window.location.search);
 
       // Extract the OAuth callback data from the URL
       const hash = window.location.hash;
@@ -69,46 +69,46 @@
       // Supabase OAuth sends data in the hash
       // Format: #access_token=...&token_type=Bearer&expires_in=3600&refresh_token=...&type=recovery
       if (hash) {
-        console.log('✅ OAuth hash found, redirecting to app');
-        
+        console.log("✅ OAuth hash found, redirecting to app");
+
         // Extract access_token from hash
         const hashParams = new URLSearchParams(hash.substring(1));
-        const accessToken = hashParams.get('access_token');
-        
+        const accessToken = hashParams.get("access_token");
+
         if (accessToken) {
-          console.log('✅ Access token found');
+          console.log("✅ Access token found");
           // Store for debugging
-          localStorage.setItem('oauth_callback_hash', hash);
-          localStorage.setItem('oauth_callback_time', new Date().toISOString());
+          localStorage.setItem("oauth_callback_hash", hash);
+          localStorage.setItem("oauth_callback_time", new Date().toISOString());
         }
-        
+
         // Redirect to home with hash intact - Supabase will automatically process it
         // This ensures the app receives the OAuth session data
         setTimeout(() => {
-          console.log('🔄 Redirecting to home with OAuth hash...');
+          console.log("🔄 Redirecting to home with OAuth hash...");
           window.location.href = `/${hash}`;
         }, 100);
       } else if (search) {
-        console.log('✅ OAuth search params found, redirecting to app');
-        
+        console.log("✅ OAuth search params found, redirecting to app");
+
         // Some OAuth flows use search params instead of hash
         setTimeout(() => {
-          console.log('🔄 Redirecting to home with OAuth params...');
+          console.log("🔄 Redirecting to home with OAuth params...");
           window.location.href = `/?${search}`;
         }, 100);
       } else {
-        console.warn('⚠️ No OAuth data found in URL, redirecting to home');
+        console.warn("⚠️ No OAuth data found in URL, redirecting to home");
         // No auth params, go straight home after a short delay
         setTimeout(() => {
-          window.location.href = '/';
+          window.location.href = "/";
         }, 1000);
       }
 
       // Timeout - if something goes wrong, go home after 5 seconds
       setTimeout(() => {
-        if (window.location.pathname === '/auth/callback') {
-          console.error('❌ OAuth callback timeout, redirecting to home');
-          window.location.href = '/';
+        if (window.location.pathname === "/auth/callback") {
+          console.error("❌ OAuth callback timeout, redirecting to home");
+          window.location.href = "/";
         }
       }, 5000);
     </script>
