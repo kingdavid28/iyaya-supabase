@@ -24,3 +24,4 @@ recovered_*
 android.os.Looper
 com.facebook.react.uimanager.ViewManagerPropertyUpdater$FallbackViewManagerSetter
 com.facebook.react.uimanager.ViewManagersPropertyCache$PropSetter
+.vercel

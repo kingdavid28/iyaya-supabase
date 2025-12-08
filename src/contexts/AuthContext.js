@@ -19,6 +19,20 @@ export const AuthProvider = ({ children }) => {
 
     const initializeSession = async () => {
       try {
+        // On web, handle OAuth callback in URL hash
+        if (Platform.OS === 'web' && typeof window !== 'undefined') {
+          const hash = window.location.hash
+          console.log('🌐 Web OAuth hash detected:', hash ? 'present' : 'none')
+          
+          // If we have an access_token in the hash, Supabase should handle it automatically
+          // But we can also check if the session was created from the callback
+          if (hash && hash.includes('access_token')) {
+            console.log('🔐 OAuth callback detected, waiting for session...')
+            // Give Supabase a moment to process the OAuth callback
+            await new Promise(resolve => setTimeout(resolve, 500))
+          }
+        }
+
         const { data, error } = await supabase.auth.getSession()
         if (error) throw error
 
@@ -466,15 +480,24 @@ export const AuthProvider = ({ children }) => {
 
       // Use platform-specific redirect URLs
       const isWeb = Platform.OS === 'web'
-      const redirectUrl = isWeb
-        ? 'https://iyaya-supabase.vercel.app/auth/callback'
-        : 'iyaya-app://auth/callback'
+      let redirectUrl
+      
+      if (isWeb) {
+        // On web, redirect to the app root - Supabase will append the OAuth hash automatically
+        // e.g., https://iyaya-supabase.vercel.app/#access_token=...
+        redirectUrl = 'https://iyaya-supabase.vercel.app/'
+        console.log('🌐 Web OAuth redirect:', redirectUrl)
+      } else {
+        // On native, use the deep link scheme
+        redirectUrl = 'iyaya-app://auth/callback'
+        console.log('📱 Native OAuth redirect:', redirectUrl)
+      }
 
       const { data, error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
         options: {
           redirectTo: redirectUrl,
-          skipBrowserRedirect: !isWeb, // Skip browser redirect for native, use deep link
+          skipBrowserRedirect: false, // Let browser handle it (Supabase will redirect)
         }
       })
 

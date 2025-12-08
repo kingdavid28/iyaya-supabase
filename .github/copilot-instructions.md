@@ -47,9 +47,17 @@ Testing and CI hints
 
 - **EAS Build** (`npm run build:android`): Produces standalone APK/IPA with native modules (Google Sign-In works). Requires `eas.json` config and EAS project ID in `app.config.js.extra.eas.projectId`.
 - **Expo Go** (`npm start`): Fast dev mode, no native modules required; Google OAuth works via Supabase's hosted flow.
-- **Vercel** (web): Deploy via `vercel deploy` after `npm run build`. Only web-compatible code runs; all `Platform.OS === 'native'` branches are stripped.
+- **Vercel** (web): Deploy via `vercel deploy` after `npm run vercel-build`. Run `npm run vercel-build` locally to test static build. Only web-compatible code runs; all `Platform.OS === 'native'` branches are stripped.
+- **Vercel OAuth callback**: Supabase redirects to `/auth/callback` on successful OAuth. This requires `public/auth/callback.html` (static page extracting OAuth hash) and `vercel.json` routes to serve it. The callback page forwards the `#access_token=...` to app root.
 - Unit tests use Jest; test files live under `__tests__/`. Use `npm test` or `npm run test:watch` locally.
 - If you change DB schema, update `db/migrations/` and related `supabase/` config files.
+
+Supabase OAuth setup for web & native
+
+- Web platform (Vercel): `signInWithGoogle()` redirects to `https://iyaya-supabase.vercel.app/auth/callback`; callback handler at `public/auth/callback.html` extracts and forwards OAuth data.
+- Native platforms: `signInWithGoogle()` redirects to `iyaya-app://auth/callback` (deep link scheme from `app.config.js`).
+- Both use `supabase.auth.signInWithOAuth({ provider: 'google', options: { redirectTo, skipBrowserRedirect } })` in `src/contexts/AuthContext.js`.
+- See `vercel.json` for static routing rules and `app.config.js` scheme configuration.
 
 When in doubt
 
