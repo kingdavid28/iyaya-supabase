@@ -21,34 +21,46 @@ console.log('🔧 Supabase Configuration:')
 console.log('  - URL:', supabaseUrl ? `${supabaseUrl.substring(0, 30)}...` : 'MISSING')
 console.log('  - Anon Key:', supabaseAnonKey ? `${supabaseAnonKey.substring(0, 20)}...` : 'MISSING')
 
+let supabase
 if (!supabaseUrl || !supabaseAnonKey) {
   console.error('❌ Missing Supabase environment variables')
   console.error('  - EXPO_PUBLIC_SUPABASE_URL:', supabaseUrl ? 'present' : 'MISSING')
   console.error('  - EXPO_PUBLIC_SUPABASE_ANON_KEY:', supabaseAnonKey ? 'present' : 'MISSING')
-  throw new Error('Missing Supabase environment variables')
+  console.error('⚠️ Creating mock Supabase client to prevent app crash')
+  // Create a mock client that will fail gracefully at runtime
+  supabase = {
+    auth: {
+      getSession: async () => ({ data: null, error: new Error('Supabase not configured - missing environment variables') }),
+      signInWithOAuth: async () => ({ data: null, error: new Error('Supabase not configured') }),
+      signOut: async () => ({ error: null }),
+    },
+    from: () => ({ select: () => Promise.reject(new Error('Supabase not configured')) }),
+  }
+} else {
+  supabase = createClient(supabaseUrl, supabaseAnonKey, {
+    auth: {
+      storage: AsyncStorage,
+      autoRefreshToken: true,
+      persistSession: true,
+      detectSessionInUrl: false,
+    },
+    global: {
+      headers: {
+        'X-Client-Info': 'iyaya-mobile-app',
+      },
+    },
+    db: {
+      schema: 'public',
+    },
+    realtime: {
+      params: {
+        eventsPerSecond: 10,
+      },
+    },
+  })
 }
 
-export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
-  auth: {
-    storage: AsyncStorage,
-    autoRefreshToken: true,
-    persistSession: true,
-    detectSessionInUrl: false,
-  },
-  global: {
-    headers: {
-      'X-Client-Info': 'iyaya-mobile-app',
-    },
-  },
-  db: {
-    schema: 'public',
-  },
-  realtime: {
-    params: {
-      eventsPerSecond: 10,
-    },
-  },
-})
+export { supabase }
 
 const clearStaleSession = async () => {
   try {
