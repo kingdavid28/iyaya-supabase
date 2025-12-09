@@ -137,6 +137,8 @@ export default function WelcomeScreen() {
     }
   ];
 
+  const ContainerComponent = isWeb ? View : SafeAreaView;
+
   return (
     <LinearGradient 
       colors={backgroundGradient} 
@@ -144,7 +146,7 @@ export default function WelcomeScreen() {
       start={{ x: 0, y: 0 }}
       end={{ x: 1, y: 1 }}
     >
-      <SafeAreaView style={styles.safeArea}>
+      <ContainerComponent style={styles.safeArea}>
         <ScrollView 
           contentContainerStyle={styles.container}
           showsVerticalScrollIndicator={false}
@@ -261,7 +263,7 @@ export default function WelcomeScreen() {
             ))}
           </View>
         </ScrollView>
-      </SafeAreaView>
+      </ContainerComponent>
     </LinearGradient>
   );
 }
