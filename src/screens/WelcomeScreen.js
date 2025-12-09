@@ -302,11 +302,7 @@ export default function WelcomeScreen() {
 const styles = StyleSheet.create({
   gradient: {
     flex: 1,
-    ...Platform.select({
-      web: {
-        background: 'linear-gradient(135deg, #fce8f4 0%, #e0f2fe 50%, #f3e8ff 100%)',
-      },
-    }),
+    backgroundColor: '#e0f2fe',
   },
   safeArea: {
     flex: 1,
