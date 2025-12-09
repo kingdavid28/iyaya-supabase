@@ -157,12 +157,19 @@ export default function WelcomeScreen() {
 
   const ContainerComponent = isWeb ? View : SafeAreaView;
 
+  console.log('[Welcome] Rendering screen', { isWeb, isLoggedIn, role, logoUri, logoError });
+
+  const GradientWrapper = isWeb ? View : LinearGradient;
+  const gradientProps = isWeb ? {} : {
+    colors: backgroundGradient,
+    start: { x: 0, y: 0 },
+    end: { x: 1, y: 1 }
+  };
+
   return (
-    <LinearGradient 
-      colors={backgroundGradient} 
+    <GradientWrapper 
+      {...gradientProps}
       style={styles.gradient}
-      start={{ x: 0, y: 0 }}
-      end={{ x: 1, y: 1 }}
     >
       <ContainerComponent style={styles.safeArea}>
         <ScrollView 
@@ -295,6 +302,11 @@ export default function WelcomeScreen() {
 const styles = StyleSheet.create({
   gradient: {
     flex: 1,
+    ...Platform.select({
+      web: {
+        background: 'linear-gradient(135deg, #fce8f4 0%, #e0f2fe 50%, #f3e8ff 100%)',
+      },
+    }),
   },
   safeArea: {
     flex: 1,
