@@ -350,11 +350,18 @@ const styles = StyleSheet.create({
     }),
     justifyContent: "center",
     alignItems: "center",
-    shadowColor: "#db2777",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.2,
-    shadowRadius: 8,
-    elevation: 8,
+    ...Platform.select({
+      web: {
+        boxShadow: '0 4px 8px rgba(219, 39, 119, 0.2)',
+      },
+      default: {
+        shadowColor: "#db2777",
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.2,
+        shadowRadius: 8,
+        elevation: 8,
+      },
+    }),
   },
   logo: {
     width: Platform.select({
@@ -423,31 +430,23 @@ const styles = StyleSheet.create({
       web: 54,
       default: 24
     }),
-    shadowColor: "#000",
-    shadowOffset: { 
-      width: 0, 
-      height: Platform.select({
-        web: 4,
-        default: 2
-      }) 
-    },
-    shadowOpacity: Platform.select({
-      web: 0.1,
-      default: 0.05
-    }),
-    shadowRadius: Platform.select({
-      web: 12,
-      default: 8
-    }),
-    elevation: Platform.select({
-      web: 8,
-      default: 3
-    }),
     minHeight: Platform.select({
       web: 320,
       default: 280
     }),
     borderWidth: 2,
+    ...Platform.select({
+      web: {
+        boxShadow: '0 4px 12px rgba(0, 0, 0, 0.1)',
+      },
+      default: {
+        shadowColor: "#000",
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.05,
+        shadowRadius: 8,
+        elevation: 3,
+      },
+    }),
   },
   cardPressed: {
     transform: [{ scale: 0.98 }],
@@ -471,11 +470,18 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
     marginBottom: 20,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 4,
+    ...Platform.select({
+      web: {
+        boxShadow: '0 2px 4px rgba(0, 0, 0, 0.1)',
+      },
+      default: {
+        shadowColor: "#000",
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.1,
+        shadowRadius: 4,
+        elevation: 4,
+      },
+    }),
   },
   parentIconContainer: {
     backgroundColor: "#fce7f3",
