@@ -23,12 +23,10 @@ import { useAuth } from "../contexts/AuthContext";
 export default function WelcomeScreen() {
   const navigation = useNavigation();
   const isWeb = Platform.OS === 'web';
-  const { user, signOut } = useAuth();
+  const { user } = useAuth();
   const isLoggedIn = !!user;
   const role = user?.role;
   const hasNavigated = React.useRef(false);
-  const [logoUri, setLogoUri] = React.useState(null);
-  const [logoError, setLogoError] = React.useState(false);
 
   // Load logo asset for web compatibility
   React.useEffect(() => {
@@ -157,7 +155,38 @@ export default function WelcomeScreen() {
 
   const ContainerComponent = isWeb ? View : SafeAreaView;
 
-  console.log('[Welcome] Rendering screen', { isWeb, isLoggedIn, role, logoUri, logoError });
+  console.log('[Welcome] Rendering screen', { isWeb, isLoggedIn, role });
+  
+  // Absolute minimal test
+  return (
+    <View style={{ flex: 1, backgroundColor: '#e0f2fe', padding: 20 }}>
+      <Text style={{ fontSize: 24, marginTop: 100, textAlign: 'center' }}>Welcome to Iyaya</Text>
+      <Pressable 
+        style={{ backgroundColor: '#db2777', padding: 15, borderRadius: 8, marginTop: 20 }}
+        onPress={() => navigation.navigate('ParentAuth')}
+      >
+        <Text style={{ color: 'white', textAlign: 'center' }}>Parent Login</Text>
+      </Pressable>
+      <Pressable 
+        style={{ backgroundColor: '#2563eb', padding: 15, borderRadius: 8, marginTop: 10 }}
+        onPress={() => navigation.navigate('CaregiverAuth')}
+      >
+        <Text style={{ color: 'white', textAlign: 'center' }}>Caregiver Login</Text>
+      </Pressable>
+    </View>
+  );
+};
+
+/* ORIGINAL CODE BELOW - COMMENTED OUT
+export default function WelcomeScreenOriginal() {
+  const navigation = useNavigation();
+  const isWeb = Platform.OS === 'web';
+  const { user } = useAuth();
+  const isLoggedIn = !!user;
+  const role = user?.role;
+  const hasNavigated = React.useRef(false);
+  
+  console.log('[Welcome] Rendering screen original', { isWeb, isLoggedIn, role });
 
   return (
     <View style={styles.gradient}>
