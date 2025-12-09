@@ -1,6 +1,6 @@
 {
   "buildCommand": "npm run vercel-build",
-  "outputDirectory": "dist",
+  "outputDirectory": "web-build",
   "rewrites": [
     {
       "source": "/auth/callback",
