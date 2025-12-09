@@ -10,25 +10,58 @@ const AuthCallbackScreen = ({ navigation }) => {
   useEffect(() => {
     const handleCallback = async () => {
       try {
+        // Wait a bit for auth state to settle
+        await new Promise(resolve => setTimeout(resolve, 1000));
+        
         // Get current session
         const { data: { session } } = await supabase.auth.getSession();
         
         if (session?.user) {
-          // Fetch user profile to get role
-          const { data: profile } = await supabase
+          console.log('🔍 Auth callback - checking user profile...');
+          
+          // Check if profile exists
+          let { data: profile, error } = await supabase
             .from('users')
             .select('role')
             .eq('id', session.user.id)
-            .single();
+            .maybeSingle();
           
-          const role = profile?.role || user?.role;
+          // If no profile, create one with default role
+          if (!profile && !error) {
+            console.log('📝 Creating user profile...');
+            const { createClient } = await import('@supabase/supabase-js');
+            const serviceClient = createClient(
+              process.env.EXPO_PUBLIC_SUPABASE_URL,
+              process.env.EXPO_PUBLIC_SUPABASE_SERVICE_ROLE_KEY
+            );
+            
+            const { data: newProfile } = await serviceClient
+              .from('users')
+              .insert([{
+                id: session.user.id,
+                email: session.user.email,
+                name: session.user.user_metadata?.name || session.user.email?.split('@')[0],
+                role: 'parent', // Default role
+                auth_provider: 'google',
+                status: 'active',
+                email_verified: true,
+                profile_image: session.user.user_metadata?.avatar_url || session.user.user_metadata?.picture
+              }])
+              .select()
+              .single();
+            
+            profile = newProfile;
+          }
+          
+          const role = profile?.role || 'parent';
+          console.log('✅ Navigating to dashboard:', role);
           const dashboardRoute = role === 'caregiver' ? 'CaregiverDashboard' : 'ParentDashboard';
           navigation.replace(dashboardRoute);
         } else {
           navigation.replace('Welcome');
         }
       } catch (error) {
-        console.error('Auth callback error:', error);
+        console.error('❌ Auth callback error:', error);
         navigation.replace('Welcome');
       } finally {
         setChecking(false);
