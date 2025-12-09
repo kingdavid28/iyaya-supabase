@@ -1,5 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import { createClient } from '@supabase/supabase-js'
+import { Platform } from 'react-native'
 
 const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL
 const supabaseAnonKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY
@@ -39,12 +40,21 @@ if (!supabaseUrl || !supabaseAnonKey) {
     from: () => ({ select: () => Promise.reject(new Error('Supabase not configured')) }),
   }
 } else {
+  // Use localStorage on web, AsyncStorage on native
+  const storage = Platform.OS === 'web' ? {
+    getItem: (key) => Promise.resolve(localStorage.getItem(key)),
+    setItem: (key, value) => Promise.resolve(localStorage.setItem(key, value)),
+    removeItem: (key) => Promise.resolve(localStorage.removeItem(key)),
+  } : AsyncStorage
+
   supabase = createClient(supabaseUrl, supabaseAnonKey, {
     auth: {
-      storage: AsyncStorage,
+      storage,
       autoRefreshToken: true,
       persistSession: true,
-      detectSessionInUrl: false,
+      detectSessionInUrl: Platform.OS === 'web',
+      flowType: 'pkce',
+      storageKey: SUPABASE_STORAGE_KEY,
     },
     global: {
       headers: {
@@ -72,7 +82,11 @@ const clearStaleSession = async () => {
   }
 
   try {
-    await AsyncStorage.removeItem(SUPABASE_STORAGE_KEY)
+    if (Platform.OS === 'web') {
+      localStorage.removeItem(SUPABASE_STORAGE_KEY)
+    } else {
+      await AsyncStorage.removeItem(SUPABASE_STORAGE_KEY)
+    }
   } catch (storageError) {
     console.warn('⚠️ Failed to remove Supabase session storage key:', storageError?.message)
   }
