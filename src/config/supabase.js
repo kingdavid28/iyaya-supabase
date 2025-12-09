@@ -1,6 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import { createClient } from '@supabase/supabase-js'
-import { Platform } from 'react-native'
 
 const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL
 const supabaseAnonKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY
@@ -17,62 +16,39 @@ const deriveStorageKey = () => {
 
 const SUPABASE_STORAGE_KEY = deriveStorageKey()
 
-// Diagnostic logging (disabled in production)
-if (__DEV__) {
-  console.log('🔧 Supabase Configuration:')
-  console.log('  - URL:', supabaseUrl ? `${supabaseUrl.substring(0, 30)}...` : 'MISSING')
-  console.log('  - Anon Key:', supabaseAnonKey ? `${supabaseAnonKey.substring(0, 20)}...` : 'MISSING')
-}
+// Diagnostic logging
+console.log('🔧 Supabase Configuration:')
+console.log('  - URL:', supabaseUrl ? `${supabaseUrl.substring(0, 30)}...` : 'MISSING')
+console.log('  - Anon Key:', supabaseAnonKey ? `${supabaseAnonKey.substring(0, 20)}...` : 'MISSING')
 
-let supabase
 if (!supabaseUrl || !supabaseAnonKey) {
   console.error('❌ Missing Supabase environment variables')
   console.error('  - EXPO_PUBLIC_SUPABASE_URL:', supabaseUrl ? 'present' : 'MISSING')
   console.error('  - EXPO_PUBLIC_SUPABASE_ANON_KEY:', supabaseAnonKey ? 'present' : 'MISSING')
-  console.error('⚠️ Creating mock Supabase client to prevent app crash')
-  // Create a mock client that will fail gracefully at runtime
-  supabase = {
-    auth: {
-      getSession: async () => ({ data: null, error: new Error('Supabase not configured - missing environment variables') }),
-      signInWithOAuth: async () => ({ data: null, error: new Error('Supabase not configured') }),
-      signOut: async () => ({ error: null }),
-    },
-    from: () => ({ select: () => Promise.reject(new Error('Supabase not configured')) }),
-  }
-} else {
-  // Use localStorage on web, AsyncStorage on native
-  const storage = Platform.OS === 'web' ? {
-    getItem: (key) => Promise.resolve(localStorage.getItem(key)),
-    setItem: (key, value) => Promise.resolve(localStorage.setItem(key, value)),
-    removeItem: (key) => Promise.resolve(localStorage.removeItem(key)),
-  } : AsyncStorage
-
-  supabase = createClient(supabaseUrl, supabaseAnonKey, {
-    auth: {
-      storage,
-      autoRefreshToken: true,
-      persistSession: true,
-      detectSessionInUrl: Platform.OS === 'web',
-      flowType: 'pkce',
-      storageKey: SUPABASE_STORAGE_KEY,
-    },
-    global: {
-      headers: {
-        'X-Client-Info': 'iyaya-mobile-app',
-      },
-    },
-    db: {
-      schema: 'public',
-    },
-    realtime: {
-      params: {
-        eventsPerSecond: 10,
-      },
-    },
-  })
+  throw new Error('Missing Supabase environment variables')
 }
 
-export { supabase }
+export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
+  auth: {
+    storage: AsyncStorage,
+    autoRefreshToken: true,
+    persistSession: true,
+    detectSessionInUrl: false,
+  },
+  global: {
+    headers: {
+      'X-Client-Info': 'iyaya-mobile-app',
+    },
+  },
+  db: {
+    schema: 'public',
+  },
+  realtime: {
+    params: {
+      eventsPerSecond: 10,
+    },
+  },
+})
 
 const clearStaleSession = async () => {
   try {
@@ -82,11 +58,7 @@ const clearStaleSession = async () => {
   }
 
   try {
-    if (Platform.OS === 'web') {
-      localStorage.removeItem(SUPABASE_STORAGE_KEY)
-    } else {
-      await AsyncStorage.removeItem(SUPABASE_STORAGE_KEY)
-    }
+    await AsyncStorage.removeItem(SUPABASE_STORAGE_KEY)
   } catch (storageError) {
     console.warn('⚠️ Failed to remove Supabase session storage key:', storageError?.message)
   }
@@ -106,10 +78,8 @@ const runInitialSessionCheck = async () => {
       return
     }
 
-    if (__DEV__) {
-      console.log('✅ Supabase client initialized successfully')
-      console.log('  - Session:', data.session ? 'Active' : 'No session')
-    }
+    console.log('✅ Supabase client initialized successfully')
+    console.log('  - Session:', data.session ? 'Active' : 'No session')
   } catch (err) {
     console.error('❌ Supabase connection test failed:', err.message)
   }

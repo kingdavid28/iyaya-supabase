@@ -148,11 +148,6 @@ export default function App() {
         setInitError(e);
       } finally {
         setAppReady(true);
-        // Hide splash screen after initialization
-        await SplashScreen.hideAsync().catch(() => {
-          // If already hidden or error, continue
-          console.log('⚠️ Splash screen already hidden');
-        });
         // Note: SplashScreen.hideAsync() is now handled by NavigationContainer's onReady
         focusManager.setEventListener((handleFocus) => {
           const subscription = AppState.addEventListener('change', (status) => {

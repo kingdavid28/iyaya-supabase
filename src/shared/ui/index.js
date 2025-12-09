@@ -12,9 +12,6 @@ export { default as TrustScoreBadge } from './TrustScoreBadge';
 // Input Components
 export * from './inputs';
 
-// Form Components
-export * from './forms';
-
 // Modal Components
 export * from './modals';
 
