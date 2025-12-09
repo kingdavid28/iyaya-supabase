@@ -295,7 +295,7 @@ export default function WelcomeScreen() {
           </View>
         </ScrollView>
       </ContainerComponent>
-    </LinearGradient>
+    </GradientWrapper>
   );
 }
 
