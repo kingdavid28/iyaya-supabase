@@ -161,130 +161,89 @@ export default function WelcomeScreen() {
 
   return (
     <View style={styles.gradient}>
-      <ContainerComponent style={styles.safeArea}>
-        <ScrollView 
-          contentContainerStyle={styles.container}
-          showsVerticalScrollIndicator={false}
-        >
-          {/* Header Section */}
-          <View style={styles.header}>
-            <View style={styles.logoContainer} accessibilityLabel="Iyaya logo">
-              <LinearGradient 
-                colors={logoGradient}
-                style={styles.logoBackground}
-              >
-                {logoUri ? (
-                  <Image 
-                    source={{ uri: logoUri }} 
-                    style={styles.logo}
-                    resizeMode="contain"
-                    accessibilityLabel="Iyaya app logo"
-                  />
-                ) : !logoError ? (
-                  <Text style={{ fontSize: 48, color: '#db2777' }}>👶</Text>
-                ) : (
-                  <Text style={{ fontSize: 24, fontWeight: 'bold', color: '#db2777' }}>Iyaya</Text>
-                )}
-              </LinearGradient>
+      <ScrollView 
+        contentContainerStyle={styles.container}
+        showsVerticalScrollIndicator={false}
+      >
+        {/* Header Section */}
+        <View style={styles.header}>
+          <View style={styles.logoContainer}>
+            <View style={styles.logoBackground}>
+              <Text style={{ fontSize: 48 }}>👶</Text>
             </View>
-
-            <Text style={styles.tagline}>Connecting families with trusted caregivers</Text>
-            <Text style={styles.subtitle}>
-              Find the perfect caregiver for your child or discover amazing families to work with.{"\n"}
-              Safe, secure, and built with love.
-            </Text>
           </View>
 
-          {/* Role Selection Cards */}
-          <View style={styles.cardsContainer}>
-            {/* Parent Card */}
-            <Pressable
-              style={({ pressed }) => [
-                styles.card, 
-                styles.parentCard,
-                pressed && styles.cardPressed
-              ]}
-              onPress={handleParentPress}
-              android_ripple={{ color: "#fce7f3" }}
-              accessibilityRole="button"
-              accessibilityLabel="I'm a Parent. Find trusted caregivers for your little ones. Get Started."
-            >
-              <View style={styles.cardContent}>
-                <LinearGradient 
-                  colors={parentGradient}
-                  style={[styles.iconContainer, styles.parentIconContainer]}
-                >
-                  <Ionicons name="happy-outline" size={40} color="#db2777" accessibilityLabel="Parent icon" />
-                </LinearGradient>
+          <Text style={styles.tagline}>Connecting families with trusted caregivers</Text>
+          <Text style={styles.subtitle}>
+            Find the perfect caregiver for your child or discover amazing families to work with.{"\n"}
+            Safe, secure, and built with love.
+          </Text>
+        </View>
 
-                <Text style={styles.cardTitle}>I'm a Parent</Text>
-                <Text style={styles.cardDescription}>
-                  Find trusted caregivers for your little ones.{"\n"}
-                  Browse profiles, read reviews, and book{"\n"}
-                  services with confidence.
-                </Text>
-
-                <View style={[styles.getStartedButton, styles.parentButton]}>
-                  <Text style={[styles.buttonText, styles.parentButtonText]}>Get Started</Text>
-                  <View style={styles.buttonDot} />
-                </View>
+        {/* Role Selection Cards */}
+        <View style={styles.cardsContainer}>
+          {/* Parent Card */}
+          <Pressable
+            style={styles.card}
+            onPress={handleParentPress}
+          >
+            <View style={styles.cardContent}>
+              <View style={[styles.iconContainer, styles.parentIconContainer]}>
+                <Ionicons name="happy-outline" size={40} color="#db2777" />
               </View>
-            </Pressable>
 
-            {/* Caregiver Card */}
-            <Pressable
-              style={({ pressed }) => [
-                styles.card, 
-                styles.caregiverCard,
-                pressed && styles.cardPressed
-              ]}
-              onPress={handleCaregiverPress}
-              android_ripple={{ color: "#e0f2fe" }}
-              accessibilityRole="button"
-              accessibilityLabel="I'm a Child Caregiver. Join our community of trusted caregivers. Get Started."
-            >
-              <View style={styles.cardContent}>
-                <LinearGradient 
-                  colors={caregiverGradient}
-                  style={[styles.iconContainer, styles.caregiverIconContainer]}
-                >
-                  <Ionicons name="person-outline" size={40} color="#2563eb" accessibilityLabel="Caregiver icon" />
-                </LinearGradient>
+              <Text style={styles.cardTitle}>I'm a Parent</Text>
+              <Text style={styles.cardDescription}>
+                Find trusted caregivers for your little ones.
+                Browse profiles, read reviews, and book services with confidence.
+              </Text>
 
-                <Text style={styles.cardTitle}>I'm a Child Caregiver</Text>
-                <Text style={styles.cardDescription}>
-                  Join our community of trusted caregivers.{"\n"}
-                  Create your profile, showcase your skills,{"\n"}
-                  and connect with families.
-                </Text>
-
-                <View style={[styles.getStartedButton, styles.caregiverButton]}>
-                  <Text style={[styles.buttonText, styles.caregiverButtonText]}>Get Started</Text>
-                  <View style={[styles.buttonDot, styles.caregiverButtonDot]} />
-                </View>
+              <View style={styles.getStartedButton}>
+                <Text style={[styles.buttonText, { color: '#db2777' }]}>Get Started →</Text>
               </View>
-            </Pressable>
-          </View>
+            </View>
+          </Pressable>
 
-          {/* Features Section */}
-          <View style={styles.featuresContainer}>
-            {features.map((feature, index) => (
-              <View key={index} style={styles.feature}>
-                <View style={[styles.featureIcon, { backgroundColor: feature.bgColor }]}>
-                  <Ionicons 
-                    name={feature.icon} 
-                    size={24} 
-                    color={feature.color} 
-                    accessibilityLabel={`${feature.title} icon`} 
-                  />
-                </View>
-                <Text style={styles.featureTitle}>{feature.title}</Text>
-                <Text style={styles.featureDescription}>{feature.description}</Text>
+          {/* Caregiver Card */}
+          <Pressable
+            style={[styles.card, { borderColor: '#bfdbfe' }]}
+            onPress={handleCaregiverPress}
+          >
+            <View style={styles.cardContent}>
+              <View style={[styles.iconContainer, styles.caregiverIconContainer]}>
+                <Ionicons name="person-outline" size={40} color="#2563eb" />
               </View>
-            ))}
-          </View>
-        </ScrollView>
-      </ContainerComponent>
+
+              <Text style={styles.cardTitle}>I'm a Child Caregiver</Text>
+              <Text style={styles.cardDescription}>
+                Join our community of trusted caregivers.
+                Create your profile, showcase your skills, and connect with families.
+              </Text>
+
+              <View style={styles.getStartedButton}>
+                <Text style={[styles.buttonText, { color: '#2563eb' }]}>Get Started →</Text>
+              </View>
+            </View>
+          </Pressable>
+        </View>
+
+        {/* Features Section */}
+        <View style={styles.featuresContainer}>
+          {features.map((feature, index) => (
+            <View key={index} style={styles.feature}>
+              <View style={[styles.featureIcon, { backgroundColor: feature.bgColor }]}>
+                <Ionicons 
+                  name={feature.icon} 
+                  size={24} 
+                  color={feature.color}
+                />
+              </View>
+              <Text style={styles.featureTitle}>{feature.title}</Text>
+              <Text style={styles.featureDescription}>{feature.description}</Text>
+            </View>
+          ))}
+        </View>
+      </ScrollView>
     </View>
   );
 }
@@ -334,32 +293,12 @@ const styles = StyleSheet.create({
     marginBottom: 20,
   },
   logoBackground: {
-    width: Platform.select({
-      web: 180,
-      default: 150
-    }),
-    height: Platform.select({
-      web: 180,
-      default: 150
-    }),
-    borderRadius: Platform.select({
-      web: 40,
-      default: 30
-    }),
+    width: 120,
+    height: 120,
+    borderRadius: 60,
+    backgroundColor: '#fce7f3',
     justifyContent: "center",
     alignItems: "center",
-    ...Platform.select({
-      web: {
-        boxShadow: '0 4px 8px rgba(219, 39, 119, 0.2)',
-      },
-      default: {
-        shadowColor: "#db2777",
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.2,
-        shadowRadius: 8,
-        elevation: 8,
-      },
-    }),
   },
   logo: {
     width: Platform.select({
@@ -410,51 +349,14 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
   },
   card: {
-    flex: Platform.select({
-      web: 1,
-      default: undefined
-    }),
-    width: Platform.select({
-      web: 'auto',
-      default: '100%'
-    }),
-    maxWidth: Platform.select({
-      web: 400,
-      default: '100%'
-    }),
-    backgroundColor: "rgba(255, 255, 255, 0.99)",
-    borderRadius: 24,
-    padding: Platform.select({
-      web: 54,
-      default: 24
-    }),
-    minHeight: Platform.select({
-      web: 320,
-      default: 280
-    }),
+    width: '100%',
+    maxWidth: 400,
+    backgroundColor: "white",
+    borderRadius: 16,
+    padding: 24,
+    marginBottom: 16,
     borderWidth: 2,
-    ...Platform.select({
-      web: {
-        boxShadow: '0 4px 12px rgba(0, 0, 0, 0.1)',
-      },
-      default: {
-        shadowColor: "#000",
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.05,
-        shadowRadius: 8,
-        elevation: 3,
-      },
-    }),
-  },
-  cardPressed: {
-    transform: [{ scale: 0.98 }],
-    opacity: 0.9,
-  },
-  parentCard: {
     borderColor: "#fbcfe8",
-  },
-  caregiverCard: {
-    borderColor: "#bfdbfe",
   },
   cardContent: {
     alignItems: "center",
@@ -468,18 +370,6 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
     marginBottom: 20,
-    ...Platform.select({
-      web: {
-        boxShadow: '0 2px 4px rgba(0, 0, 0, 0.1)',
-      },
-      default: {
-        shadowColor: "#000",
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.1,
-        shadowRadius: 4,
-        elevation: 4,
-      },
-    }),
   },
   parentIconContainer: {
     backgroundColor: "#fce7f3",
@@ -531,15 +421,7 @@ const styles = StyleSheet.create({
   caregiverButtonText: {
     color: "#2563eb",
   },
-  buttonDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: "#db2777",
-  },
-  caregiverButtonDot: {
-    backgroundColor: "#2563eb",
-  },
+
   featuresContainer: {
     flexDirection: Platform.select({
       web: 'row',
