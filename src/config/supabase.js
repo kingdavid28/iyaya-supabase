@@ -16,10 +16,12 @@ const deriveStorageKey = () => {
 
 const SUPABASE_STORAGE_KEY = deriveStorageKey()
 
-// Diagnostic logging
-console.log('🔧 Supabase Configuration:')
-console.log('  - URL:', supabaseUrl ? `${supabaseUrl.substring(0, 30)}...` : 'MISSING')
-console.log('  - Anon Key:', supabaseAnonKey ? `${supabaseAnonKey.substring(0, 20)}...` : 'MISSING')
+// Diagnostic logging (disabled in production)
+if (__DEV__) {
+  console.log('🔧 Supabase Configuration:')
+  console.log('  - URL:', supabaseUrl ? `${supabaseUrl.substring(0, 30)}...` : 'MISSING')
+  console.log('  - Anon Key:', supabaseAnonKey ? `${supabaseAnonKey.substring(0, 20)}...` : 'MISSING')
+}
 
 let supabase
 if (!supabaseUrl || !supabaseAnonKey) {
@@ -90,8 +92,10 @@ const runInitialSessionCheck = async () => {
       return
     }
 
-    console.log('✅ Supabase client initialized successfully')
-    console.log('  - Session:', data.session ? 'Active' : 'No session')
+    if (__DEV__) {
+      console.log('✅ Supabase client initialized successfully')
+      console.log('  - Session:', data.session ? 'Active' : 'No session')
+    }
   } catch (err) {
     console.error('❌ Supabase connection test failed:', err.message)
   }

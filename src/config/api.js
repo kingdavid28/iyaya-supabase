@@ -20,8 +20,10 @@ import { supabase } from './supabase';
 // Export for backward compatibility
 export const API_BASE_URL = getCurrentAPIURL();
 
-console.log('✅ Using consolidated API service with enhanced features.');
-console.log('🔗 API URL:', API_BASE_URL);
+if (__DEV__) {
+  console.log('✅ Using consolidated API service with enhanced features.');
+  console.log('🔗 API URL:', API_BASE_URL);
+}
 
 // Export utilities
 export { getCurrentAPIURL, getCurrentSocketURL };
