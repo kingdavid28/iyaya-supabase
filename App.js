@@ -1,4 +1,2 @@
-// Main App Entry Point - Delegates to new architecture
-import App from './src/app/App';
-
-export default App;
+// Root entry point - re-exports the actual App from src/app/App.js
+export { default } from './src/app/App';

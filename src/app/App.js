@@ -61,18 +61,8 @@ const SupabaseAuthProvider = ({ children }) => {
       console.log('🔥 Initializing Supabase with Auth...', { platform: Platform.OS });
 
       try {
-        // Check if Supabase is configured
-        if (!process.env.EXPO_PUBLIC_SUPABASE_URL || !process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY) {
-          console.error('❌ Supabase environment variables are missing');
-          if (isMounted) {
-            setError('Configuration Error: Supabase credentials not set. Please contact the developer.');
-            setSupabaseReady(true); // Allow app to load to show error
-          }
-          return;
-        }
-
         const timeoutPromise = new Promise((_, reject) =>
-          setTimeout(() => reject(new Error('Supabase initialization timeout')), 8000)
+          setTimeout(() => reject(new Error('Supabase initialization timeout')), 10000)
         );
 
         const authPromise = supabase.auth.getSession().then((result) => {
@@ -86,9 +76,9 @@ const SupabaseAuthProvider = ({ children }) => {
 
         const { data, error } = await Promise.race([authPromise, timeoutPromise]);
 
-        if (error && error.message !== 'Supabase initialization timeout') {
+        if (error) {
           console.error('❌ Supabase auth.getSession returned error', { platform: Platform.OS, message: error.message });
-          // Don't throw on auth errors - continue with unauth state
+          throw error;
         }
 
         console.log('✅ Supabase Auth is ready', { platform: Platform.OS, hasSession: !!data?.session });
@@ -98,11 +88,8 @@ const SupabaseAuthProvider = ({ children }) => {
       } catch (err) {
         console.error('❌ Supabase Auth initialization failed', { platform: Platform.OS, message: err?.message });
         if (isMounted) {
-          // On timeout or error, still allow app to load
-          if (err.message === 'Supabase initialization timeout') {
-            console.warn('⚠️ Supabase took too long to initialize, continuing with app');
-          }
-          setSupabaseReady(true); // Always continue to avoid blocking
+          setError(err);
+          setSupabaseReady(true); // Continue anyway to avoid blocking the app
         }
       }
     };
@@ -114,23 +101,24 @@ const SupabaseAuthProvider = ({ children }) => {
     };
   }, []);
 
-  if (!supabaseReady) {
+  if (error) {
     return (
       <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#f9fafb' }}>
-        <ActivityIndicator size="large" color="#0000ff" />
-        <Text style={{ marginTop: 10, color: '#666', fontSize: 14 }}>Initializing...</Text>
+        <Text style={{ color: 'red', fontSize: 16, textAlign: 'center', padding: 20 }}>
+          Connection Issue
+        </Text>
+        <Text style={{ color: '#666', fontSize: 14, textAlign: 'center', padding: 20 }}>
+          {error.message}
+        </Text>
       </View>
     );
   }
 
-  if (error) {
+  if (!supabaseReady) {
     return (
-      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#fee', padding: 20 }}>
-        <Text style={{ fontSize: 16, fontWeight: 'bold', color: '#c33', marginBottom: 10 }}>⚠️ Configuration Error</Text>
-        <Text style={{ fontSize: 14, color: '#666', textAlign: 'center' }}>{error}</Text>
-        <Text style={{ fontSize: 12, color: '#999', marginTop: 20, textAlign: 'center' }}>
-          Please set EXPO_PUBLIC_SUPABASE_URL and EXPO_PUBLIC_SUPABASE_ANON_KEY environment variables in Vercel dashboard.
-        </Text>
+      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#f9fafb' }}>
+        <ActivityIndicator size="large" color="#0000ff" />
+        <Text style={{ marginTop: 10, color: '#666' }}>Initializing Supabase Auth...</Text>
       </View>
     );
   }
@@ -160,13 +148,12 @@ export default function App() {
         setInitError(e);
       } finally {
         setAppReady(true);
-        // Ensure splash is hidden once app is ready
-        try {
-          await SplashScreen.hideAsync();
-        } catch (splashErr) {
-          console.warn('⚠️ SplashScreen.hideAsync failed:', splashErr?.message || splashErr);
-        }
-
+        // Hide splash screen after initialization
+        await SplashScreen.hideAsync().catch(() => {
+          // If already hidden or error, continue
+          console.log('⚠️ Splash screen already hidden');
+        });
+        // Note: SplashScreen.hideAsync() is now handled by NavigationContainer's onReady
         focusManager.setEventListener((handleFocus) => {
           const subscription = AppState.addEventListener('change', (status) => {
             handleFocus(status === 'active');

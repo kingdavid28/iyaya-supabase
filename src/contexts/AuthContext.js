@@ -1,10 +1,11 @@
+import Constants from 'expo-constants'
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react'
 
 import { ActivityIndicator, Platform, View } from 'react-native'
 
 import { supabase } from '../config/supabase'
-import { userStatusService } from '../services/supabase/userStatusService'
 import { tokenManager } from '../utils/tokenManager'
+import { userStatusService } from '../services/supabase/userStatusService'
 
 export const AuthContext = createContext()
 
@@ -19,20 +20,6 @@ export const AuthProvider = ({ children }) => {
 
     const initializeSession = async () => {
       try {
-        // On web, handle OAuth callback in URL hash
-        if (Platform.OS === 'web' && typeof window !== 'undefined') {
-          const hash = window.location.hash
-          console.log('🌐 Web OAuth hash detected:', hash ? 'present' : 'none')
-          
-          // If we have an access_token in the hash, Supabase should handle it automatically
-          // But we can also check if the session was created from the callback
-          if (hash && hash.includes('access_token')) {
-            console.log('🔐 OAuth callback detected, waiting for session...')
-            // Give Supabase a moment to process the OAuth callback
-            await new Promise(resolve => setTimeout(resolve, 500))
-          }
-        }
-
         const { data, error } = await supabase.auth.getSession()
         if (error) throw error
 
@@ -229,7 +216,7 @@ export const AuthProvider = ({ children }) => {
 
       // Determine auth provider
       const authProvider = authUser.app_metadata?.provider || 'supabase'
-
+      
       const profilePayload = {
         id: authUser.id,
         email: authUser.email,
@@ -474,38 +461,24 @@ export const AuthProvider = ({ children }) => {
     try {
       setError(null)
       setLoading(true)
-
+      
       console.log('🔄 Starting Google Sign-In (Expo Go compatible)...')
       console.log('🌍 Platform:', Platform.OS)
-
-      // Use platform-specific redirect URLs
-      const isWeb = Platform.OS === 'web'
-      let redirectUrl
       
-      if (isWeb) {
-        // On web, redirect to the app root - Supabase will append the OAuth hash automatically
-        // e.g., https://iyaya-supabase.vercel.app/#access_token=...
-        redirectUrl = 'https://iyaya-supabase.vercel.app/'
-        console.log('🌐 Web OAuth redirect:', redirectUrl)
-      } else {
-        // On native, use the deep link scheme
-        redirectUrl = 'iyaya-app://auth/callback'
-        console.log('📱 Native OAuth redirect:', redirectUrl)
-      }
-
       const { data, error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
         options: {
-          redirectTo: redirectUrl,
-          skipBrowserRedirect: false, // Let browser handle it (Supabase will redirect)
+          redirectTo: 'https://iyaya-supabase.vercel.app/auth/callback',
         }
       })
 
       console.log('📊 OAuth response:', { data, error })
+
       if (error) {
         console.error('❌ OAuth error:', error)
         throw error
       }
+      
       console.log('✅ Google Sign-In initiated successfully')
       return data
     } catch (err) {

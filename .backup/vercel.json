@@ -1,0 +1,25 @@
+{
+  "buildCommand": "npm run vercel-build",
+  "outputDirectory": "web-build",
+  "rewrites": [
+    {
+      "source": "/auth/callback",
+      "destination": "/auth/callback.html"
+    },
+    {
+      "source": "/(.*)",
+      "destination": "/index.html"
+    }
+  ],
+  "headers": [
+    {
+      "source": "/(.*)",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "public, max-age=3600, must-revalidate"
+        }
+      ]
+    }
+  ]
+}

@@ -1,8 +1,0 @@
-# Run linting
-npm run lint
-
-# Run type checking
-npm run type-check
-
-# Run tests
-npm run test -- --passWithNoTests --watchAll=false
