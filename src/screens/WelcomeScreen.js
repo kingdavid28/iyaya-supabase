@@ -1,5 +1,6 @@
 import { Ionicons } from "@expo/vector-icons";
 import { CommonActions, useNavigation } from "@react-navigation/native";
+import { Asset } from 'expo-asset';
 import { LinearGradient } from "expo-linear-gradient";
 import React from 'react';
 import {
@@ -26,6 +27,21 @@ export default function WelcomeScreen() {
   const isLoggedIn = !!user;
   const role = user?.role;
   const hasNavigated = React.useRef(false);
+  const [logoUri, setLogoUri] = React.useState(null);
+
+  // Load logo asset for web compatibility
+  React.useEffect(() => {
+    const loadAsset = async () => {
+      try {
+        const asset = Asset.fromModule(require('../../assets/icon.png'));
+        await asset.downloadAsync();
+        setLogoUri(asset.uri);
+      } catch (error) {
+        console.error('Failed to load logo:', error);
+      }
+    };
+    loadAsset();
+  }, []);
   
   // Debug: log auth state when it changes
   React.useEffect(() => {
@@ -158,12 +174,14 @@ export default function WelcomeScreen() {
                 colors={logoGradient}
                 style={styles.logoBackground}
               >
-                <Image 
-                  source={require('../../assets/icon.png')} 
-                  style={styles.logo}
-                  resizeMode="contain"
-                  accessibilityLabel="Iyaya app logo"
-                />
+                {logoUri && (
+                  <Image 
+                    source={{ uri: logoUri }} 
+                    style={styles.logo}
+                    resizeMode="contain"
+                    accessibilityLabel="Iyaya app logo"
+                  />
+                )}
               </LinearGradient>
             </View>
 
