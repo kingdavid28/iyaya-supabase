@@ -553,18 +553,12 @@ export const AuthProvider = ({ children }) => {
     getUserProfile,
     signInWithGoogle,
     requireAuthSession,
-    ensureAuthenticated
+    ensureAuthenticated,
+    ensureUserProfileExists
   }), [
     user,
     loading,
     error,
-    signUp,
-    signIn,
-    signOut,
-    resetPassword,
-    updatePassword,
-    resendVerification,
-    signInWithGoogle,
     requireAuthSession,
     ensureAuthenticated
   ])
