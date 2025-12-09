@@ -30,6 +30,7 @@ import JobSearchScreen from "../../screens/JobSearchScreen";
 import MyReportsScreen from "../../screens/MyReportsScreen";
 import OnboardingScreen from "../../screens/OnboardingScreen";
 import AuthCallbackScreen from "../../screens/AuthCallbackScreen";
+import RoleSelectionScreen from "../../screens/RoleSelectionScreen";
 
 // Primary screens (formerly lazy-loaded)
 import AvailabilityManagementScreen from "../../screens/AvailabilityManagementScreen";
@@ -303,6 +304,7 @@ const AppNavigatorWithAuth = () => {
         <Stack.Screen name="CreateReport" component={CreateReportScreen} options={{ title: "Report User", headerBackTitle: "Back" }} />
         <Stack.Screen name="MyReports" component={MyReportsScreen} options={{ title: "My Reports", headerBackTitle: "Back" }} />
         <Stack.Screen name="AuthCallback" component={AuthCallbackScreen} options={{ headerShown: false }} />
+        <Stack.Screen name="RoleSelection" component={RoleSelectionScreen} options={{ headerShown: false }} />
       </Stack.Navigator>
       </StatusGuard>
     </NavigationContainer>

@@ -3,13 +3,16 @@ import { View, Text, ActivityIndicator } from 'react-native';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../config/supabase';
 
-const AuthCallbackScreen = ({ navigation }) => {
+const AuthCallbackScreen = ({ navigation, route }) => {
   const { user } = useAuth();
   const [checking, setChecking] = useState(true);
 
   useEffect(() => {
     const handleCallback = async () => {
       try {
+        // Get role from route params if provided
+        const selectedRole = route.params?.role;
+        
         // Wait a bit for auth state to settle
         await new Promise(resolve => setTimeout(resolve, 1000));
         
@@ -26,9 +29,17 @@ const AuthCallbackScreen = ({ navigation }) => {
             .eq('id', session.user.id)
             .maybeSingle();
           
-          // If no profile, create one with default role
+          // If no profile exists, check if role was selected
           if (!profile && !error) {
-            console.log('📝 Creating user profile...');
+            if (!selectedRole) {
+              // No role selected yet - redirect to role selection
+              console.log('📋 No role selected - redirecting to role selection');
+              navigation.replace('RoleSelection', { session });
+              return;
+            }
+            
+            // Create profile with selected role
+            console.log('📝 Creating user profile with role:', selectedRole);
             const { createClient } = await import('@supabase/supabase-js');
             const serviceClient = createClient(
               process.env.EXPO_PUBLIC_SUPABASE_URL,
@@ -41,7 +52,7 @@ const AuthCallbackScreen = ({ navigation }) => {
                 id: session.user.id,
                 email: session.user.email,
                 name: session.user.user_metadata?.name || session.user.email?.split('@')[0],
-                role: 'parent', // Default role
+                role: selectedRole,
                 auth_provider: 'google',
                 status: 'active',
                 email_verified: true,
@@ -53,7 +64,7 @@ const AuthCallbackScreen = ({ navigation }) => {
             profile = newProfile;
           }
           
-          const role = profile?.role || 'parent';
+          const role = profile?.role;
           console.log('✅ Navigating to dashboard:', role);
           const dashboardRoute = role === 'caregiver' ? 'CaregiverDashboard' : 'ParentDashboard';
           navigation.replace(dashboardRoute);
@@ -69,7 +80,7 @@ const AuthCallbackScreen = ({ navigation }) => {
     };
 
     handleCallback();
-  }, [navigation]);
+  }, [navigation, route.params]);
 
   return (
     <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#f8fafc' }}>
