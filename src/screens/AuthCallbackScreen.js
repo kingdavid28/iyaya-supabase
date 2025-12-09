@@ -1,33 +1,42 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { View, Text, ActivityIndicator } from 'react-native';
 import { useAuth } from '../contexts/AuthContext';
+import { supabase } from '../config/supabase';
 
 const AuthCallbackScreen = ({ navigation }) => {
   const { user } = useAuth();
+  const [checking, setChecking] = useState(true);
 
   useEffect(() => {
-    // Handle OAuth callback
     const handleCallback = async () => {
       try {
-        // Wait for auth state to update
-        setTimeout(() => {
-          if (user) {
-            // Navigate to appropriate dashboard based on user role
-            const dashboardRoute = user.role === 'caregiver' ? 'CaregiverDashboard' : 'ParentDashboard';
-            navigation.replace(dashboardRoute);
-          } else {
-            // If no user, go back to welcome
-            navigation.replace('Welcome');
-          }
-        }, 2000);
+        // Get current session
+        const { data: { session } } = await supabase.auth.getSession();
+        
+        if (session?.user) {
+          // Fetch user profile to get role
+          const { data: profile } = await supabase
+            .from('users')
+            .select('role')
+            .eq('id', session.user.id)
+            .single();
+          
+          const role = profile?.role || user?.role;
+          const dashboardRoute = role === 'caregiver' ? 'CaregiverDashboard' : 'ParentDashboard';
+          navigation.replace(dashboardRoute);
+        } else {
+          navigation.replace('Welcome');
+        }
       } catch (error) {
         console.error('Auth callback error:', error);
         navigation.replace('Welcome');
+      } finally {
+        setChecking(false);
       }
     };
 
     handleCallback();
-  }, [user, navigation]);
+  }, [navigation]);
 
   return (
     <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#f8fafc' }}>
