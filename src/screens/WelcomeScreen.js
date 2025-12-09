@@ -159,42 +159,8 @@ export default function WelcomeScreen() {
 
   console.log('[Welcome] Rendering screen', { isWeb, isLoggedIn, role, logoUri, logoError });
 
-  // Simple test render
-  if (isWeb) {
-    return (
-      <View style={{ flex: 1, backgroundColor: '#e0f2fe', justifyContent: 'center', alignItems: 'center', padding: 20 }}>
-        <Text style={{ fontSize: 32, fontWeight: 'bold', color: '#1f2937', marginBottom: 20 }}>Iyaya</Text>
-        <Text style={{ fontSize: 18, color: '#4b5563', marginBottom: 40, textAlign: 'center' }}>Connecting families with trusted caregivers</Text>
-        
-        <Pressable
-          style={{ backgroundColor: '#db2777', padding: 20, borderRadius: 12, marginBottom: 16, minWidth: 200 }}
-          onPress={handleParentPress}
-        >
-          <Text style={{ color: 'white', fontSize: 18, fontWeight: '600', textAlign: 'center' }}>I'm a Parent</Text>
-        </Pressable>
-        
-        <Pressable
-          style={{ backgroundColor: '#2563eb', padding: 20, borderRadius: 12, minWidth: 200 }}
-          onPress={handleCaregiverPress}
-        >
-          <Text style={{ color: 'white', fontSize: 18, fontWeight: '600', textAlign: 'center' }}>I'm a Caregiver</Text>
-        </Pressable>
-      </View>
-    );
-  }
-
-  const GradientWrapper = isWeb ? View : LinearGradient;
-  const gradientProps = isWeb ? {} : {
-    colors: backgroundGradient,
-    start: { x: 0, y: 0 },
-    end: { x: 1, y: 1 }
-  };
-
   return (
-    <GradientWrapper 
-      {...gradientProps}
-      style={styles.gradient}
-    >
+    <View style={styles.gradient}>
       <ContainerComponent style={styles.safeArea}>
         <ScrollView 
           contentContainerStyle={styles.container}
@@ -319,7 +285,7 @@ export default function WelcomeScreen() {
           </View>
         </ScrollView>
       </ContainerComponent>
-    </GradientWrapper>
+    </View>
   );
 }
 
