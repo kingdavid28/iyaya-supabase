@@ -28,6 +28,7 @@ export default function WelcomeScreen() {
   const role = user?.role;
   const hasNavigated = React.useRef(false);
   const [logoUri, setLogoUri] = React.useState(null);
+  const [logoError, setLogoError] = React.useState(false);
 
   // Load logo asset for web compatibility
   React.useEffect(() => {
@@ -38,6 +39,7 @@ export default function WelcomeScreen() {
         setLogoUri(asset.uri);
       } catch (error) {
         console.error('Failed to load logo:', error);
+        setLogoError(true);
       }
     };
     loadAsset();
@@ -174,13 +176,17 @@ export default function WelcomeScreen() {
                 colors={logoGradient}
                 style={styles.logoBackground}
               >
-                {logoUri && (
+                {logoUri ? (
                   <Image 
                     source={{ uri: logoUri }} 
                     style={styles.logo}
                     resizeMode="contain"
                     accessibilityLabel="Iyaya app logo"
                   />
+                ) : !logoError ? (
+                  <Text style={{ fontSize: 48, color: '#db2777' }}>👶</Text>
+                ) : (
+                  <Text style={{ fontSize: 24, fontWeight: 'bold', color: '#db2777' }}>Iyaya</Text>
                 )}
               </LinearGradient>
             </View>
