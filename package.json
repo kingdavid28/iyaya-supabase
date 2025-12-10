@@ -19,7 +19,7 @@
     "build:android": "eas build --platform android --profile production",
     "build:ios": "eas build --platform ios --profile production",
     "build:preview": "eas build --platform android --profile preview",
-    "vercel-build": "expo export -p web",
+    "vercel-build": "expo export --platform web",
     "setup-network": "node scripts/setup-network.js",
     "analyze-bundle": "npx expo export --dump-sourcemap && npx react-native-bundle-visualizer"
   },
