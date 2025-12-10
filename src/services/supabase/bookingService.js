@@ -1,6 +1,7 @@
 import { SupabaseBase, supabase } from './base'
 import { getCachedOrFetch, invalidateCache } from './cache'
 import { notificationService } from './notificationService'
+import { trackBookingCreated } from '../../utils/analytics'
 
 export class BookingService extends SupabaseBase {
   async createBooking(bookingData) {
@@ -51,6 +52,18 @@ export class BookingService extends SupabaseBase {
       if (error) throw error
 
       console.log('✅ Booking created successfully:', data)
+      
+      // Track booking creation with real data
+      trackBookingCreated('childcare', {
+        booking_id: data.id,
+        hourly_rate: data.hourly_rate,
+        total_amount: data.total_amount,
+        duration_hours: data.start_time && data.end_time ? 
+          (new Date(`1970-01-01T${data.end_time}`) - new Date(`1970-01-01T${data.start_time}`)) / (1000 * 60 * 60) : 0,
+        children_count: Array.isArray(data.selected_children) ? data.selected_children.length : 0,
+        has_special_instructions: !!data.special_instructions
+      })
+      
       invalidateCache('bookings:')
       return data
     } catch (error) {

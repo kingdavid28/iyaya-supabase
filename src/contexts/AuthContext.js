@@ -6,6 +6,7 @@ import { ActivityIndicator, Platform, View } from 'react-native'
 import { supabase } from '../config/supabase'
 import { tokenManager } from '../utils/tokenManager'
 import { userStatusService } from '../services/supabase/userStatusService'
+import { trackUserRegistration, trackUserLogin } from '../utils/analytics'
 
 export const AuthContext = createContext()
 
@@ -284,6 +285,9 @@ export const AuthProvider = ({ children }) => {
       // Create user profile in public.users table using service role
       if (data.user) {
         console.log('🔄 Creating user profile for:', data.user.id)
+        
+        // Track user registration
+        trackUserRegistration(userData.role)
 
         try {
           // Use service role client to bypass RLS during signup
@@ -349,6 +353,12 @@ export const AuthProvider = ({ children }) => {
       //   await supabase.auth.signOut()
       //   throw new Error('Please verify your email before signing in. Check your inbox for the verification link.')
       // }
+
+      // Track user login
+      if (data.user) {
+        const userWithProfile = await fetchUserWithProfile(data.user)
+        trackUserLogin(userWithProfile?.role || 'unknown')
+      }
 
       return data
     } catch (err) {
@@ -480,6 +490,12 @@ export const AuthProvider = ({ children }) => {
       }
       
       console.log('✅ Google Sign-In initiated successfully')
+      
+      // Track Google OAuth login
+      if (data?.user) {
+        trackUserLogin('google_oauth')
+      }
+      
       return data
     } catch (err) {
       console.error('❌ Google Sign-In failed:', err)

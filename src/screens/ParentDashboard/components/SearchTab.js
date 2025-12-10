@@ -3,6 +3,7 @@ import React, { memo, useCallback, useMemo } from 'react';
 import { ActivityIndicator, FlatList, RefreshControl, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { colors, styles } from '../../styles/ParentDashboard.styles';
 import CaregiverCard from './CaregiverCard';
+import { trackSearchPerformed, trackEvent } from '../../../utils/analytics';
 
 const PARENT_HEADER_GRADIENT = ['#f4a9daff', '#dcd8f0ff'];
 
@@ -42,10 +43,36 @@ const SearchTabComponent = ({
     ({ item }) => (
       <CaregiverCard
         caregiver={item}
-        onPress={() => onBookCaregiver(item)}
-        onMessagePress={() => onMessageCaregiver(item)}
-        onViewReviews={onViewReviews ? () => onViewReviews(item) : undefined}
-        onRequestInfo={onRequestInfo ? () => onRequestInfo(item) : undefined}
+        onPress={() => {
+          // Track caregiver card click
+          trackEvent('caregiver_card_clicked', {
+            caregiver_id: item?.id || item?._id,
+            caregiver_name: item?.name,
+            hourly_rate: item?.hourlyRate || item?.hourly_rate,
+            rating: item?.rating,
+            experience_years: item?.experienceYears || item?.experience_years
+          });
+          onBookCaregiver(item);
+        }}
+        onMessagePress={() => {
+          trackEvent('caregiver_message_clicked', {
+            caregiver_id: item?.id || item?._id
+          });
+          onMessageCaregiver(item);
+        }}
+        onViewReviews={onViewReviews ? () => {
+          trackEvent('caregiver_reviews_viewed', {
+            caregiver_id: item?.id || item?._id,
+            reviews_count: item?.reviewsCount || 0
+          });
+          onViewReviews(item);
+        } : undefined}
+        onRequestInfo={onRequestInfo ? () => {
+          trackEvent('caregiver_info_requested', {
+            caregiver_id: item?.id || item?._id
+          });
+          onRequestInfo(item);
+        } : undefined}
       />
     ),
     [onBookCaregiver, onMessageCaregiver, onViewReviews, onRequestInfo]
@@ -87,7 +114,17 @@ const SearchTabComponent = ({
           style={searchTabStyles.searchInput}
           placeholder="Search by location, name, or specialty..."
           value={searchQuery}
-          onChangeText={onSearch}
+          onChangeText={(text) => {
+            onSearch(text);
+            // Track search with real data
+            if (text.length > 2) {
+              trackSearchPerformed('caregivers', {
+                query_length: text.length,
+                results_count: filteredCaregivers?.length || 0,
+                active_filters: activeFilters || 0
+              });
+            }
+          }}
           placeholderTextColor="#9CA3AF"
         />
       </View>

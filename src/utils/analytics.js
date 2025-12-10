@@ -1,41 +1,61 @@
-export const analytics = {
-  trackScreen(screenName, properties = {}) {
-    console.log('📊 Screen:', screenName, properties);
-  },
+import { Platform } from 'react-native';
 
-  trackEvent(eventName, properties = {}) {
-    console.log('📊 Event:', eventName, properties);
-  },
+// Vercel Analytics utilities
+let analytics = null;
 
-  trackError(error, context = {}) {
-    console.error('📊 Error:', error, context);
-  },
-
-  trackLogin(method = 'email') {
-    console.log('📊 Login:', method);
-  },
-
-  trackSignup(userType) {
-    console.log('📊 Signup:', userType);
-  },
-
-  trackJobPost() {
-    console.log('📊 Job Posted');
-  },
-
-  trackJobApply(jobId) {
-    console.log('📊 Job Applied:', jobId);
-  },
-
-  trackBookingCreated(bookingId) {
-    console.log('📊 Booking Created:', bookingId);
-  },
-
-  trackMessageSent(conversationId) {
-    console.log('📊 Message Sent:', conversationId);
-  },
-
-  setUserId(userId) {
-    console.log('📊 User ID set:', userId);
+if (Platform.OS === 'web') {
+  try {
+    const { track } = require('@vercel/analytics');
+    analytics = { track };
+  } catch (error) {
+    console.warn('Vercel Analytics not available:', error.message);
   }
+}
+
+// Analytics tracking functions
+export const trackEvent = (eventName, properties = {}) => {
+  if (Platform.OS === 'web' && analytics?.track) {
+    try {
+      analytics.track(eventName, properties);
+      console.log('Analytics event tracked:', eventName, properties);
+    } catch (error) {
+      console.warn('Failed to track analytics event:', error.message);
+    }
+  }
+};
+
+// Common events for the Iyaya app
+export const trackUserRegistration = (userType) => {
+  trackEvent('user_registration', { user_type: userType });
+};
+
+export const trackUserLogin = (userType) => {
+  trackEvent('user_login', { user_type: userType });
+};
+
+export const trackProfileView = (profileType) => {
+  trackEvent('profile_view', { profile_type: profileType });
+};
+
+export const trackBookingCreated = (serviceType, bookingData = {}) => {
+  trackEvent('booking_created', { 
+    service_type: serviceType,
+    ...bookingData
+  });
+};
+
+export const trackSearchPerformed = (searchType, searchData = {}) => {
+  trackEvent('search_performed', { 
+    search_type: searchType,
+    ...searchData
+  });
+};
+
+export default {
+  trackEvent,
+  trackUserRegistration,
+  trackUserLogin,
+  trackProfileView,
+  trackBookingCreated,
+  trackSearchPerformed
 };

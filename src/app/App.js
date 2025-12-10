@@ -7,6 +7,17 @@ import { ActivityIndicator, AppState, Platform, Text, View } from 'react-native'
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
+// Vercel Analytics - only for web
+let Analytics = null;
+if (Platform.OS === 'web') {
+  try {
+    const { Analytics: VercelAnalytics } = require('@vercel/analytics/react');
+    Analytics = VercelAnalytics;
+  } catch (error) {
+    console.warn('Vercel Analytics not available:', error.message);
+  }
+}
+
 if (!global.Buffer) {
   global.Buffer = Buffer;
 }
@@ -38,6 +49,11 @@ import { supabase } from '../config/supabase';
 // Log filter
 import '../utils/logFilter';
 // import { enableAllLogs } from '../utils/logFilter';
+
+// Analytics test (development only)
+if (Platform.OS === 'web' && process.env.NODE_ENV === 'development') {
+  import('../utils/analyticsTest');
+}
 
 // // // Temporarily re-enable verbose logging for debugging startup on iOS
 // // if (typeof enableAllLogs === 'function') {
@@ -197,6 +213,7 @@ export default function App() {
                     <AppIntegration>
                       <AppNavigator />
                       <StatusBar style="auto" />
+                      {Analytics && <Analytics />}
                     </AppIntegration>
                   </SupabaseAuthProvider>
                 </PrivacyProvider>

@@ -11,6 +11,7 @@ import {
   ProfileHeaderSkeleton,
   ProfileCardSkeleton
 } from '../../components/profile/ProfileSkeletons';
+import { trackProfileView, trackEvent } from '../../utils/analytics';
 
 const ProfileScreen = () => {
   const theme = useTheme();
@@ -37,6 +38,9 @@ const ProfileScreen = () => {
   useEffect(() => {
     const loadProfile = async () => {
       try {
+        // Track profile view
+        trackProfileView(user?.role || 'unknown');
+        
         const profile = await userService.getProfile(user.uid);
         setInitialValues(prev => ({
           ...prev,
@@ -94,6 +98,14 @@ const ProfileScreen = () => {
       // Use authAPI.updateProfile which handles token refresh automatically
       const result = await authAPI.updateProfile(profileData);
       console.log('✅ Profile update result:', result);
+      
+      // Track profile update
+      trackEvent('profile_updated', {
+        user_role: user?.role,
+        verification_status: profileData.verificationStatus,
+        has_documents: !!(formData.documents?.id && formData.documents?.policeClearance),
+        skills_count: formData.skills?.length || 0
+      });
       
       Alert.alert(
         'Success',
