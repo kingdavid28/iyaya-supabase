@@ -1,33 +1,56 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { View, Text, ActivityIndicator } from 'react-native';
 import { useAuth } from '../contexts/AuthContext';
+import { CommonActions } from '@react-navigation/native';
 
 const AuthCallbackScreen = ({ navigation }) => {
-  const { user } = useAuth();
+  const { user, handleOAuthCallback } = useAuth();
+  const [processing, setProcessing] = useState(true);
 
   useEffect(() => {
-    // Handle OAuth callback
     const handleCallback = async () => {
       try {
-        // Wait for auth state to update
+        console.log('🔄 Processing OAuth callback...');
+        
+        // Handle OAuth callback with default parent role
+        await handleOAuthCallback('parent');
+        
+        // Wait a moment for auth state to update
         setTimeout(() => {
           if (user) {
-            // Navigate to appropriate dashboard based on user role
+            console.log('✅ User authenticated, navigating to dashboard');
             const dashboardRoute = user.role === 'caregiver' ? 'CaregiverDashboard' : 'ParentDashboard';
-            navigation.replace(dashboardRoute);
+            navigation.dispatch(
+              CommonActions.reset({
+                index: 0,
+                routes: [{ name: dashboardRoute }],
+              })
+            );
           } else {
-            // If no user, go back to welcome
-            navigation.replace('Welcome');
+            console.log('❌ No user found, returning to welcome');
+            navigation.dispatch(
+              CommonActions.reset({
+                index: 0,
+                routes: [{ name: 'Welcome' }],
+              })
+            );
           }
-        }, 2000);
+          setProcessing(false);
+        }, 1500);
       } catch (error) {
-        console.error('Auth callback error:', error);
-        navigation.replace('Welcome');
+        console.error('❌ Auth callback error:', error);
+        navigation.dispatch(
+          CommonActions.reset({
+            index: 0,
+            routes: [{ name: 'Welcome' }],
+          })
+        );
+        setProcessing(false);
       }
     };
 
     handleCallback();
-  }, [user, navigation]);
+  }, [user, navigation, handleOAuthCallback]);
 
   return (
     <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#f8fafc' }}>

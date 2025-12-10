@@ -84,6 +84,11 @@ export const AuthProvider = ({ children }) => {
             if (!isMounted) return
             setUser(userWithProfile)
             setError(null)
+            
+            // Track OAuth login
+            if (event === 'SIGNED_IN') {
+              trackUserLogin('google_oauth')
+            }
           } else {
             setUser(null)
           }
@@ -467,36 +472,18 @@ export const AuthProvider = ({ children }) => {
     }
   }
 
-  const signInWithGoogle = async () => {
+  const signInWithGoogle = async (navigation = null, roleHint = 'parent') => {
     try {
       setError(null)
       setLoading(true)
       
-      console.log('🔄 Starting Google Sign-In (Expo Go compatible)...')
-      console.log('🌍 Platform:', Platform.OS)
+      console.log('🔄 Starting Google Sign-In...', { platform: Platform.OS, roleHint })
       
-      const { data, error } = await supabase.auth.signInWithOAuth({
-        provider: 'google',
-        options: {
-          redirectTo: 'https://iyaya-supabase.vercel.app/auth/callback',
-        }
-      })
-
-      console.log('📊 OAuth response:', { data, error })
-
-      if (error) {
-        console.error('❌ OAuth error:', error)
-        throw error
-      }
+      // Use the existing signInWithOAuth function
+      const result = await signInWithOAuth('google')
       
-      console.log('✅ Google Sign-In initiated successfully')
-      
-      // Track Google OAuth login
-      if (data?.user) {
-        trackUserLogin('google_oauth')
-      }
-      
-      return data
+      console.log('✅ Google OAuth completed')
+      return result
     } catch (err) {
       console.error('❌ Google Sign-In failed:', err)
       setError(err.message)
@@ -555,6 +542,42 @@ export const AuthProvider = ({ children }) => {
     return user
   }, [requireAuthSession, user])
 
+  const handleOAuthCallback = async (roleHint = 'parent') => {
+    try {
+      setError(null)
+      setLoading(true)
+      
+      console.log('🔄 Handling OAuth callback...', { roleHint })
+      
+      const { data, error } = await supabase.auth.getSession()
+      
+      if (error) {
+        console.error('❌ OAuth callback error:', error)
+        throw error
+      }
+      
+      if (data?.session?.user) {
+        console.log('✅ OAuth session found, ensuring profile exists...')
+        
+        // Ensure user profile exists with role hint
+        await ensureUserProfileExists(data.session.user, roleHint)
+        
+        // Track successful OAuth login
+        trackUserLogin('google_oauth')
+        
+        return data.session
+      }
+      
+      throw new Error('No session found after OAuth callback')
+    } catch (err) {
+      console.error('❌ OAuth callback failed:', err)
+      setError(err.message)
+      throw err
+    } finally {
+      setLoading(false)
+    }
+  }
+
   const value = useMemo(() => ({
     user,
     loading,
@@ -568,6 +591,7 @@ export const AuthProvider = ({ children }) => {
     getCurrentUser,
     getUserProfile,
     signInWithGoogle,
+    handleOAuthCallback,
     requireAuthSession,
     ensureAuthenticated
   }), [

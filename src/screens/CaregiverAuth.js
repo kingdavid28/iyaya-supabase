@@ -1,6 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from '@react-navigation/native';
 import { LinearGradient } from 'expo-linear-gradient';
+import Constants from 'expo-constants';
 import React, { useState } from 'react';
 import {
   Alert,
@@ -48,17 +49,7 @@ const CaregiverAuth = ({ navigation }) => {
     }
   };
 
-  // Navigate when user becomes authenticated
-  useFocusEffect(
-    React.useCallback(() => {
-      if (authUser?.role) {
-        const timer = setTimeout(() => {
-          navigateToUserDashboard(navigation, authUser.role);
-        }, 50);
-        return () => clearTimeout(timer);
-      }
-    }, [authUser, navigation])
-  );
+  // Navigation is now handled by AuthContext, no need for focus effect
 
   // Calculate age from birth date
   const calculateAge = (birthDate) => {
@@ -391,7 +382,7 @@ const CaregiverAuth = ({ navigation }) => {
                     <GoogleSignInButton
                       onPress={async () => {
                         try {
-                          await signInWithGoogle()
+                          await signInWithGoogle(navigation, 'caregiver')
                         } catch (error) {
                           Alert.alert('Google Sign In Failed', error.message)
                         }
@@ -626,6 +617,18 @@ const styles = StyleSheet.create({
     marginHorizontal: 16,
     color: '#6b7280',
     fontSize: 14
+  },
+  mobileOAuthNote: {
+    padding: 12,
+    backgroundColor: '#f3f4f6',
+    borderRadius: 8,
+    marginTop: 8
+  },
+  mobileOAuthText: {
+    fontSize: 12,
+    color: '#6b7280',
+    textAlign: 'center',
+    fontStyle: 'italic'
   }
 });
 

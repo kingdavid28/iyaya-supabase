@@ -1,12 +1,9 @@
 import React, { useEffect } from 'react';
-import { useAnalytics } from '../hooks/useAnalytics';
+import { trackEvent } from '../utils/analytics';
 import { useSecurity } from '../hooks/useSecurity';
-
-
 
 // Integration component to initialize all implemented functionality
 const AppIntegration = ({ children }) => {
-  const { trackEvent } = useAnalytics();
   const { checkRateLimit } = useSecurity();
 
   useEffect(() => {
@@ -19,7 +16,7 @@ const AppIntegration = ({ children }) => {
         // Track app startup
         trackEvent('app_startup', { 
           timestamp: new Date().toISOString(),
-          platform: 'mobile'
+          platform: 'web'
         });
         
         console.log('✅ App integration initialized successfully');
@@ -29,7 +26,7 @@ const AppIntegration = ({ children }) => {
     };
 
     initializeApp();
-  }, [trackEvent]);
+  }, []);
 
   return children;
 };

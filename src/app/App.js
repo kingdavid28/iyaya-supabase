@@ -50,11 +50,6 @@ import { supabase } from '../config/supabase';
 import '../utils/logFilter';
 // import { enableAllLogs } from '../utils/logFilter';
 
-// Analytics test (development only)
-if (Platform.OS === 'web' && process.env.NODE_ENV === 'development') {
-  import('../utils/analyticsTest');
-}
-
 // // // Temporarily re-enable verbose logging for debugging startup on iOS
 // // if (typeof enableAllLogs === 'function') {
 // //   enableAllLogs();

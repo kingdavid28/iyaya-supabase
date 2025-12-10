@@ -24,7 +24,7 @@ const getBaseHost = () => {
 
     // 2) Legacy API URL (deprecated - should not be used)
     const envUrlRaw = process.env?.EXPO_PUBLIC_API_URL || process.env?.REACT_APP_API_URL;
-    if (envUrlRaw && !envUrlRaw.includes('192.168.1.5')) {
+    if (envUrlRaw && !envUrlRaw.includes('192.168.1.7')) {
       const trimmed = envUrlRaw.trim().replace(/\/$/, "");
       const withoutApi = trimmed.replace(/\/api$/i, "");
       return { mode: "legacy-env", url: withoutApi, appendApi: true };

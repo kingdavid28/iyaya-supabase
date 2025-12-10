@@ -1,6 +1,7 @@
 import { Ionicons } from "@expo/vector-icons";
 import { CommonActions, useFocusEffect } from '@react-navigation/native';
 import { LinearGradient } from "expo-linear-gradient";
+import Constants from 'expo-constants';
 import React, { useState } from 'react';
 import {
   Alert,
@@ -26,32 +27,7 @@ const ParentAuth = ({ navigation, route }) => {
   const { dispatch } = useApp();
   const { user: authUser, signIn, signUp, signInWithGoogle, verifyEmailToken } = useAuth();
 
-  // Use focus effect for navigation to ensure proper timing
-  useFocusEffect(
-    React.useCallback(() => {
-      if (authUser) {
-        console.log('Auth user detected on focus:', {
-          email: authUser.email,
-          role: authUser.role
-        });
-
-        // Navigate based on user role
-        const dashboardRoute = authUser.role === 'caregiver' ? 'CaregiverDashboard' : 'ParentDashboard';
-
-        // Use setTimeout to ensure navigation happens after render
-        const timer = setTimeout(() => {
-          navigation.dispatch(
-            CommonActions.reset({
-              index: 0,
-              routes: [{ name: dashboardRoute }],
-            })
-          );
-        }, 50);
-
-        return () => clearTimeout(timer);
-      }
-    }, [authUser, navigation])
-  );
+  // Navigation is now handled by AuthContext, no need for focus effect
 
   const [mode, setMode] = useState(route.params?.mode || 'login');
   const { formData, formErrors, handleChange, validateForm: validateCurrentForm, resetForm } = useAuthForm();
@@ -353,7 +329,7 @@ const ParentAuth = ({ navigation, route }) => {
                     </View>
                     
                     <GoogleSignInButton
-                      onPress={signInWithGoogle}
+                      onPress={() => signInWithGoogle(navigation, 'parent')}
                       loading={isSubmitting}
                     />
                   </>
@@ -564,6 +540,18 @@ const styles = StyleSheet.create({
     marginHorizontal: 16,
     color: '#6b7280',
     fontSize: 14
+  },
+  mobileOAuthNote: {
+    padding: 12,
+    backgroundColor: '#f3f4f6',
+    borderRadius: 8,
+    marginTop: 8
+  },
+  mobileOAuthText: {
+    fontSize: 12,
+    color: '#6b7280',
+    textAlign: 'center',
+    fontStyle: 'italic'
   }
 });
 

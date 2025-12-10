@@ -9,7 +9,8 @@ import {
   ScrollView,
   StyleSheet,
   Text,
-  View
+  View,
+  ActivityIndicator
 } from "react-native";
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAuth } from "../contexts/AuthContext";
@@ -22,8 +23,7 @@ import { trackEvent } from '../utils/analytics';
  */
 export default function WelcomeScreen() {
   const navigation = useNavigation();
-  const isWeb = Platform.OS === 'web';
-  const { user, signOut } = useAuth();
+  const { user, signOut, isLoading } = useAuth();
   const isLoggedIn = !!user;
   const role = user?.role;
   const hasNavigated = React.useRef(false);
@@ -35,9 +35,20 @@ export default function WelcomeScreen() {
       userEmail: user?.email, 
       userRole: user?.role,
       isLoggedIn,
-      role 
+      role,
+      isLoading
     });
-  }, [user, isLoggedIn, role]);
+    
+    // Navigate immediately when user becomes authenticated
+    if (user && user.role && !isLoading) {
+      const dashboardRoute = user.role === 'caregiver' ? 'CaregiverDashboard' : 'ParentDashboard';
+      console.log('[Welcome] User authenticated, navigating to:', dashboardRoute);
+      navigation.dispatch(CommonActions.reset({
+        index: 0,
+        routes: [{ name: dashboardRoute }],
+      }));
+    }
+  }, [user, isLoggedIn, role, isLoading, navigation]);
 
   // Reset navigation flag when user logs out
   React.useEffect(() => {
@@ -46,79 +57,54 @@ export default function WelcomeScreen() {
     }
   }, [isLoggedIn]);
 
-  // If logged in, immediately reset to the correct dashboard based on role (only once)
-  React.useEffect(() => {
-    if (!isLoggedIn || !role || hasNavigated.current) return;
-
-    const target = role === 'caregiver' ? 'CaregiverDashboard' : 'ParentDashboard';
-    
-    console.log(`[Welcome] User logged in as ${role}, navigating to ${target}`);
-    hasNavigated.current = true;
-    
-    // Use setTimeout to ensure navigation happens after component mount
-    const navigationTimer = setTimeout(() => {
-      try {
-        navigation.dispatch(
-          CommonActions.reset({
-            index: 0,
-            routes: [{ name: target }],
-          })
-        );
-      } catch (error) {
-        console.error('[Welcome] Navigation reset failed:', error);
-        // Fallback to regular navigation
-        try {
-          navigation.dispatch(CommonActions.navigate(target));
-        } catch (fallbackError) {
-          console.error('[Welcome] Fallback navigation also failed:', fallbackError);
-        }
-      }
-    }, 100);
-
-    return () => clearTimeout(navigationTimer);
-  }, [isLoggedIn, role, navigation]);
+  // Navigation is now handled by AppNavigator, no need for automatic redirect
 
   // Navigation handlers
   const handleParentPress = React.useCallback(() => {
-    console.log('[Welcome] Parent card pressed', { isLoggedIn });
+    console.log('[Welcome] Parent card pressed', { isLoggedIn, role });
     
     // Track user interaction
     trackEvent('welcome_card_clicked', { 
       card_type: 'parent',
-      user_logged_in: isLoggedIn 
+      user_logged_in: isLoggedIn,
+      user_role: role
     });
     
-    if (isLoggedIn) {
-      navigation.dispatch(CommonActions.navigate('ParentDashboard'));
-    } else {
+    // Only handle navigation for non-logged-in users
+    if (!isLoggedIn) {
       navigation.dispatch(CommonActions.navigate('ParentAuth'));
     }
-  }, [isLoggedIn, navigation]);
+    // For logged-in users, AppNavigator handles navigation automatically
+  }, [isLoggedIn, role, navigation]);
 
   const handleCaregiverPress = React.useCallback(() => {
-    console.log('[Welcome] Caregiver card pressed', { isLoggedIn });
+    console.log('[Welcome] Caregiver card pressed', { isLoggedIn, role });
     
     // Track user interaction
     trackEvent('welcome_card_clicked', { 
       card_type: 'caregiver',
-      user_logged_in: isLoggedIn 
+      user_logged_in: isLoggedIn,
+      user_role: role
     });
     
-    if (isLoggedIn) {
-      navigation.dispatch(CommonActions.navigate('CaregiverDashboard'));
-    } else {
+    // Only handle navigation for non-logged-in users
+    if (!isLoggedIn) {
       navigation.dispatch(CommonActions.navigate('CaregiverAuth'));
     }
-  }, [isLoggedIn, navigation]);
+    // For logged-in users, AppNavigator handles navigation automatically
+  }, [isLoggedIn, role, navigation]);
 
-  // Don't render the welcome screen if user is logged in
-  if (isLoggedIn && role) {
+  // Show loading indicator while checking auth state
+  if (isLoading) {
     return (
       <View style={styles.loadingContainer}>
-        <Text>Redirecting to your dashboard...</Text>
+        <ActivityIndicator size="large" color="#db2777" />
+        <Text style={styles.loadingText}>Loading...</Text>
       </View>
     );
   }
+
+
 
   // Gradient colors reused throughout the component
   const backgroundGradient = ["#fce8f4", "#e0f2fe", "#f3e8ff"];
@@ -132,14 +118,14 @@ export default function WelcomeScreen() {
       color: "#16a34a",
       bgColor: "#dcfce7",
       title: "Verified Profiles",
-      description: "All caregivers undergo background checks\nand verification"
+      description: "All caregivers undergo background checks and verification"
     },
     {
       icon: "people-outline",
       color: "#d97706",
       bgColor: "#fef3c7",
       title: "Trusted Community",
-      description: "Join thousands of happy families and\ncaregivers"
+      description: "Join thousands of happy families and caregivers"
     },
     {
       icon: "heart-outline",
@@ -161,6 +147,7 @@ export default function WelcomeScreen() {
         <ScrollView 
           contentContainerStyle={styles.container}
           showsVerticalScrollIndicator={false}
+          bounces={false}
         >
           {/* Header Section */}
           <View style={styles.header}>
@@ -180,7 +167,8 @@ export default function WelcomeScreen() {
 
             <Text style={styles.tagline}>Connecting families with trusted caregivers</Text>
             <Text style={styles.subtitle}>
-              Find the perfect caregiver for your child or discover amazing families to work with.{"\n"}
+              Find the perfect caregiver for your child or discover amazing families to work with.
+              {"\n"}
               Safe, secure, and built with love.
             </Text>
           </View>
@@ -195,23 +183,26 @@ export default function WelcomeScreen() {
                 pressed && styles.cardPressed
               ]}
               onPress={handleParentPress}
-              android_ripple={{ color: "#fce7f3" }}
+              android_ripple={{ color: "rgba(219, 39, 119, 0.1)" }}
               accessibilityRole="button"
               accessibilityLabel="I'm a Parent. Find trusted caregivers for your little ones. Get Started."
+              accessibilityHint="Double tap to select parent role"
             >
               <View style={styles.cardContent}>
                 <LinearGradient 
                   colors={parentGradient}
                   style={[styles.iconContainer, styles.parentIconContainer]}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 1 }}
                 >
                   <Ionicons name="happy-outline" size={40} color="#db2777" accessibilityLabel="Parent icon" />
                 </LinearGradient>
 
                 <Text style={styles.cardTitle}>I'm a Parent</Text>
                 <Text style={styles.cardDescription}>
-                  Find trusted caregivers for your little ones.{"\n"}
-                  Browse profiles, read reviews, and book{"\n"}
-                  services with confidence.
+                  Find trusted caregivers for your little ones.
+                  {"\n"}
+                  Browse profiles, read reviews, and book services with confidence.
                 </Text>
 
                 <View style={[styles.getStartedButton, styles.parentButton]}>
@@ -229,23 +220,26 @@ export default function WelcomeScreen() {
                 pressed && styles.cardPressed
               ]}
               onPress={handleCaregiverPress}
-              android_ripple={{ color: "#e0f2fe" }}
+              android_ripple={{ color: "rgba(37, 99, 235, 0.1)" }}
               accessibilityRole="button"
               accessibilityLabel="I'm a Child Caregiver. Join our community of trusted caregivers. Get Started."
+              accessibilityHint="Double tap to select caregiver role"
             >
               <View style={styles.cardContent}>
                 <LinearGradient 
                   colors={caregiverGradient}
                   style={[styles.iconContainer, styles.caregiverIconContainer]}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 1 }}
                 >
                   <Ionicons name="person-outline" size={40} color="#2563eb" accessibilityLabel="Caregiver icon" />
                 </LinearGradient>
 
                 <Text style={styles.cardTitle}>I'm a Child Caregiver</Text>
                 <Text style={styles.cardDescription}>
-                  Join our community of trusted caregivers.{"\n"}
-                  Create your profile, showcase your skills,{"\n"}
-                  and connect with families.
+                  Join our community of trusted caregivers.
+                  {"\n"}
+                  Create your profile, showcase your skills, and connect with families.
                 </Text>
 
                 <View style={[styles.getStartedButton, styles.caregiverButton]}>
@@ -259,7 +253,12 @@ export default function WelcomeScreen() {
           {/* Features Section */}
           <View style={styles.featuresContainer}>
             {features.map((feature, index) => (
-              <View key={index} style={styles.feature}>
+              <View 
+                key={index} 
+                style={styles.feature}
+                accessibilityLabel={`${feature.title}: ${feature.description}`}
+                accessibilityRole="text"
+              >
                 <View style={[styles.featureIcon, { backgroundColor: feature.bgColor }]}>
                   <Ionicons 
                     name={feature.icon} 
@@ -291,6 +290,12 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     backgroundColor: '#f8f9fa',
+    padding: 20,
+  },
+  loadingText: {
+    marginTop: 12,
+    fontSize: 16,
+    color: '#4b5563',
   },
   container: {
     flexGrow: 1,
@@ -378,7 +383,7 @@ const styles = StyleSheet.create({
       default: 'column'
     }),
     justifyContent: 'center',
-    alignItems: 'center',
+    alignItems: 'stretch',
     marginBottom: Platform.select({
       web: 50,
       default: 30
@@ -404,10 +409,10 @@ const styles = StyleSheet.create({
       web: 400,
       default: '100%'
     }),
-    backgroundColor: "rgba(255, 255, 255, 0.99)",
+    backgroundColor: "#FFFFFF",
     borderRadius: 24,
     padding: Platform.select({
-      web: 54,
+      web: 40,
       default: 24
     }),
     shadowColor: "#000",
@@ -489,6 +494,7 @@ const styles = StyleSheet.create({
     textAlign: "center",
     lineHeight: 20,
     marginBottom: 24,
+    flex: 1,
   },
   getStartedButton: {
     flexDirection: "row",
@@ -496,12 +502,15 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     paddingHorizontal: 20,
     borderRadius: 25,
+    borderWidth: 1,
   },
   parentButton: {
     backgroundColor: "transparent",
+    borderColor: "#db2777",
   },
   caregiverButton: {
     backgroundColor: "transparent",
+    borderColor: "#2563eb",
   },
   buttonText: {
     fontSize: 16,
@@ -529,8 +538,8 @@ const styles = StyleSheet.create({
       default: 'column'
     }),
     justifyContent: 'space-between',
-    alignItems: 'center',
-    gap: 16,
+    alignItems: 'flex-start',
+    gap: 24,
     width: '100%',
     paddingHorizontal: 16,
     maxWidth: Platform.select({
