@@ -3,7 +3,7 @@ import { Platform } from 'react-native';
 // Vercel Analytics utilities
 let analytics = null;
 
-if (Platform.OS === 'web') {
+if (Platform.OS === 'web' && process.env.NODE_ENV === 'production') {
   try {
     const { track } = require('@vercel/analytics');
     analytics = { track };
