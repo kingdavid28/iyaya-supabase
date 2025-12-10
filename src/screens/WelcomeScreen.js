@@ -1,6 +1,5 @@
 import { Ionicons } from "@expo/vector-icons";
 import { CommonActions, useNavigation } from "@react-navigation/native";
-import { LinearGradient } from "expo-linear-gradient";
 import React from 'react';
 import {
   Image,
@@ -138,12 +137,7 @@ export default function WelcomeScreen() {
   ];
 
   return (
-    <LinearGradient 
-      colors={backgroundGradient} 
-      style={styles.gradient}
-      start={{ x: 0, y: 0 }}
-      end={{ x: 1, y: 1 }}
-    >
+    <View style={styles.gradient}>
       <SafeAreaView style={styles.safeArea}>
         <ScrollView 
           contentContainerStyle={styles.container}
@@ -152,17 +146,14 @@ export default function WelcomeScreen() {
           {/* Header Section */}
           <View style={styles.header}>
             <View style={styles.logoContainer} accessibilityLabel="Iyaya logo">
-              <LinearGradient 
-                colors={logoGradient}
-                style={styles.logoBackground}
-              >
+              <View style={styles.logoBackground}>
                 <Image 
                   source={require('../../assets/icon.png')} 
                   style={styles.logo}
                   resizeMode="contain"
                   accessibilityLabel="Iyaya app logo"
                 />
-              </LinearGradient>
+              </View>
             </View>
 
             <Text style={styles.tagline}>Connecting families with trusted caregivers</Text>
@@ -187,12 +178,9 @@ export default function WelcomeScreen() {
               accessibilityLabel="I'm a Parent. Find trusted caregivers for your little ones. Get Started."
             >
               <View style={styles.cardContent}>
-                <LinearGradient 
-                  colors={parentGradient}
-                  style={[styles.iconContainer, styles.parentIconContainer]}
-                >
+                <View style={[styles.iconContainer, styles.parentIconContainer]}>
                   <Ionicons name="happy-outline" size={40} color="#db2777" accessibilityLabel="Parent icon" />
-                </LinearGradient>
+                </View>
 
                 <Text style={styles.cardTitle}>I'm a Parent</Text>
                 <Text style={styles.cardDescription}>
@@ -221,12 +209,9 @@ export default function WelcomeScreen() {
               accessibilityLabel="I'm a Child Caregiver. Join our community of trusted caregivers. Get Started."
             >
               <View style={styles.cardContent}>
-                <LinearGradient 
-                  colors={caregiverGradient}
-                  style={[styles.iconContainer, styles.caregiverIconContainer]}
-                >
+                <View style={[styles.iconContainer, styles.caregiverIconContainer]}>
                   <Ionicons name="person-outline" size={40} color="#2563eb" accessibilityLabel="Caregiver icon" />
-                </LinearGradient>
+                </View>
 
                 <Text style={styles.cardTitle}>I'm a Child Caregiver</Text>
                 <Text style={styles.cardDescription}>
@@ -262,13 +247,17 @@ export default function WelcomeScreen() {
           </View>
         </ScrollView>
       </SafeAreaView>
-    </LinearGradient>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
   gradient: {
     flex: 1,
+    backgroundColor: Platform.select({
+      web: 'linear-gradient(135deg, #fce8f4 0%, #e0f2fe 50%, #f3e8ff 100%)',
+      default: '#fce8f4'
+    }),
   },
   safeArea: {
     flex: 1,
@@ -324,11 +313,22 @@ const styles = StyleSheet.create({
     }),
     justifyContent: "center",
     alignItems: "center",
-    shadowColor: "#db2777",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.2,
-    shadowRadius: 8,
-    elevation: 8,
+    backgroundColor: Platform.select({
+      web: '#fbcfe8',
+      default: '#fbcfe8'
+    }),
+    ...Platform.select({
+      web: {
+        boxShadow: '0 4px 8px rgba(219, 39, 119, 0.2)'
+      },
+      default: {
+        shadowColor: "#db2777",
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.2,
+        shadowRadius: 8,
+        elevation: 8,
+      }
+    }),
   },
   logo: {
     width: Platform.select({
@@ -397,25 +397,17 @@ const styles = StyleSheet.create({
       web: 54,
       default: 24
     }),
-    shadowColor: "#000",
-    shadowOffset: { 
-      width: 0, 
-      height: Platform.select({
-        web: 4,
-        default: 2
-      }) 
-    },
-    shadowOpacity: Platform.select({
-      web: 0.1,
-      default: 0.05
-    }),
-    shadowRadius: Platform.select({
-      web: 12,
-      default: 8
-    }),
-    elevation: Platform.select({
-      web: 8,
-      default: 3
+    ...Platform.select({
+      web: {
+        boxShadow: '0 4px 12px rgba(0, 0, 0, 0.1)'
+      },
+      default: {
+        shadowColor: "#000",
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.05,
+        shadowRadius: 8,
+        elevation: 3,
+      }
     }),
     minHeight: Platform.select({
       web: 320,
@@ -445,11 +437,18 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
     marginBottom: 20,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 4,
+    ...Platform.select({
+      web: {
+        boxShadow: '0 2px 4px rgba(0, 0, 0, 0.1)'
+      },
+      default: {
+        shadowColor: "#000",
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.1,
+        shadowRadius: 4,
+        elevation: 4,
+      }
+    }),
   },
   parentIconContainer: {
     backgroundColor: "#fce7f3",
