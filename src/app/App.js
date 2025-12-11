@@ -2,29 +2,38 @@ import { QueryClient, QueryClientProvider, focusManager } from '@tanstack/react-
 import { Buffer } from 'buffer';
 import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
-import React, { useEffect, useState } from 'react';
-import { ActivityIndicator, AppState, Platform, Text, View } from 'react-native';
+import React, { useEffect, useState, useCallback } from 'react';
+import { ActivityIndicator, AppState, Platform, Text, View, LogBox } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
-// Vercel Analytics - only for web
-let Analytics = null;
-if (Platform.OS === 'web') {
+// Ignore specific warnings
+LogBox.ignoreLogs([
+  'Non-serializable values were found in the navigation state',
+  'AsyncStorage has been extracted from react-native core'
+]);
+
+// Vercel Analytics - Only load in production
+const Analytics = React.memo(() => {
+  if (Platform.OS !== 'web' || process.env.NODE_ENV !== 'production') {
+    return null;
+  }
+  
   try {
     const { Analytics: VercelAnalytics } = require('@vercel/analytics/react');
-    Analytics = VercelAnalytics;
-    console.log('✅ Vercel Analytics loaded successfully');
+    return <VercelAnalytics />;
   } catch (error) {
-    console.warn('⚠️ Vercel Analytics not available:', error.message);
-    // Create a no-op component to prevent errors
-    Analytics = () => null;
+    console.warn('Vercel Analytics not available:', error.message);
+    return null;
   }
-}
+});
 
+// Initialize Buffer polyfill
 if (!global.Buffer) {
   global.Buffer = Buffer;
 }
 
+// Configure query client
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
@@ -32,78 +41,60 @@ const queryClient = new QueryClient({
       staleTime: 60 * 1000,
       refetchOnReconnect: true,
       refetchOnWindowFocus: false,
+      refetchOnMount: false,
     },
   },
 });
 
-// Core imports
+// Lazy load components
+const LazyAppNavigator = React.lazy(() => import('./navigation/AppNavigator'));
+const LazyAppIntegration = React.lazy(() => import('./AppIntegration'));
+
+// Core providers
 import PrivacyProvider from '../components/features/privacy/PrivacyManager';
 import ProfileDataProvider from '../components/features/privacy/ProfileDataManager';
 import AppProvider from '../providers/AppProvider';
 import { ErrorBoundary } from '../shared/ui';
-import AppIntegration from './AppIntegration';
-
-// Auth Context
-import { AuthProvider } from '../contexts/AuthContext';
-
-// Supabase - Direct import for initialization
+import { AuthProvider, useAuth } from '../contexts/AuthContext';
 import { supabase } from '../config/supabase';
 
-// Log filter
-import '../utils/logFilter';
-// import { enableAllLogs } from '../utils/logFilter';
+// Initialize splash screen
+SplashScreen.preventAutoHideAsync().catch(() => {
+  // Handle error if needed
+});
 
-// // // Temporarily re-enable verbose logging for debugging startup on iOS
-// // if (typeof enableAllLogs === 'function') {
-// //   enableAllLogs();
-// // }
-
-// Navigation
-import AppNavigator from './navigation/AppNavigator';
-
-SplashScreen.preventAutoHideAsync();
-
-// Enhanced Supabase Provider that ensures Auth is ready
+// Supabase Auth Provider
 const SupabaseAuthProvider = ({ children }) => {
-  const [supabaseReady, setSupabaseReady] = useState(false);
-  const [error, setError] = useState(null);
+  const [state, setState] = useState({ ready: false, error: null });
 
   useEffect(() => {
     let isMounted = true;
+    const controller = new AbortController();
 
     const initSupabase = async () => {
-      console.log('🔥 Initializing Supabase with Auth...', { platform: Platform.OS });
-
       try {
-        const timeoutPromise = new Promise((_, reject) =>
-          setTimeout(() => reject(new Error('Supabase initialization timeout')), 10000)
-        );
+        const [sessionResult] = await Promise.allSettled([
+          supabase.auth.getSession(),
+          new Promise(resolve => setTimeout(resolve, 1000)) // Minimum show time
+        ]);
 
-        const authPromise = supabase.auth.getSession().then((result) => {
-          console.log('📡 Supabase auth.getSession resolved', {
-            platform: Platform.OS,
-            hasSession: !!result?.data?.session,
-            error: result?.error?.message || null,
-          });
-          return result;
-        });
+        if (controller.signal.aborted) return;
 
-        const { data, error } = await Promise.race([authPromise, timeoutPromise]);
-
-        if (error) {
-          console.error('❌ Supabase auth.getSession returned error', { platform: Platform.OS, message: error.message });
-          throw error;
+        if (sessionResult.status === 'rejected') {
+          throw sessionResult.reason;
         }
 
-        console.log('✅ Supabase Auth is ready', { platform: Platform.OS, hasSession: !!data?.session });
+        const { data, error } = sessionResult.value;
+        
+        if (error) throw error;
+
         if (isMounted) {
-          setSupabaseReady(true);
+          setState({ ready: true, error: null });
         }
-      } catch (err) {
-        console.error('❌ Supabase Auth initialization failed', { platform: Platform.OS, message: err?.message });
+      } catch (error) {
+        console.error('Supabase init error:', error);
         if (isMounted) {
-          setError(err);
-          setSupabaseReady(true); // Continue anyway to avoid blocking the app
+          setState({ ready: true, error });
         }
       }
     };
@@ -112,27 +103,23 @@ const SupabaseAuthProvider = ({ children }) => {
 
     return () => {
       isMounted = false;
+      controller.abort();
     };
   }, []);
 
-  if (error) {
+  if (!state.ready) {
     return (
-      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#f9fafb' }}>
-        <Text style={{ color: 'red', fontSize: 16, textAlign: 'center', padding: 20 }}>
-          Connection Issue
-        </Text>
-        <Text style={{ color: '#666', fontSize: 14, textAlign: 'center', padding: 20 }}>
-          {error.message}
-        </Text>
+      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+        <ActivityIndicator size="large" />
       </View>
     );
   }
 
-  if (!supabaseReady) {
+  if (state.error) {
     return (
-      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#f9fafb' }}>
-        <ActivityIndicator size="large" color="#0000ff" />
-        <Text style={{ marginTop: 10, color: '#666' }}>Initializing Supabase Auth...</Text>
+      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', padding: 20 }}>
+        <Text style={{ color: 'red', marginBottom: 10 }}>Connection Error</Text>
+        <Text style={{ textAlign: 'center' }}>{state.error.message}</Text>
       </View>
     );
   }
@@ -140,64 +127,67 @@ const SupabaseAuthProvider = ({ children }) => {
   return <AuthProvider>{children}</AuthProvider>;
 };
 
-export default function App() {
+const AppContent = () => {
+  const { session } = useAuth();
   const [appReady, setAppReady] = useState(false);
-  const [initError, setInitError] = useState(null);
+
+  const onLayoutRootView = useCallback(async () => {
+    if (appReady) {
+      await SplashScreen.hideAsync().catch(console.warn);
+    }
+  }, [appReady]);
 
   useEffect(() => {
-    async function prepare() {
+    const initApp = async () => {
       try {
-        console.log('🚀 Initializing Iyaya app...');
-
-        // Pre-initialize Supabase to ensure it's ready
-        await supabase.auth.getSession().catch(error => {
-          console.warn('⚠️ Supabase init warning (continuing):', error.message);
-        });
-
-        // Minimal initialization delay
-        await new Promise(resolve => setTimeout(resolve, 300));
-
-      } catch (e) {
-        console.error('❌ Error during app initialization:', e);
-        setInitError(e);
+        // Add any additional app initialization here
+        await new Promise(resolve => setTimeout(resolve, 500)); // Simulate loading
+      } catch (error) {
+        console.error('App initialization error:', error);
       } finally {
         setAppReady(true);
-        // Note: SplashScreen.hideAsync() is now handled by NavigationContainer's onReady
-        focusManager.setEventListener((handleFocus) => {
-          const subscription = AppState.addEventListener('change', (status) => {
-            handleFocus(status === 'active');
-          });
-
-          return () => subscription.remove();
-        });
-        console.log('✅ App initialization complete');
       }
-    }
+    };
 
-    prepare();
+    initApp();
   }, []);
 
   if (!appReady) {
     return (
-      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#f9fafb' }}>
-        <ActivityIndicator size="large" color="#0000ff" />
-        <Text style={{ marginTop: 10, color: '#666' }}>Starting Iyaya...</Text>
+      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+        <ActivityIndicator size="large" />
       </View>
     );
   }
 
-  if (initError) {
-    return (
-      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#f9fafb' }}>
-        <Text style={{ color: 'red', fontSize: 16, textAlign: 'center', padding: 20 }}>
-          App Initialization Failed
-        </Text>
-        <Text style={{ color: '#666', fontSize: 14, textAlign: 'center', padding: 20 }}>
-          {initError.message}
-        </Text>
+  return (
+    <React.Suspense
+      fallback={
+        <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+          <ActivityIndicator size="large" />
+        </View>
+      }
+    >
+      <View style={{ flex: 1 }} onLayout={onLayoutRootView}>
+        <LazyAppIntegration>
+          <LazyAppNavigator />
+          <StatusBar style="auto" />
+          <Analytics />
+        </LazyAppIntegration>
       </View>
-    );
-  }
+    </React.Suspense>
+  );
+};
+
+export default function App() {
+  const handleAppStateChange = useCallback((nextAppState) => {
+    focusManager.setFocused(nextAppState === 'active');
+  }, []);
+
+  useEffect(() => {
+    const subscription = AppState.addEventListener('change', handleAppStateChange);
+    return () => subscription.remove();
+  }, [handleAppStateChange]);
 
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
@@ -208,11 +198,7 @@ export default function App() {
               <ProfileDataProvider>
                 <PrivacyProvider>
                   <SupabaseAuthProvider>
-                    <AppIntegration>
-                      <AppNavigator />
-                      <StatusBar style="auto" />
-                      {Analytics && <Analytics />}
-                    </AppIntegration>
+                    <AppContent />
                   </SupabaseAuthProvider>
                 </PrivacyProvider>
               </ProfileDataProvider>
