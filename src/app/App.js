@@ -13,8 +13,11 @@ if (Platform.OS === 'web') {
   try {
     const { Analytics: VercelAnalytics } = require('@vercel/analytics/react');
     Analytics = VercelAnalytics;
+    console.log('✅ Vercel Analytics loaded successfully');
   } catch (error) {
-    console.warn('Vercel Analytics not available:', error.message);
+    console.warn('⚠️ Vercel Analytics not available:', error.message);
+    // Create a no-op component to prevent errors
+    Analytics = () => null;
   }
 }
 
@@ -151,8 +154,8 @@ export default function App() {
           console.warn('⚠️ Supabase init warning (continuing):', error.message);
         });
 
-        // Simulate other app initialization tasks
-        await new Promise(resolve => setTimeout(resolve, 1000));
+        // Minimal initialization delay
+        await new Promise(resolve => setTimeout(resolve, 300));
 
       } catch (e) {
         console.error('❌ Error during app initialization:', e);

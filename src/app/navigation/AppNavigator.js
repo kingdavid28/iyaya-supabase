@@ -197,27 +197,64 @@ const AppNavigatorWithAuth = () => {
   }, []);
 
   // Handle splash screen timeout
-  useEffect(() => {
-    if (__DEV__ || isLoading || !onboardingChecked || fallbackTimeoutRef.current) {
-      return undefined;
-    }
+// Handle splash screen with platform-specific logic and robust error handling
+useEffect(() => {
+  // Skip splash screen handling during development
+  if (__DEV__) {
+    return;
+  }
 
-    const timeoutId = setTimeout(() => {
-      console.warn('⚠️ SplashScreen fallback triggered — forcing hide after timeout.', { platform: Platform.OS });
-      SplashScreen.hideAsync().catch((err) =>
-        console.warn('⚠️ SplashScreen.hideAsync fallback failed', err)
-      );
-    }, 8000);
+  // Don't set up timeout if still loading or onboarding not checked
+  if (isLoading || !onboardingChecked || fallbackTimeoutRef.current) {
+    return;
+  }
 
-    fallbackTimeoutRef.current = timeoutId;
+  // Platform-specific splash screen handling
+  const handleSplashScreen = async () => {
+    try {
+      if (Platform.OS === 'web') {
+        // Web: Hide splash screen immediately since it's not native
+        await SplashScreen.hideAsync();
+      } else {
+        // Native: Set a fallback timeout to ensure splash screen is hidden
+        const timeoutId = setTimeout(async () => {
+          console.warn('⚠️ SplashScreen fallback triggered - forcing hide after timeout', { 
+            platform: Platform.OS,
+            isLoading,
+            onboardingChecked
+          });
+          try {
+            await SplashScreen.hideAsync();
+          } catch (error) {
+            console.error('Failed to hide splash screen in fallback:', error);
+          }
+        }, 3000); // 3 second timeout for native platforms
 
-    return () => {
-      clearTimeout(timeoutId);
-      if (fallbackTimeoutRef.current === timeoutId) {
-        fallbackTimeoutRef.current = null;
+        fallbackTimeoutRef.current = timeoutId;
+
+        // Clean up the timeout if the component unmounts
+        return () => {
+          if (fallbackTimeoutRef.current === timeoutId) {
+            clearTimeout(timeoutId);
+            fallbackTimeoutRef.current = null;
+          }
+        };
       }
-    };
-  }, [isLoading, onboardingChecked]);
+    } catch (error) {
+      console.error('Error in splash screen handling:', error);
+    }
+  };
+
+  handleSplashScreen();
+
+  // Cleanup function
+  return () => {
+    if (fallbackTimeoutRef.current) {
+      clearTimeout(fallbackTimeoutRef.current);
+      fallbackTimeoutRef.current = null;
+    }
+  };
+}, [isLoading, onboardingChecked]);
 
   // Handle navigation when user is authenticated
   useEffect(() => {

@@ -7,6 +7,14 @@
       "destination": "/auth/callback.html"
     },
     {
+      "source": "/_vercel/insights/(.*)",
+      "destination": "/404"
+    },
+    {
+      "source": "/.well-known/(.*)",
+      "destination": "/404"
+    },
+    {
       "source": "/(.*)",
       "destination": "/index.html"
     }
