@@ -55,59 +55,54 @@ import PrivacyProvider from '../components/features/privacy/PrivacyManager';
 import ProfileDataProvider from '../components/features/privacy/ProfileDataManager';
 import AppProvider from '../providers/AppProvider';
 import { ErrorBoundary } from '../shared/ui';
-import { AuthProvider, useAuth } from '../contexts/AuthContext';
-import { supabase } from '../config/supabase';
+import { AuthProvider } from '../contexts/AuthContext';
+import { ensureInitialized, getSession } from '../config/supabase';
 
 // Initialize splash screen
 SplashScreen.preventAutoHideAsync().catch(() => {
   // Handle error if needed
 });
 
-// Supabase Auth Provider
-const SupabaseAuthProvider = ({ children }) => {
-  const [state, setState] = useState({ ready: false, error: null });
+// App Initialization Component
+const AppInitializer = ({ children, onInitialized }) => {
+  const [initialized, setInitialized] = useState(false);
+  const [error, setError] = useState(null);
 
   useEffect(() => {
     let isMounted = true;
-    const controller = new AbortController();
 
-    const initSupabase = async () => {
+    const initializeApp = async () => {
       try {
-        const [sessionResult] = await Promise.allSettled([
-          supabase.auth.getSession(),
-          new Promise(resolve => setTimeout(resolve, 1000)) // Minimum show time
-        ]);
-
-        if (controller.signal.aborted) return;
-
-        if (sessionResult.status === 'rejected') {
-          throw sessionResult.reason;
-        }
-
-        const { data, error } = sessionResult.value;
+        // Initialize Supabase and get session
+        const session = await ensureInitialized();
         
-        if (error) throw error;
-
         if (isMounted) {
-          setState({ ready: true, error: null });
+          setInitialized(true);
+          setError(null);
+          if (onInitialized) {
+            onInitialized(session);
+          }
         }
       } catch (error) {
-        console.error('Supabase init error:', error);
+        console.error('App initialization failed:', error);
         if (isMounted) {
-          setState({ ready: true, error });
+          setInitialized(true);
+          setError(error);
+          if (onInitialized) {
+            onInitialized(null, error);
+          }
         }
       }
     };
 
-    initSupabase();
+    initializeApp();
 
     return () => {
       isMounted = false;
-      controller.abort();
     };
-  }, []);
+  }, [onInitialized]);
 
-  if (!state.ready) {
+  if (!initialized) {
     return (
       <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
         <ActivityIndicator size="large" />
@@ -115,21 +110,40 @@ const SupabaseAuthProvider = ({ children }) => {
     );
   }
 
-  if (state.error) {
+  if (error) {
     return (
       <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', padding: 20 }}>
-        <Text style={{ color: 'red', marginBottom: 10 }}>Connection Error</Text>
-        <Text style={{ textAlign: 'center' }}>{state.error.message}</Text>
+        <Text style={{ color: 'red', marginBottom: 10, fontSize: 16, fontWeight: 'bold' }}>
+          Initialization Error
+        </Text>
+        <Text style={{ textAlign: 'center', color: '#666', marginBottom: 20 }}>
+          {error.message || 'Unable to initialize app'}
+        </Text>
+        <Text style={{ textAlign: 'center', color: '#999', fontSize: 12 }}>
+          Please restart the app or check your connection
+        </Text>
       </View>
     );
   }
 
-  return <AuthProvider>{children}</AuthProvider>;
+  return children;
 };
 
+// App Content Component
 const AppContent = () => {
-  const { session } = useAuth();
   const [appReady, setAppReady] = useState(false);
+  const [sessionInfo, setSessionInfo] = useState(null);
+
+  const handleInitialized = useCallback((session, error) => {
+    if (error) {
+      console.log('App initialized with error:', error.message);
+    } else if (session) {
+      console.log('App initialized with session for:', session.user?.email);
+    } else {
+      console.log('App initialized without session');
+    }
+    setSessionInfo({ session, error });
+  }, []);
 
   const onLayoutRootView = useCallback(async () => {
     if (appReady) {
@@ -169,7 +183,7 @@ const AppContent = () => {
       }
     >
       <View style={{ flex: 1 }} onLayout={onLayoutRootView}>
-        <LazyAppIntegration>
+        <LazyAppIntegration sessionInfo={sessionInfo}>
           <LazyAppNavigator />
           <StatusBar style="auto" />
           <Analytics />
@@ -179,6 +193,7 @@ const AppContent = () => {
   );
 };
 
+// Main App Component
 export default function App() {
   const handleAppStateChange = useCallback((nextAppState) => {
     focusManager.setFocused(nextAppState === 'active');
@@ -197,9 +212,11 @@ export default function App() {
             <AppProvider>
               <ProfileDataProvider>
                 <PrivacyProvider>
-                  <SupabaseAuthProvider>
-                    <AppContent />
-                  </SupabaseAuthProvider>
+                  <AppInitializer>
+                    <AuthProvider>
+                      <AppContent />
+                    </AuthProvider>
+                  </AppInitializer>
                 </PrivacyProvider>
               </ProfileDataProvider>
             </AppProvider>

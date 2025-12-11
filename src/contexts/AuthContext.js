@@ -1,12 +1,41 @@
-import Constants from 'expo-constants'
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react'
-
 import { ActivityIndicator, Platform, View } from 'react-native'
 
 import { supabase } from '../config/supabase'
 import { tokenManager } from '../utils/tokenManager'
 import { userStatusService } from '../services/supabase/userStatusService'
 import { trackUserRegistration, trackUserLogin } from '../utils/analytics'
+
+// Constants
+const REDIRECT_URL = Constants.expoConfig?.extra?.redirectUrl || 
+                    (Platform.OS === 'web' 
+                      ? window?.location?.origin + '/auth/callback'
+                      : 'myapp://auth/callback')
+
+const DEFAULT_ROLE = 'parent'
+const MAX_RETRIES = 3
+const RETRY_DELAY = 1000
+
+// Error types for better error handling
+const AuthErrorTypes = {
+  NETWORK: 'network_error',
+  UNAUTHORIZED: 'unauthorized',
+  INVALID_CREDENTIALS: 'invalid_credentials',
+  SESSION_EXPIRED: 'session_expired',
+  USER_RESTRICTED: 'user_restricted',
+  EMAIL_NOT_VERIFIED: 'email_not_verified',
+  UNKNOWN: 'unknown_error'
+}
+
+// Custom error class
+class AuthError extends Error {
+  constructor(message, type = AuthErrorTypes.UNKNOWN, originalError = null) {
+    super(message)
+    this.type = type
+    this.originalError = originalError
+    this.name = 'AuthError'
+  }
+}
 
 export const AuthContext = createContext()
 
@@ -15,101 +44,37 @@ export const AuthProvider = ({ children }) => {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const sessionRef = useRef(null)
+  const isMountedRef = useRef(true)
 
+  // Initialize mount status
   useEffect(() => {
-    let isMounted = true
-
-    const initializeSession = async () => {
-      try {
-        const { data, error } = await supabase.auth.getSession()
-        if (error) throw error
-
-        const session = data?.session || null
-        sessionRef.current = session
-
-        if (!isMounted) return
-
-        setError(null)
-
-        if (session?.user) {
-          const userWithProfile = await fetchUserWithProfile(session.user)
-          if (!isMounted) return
-          setUser(userWithProfile)
-        } else {
-          setUser(null)
-        }
-      } catch (err) {
-        console.error('❌ Initial session fetch failed:', err)
-        sessionRef.current = null
-        await tokenManager.logout()
-        const { error: signOutError } = await supabase.auth.signOut()
-        if (signOutError) {
-          console.warn('Supabase signOut failed during session reset:', signOutError)
-        }
-
-        if (isMounted) {
-          setUser(null)
-          const friendlyMessage = err?.message?.includes('Invalid Refresh Token')
-            ? 'Your session expired. Please sign in again.'
-            : err?.message
-          setError(friendlyMessage || null)
-        }
-      } finally {
-        if (isMounted) {
-          setLoading(false)
-        }
-      }
-    }
-
-    initializeSession()
-
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (event, session) => {
-        console.log('Auth event:', event)
-        sessionRef.current = session || null
-
-        if (!isMounted) return
-
-        try {
-          if (event === 'SIGNED_OUT') {
-            await tokenManager.logout()
-          }
-
-          if (event === 'TOKEN_REFRESHED') {
-            tokenManager.clearCache()
-          }
-
-          if (session?.user) {
-            const userWithProfile = await fetchUserWithProfile(session.user)
-            if (!isMounted) return
-            setUser(userWithProfile)
-            setError(null)
-            
-            // Track OAuth login
-            if (event === 'SIGNED_IN') {
-              trackUserLogin('google_oauth')
-            }
-          } else {
-            setUser(null)
-          }
-        } catch (authError) {
-          console.error('❌ Auth state handling error:', authError)
-          setError(authError?.message || 'Authentication error')
-        } finally {
-          if (isMounted) {
-            setLoading(false)
-          }
-        }
-      }
-    )
-
+    isMountedRef.current = true
     return () => {
-      isMounted = false
-      subscription.unsubscribe()
+      isMountedRef.current = false
     }
   }, [])
 
-  const fetchUserWithProfile = async (authUser) => {
+  // Helper to safely update state only if mounted
+  const safeSetState = useCallback((setter, value) => {
+    if (isMountedRef.current) {
+      setter(value)
+    }
+  }, [])
+
+  // Retry mechanism with exponential backoff
+  const retryWithBackoff = async (fn, retries = MAX_RETRIES, delay = RETRY_DELAY) => {
+    try {
+      return await fn()
+    } catch (error) {
+      if (retries === 0) throw error
+      
+      console.log(`Retrying operation, ${retries} attempts left...`)
+      await new Promise(resolve => setTimeout(resolve, delay))
+      return retryWithBackoff(fn, retries - 1, delay * 2)
+    }
+  }
+
+  const fetchUserWithProfile = useCallback(async (authUser) => {
     try {
       console.log('🔍 Fetching profile for user:', {
         id: authUser.id,
@@ -117,35 +82,43 @@ export const AuthProvider = ({ children }) => {
         authUserKeys: Object.keys(authUser)
       })
 
-      const { data, error } = await supabase
-        .from('users')
-        .select('*')
-        .eq('id', authUser.id)
+      const { data, error } = await retryWithBackoff(() =>
+        supabase
+          .from('users')
+          .select('*')
+          .eq('id', authUser.id)
+      )
 
       if (error) {
         console.error('❌ Error fetching user profile:', {
           message: error?.message,
-          code: error?.code,
-          details: error?.details,
-          hint: error?.hint,
-          error: error
+          code: error?.code
         })
-        return { ...authUser, role: 'parent' } // Default role
+        // Return minimal user object with default role
+        return { 
+          ...authUser, 
+          role: DEFAULT_ROLE,
+          profile: null 
+        }
       }
 
       const profile = data && data.length > 0 ? data[0] : null
-      console.log('👤 User profile found:', profile)
+      console.log('👤 User profile found:', profile ? 'Yes' : 'No')
 
-      // Check user status
-      const statusData = await userStatusService.checkUserStatus(authUser.id)
-      if (!statusData.canAccess) {
-        console.warn('⚠️ User access restricted:', statusData)
-        // Don't throw error here, let StatusGuard handle it
+      // Check user status asynchronously
+      let statusData = { canAccess: true }
+      try {
+        statusData = await userStatusService.checkUserStatus(authUser.id)
+        if (!statusData.canAccess) {
+          console.warn('⚠️ User access restricted:', statusData)
+        }
+      } catch (statusError) {
+        console.error('Error checking user status:', statusError)
       }
 
       const userWithProfile = {
         ...authUser,
-        role: profile?.role || 'parent',
+        role: profile?.role || DEFAULT_ROLE,
         name: profile?.name || authUser.user_metadata?.name,
         profile,
         status: profile?.status || 'active',
@@ -155,30 +128,28 @@ export const AuthProvider = ({ children }) => {
       console.log('✅ Final user object:', {
         id: userWithProfile.id,
         email: userWithProfile.email,
-        role: userWithProfile.role,
-        status: userWithProfile.status,
-        keys: Object.keys(userWithProfile)
+        role: userWithProfile.role
       })
+      
       return userWithProfile
     } catch (err) {
-      console.error('❌ Error fetching user profile:', {
-        message: err?.message,
-        code: err?.code,
-        details: err?.details,
-        hint: err?.hint,
-        error: err
-      })
-      return { ...authUser, role: 'parent' } // Default role
+      console.error('❌ Error in fetchUserWithProfile:', err)
+      return { 
+        ...authUser, 
+        role: DEFAULT_ROLE,
+        profile: null 
+      }
     }
-  }
+  }, [])
 
-  const ensureUserProfileExists = async (authUser, roleHint) => {
+  const ensureUserProfileExists = useCallback(async (authUser, roleHint = DEFAULT_ROLE) => {
     try {
       if (!authUser?.id) {
         console.warn('⚠️ Cannot ensure profile without auth user ID')
         return null
       }
 
+      // Check if profile exists
       const { data: existingProfile, error: selectError } = await supabase
         .from('users')
         .select('*')
@@ -187,7 +158,7 @@ export const AuthProvider = ({ children }) => {
 
       if (selectError && selectError.code !== 'PGRST116') {
         console.error('❌ Failed to check existing profile:', selectError)
-        return null
+        throw new AuthError('Failed to check user profile', AuthErrorTypes.UNKNOWN, selectError)
       }
 
       if (existingProfile) {
@@ -195,15 +166,8 @@ export const AuthProvider = ({ children }) => {
         return existingProfile
       }
 
-      const serviceRoleKey = process.env.EXPO_PUBLIC_SUPABASE_SERVICE_ROLE_KEY
-      const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL
-
-      if (!serviceRoleKey || !supabaseUrl) {
-        console.warn('⚠️ Service role key or Supabase URL missing; cannot create profile automatically')
-        return null
-      }
-
-      const role = roleHint || authUser.user_metadata?.role || 'parent'
+      // Prepare profile data
+      const role = roleHint || authUser.user_metadata?.role || DEFAULT_ROLE
       const firstName = authUser.user_metadata?.first_name
         || authUser.user_metadata?.given_name
         || authUser.user_metadata?.firstName
@@ -218,7 +182,7 @@ export const AuthProvider = ({ children }) => {
         || authUser.user_metadata?.fullName
         || derivedName
         || authUser.email?.split('@')?.[0]
-        || 'Iyaya User'
+        || 'User'
 
       // Determine auth provider
       const authProvider = authUser.app_metadata?.provider || 'supabase'
@@ -239,42 +203,135 @@ export const AuthProvider = ({ children }) => {
         updated_at: new Date().toISOString()
       }
 
+      // Remove undefined values
       const cleanedPayload = Object.fromEntries(
         Object.entries(profilePayload).filter(([, value]) => value !== undefined)
       )
 
-      const { createClient } = await import('@supabase/supabase-js')
-      const serviceClient = createClient(supabaseUrl, serviceRoleKey)
-
-      const { data: upsertData, error: upsertError } = await serviceClient
+      // Insert profile
+      const { data: upsertData, error: upsertError } = await supabase
         .from('users')
         .upsert([cleanedPayload], { onConflict: 'id' })
         .select()
 
       if (upsertError) {
-        console.error('❌ Failed to create profile via service client:', upsertError)
-        return null
+        console.error('❌ Failed to create profile:', upsertError)
+        throw new AuthError('Failed to create user profile', AuthErrorTypes.UNKNOWN, upsertError)
       }
 
       console.log('✅ Profile created for user:', authUser.id)
-
       return Array.isArray(upsertData) ? upsertData[0] : upsertData
     } catch (error) {
       console.error('❌ ensureUserProfileExists error:', error)
-      return null
+      throw error
     }
-  }
+  }, [])
+
+  const initializeSession = useCallback(async () => {
+    try {
+      const { data, error } = await retryWithBackoff(() => 
+        supabase.auth.getSession()
+      )
+
+      if (error) {
+        throw new AuthError(error.message, AuthErrorTypes.SESSION_EXPIRED, error)
+      }
+
+      const session = data?.session || null
+      sessionRef.current = session
+
+      if (session?.user) {
+        const userWithProfile = await fetchUserWithProfile(session.user)
+        safeSetState(setUser, userWithProfile)
+      } else {
+        safeSetState(setUser, null)
+      }
+      
+      safeSetState(setError, null)
+    } catch (err) {
+      console.error('❌ Initial session fetch failed:', err)
+      sessionRef.current = null
+      
+      // Clear tokens on error
+      await tokenManager.logout().catch(console.warn)
+      await supabase.auth.signOut().catch(console.warn)
+
+      safeSetState(setUser, null)
+      const friendlyMessage = err?.message?.includes('Invalid Refresh Token')
+        ? 'Your session expired. Please sign in again.'
+        : err?.message || 'Failed to initialize session'
+      safeSetState(setError, friendlyMessage)
+      
+      throw err
+    } finally {
+      safeSetState(setLoading, false)
+    }
+  }, [fetchUserWithProfile, safeSetState])
+
+  useEffect(() => {
+    let unsubscribe
+
+    const setupAuth = async () => {
+      await initializeSession()
+
+      // Subscribe to auth state changes
+      const { data: { subscription } } = supabase.auth.onAuthStateChange(
+        async (event, session) => {
+          console.log('Auth event:', event)
+          sessionRef.current = session || null
+
+          try {
+            if (event === 'SIGNED_OUT') {
+              await tokenManager.logout()
+            }
+
+            if (event === 'TOKEN_REFRESHED') {
+              tokenManager.clearCache()
+            }
+
+            if (session?.user) {
+              const userWithProfile = await fetchUserWithProfile(session.user)
+              safeSetState(setUser, userWithProfile)
+              safeSetState(setError, null)
+              
+              // Track OAuth login
+              if (event === 'SIGNED_IN') {
+                trackUserLogin('oauth')
+              }
+            } else {
+              safeSetState(setUser, null)
+            }
+          } catch (authError) {
+            console.error('❌ Auth state handling error:', authError)
+            safeSetState(setError, authError?.message || 'Authentication error')
+          } finally {
+            safeSetState(setLoading, false)
+          }
+        }
+      )
+
+      unsubscribe = subscription.unsubscribe
+    }
+
+    setupAuth()
+
+    return () => {
+      if (unsubscribe) {
+        unsubscribe()
+      }
+    }
+  }, [initializeSession, fetchUserWithProfile, safeSetState])
 
   const signUp = async (email, password, userData) => {
     try {
-      setError(null)
-      setLoading(true)
+      safeSetState(setError, null)
+      safeSetState(setLoading, true)
 
       const { data, error } = await supabase.auth.signUp({
         email,
         password,
         options: {
-          emailRedirectTo: 'https://myiyrmiiywwgismcpith.supabase.co/auth/v1/callback',
+          emailRedirectTo: REDIRECT_URL,
           data: {
             name: userData.name,
             role: userData.role,
@@ -285,9 +342,11 @@ export const AuthProvider = ({ children }) => {
         }
       })
 
-      if (error) throw error
+      if (error) {
+        throw new AuthError(error.message, AuthErrorTypes.INVALID_CREDENTIALS, error)
+      }
 
-      // Create user profile in public.users table using service role
+      // Create user profile
       if (data.user) {
         console.log('🔄 Creating user profile for:', data.user.id)
         
@@ -295,68 +354,41 @@ export const AuthProvider = ({ children }) => {
         trackUserRegistration(userData.role)
 
         try {
-          // Use service role client to bypass RLS during signup
-          const { createClient } = await import('@supabase/supabase-js')
-          const serviceClient = createClient(
-            process.env.EXPO_PUBLIC_SUPABASE_URL,
-            process.env.EXPO_PUBLIC_SUPABASE_SERVICE_ROLE_KEY
-          )
-
-          const { data: profileData, error: profileError } = await serviceClient
-            .from('users')
-            .insert([{
-              id: data.user.id,
-              email: data.user.email,
-              name: userData.name,
-              role: userData.role,
-              first_name: userData.firstName,
-              last_name: userData.lastName,
-              phone: userData.phone,
-              email_verified: false,
-              auth_provider: 'supabase',
-              status: 'active'
-            }])
-            .select()
-
-          if (profileError) {
-            if (profileError.code === '23505') {
-              console.log('✅ User profile already exists, skipping creation')
-            } else {
-              console.error('❌ Profile creation failed:', profileError)
-            }
-          } else {
-            console.log('✅ Profile created successfully:', profileData)
-          }
-        } catch (serviceError) {
-          console.error('❌ Service client error:', serviceError)
+          await ensureUserProfileExists(data.user, userData.role)
+          console.log('✅ Profile created successfully')
+        } catch (profileError) {
+          console.error('❌ Profile creation failed:', profileError)
+          // Don't throw - user can still sign in, profile might be created later
         }
       }
 
       return data
     } catch (err) {
-      setError(err.message)
+      safeSetState(setError, err.message)
       throw err
     } finally {
-      setLoading(false)
+      safeSetState(setLoading, false)
     }
   }
 
   const signIn = async (email, password) => {
     try {
-      setError(null)
-      setLoading(true)
+      safeSetState(setError, null)
+      safeSetState(setLoading, true)
 
       const { data, error } = await supabase.auth.signInWithPassword({
         email,
         password
       })
 
-      if (error) throw error
+      if (error) {
+        throw new AuthError(error.message, AuthErrorTypes.INVALID_CREDENTIALS, error)
+      }
 
-      // Check if email is verified (temporarily disabled)
+      // Check if email is verified (optional - can be enabled later)
       // if (data.user && !data.user.email_confirmed_at) {
       //   await supabase.auth.signOut()
-      //   throw new Error('Please verify your email before signing in. Check your inbox for the verification link.')
+      //   throw new AuthError('Please verify your email before signing in.', AuthErrorTypes.EMAIL_NOT_VERIFIED)
       // }
 
       // Track user login
@@ -367,150 +399,181 @@ export const AuthProvider = ({ children }) => {
 
       return data
     } catch (err) {
-      setError(err.message)
+      safeSetState(setError, err.message)
       throw err
     } finally {
-      setLoading(false)
+      safeSetState(setLoading, false)
     }
   }
 
   const signOut = async () => {
     try {
-      setError(null)
-      setLoading(true)
+      safeSetState(setError, null)
+      safeSetState(setLoading, true)
 
       await tokenManager.logout()
+      
       const { error } = await supabase.auth.signOut()
-
-      if (error) {
-        const isMissingSession = error?.name === 'AuthSessionMissingError' || error?.message?.toLowerCase().includes('auth session missing')
-        if (!isMissingSession) {
-          throw error
-        }
-        console.warn('⚠️ Ignoring AuthSessionMissingError during sign out — no active session to clear.')
+      
+      // Ignore missing session errors
+      if (error && !(error?.name === 'AuthSessionMissingError' || error?.message?.toLowerCase().includes('auth session missing'))) {
+        throw new AuthError(error.message, AuthErrorTypes.UNKNOWN, error)
       }
 
-      setUser(null)
+      safeSetState(setUser, null)
+      sessionRef.current = null
+      
+      return { success: true }
     } catch (err) {
-      setError(err.message)
+      safeSetState(setError, err.message)
       throw err
     } finally {
-      setLoading(false)
+      safeSetState(setLoading, false)
     }
   }
 
   const resetPassword = async (email) => {
     try {
-      setError(null)
+      safeSetState(setError, null)
       const { error } = await supabase.auth.resetPasswordForEmail(email, {
-        redirectTo: 'your-app://reset-password'
+        redirectTo: REDIRECT_URL.replace('/auth/callback', '/reset-password')
       })
-      if (error) throw error
+      
+      if (error) {
+        throw new AuthError(error.message, AuthErrorTypes.UNKNOWN, error)
+      }
+      
+      return { success: true }
     } catch (err) {
-      setError(err.message)
+      safeSetState(setError, err.message)
       throw err
     }
   }
 
   const resendVerification = async (email) => {
     try {
-      setError(null)
+      safeSetState(setError, null)
       console.log('🔄 Resending verification email to:', email)
+      
       const { error } = await supabase.auth.resend({
         type: 'signup',
         email,
         options: {
-          emailRedirectTo: 'https://myiyrmiiywwgismcpith.supabase.co/auth/v1/callback'
+          emailRedirectTo: REDIRECT_URL
         }
       })
+      
       if (error) {
         console.error('❌ Resend error:', error)
-        throw error
+        throw new AuthError(error.message, AuthErrorTypes.UNKNOWN, error)
       }
+      
       console.log('✅ Verification email resent successfully')
       return { success: true, message: 'Verification email sent. Please check your inbox and spam folder.' }
     } catch (err) {
       console.error('❌ Resend failed:', err)
-      setError(err.message)
+      safeSetState(setError, err.message)
       throw err
     }
   }
 
   const updatePassword = async (newPassword) => {
     try {
-      setError(null)
+      safeSetState(setError, null)
       const { error } = await supabase.auth.updateUser({
         password: newPassword
       })
-      if (error) throw error
+      
+      if (error) {
+        throw new AuthError(error.message, AuthErrorTypes.UNKNOWN, error)
+      }
+      
+      return { success: true }
     } catch (err) {
-      setError(err.message)
+      safeSetState(setError, err.message)
       throw err
     }
   }
 
-  const signInWithOAuth = async (provider) => {
+  const signInWithProvider = async (provider) => {
     try {
-      setError(null)
-      setLoading(true)
+      safeSetState(setError, null)
+      safeSetState(setLoading, true)
 
       const { data, error } = await supabase.auth.signInWithOAuth({
         provider,
         options: {
-          redirectTo: `${window?.location?.origin || 'https://myiyrmiiywwgismcpith.supabase.co'}/auth/callback`,
-          skipBrowserRedirect: false,
+          redirectTo: REDIRECT_URL,
+          skipBrowserRedirect: Platform.OS !== 'web',
         }
       })
 
-      if (error) throw error
+      if (error) {
+        throw new AuthError(error.message, AuthErrorTypes.UNAUTHORIZED, error)
+      }
+      
       return data
     } catch (err) {
-      setError(err.message)
+      safeSetState(setError, err.message)
       throw err
     } finally {
-      setLoading(false)
+      safeSetState(setLoading, false)
     }
   }
 
-  const signInWithGoogle = async (navigation = null, roleHint = 'parent') => {
+  const signInWithGoogle = async (roleHint = DEFAULT_ROLE) => {
     try {
-      setError(null)
-      setLoading(true)
+      safeSetState(setError, null)
+      safeSetState(setLoading, true)
       
       console.log('🔄 Starting Google Sign-In...', { platform: Platform.OS, roleHint })
       
-      // Use the existing signInWithOAuth function
-      const result = await signInWithOAuth('google')
+      const result = await signInWithProvider('google')
       
-      console.log('✅ Google OAuth completed')
+      console.log('✅ Google OAuth initiated')
       return result
     } catch (err) {
       console.error('❌ Google Sign-In failed:', err)
-      setError(err.message)
+      safeSetState(setError, err.message)
       throw err
     } finally {
-      setLoading(false)
+      safeSetState(setLoading, false)
     }
   }
 
-  const getCurrentUser = () => {
-    return user
-  }
-
-  const getUserProfile = async () => {
-    if (!user) return null
-
+  const handleOAuthCallback = async (roleHint = DEFAULT_ROLE) => {
     try {
-      const { data, error } = await supabase
-        .from('users')
-        .select('*')
-        .eq('id', user.id)
-
-      if (error) throw error
-      return data && data.length > 0 ? data[0] : null
+      safeSetState(setError, null)
+      safeSetState(setLoading, true)
+      
+      console.log('🔄 Handling OAuth callback...', { roleHint })
+      
+      const { data, error } = await supabase.auth.getSession()
+      
+      if (error) {
+        console.error('❌ OAuth callback error:', error)
+        throw new AuthError(error.message, AuthErrorTypes.UNAUTHORIZED, error)
+      }
+      
+      if (data?.session?.user) {
+        console.log('✅ OAuth session found, ensuring profile exists...')
+        
+        // Ensure user profile exists with role hint
+        await ensureUserProfileExists(data.session.user, roleHint)
+        
+        // Track successful OAuth login
+        trackUserLogin('oauth')
+        
+        return data.session
+      }
+      
+      throw new AuthError('No session found after OAuth callback', AuthErrorTypes.SESSION_EXPIRED)
     } catch (err) {
-      console.error('Error fetching user profile:', err)
-      return null
+      console.error('❌ OAuth callback failed:', err)
+      safeSetState(setError, err.message)
+      throw err
+    } finally {
+      safeSetState(setLoading, false)
     }
   }
 
@@ -534,49 +597,36 @@ export const AuthProvider = ({ children }) => {
     if (!session?.user?.id) {
       return null
     }
+    
     if (!user) {
       const userWithProfile = await fetchUserWithProfile(session.user)
-      setUser(userWithProfile)
+      safeSetState(setUser, userWithProfile)
       return userWithProfile
     }
+    
     return user
-  }, [requireAuthSession, user])
+  }, [requireAuthSession, user, fetchUserWithProfile, safeSetState])
 
-  const handleOAuthCallback = async (roleHint = 'parent') => {
+  const getUserProfile = async () => {
+    if (!user) return null
+
     try {
-      setError(null)
-      setLoading(true)
-      
-      console.log('🔄 Handling OAuth callback...', { roleHint })
-      
-      const { data, error } = await supabase.auth.getSession()
-      
-      if (error) {
-        console.error('❌ OAuth callback error:', error)
-        throw error
-      }
-      
-      if (data?.session?.user) {
-        console.log('✅ OAuth session found, ensuring profile exists...')
-        
-        // Ensure user profile exists with role hint
-        await ensureUserProfileExists(data.session.user, roleHint)
-        
-        // Track successful OAuth login
-        trackUserLogin('google_oauth')
-        
-        return data.session
-      }
-      
-      throw new Error('No session found after OAuth callback')
+      const { data, error } = await supabase
+        .from('users')
+        .select('*')
+        .eq('id', user.id)
+
+      if (error) throw error
+      return data && data.length > 0 ? data[0] : null
     } catch (err) {
-      console.error('❌ OAuth callback failed:', err)
-      setError(err.message)
-      throw err
-    } finally {
-      setLoading(false)
+      console.error('Error fetching user profile:', err)
+      return null
     }
   }
+
+  const clearError = useCallback(() => {
+    safeSetState(setError, null)
+  }, [safeSetState])
 
   const value = useMemo(() => ({
     user,
@@ -588,12 +638,13 @@ export const AuthProvider = ({ children }) => {
     resetPassword,
     updatePassword,
     resendVerification,
-    getCurrentUser,
-    getUserProfile,
     signInWithGoogle,
     handleOAuthCallback,
     requireAuthSession,
-    ensureAuthenticated
+    ensureAuthenticated,
+    getUserProfile,
+    clearError,
+    isAuthenticated: !!user
   }), [
     user,
     loading,
@@ -605,19 +656,24 @@ export const AuthProvider = ({ children }) => {
     updatePassword,
     resendVerification,
     signInWithGoogle,
+    handleOAuthCallback,
     requireAuthSession,
-    ensureAuthenticated
+    ensureAuthenticated,
+    getUserProfile,
+    clearError
   ])
+
+  if (loading && !user) {
+    return (
+      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+        <ActivityIndicator size="large" />
+      </View>
+    )
+  }
 
   return (
     <AuthContext.Provider value={value}>
-      {loading ? (
-        <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
-          <ActivityIndicator size="large" />
-        </View>
-      ) : (
-        children
-      )}
+      {children}
     </AuthContext.Provider>
   )
 }
@@ -629,5 +685,3 @@ export const useAuth = () => {
   }
   return context
 }
-
-export default AuthContext
