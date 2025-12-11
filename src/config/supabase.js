@@ -59,12 +59,13 @@ const checkNetworkStatus = async () => {
   try {
     const networkState = await Network.getNetworkStateAsync();
     if (!networkState.isConnected) {
-      throw new Error('No internet connection');
+      console.warn('No internet connection detected');
+      return false;
     }
     return true;
   } catch (error) {
-    console.error('Network check error:', error);
-    throw new Error('Unable to check network status');
+    console.warn('Network check error:', error.message);
+    return true; // Assume connected if check fails
   }
 };
 
@@ -174,12 +175,13 @@ export const getSession = async (retryCount = 0) => {
         await new Promise(resolve => setTimeout(resolve, 1000 * (retryCount + 1)));
         return getSession(retryCount + 1);
       }
-      throw error;
+      console.warn('Session fetch failed after retries:', error.message);
+      return { session: null, error };
     }
     
     return { session, error: null };
   } catch (error) {
-    console.error('Session fetch error:', error);
+    console.warn('Session fetch error:', error.message);
     return { session: null, error };
   }
 };
