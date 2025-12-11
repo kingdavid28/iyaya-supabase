@@ -3,10 +3,11 @@ import { createClient } from '@supabase/supabase-js';
 import 'react-native-url-polyfill/auto';
 import { Platform } from 'react-native';
 import * as Network from 'expo-network';
+import Constants from 'expo-constants';
 
 // Environment variables with fallbacks
-const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL;
-const supabaseAnonKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY;
+const supabaseUrl = Constants.expoConfig?.extra?.supabaseUrl || process.env.EXPO_PUBLIC_SUPABASE_URL || 'https://myiyrmiiywwgismcpith.supabase.co';
+const supabaseAnonKey = Constants.expoConfig?.extra?.supabaseAnonKey || process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im15aXlybWlpeXd3Z2lzbWNwaXRoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTk4MDgzNDYsImV4cCI6MjA3NTM4NDM0Nn0.DGRKcZmPvatheWOlukc7sjGU8ufYlSiW03L47Q_YWyI';
 
 // Enhanced storage key derivation with versioning
 const deriveStorageKey = () => {
@@ -28,35 +29,69 @@ const secureLog = (key, value) => {
   }
 };
 
-// Custom storage with error handling
-const customStorage = {
-  getItem: async (key) => {
-    try {
-      return await AsyncStorage.getItem(key);
-    } catch (error) {
-      console.error('Storage getItem error:', error);
-      return null;
-    }
-  },
-  setItem: async (key, value) => {
-    try {
-      await AsyncStorage.setItem(key, value);
-    } catch (error) {
-      console.error('Storage setItem error:', error);
-    }
-  },
-  removeItem: async (key) => {
-    try {
-      await AsyncStorage.removeItem(key);
-    } catch (error) {
-      console.error('Storage removeItem error:', error);
-    }
+// Custom storage with web compatibility
+const createStorage = () => {
+  if (Platform.OS === 'web') {
+    return {
+      getItem: async (key) => {
+        try {
+          return localStorage.getItem(key);
+        } catch (error) {
+          console.error('Storage getItem error:', error);
+          return null;
+        }
+      },
+      setItem: async (key, value) => {
+        try {
+          localStorage.setItem(key, value);
+        } catch (error) {
+          console.error('Storage setItem error:', error);
+        }
+      },
+      removeItem: async (key) => {
+        try {
+          localStorage.removeItem(key);
+        } catch (error) {
+          console.error('Storage removeItem error:', error);
+        }
+      }
+    };
   }
+  
+  return {
+    getItem: async (key) => {
+      try {
+        return await AsyncStorage.getItem(key);
+      } catch (error) {
+        console.error('Storage getItem error:', error);
+        return null;
+      }
+    },
+    setItem: async (key, value) => {
+      try {
+        await AsyncStorage.setItem(key, value);
+      } catch (error) {
+        console.error('Storage setItem error:', error);
+      }
+    },
+    removeItem: async (key) => {
+      try {
+        await AsyncStorage.removeItem(key);
+      } catch (error) {
+        console.error('Storage removeItem error:', error);
+      }
+    }
+  };
 };
 
-// Network status check
+const customStorage = createStorage();
+
+// Network status check with web compatibility
 const checkNetworkStatus = async () => {
   try {
+    if (Platform.OS === 'web') {
+      return navigator.onLine;
+    }
     const networkState = await Network.getNetworkStateAsync();
     if (!networkState.isConnected) {
       console.warn('No internet connection detected');
@@ -90,7 +125,7 @@ try {
       storageKey: SUPABASE_STORAGE_KEY,
       autoRefreshToken: true,
       persistSession: true,
-      detectSessionInUrl: false,
+      detectSessionInUrl: Platform.OS === 'web',
       flowType: 'pkce',
     },
     global: {
@@ -117,32 +152,61 @@ try {
 
 } catch (error) {
   console.error('❌ Supabase initialization failed:', error.message);
-  // Fallback for development
-  if (__DEV__) {
-    console.warn('⚠️ Creating mock Supabase client for development');
-    supabase = {
-      auth: {
-        signIn: () => Promise.resolve({ error: { message: 'Mock client - development mode' } }),
-        signOut: () => Promise.resolve({ error: null }),
-        getSession: () => Promise.resolve({ data: { session: null }, error: null }),
-        refreshSession: () => Promise.resolve({ data: { session: null }, error: null }),
-        onAuthStateChange: () => ({ 
-          data: { 
-            subscription: { 
-              unsubscribe: () => {} 
-            } 
+  
+  // Create a minimal working client to prevent crashes
+  console.warn('⚠️ Creating fallback Supabase client');
+  supabase = {
+    auth: {
+      signIn: () => Promise.resolve({ error: { message: 'Supabase initialization failed' } }),
+      signInWithPassword: () => Promise.resolve({ error: { message: 'Supabase initialization failed' } }),
+      signInWithOAuth: () => Promise.resolve({ error: { message: 'Supabase initialization failed' } }),
+      signUp: () => Promise.resolve({ error: { message: 'Supabase initialization failed' } }),
+      signOut: () => Promise.resolve({ error: null }),
+      getSession: () => Promise.resolve({ data: { session: null }, error: null }),
+      getUser: () => Promise.resolve({ data: { user: null }, error: null }),
+      refreshSession: () => Promise.resolve({ data: { session: null }, error: null }),
+      resetPasswordForEmail: () => Promise.resolve({ error: { message: 'Supabase initialization failed' } }),
+      updateUser: () => Promise.resolve({ error: { message: 'Supabase initialization failed' } }),
+      resend: () => Promise.resolve({ error: { message: 'Supabase initialization failed' } }),
+      onAuthStateChange: () => ({ 
+        data: { 
+          subscription: { 
+            unsubscribe: () => {} 
           } 
-        }),
-      },
-      // Add other necessary Supabase methods if used
-      from: () => ({
-        select: () => ({
-          then: () => Promise.resolve({ data: [], error: null })
-        })
+        } 
       }),
-    };
-  } else {
-    throw error;
+    },
+    from: () => ({
+      select: () => ({
+        eq: () => ({
+          single: () => Promise.resolve({ data: null, error: { message: 'Supabase initialization failed' } }),
+          maybeSingle: () => Promise.resolve({ data: null, error: { message: 'Supabase initialization failed' } })
+        }),
+        then: () => Promise.resolve({ data: [], error: { message: 'Supabase initialization failed' } })
+      }),
+      insert: () => ({
+        select: () => Promise.resolve({ data: null, error: { message: 'Supabase initialization failed' } })
+      }),
+      upsert: () => ({
+        select: () => Promise.resolve({ data: null, error: { message: 'Supabase initialization failed' } })
+      }),
+      update: () => ({
+        eq: () => Promise.resolve({ data: null, error: { message: 'Supabase initialization failed' } })
+      }),
+      delete: () => ({
+        eq: () => Promise.resolve({ data: null, error: { message: 'Supabase initialization failed' } })
+      })
+    }),
+    channel: () => ({
+      on: () => ({
+        subscribe: () => ({ unsubscribe: () => {} })
+      })
+    })
+  };
+  
+  if (!__DEV__) {
+    // In production, we still want to show a user-friendly error
+    console.error('Production Supabase initialization failed. Check environment variables.');
   }
 }
 
@@ -277,5 +341,34 @@ export const getSupabaseClient = () => {
   }
   return supabase;
 };
+
+// Validate client is working
+export const validateSupabaseClient = () => {
+  try {
+    if (!supabase || !supabase.auth) {
+      console.error('Supabase client or auth not available');
+      return false;
+    }
+    return true;
+  } catch (error) {
+    console.error('Supabase client validation failed:', error);
+    return false;
+  }
+};
+
+// Initialize validation on web
+if (Platform.OS === 'web' && typeof window !== 'undefined') {
+  // Run validation after a short delay to ensure everything is loaded
+  setTimeout(() => {
+    if (!validateSupabaseClient()) {
+      console.error('Supabase client validation failed on web platform');
+    }
+  }, 100);
+}
+
+// Ensure we always export a valid client
+if (!supabase) {
+  console.error('No Supabase client available for export');
+}
 
 export default supabase;

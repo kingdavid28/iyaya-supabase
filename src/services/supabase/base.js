@@ -1,4 +1,4 @@
-import { supabase } from '../../config/supabase'
+import supabase from '../../config/supabase'
 import { isValidUUID } from '../../utils/id'
 import { resolveSupabaseUserId } from './utils/idResolver'
 
@@ -120,4 +120,4 @@ export class SupabaseBase {
   }
 }
 
-export { supabase }
+export default supabase

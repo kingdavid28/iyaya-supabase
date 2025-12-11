@@ -2,7 +2,7 @@ import React, { createContext, useCallback, useContext, useEffect, useMemo, useR
 import { ActivityIndicator, Platform, View } from 'react-native'
 import Constants from 'expo-constants'
 
-import { supabase } from '../config/supabase'
+import supabase from '../config/supabase'
 import { tokenManager } from '../utils/tokenManager'
 import { userStatusService } from '../services/supabase/userStatusService'
 import { trackUserRegistration, trackUserLogin } from '../utils/analytics'
