@@ -1,5 +1,6 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react'
 import { ActivityIndicator, Platform, View } from 'react-native'
+import Constants from 'expo-constants'
 
 import { supabase } from '../config/supabase'
 import { tokenManager } from '../utils/tokenManager'
@@ -9,7 +10,7 @@ import { trackUserRegistration, trackUserLogin } from '../utils/analytics'
 // Constants
 const REDIRECT_URL = Constants.expoConfig?.extra?.redirectUrl || 
                     (Platform.OS === 'web' 
-                      ? window?.location?.origin + '/auth/callback'
+                      ? (typeof window !== 'undefined' ? window.location.origin + '/auth/callback' : 'http://localhost:3000/auth/callback')
                       : 'myapp://auth/callback')
 
 const DEFAULT_ROLE = 'parent'
@@ -234,7 +235,12 @@ export const AuthProvider = ({ children }) => {
       )
 
       if (error) {
-        throw new AuthError(error.message, AuthErrorTypes.SESSION_EXPIRED, error)
+        console.warn('Session fetch error:', error.message)
+        // Don't throw on session errors, just clear state
+        sessionRef.current = null
+        safeSetState(setUser, null)
+        safeSetState(setError, null)
+        return
       }
 
       const session = data?.session || null
@@ -257,12 +263,7 @@ export const AuthProvider = ({ children }) => {
       await supabase.auth.signOut().catch(console.warn)
 
       safeSetState(setUser, null)
-      const friendlyMessage = err?.message?.includes('Invalid Refresh Token')
-        ? 'Your session expired. Please sign in again.'
-        : err?.message || 'Failed to initialize session'
-      safeSetState(setError, friendlyMessage)
-      
-      throw err
+      safeSetState(setError, null) // Don't show error to user on initialization
     } finally {
       safeSetState(setLoading, false)
     }
