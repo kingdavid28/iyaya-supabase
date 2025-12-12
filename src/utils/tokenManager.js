@@ -1,5 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { supabase } from '../config/supabase';
+import supabase from '../config/supabase';
 import { STORAGE_KEYS } from '../config/constants';
 import { performanceMonitor } from './performanceMonitor';
 
@@ -45,6 +45,13 @@ class TokenManager {
     performanceMonitor.startTimer('token-refresh');
     
     try {
+      // Safety check for supabase client
+      if (!supabase || !supabase.auth) {
+        console.warn('Supabase client not available for token refresh');
+        performanceMonitor.endTimer('token-refresh');
+        return null;
+      }
+      
       const { data: { session }, error } = await supabase.auth.getSession();
       if (error || !session) {
         console.log('No authenticated user - returning null silently');

@@ -199,11 +199,6 @@ const AppNavigatorWithAuth = () => {
   // Handle splash screen timeout
 // Handle splash screen with platform-specific logic and robust error handling
 useEffect(() => {
-  // Skip splash screen handling during development
-  if (__DEV__) {
-    return;
-  }
-
   // Don't set up timeout if still loading or onboarding not checked
   if (isLoading || !onboardingChecked || fallbackTimeoutRef.current) {
     return;
@@ -212,10 +207,10 @@ useEffect(() => {
   // Platform-specific splash screen handling
   const handleSplashScreen = async () => {
     try {
-      if (Platform.OS === 'web') {
-        // Web: Hide splash screen immediately since it's not native
-        await SplashScreen.hideAsync();
-      } else {
+      // Always hide splash screen immediately for web deployment
+      await SplashScreen.hideAsync();
+      
+      if (Platform.OS !== 'web') {
         // Native: Set a fallback timeout to ensure splash screen is hidden
         const timeoutId = setTimeout(async () => {
           console.warn('⚠️ SplashScreen fallback triggered - forcing hide after timeout', { 

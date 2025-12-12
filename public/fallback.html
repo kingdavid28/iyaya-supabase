@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>iYaya - Childcare App</title>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <style>
+        body { 
+            font-family: Arial, sans-serif; 
+            margin: 0; 
+            padding: 20px; 
+            background: linear-gradient(135deg, #fce8f4, #e0f2fe);
+            min-height: 100vh;
+        }
+        .container { 
+            max-width: 800px; 
+            margin: 0 auto; 
+            text-align: center; 
+            padding: 40px 20px;
+        }
+        .logo { 
+            width: 120px; 
+            height: 120px; 
+            background: #db2777; 
+            border-radius: 20px; 
+            margin: 0 auto 20px; 
+            display: flex; 
+            align-items: center; 
+            justify-content: center; 
+            color: white; 
+            font-size: 24px; 
+            font-weight: bold;
+        }
+        h1 { color: #1f2937; margin-bottom: 10px; }
+        p { color: #6b7280; margin-bottom: 30px; }
+        .cards { 
+            display: flex; 
+            gap: 20px; 
+            justify-content: center; 
+            flex-wrap: wrap; 
+            margin: 40px 0;
+        }
+        .card { 
+            background: white; 
+            padding: 30px; 
+            border-radius: 20px; 
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1); 
+            max-width: 300px; 
+            border: 2px solid #fbcfe8;
+        }
+        .card.caregiver { border-color: #bfdbfe; }
+        .btn { 
+            background: #db2777; 
+            color: white; 
+            padding: 12px 24px; 
+            border: none; 
+            border-radius: 25px; 
+            cursor: pointer; 
+            font-size: 16px; 
+            margin: 10px;
+        }
+        .btn.caregiver { background: #2563eb; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="logo">iY</div>
+        <h1>iYaya - Childcare App</h1>
+        <p>Connecting families with trusted caregivers</p>
+        
+        <div class="cards">
+            <div class="card">
+                <h3>I'm a Parent</h3>
+                <p>Find trusted caregivers for your children</p>
+                <button class="btn">Get Started</button>
+            </div>
+            <div class="card caregiver">
+                <h3>I'm a Caregiver</h3>
+                <p>Join our community of trusted caregivers</p>
+                <button class="btn caregiver">Get Started</button>
+            </div>
+        </div>
+        
+        <p><strong>App is loading...</strong></p>
+        <p>If you see this page, the deployment is working but the React app may still be loading.</p>
+    </div>
+</body>
+</html>

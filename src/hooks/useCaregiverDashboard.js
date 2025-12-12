@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { supabase } from '../config/supabase';
+import supabase from '../config/supabase';
 import { useAuth } from '../contexts/AuthContext';
 import { supabaseService } from '../services/supabase';
 import { contractService } from '../services/supabase/contractService';

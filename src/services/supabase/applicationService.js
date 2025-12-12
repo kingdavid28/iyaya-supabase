@@ -1,4 +1,5 @@
-import { SupabaseBase, supabase } from './base'
+import { SupabaseBase } from './base'
+import supabase from './base'
 
 export class ApplicationService extends SupabaseBase {
   async applyToJob(jobId, caregiverId, applicationData = {}) {

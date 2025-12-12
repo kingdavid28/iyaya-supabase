@@ -1,4 +1,5 @@
-import { SupabaseBase, supabase } from './base'
+import { SupabaseBase } from './base'
+import supabase from './base'
 import { getCachedOrFetch, invalidateCache } from './cache'
 
 const TABLE_REQUESTS = 'information_requests'

@@ -15,7 +15,7 @@ import {
 } from '../services';
 import { informationRequestService } from '../services/supabase/informationRequestService';
 import { tokenManager } from '../utils/tokenManager';
-import { supabase } from './supabase';
+import supabase from './supabase';
 
 // Export for backward compatibility
 export const API_BASE_URL = getCurrentAPIURL();

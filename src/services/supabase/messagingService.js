@@ -1,6 +1,7 @@
 // src/services/supabase/messagingService.js
 import { ATTACHMENT_VALIDATION_DEFAULTS, validateUpload } from '../../utils/uploadValidation';
-import { SupabaseBase, supabase } from './base';
+import { SupabaseBase } from './base'
+import supabase from './base';
 import { getCachedOrFetch, invalidateCache } from './cache';
 
 const MESSAGE_SELECT_FIELDS = `

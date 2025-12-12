@@ -1,4 +1,5 @@
-import { SupabaseBase, supabase } from './base'
+import { SupabaseBase } from './base'
+import supabase from './base'
 import { invalidateCache } from './cache'
 import { userService } from './userService'
 

@@ -104,6 +104,9 @@ export default function WelcomeScreen() {
     );
   }
 
+  // Ensure we always render something visible
+  console.log('[Welcome] Rendering WelcomeScreen', { isLoading, user: !!user });
+
 
 
   // Gradient colors reused throughout the component

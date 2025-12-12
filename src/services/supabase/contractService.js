@@ -1,6 +1,7 @@
 import * as FileSystem from 'expo-file-system'
 import { Linking, Platform } from 'react-native'
-import { SupabaseBase, supabase } from './base'
+import { SupabaseBase } from './base'
+import supabase from './base'
 import { getCachedOrFetch, invalidateCache } from './cache'
 import { notificationService } from './notificationService'
 
