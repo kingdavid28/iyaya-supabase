@@ -291,6 +291,21 @@ export const AuthProvider = ({ children }) => {
             }
 
             if (session?.user) {
+              // Get role hint from storage for new OAuth users
+              let roleHint = DEFAULT_ROLE
+              if (Platform.OS === 'web' && event === 'SIGNED_IN') {
+                const storedRole = sessionStorage.getItem('pendingRole')
+                if (storedRole) {
+                  roleHint = storedRole
+                  sessionStorage.removeItem('pendingRole')
+                }
+              }
+              
+              // Ensure profile exists with correct role for new users
+              if (event === 'SIGNED_IN') {
+                await ensureUserProfileExists(session.user, roleHint)
+              }
+              
               const userWithProfile = await fetchUserWithProfile(session.user)
               safeSetState(setUser, userWithProfile)
               safeSetState(setError, null)
@@ -528,6 +543,11 @@ export const AuthProvider = ({ children }) => {
       safeSetState(setLoading, true)
       
       console.log('🔄 Starting Google Sign-In...', { platform: Platform.OS, roleHint })
+      
+      // Store role hint for later use
+      if (Platform.OS === 'web') {
+        sessionStorage.setItem('pendingRole', roleHint)
+      }
       
       const result = await signInWithProvider('google')
       

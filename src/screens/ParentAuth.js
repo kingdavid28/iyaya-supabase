@@ -329,7 +329,7 @@ const ParentAuth = ({ navigation, route }) => {
                     </View>
                     
                     <GoogleSignInButton
-                      onPress={() => signInWithGoogle(navigation, 'parent')}
+                      onPress={() => signInWithGoogle('parent')}
                       loading={isSubmitting}
                     />
                   </>

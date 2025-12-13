@@ -253,38 +253,28 @@ useEffect(() => {
 
   // Handle navigation when user is authenticated
   useEffect(() => {
-    if (!navigationRef.current) return;
-    
-    const unsubscribe = navigationRef.current.addListener('state', () => {
-      if (!isLoading && user && user.role) {
-        const currentRoute = navigationRef.current.getCurrentRoute()?.name;
-        const dashboardRoute = user.role === 'caregiver' ? 'CaregiverDashboard' : 'ParentDashboard';
-        
-        if (currentRoute !== dashboardRoute) {
-          console.log('[AppNavigator] Auto-navigating to dashboard:', dashboardRoute);
-          navigationRef.current.reset({
-            index: 0,
-            routes: [{ name: dashboardRoute }],
-          });
-        }
-      }
-    });
-    
-    return unsubscribe;
-  }, [user, isLoading]);
-  
-  // Also handle immediate navigation
-  useEffect(() => {
     if (!isLoading && user && user.role && navigationRef.current) {
+      const currentRoute = navigationRef.current.getCurrentRoute()?.name;
       const dashboardRoute = user.role === 'caregiver' ? 'CaregiverDashboard' : 'ParentDashboard';
-      console.log('[AppNavigator] User authenticated, navigating to:', dashboardRoute);
       
-      navigationRef.current.reset({
-        index: 0,
-        routes: [{ name: dashboardRoute }],
-      });
+      // Only navigate if not already on the correct dashboard
+      if (currentRoute !== dashboardRoute && 
+          currentRoute !== 'AuthCallback' && 
+          !currentRoute?.includes('Dashboard')) {
+        console.log('[AppNavigator] User authenticated, navigating to:', dashboardRoute);
+        
+        // Use a timeout to ensure navigation state is ready
+        setTimeout(() => {
+          if (navigationRef.current) {
+            navigationRef.current.reset({
+              index: 0,
+              routes: [{ name: dashboardRoute }],
+            });
+          }
+        }, 100);
+      }
     }
-  }, [user?.id, isLoading]);
+  }, [user?.id, user?.role, isLoading]);
 
   // Show loading screen while checking auth and onboarding
   if (isLoading || !onboardingChecked) {

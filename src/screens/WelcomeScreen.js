@@ -70,11 +70,16 @@ export default function WelcomeScreen() {
       user_role: role
     });
     
-    // Only handle navigation for non-logged-in users
-    if (!isLoggedIn) {
+    if (isLoggedIn && role === 'parent') {
+      // Navigate to parent dashboard if already logged in as parent
+      navigation.dispatch(CommonActions.reset({
+        index: 0,
+        routes: [{ name: 'ParentDashboard' }],
+      }));
+    } else {
+      // Navigate to parent auth for login/signup
       navigation.dispatch(CommonActions.navigate('ParentAuth'));
     }
-    // For logged-in users, AppNavigator handles navigation automatically
   }, [isLoggedIn, role, navigation]);
 
   const handleCaregiverPress = React.useCallback(() => {
@@ -87,11 +92,16 @@ export default function WelcomeScreen() {
       user_role: role
     });
     
-    // Only handle navigation for non-logged-in users
-    if (!isLoggedIn) {
+    if (isLoggedIn && role === 'caregiver') {
+      // Navigate to caregiver dashboard if already logged in as caregiver
+      navigation.dispatch(CommonActions.reset({
+        index: 0,
+        routes: [{ name: 'CaregiverDashboard' }],
+      }));
+    } else {
+      // Navigate to caregiver auth for login/signup
       navigation.dispatch(CommonActions.navigate('CaregiverAuth'));
     }
-    // For logged-in users, AppNavigator handles navigation automatically
   }, [isLoggedIn, role, navigation]);
 
   // Show loading indicator while checking auth state
