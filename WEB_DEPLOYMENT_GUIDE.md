@@ -62,3 +62,5 @@ npx serve dist
 1. Add Vercel URL to Google Cloud Console authorized redirect URIs
 2. Format: `https://iyaya-supabase.vercel.app/auth/callback`
 3. Also add: `https://iyaya-supabase.vercel.app`
+
+vercel --prod

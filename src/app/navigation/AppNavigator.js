@@ -290,7 +290,13 @@ useEffect(() => {
     if (showOnboarding) {
       return "Onboarding";
     }
-    // Always start with Welcome for OAuth flows to work properly
+    
+    // If user is authenticated, go directly to dashboard
+    if (user && user.role) {
+      return user.role === 'caregiver' ? 'CaregiverDashboard' : 'ParentDashboard';
+    }
+    
+    // Default to Welcome for unauthenticated users
     return "Welcome";
   };
 
