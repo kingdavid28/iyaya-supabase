@@ -8,10 +8,16 @@ import { userStatusService } from '../services/supabase/userStatusService'
 import { trackUserRegistration, trackUserLogin } from '../utils/analytics'
 
 // Constants
-const REDIRECT_URL = Constants.expoConfig?.extra?.redirectUrl || 
-                    (Platform.OS === 'web' 
-                      ? (typeof window !== 'undefined' ? window.location.origin + '/auth/callback' : 'http://localhost:3000/auth/callback')
-                      : 'myapp://auth/callback')
+const getRedirectUrl = () => {
+  if (Platform.OS === 'web' && typeof window !== 'undefined') {
+    // Use current domain for web
+    return window.location.origin + '/auth/callback'
+  }
+  // Fallback for development and native
+  return Constants.expoConfig?.extra?.redirectUrl || 'http://localhost:3000/auth/callback'
+}
+
+const REDIRECT_URL = getRedirectUrl()
 
 const DEFAULT_ROLE = 'parent'
 const MAX_RETRIES = 3
