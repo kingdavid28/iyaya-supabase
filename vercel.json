@@ -3,10 +3,6 @@
   "outputDirectory": "dist",
   "rewrites": [
     {
-      "source": "/test",
-      "destination": "/fallback.html"
-    },
-    {
       "source": "/auth/callback",
       "destination": "/auth/callback.html"
     },
@@ -17,14 +13,6 @@
     {
       "source": "/assets/(.*)",
       "destination": "/assets/$1"
-    },
-    {
-      "source": "/_vercel/insights/(.*)",
-      "destination": "/404"
-    },
-    {
-      "source": "/.well-known/(.*)",
-      "destination": "/404"
     },
     {
       "source": "/(.*)",

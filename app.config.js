@@ -45,7 +45,8 @@ module.exports = {
       jsEngine: "hermes"
     },
     web: {
-      favicon: "./assets/logo.png"
+      favicon: "./assets/logo.png",
+      bundler: "metro"
     },
     plugins,
     scheme: "iyaya-app",
