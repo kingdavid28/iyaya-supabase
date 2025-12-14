@@ -253,7 +253,7 @@ useEffect(() => {
 
   // Handle navigation when user is authenticated
   useEffect(() => {
-    if (!isLoading && user && user.role && navigationRef.current) {
+    if (!isLoading && user && user.role && navigationRef.current && onboardingChecked) {
       const currentRoute = navigationRef.current.getCurrentRoute()?.name;
       const dashboardRoute = user.role === 'caregiver' ? 'CaregiverDashboard' : 'ParentDashboard';
       
@@ -263,18 +263,18 @@ useEffect(() => {
           !currentRoute?.includes('Dashboard')) {
         console.log('[AppNavigator] User authenticated, navigating to:', dashboardRoute);
         
-        // Use a timeout to ensure navigation state is ready
+        // Use a longer timeout to ensure navigation state is ready
         setTimeout(() => {
-          if (navigationRef.current) {
+          if (navigationRef.current && !isLoading) {
             navigationRef.current.reset({
               index: 0,
               routes: [{ name: dashboardRoute }],
             });
           }
-        }, 100);
+        }, 500);
       }
     }
-  }, [user?.id, user?.role, isLoading]);
+  }, [user?.id, user?.role, isLoading, onboardingChecked]);
 
   // Show loading screen while checking auth and onboarding
   if (isLoading || !onboardingChecked) {
@@ -291,12 +291,7 @@ useEffect(() => {
       return "Onboarding";
     }
     
-    // If user is authenticated, go directly to dashboard
-    if (user && user.role) {
-      return user.role === 'caregiver' ? 'CaregiverDashboard' : 'ParentDashboard';
-    }
-    
-    // Default to Welcome for unauthenticated users
+    // Always start with Welcome - navigation will happen after auth loads
     return "Welcome";
   };
 

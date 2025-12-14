@@ -39,14 +39,18 @@ export default function WelcomeScreen() {
       isLoading
     });
     
-    // Navigate immediately when user becomes authenticated
-    if (user && user.role && !isLoading) {
+    // Navigate to dashboard if user is authenticated
+    if (!isLoading && user && user.role && !hasNavigated.current) {
+      hasNavigated.current = true;
       const dashboardRoute = user.role === 'caregiver' ? 'CaregiverDashboard' : 'ParentDashboard';
-      console.log('[Welcome] User authenticated, navigating to:', dashboardRoute);
-      navigation.dispatch(CommonActions.reset({
-        index: 0,
-        routes: [{ name: dashboardRoute }],
-      }));
+      console.log('[Welcome] Navigating authenticated user to:', dashboardRoute);
+      
+      setTimeout(() => {
+        navigation.dispatch(CommonActions.reset({
+          index: 0,
+          routes: [{ name: dashboardRoute }],
+        }));
+      }, 100);
     }
   }, [user, isLoggedIn, role, isLoading, navigation]);
 
