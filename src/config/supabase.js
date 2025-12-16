@@ -125,7 +125,7 @@ try {
       storageKey: SUPABASE_STORAGE_KEY,
       autoRefreshToken: true,
       persistSession: true,
-      detectSessionInUrl: Platform.OS === 'web',
+      detectSessionInUrl: true,
       flowType: 'pkce',
     },
     global: {

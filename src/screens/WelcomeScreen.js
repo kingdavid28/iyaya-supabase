@@ -39,7 +39,7 @@ export default function WelcomeScreen() {
       isLoading
     });
     
-    // Navigate to dashboard if user is authenticated
+    // Navigate to dashboard if user is authenticated with role
     if (!isLoading && user && user.role && !hasNavigated.current) {
       hasNavigated.current = true;
       const dashboardRoute = user.role === 'caregiver' ? 'CaregiverDashboard' : 'ParentDashboard';
@@ -51,6 +51,11 @@ export default function WelcomeScreen() {
           routes: [{ name: dashboardRoute }],
         }));
       }, 100);
+    }
+    
+    // If user is authenticated but has no role, show role selection
+    if (!isLoading && user && !user.role) {
+      console.log('[Welcome] User authenticated but no role, showing role selection');
     }
   }, [user, isLoggedIn, role, isLoading, navigation]);
 
@@ -64,7 +69,7 @@ export default function WelcomeScreen() {
   // Navigation is now handled by AppNavigator, no need for automatic redirect
 
   // Navigation handlers
-  const handleParentPress = React.useCallback(() => {
+  const handleParentPress = React.useCallback(async () => {
     console.log('[Welcome] Parent card pressed', { isLoggedIn, role });
     
     // Track user interaction
@@ -80,13 +85,30 @@ export default function WelcomeScreen() {
         index: 0,
         routes: [{ name: 'ParentDashboard' }],
       }));
+    } else if (isLoggedIn && !role) {
+      // User is authenticated but needs role - update profile and navigate
+      console.log('[Welcome] Setting role to parent for authenticated user');
+      try {
+        const { userService } = await import('../services/supabase/userService');
+        await userService.updateProfile(user.id, { role: 'parent' });
+        
+        // Force refresh user data in AuthContext
+        window.location.reload();
+      } catch (error) {
+        console.error('Failed to update user role:', error);
+        // Navigate anyway - the role will be set on next login
+        navigation.dispatch(CommonActions.reset({
+          index: 0,
+          routes: [{ name: 'ParentDashboard' }],
+        }));
+      }
     } else {
       // Navigate to parent auth for login/signup
       navigation.dispatch(CommonActions.navigate('ParentAuth'));
     }
-  }, [isLoggedIn, role, navigation]);
+  }, [isLoggedIn, role, navigation, user]);
 
-  const handleCaregiverPress = React.useCallback(() => {
+  const handleCaregiverPress = React.useCallback(async () => {
     console.log('[Welcome] Caregiver card pressed', { isLoggedIn, role });
     
     // Track user interaction
@@ -102,11 +124,28 @@ export default function WelcomeScreen() {
         index: 0,
         routes: [{ name: 'CaregiverDashboard' }],
       }));
+    } else if (isLoggedIn && !role) {
+      // User is authenticated but needs role - update profile and navigate
+      console.log('[Welcome] Setting role to caregiver for authenticated user');
+      try {
+        const { userService } = await import('../services/supabase/userService');
+        await userService.updateProfile(user.id, { role: 'caregiver' });
+        
+        // Force refresh user data in AuthContext
+        window.location.reload();
+      } catch (error) {
+        console.error('Failed to update user role:', error);
+        // Navigate anyway - the role will be set on next login
+        navigation.dispatch(CommonActions.reset({
+          index: 0,
+          routes: [{ name: 'CaregiverDashboard' }],
+        }));
+      }
     } else {
       // Navigate to caregiver auth for login/signup
       navigation.dispatch(CommonActions.navigate('CaregiverAuth'));
     }
-  }, [isLoggedIn, role, navigation]);
+  }, [isLoggedIn, role, navigation, user]);
 
   // Show loading indicator while checking auth state
   if (isLoading) {
@@ -118,8 +157,14 @@ export default function WelcomeScreen() {
     );
   }
 
+  // Show role selection for authenticated users without role
+  if (!isLoading && user && !user.role) {
+    console.log('[Welcome] Showing role selection for authenticated user');
+    // User is authenticated but needs to select role - show welcome screen
+  }
+  
   // Ensure we always render something visible
-  console.log('[Welcome] Rendering WelcomeScreen', { isLoading, user: !!user });
+  console.log('[Welcome] Rendering WelcomeScreen', { isLoading, user: !!user, role: user?.role });
 
 
 

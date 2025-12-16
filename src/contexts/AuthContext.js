@@ -173,8 +173,8 @@ export const AuthProvider = ({ children }) => {
         return existingProfile
       }
 
-      // Prepare profile data
-      const role = roleHint || authUser.user_metadata?.role || DEFAULT_ROLE
+      // Prepare profile data with correct role from hint
+      const role = roleHint
       const firstName = authUser.user_metadata?.first_name
         || authUser.user_metadata?.given_name
         || authUser.user_metadata?.firstName
@@ -226,7 +226,12 @@ export const AuthProvider = ({ children }) => {
         throw new AuthError('Failed to create user profile', AuthErrorTypes.UNKNOWN, upsertError)
       }
 
-      console.log('✅ Profile created for user:', authUser.id)
+      console.log('✅ Profile created successfully:', {
+        userId: authUser.id,
+        role: role,
+        name: name,
+        email: authUser.email
+      })
       return Array.isArray(upsertData) ? upsertData[0] : upsertData
     } catch (error) {
       console.error('❌ ensureUserProfileExists error:', error)
@@ -236,6 +241,17 @@ export const AuthProvider = ({ children }) => {
 
   const initializeSession = useCallback(async () => {
     try {
+      // Handle OAuth callback on web
+      if (Platform.OS === 'web' && window.location.hash) {
+        console.log('🔄 Handling OAuth callback...')
+        const { data, error } = await supabase.auth.getSession()
+        if (error) {
+          console.error('❌ OAuth callback error:', error)
+        } else if (data?.session) {
+          console.log('✅ OAuth session established')
+        }
+      }
+
       const { data, error } = await retryWithBackoff(() => 
         supabase.auth.getSession()
       )
@@ -253,6 +269,19 @@ export const AuthProvider = ({ children }) => {
       sessionRef.current = session
 
       if (session?.user) {
+        // Get role hint for OAuth users
+        let roleHint = DEFAULT_ROLE
+        if (Platform.OS === 'web') {
+          const storedRole = sessionStorage.getItem('pendingRole')
+          if (storedRole) {
+            roleHint = storedRole
+            sessionStorage.removeItem('pendingRole')
+          }
+        }
+        
+        // Ensure profile exists for OAuth users
+        await ensureUserProfileExists(session.user, roleHint)
+        
         const userWithProfile = await fetchUserWithProfile(session.user)
         safeSetState(setUser, userWithProfile)
       } else {
@@ -273,7 +302,7 @@ export const AuthProvider = ({ children }) => {
     } finally {
       safeSetState(setLoading, false)
     }
-  }, [fetchUserWithProfile, safeSetState])
+  }, [fetchUserWithProfile, safeSetState, ensureUserProfileExists])
 
   useEffect(() => {
     let unsubscribe
@@ -297,28 +326,28 @@ export const AuthProvider = ({ children }) => {
             }
 
             if (session?.user) {
-              // Get role hint from storage for new OAuth users
+              // Get role hint from storage for OAuth users
               let roleHint = DEFAULT_ROLE
-              if (Platform.OS === 'web' && event === 'SIGNED_IN') {
+              if (Platform.OS === 'web') {
                 const storedRole = sessionStorage.getItem('pendingRole')
                 if (storedRole) {
                   roleHint = storedRole
                   sessionStorage.removeItem('pendingRole')
+                  console.log('🎯 Using stored role hint:', roleHint)
                 }
               }
               
-              // Ensure profile exists with correct role for new users
-              if (event === 'SIGNED_IN') {
-                await ensureUserProfileExists(session.user, roleHint)
-              }
+              // Always ensure profile exists with correct role
+              await ensureUserProfileExists(session.user, roleHint)
               
               const userWithProfile = await fetchUserWithProfile(session.user)
               safeSetState(setUser, userWithProfile)
               safeSetState(setError, null)
               
-              // Track OAuth login
+              // Track login
               if (event === 'SIGNED_IN') {
-                trackUserLogin('oauth')
+                const isOAuth = session.user.app_metadata?.provider !== 'email'
+                trackUserLogin(isOAuth ? 'oauth' : 'email')
               }
             } else {
               safeSetState(setUser, null)
@@ -433,21 +462,55 @@ export const AuthProvider = ({ children }) => {
       safeSetState(setError, null)
       safeSetState(setLoading, true)
 
+      console.log('🚪 Starting logout process...')
+
+      // Clear token manager
       await tokenManager.logout()
       
+      // Sign out from Supabase
       const { error } = await supabase.auth.signOut()
       
-      // Ignore missing session errors
       if (error && !(error?.name === 'AuthSessionMissingError' || error?.message?.toLowerCase().includes('auth session missing'))) {
-        throw new AuthError(error.message, AuthErrorTypes.UNKNOWN, error)
+        console.warn('Sign out error:', error.message)
       }
 
+      // Clear local state
       safeSetState(setUser, null)
       sessionRef.current = null
       
+      // Aggressive cleanup for web
+      if (Platform.OS === 'web' && typeof window !== 'undefined') {
+        // Clear all storage
+        localStorage.clear()
+        sessionStorage.clear()
+        
+        // Clear cookies
+        document.cookie.split(';').forEach(cookie => {
+          const eqPos = cookie.indexOf('=')
+          const name = eqPos > -1 ? cookie.substr(0, eqPos) : cookie
+          document.cookie = `${name}=;expires=Thu, 01 Jan 1970 00:00:00 GMT;path=/`
+        })
+        
+        console.log('✅ Logout complete, reloading page...')
+        
+        // Force page reload to clear all state
+        setTimeout(() => {
+          window.location.href = '/'
+        }, 100)
+      }
+      
       return { success: true }
     } catch (err) {
+      console.error('❌ Logout failed:', err)
       safeSetState(setError, err.message)
+      
+      // Force reload even on error
+      if (Platform.OS === 'web') {
+        setTimeout(() => {
+          window.location.href = '/'
+        }, 100)
+      }
+      
       throw err
     } finally {
       safeSetState(setLoading, false)
@@ -548,19 +611,48 @@ export const AuthProvider = ({ children }) => {
       safeSetState(setError, null)
       safeSetState(setLoading, true)
       
-      console.log('🔄 Starting Google Sign-In...', { platform: Platform.OS, roleHint })
+      console.log('🔄 Starting Google Sign-In...', { 
+        platform: Platform.OS, 
+        roleHint,
+        supabaseUrl: supabase?.supabaseUrl,
+        hasAuth: !!supabase?.auth
+      })
       
       // Store role hint for later use
       if (Platform.OS === 'web') {
         sessionStorage.setItem('pendingRole', roleHint)
+        console.log('💾 Stored role hint:', roleHint)
       }
       
-      const result = await signInWithProvider('google')
+      // Test Supabase connection first
+      try {
+        const { data: testData, error: testError } = await supabase.auth.getSession()
+        console.log('🧪 Supabase connection test:', { hasData: !!testData, error: testError?.message })
+      } catch (testErr) {
+        console.error('❌ Supabase connection failed:', testErr)
+      }
       
-      console.log('✅ Google OAuth initiated')
-      return result
+      const { data, error } = await supabase.auth.signInWithOAuth({
+        provider: 'google'
+      })
+      
+      if (error) {
+        console.error('❌ OAuth error details:', {
+          message: error.message,
+          status: error.status,
+          details: error
+        })
+        throw new AuthError(error.message, AuthErrorTypes.UNAUTHORIZED, error)
+      }
+      
+      console.log('✅ Google OAuth response:', data)
+      return data
     } catch (err) {
-      console.error('❌ Google Sign-In failed:', err)
+      console.error('❌ Google Sign-In failed:', {
+        message: err.message,
+        stack: err.stack,
+        error: err
+      })
       safeSetState(setError, err.message)
       throw err
     } finally {
