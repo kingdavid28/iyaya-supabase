@@ -636,8 +636,14 @@ const ParentDashboard = () => {
       icon: 'person-add',
       title: 'Add Child',
       onPress: () => openAddChild()
+    },
+    {
+      id: 'reports',
+      icon: 'flag',
+      title: 'My Reports',
+      onPress: () => navigation.navigate('MyReports')
     }
-  ], [setActiveTab, createCaregiverObject, toggleModal, openAddChild]);
+  ], [setActiveTab, createCaregiverObject, toggleModal, openAddChild, navigation]);
 
   // Refresh function
   const onRefresh = useCallback(async () => {

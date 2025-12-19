@@ -1,4 +1,5 @@
 import { Calendar, Plus } from 'lucide-react-native';
+import ReportButton from '../../../components/ui/ReportButton';
 import React, { useCallback, useEffect, useMemo, useRef } from 'react';
 import { ActivityIndicator, Alert, Animated, Easing, FlatList, Linking, RefreshControl, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import ContractModal from '../../../components/modals/ContractModal';
@@ -831,6 +832,15 @@ const BookingsTab = ({
         onOpenContract={onOpenContract}
         onCreateContract={handleCreateContract}
         contract={bookingContract}
+        reportButton={
+          <ReportButton
+            reportedUserId={caregiverData?.id || caregiverData?._id}
+            bookingId={bookingId}
+            onReportSubmitted={() => {
+              Alert.alert('Report Submitted', 'Your report has been submitted successfully.');
+            }}
+          />
+        }
       />
     );
   }, [contracts, handleCallCaregiver, handleContractResend, handleCreateContract, handleMessageCaregiver, onCancelBooking, onOpenContract, onUploadPayment, onViewBookingDetails, onWriteReview]);

@@ -5,7 +5,12 @@ import { getCachedOrFetch, invalidateCache } from './cache'
 export class ReportService extends SupabaseBase {
   async _requireAdmin() {
     const user = await this._getCurrentUser()
-    if (!user || user.role !== 'admin') {
+    if (!user) {
+      throw new Error('Authentication required')
+    }
+    // Check if user has admin role in JWT claims
+    const { data: { session } } = await supabase.auth.getSession()
+    if (!session || session.user?.app_metadata?.role !== 'admin') {
       throw new Error('Admin access required')
     }
     return user
@@ -44,12 +49,7 @@ export class ReportService extends SupabaseBase {
       return await getCachedOrFetch(cacheKey, async () => {
         const { data, error } = await supabase
           .from('user_reports')
-          .select(`
-            *,
-            reporter:reporter_id(id, name, email),
-            reported_user:reported_user_id(id, name, email),
-            reviewer:reviewed_by(id, name, email)
-          `)
+          .select('*')
           .or(`reporter_id.eq.${resolvedUserId},reported_user_id.eq.${resolvedUserId}`)
           .order('created_at', { ascending: false })
 
@@ -67,12 +67,7 @@ export class ReportService extends SupabaseBase {
 
       let query = supabase
         .from('user_reports')
-        .select(`
-          *,
-          reporter:reporter_id(id, name, email),
-          reported_user:reported_user_id(id, name, email),
-          reviewer:reviewed_by(id, name, email)
-        `)
+        .select('*')
 
       // Apply filters
       if (filters.status) {
@@ -103,14 +98,7 @@ export class ReportService extends SupabaseBase {
     try {
       const { data, error } = await supabase
         .from('user_reports')
-        .select(`
-          *,
-          reporter:reporter_id(id, name, email, role),
-          reported_user:reported_user_id(id, name, email, role),
-          reviewer:reviewed_by(id, name, email),
-          booking:booking_id(id, start_date, end_date),
-          job:job_id(id, title)
-        `)
+        .select('*')
         .eq('id', reportId)
         .single()
 

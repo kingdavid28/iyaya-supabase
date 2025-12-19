@@ -27,7 +27,8 @@ const BookingItem = ({
   onCallCaregiver,
   onOpenContract,
   onCreateContract,
-  contract: contractProp
+  contract: contractProp,
+  reportButton
 }) => {
   const formatDate = (dateString) => {
     try {
@@ -573,6 +574,12 @@ const BookingItem = ({
               <Text style={styles.cancelButtonText}>Cancel Booking</Text>
             </TouchableOpacity>
           )}
+
+          {reportButton && (
+            <View style={styles.reportButtonContainer}>
+              {reportButton}
+            </View>
+          )}
         </View>
       </View>
     </View>
@@ -1087,6 +1094,10 @@ const styles = StyleSheet.create({
   },
   contractActionTextDisabled: {
     color: '#9CA3AF',
+  },
+  reportButtonContainer: {
+    flex: 1,
+    minWidth: 100,
   },
 });
 
