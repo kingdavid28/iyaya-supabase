@@ -574,8 +574,7 @@ useEffect(() => {
             name="MyReports" 
             component={MyReportsScreen} 
             options={{ 
-              title: "My Reports", 
-              headerBackTitle: "Back" 
+              headerShown: false
             }} 
           />
         </Stack.Navigator>

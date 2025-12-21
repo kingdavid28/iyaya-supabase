@@ -5,14 +5,17 @@ import {
   StyleSheet,
   ScrollView,
   Alert,
-  TouchableOpacity
+  TouchableOpacity,
+  KeyboardAvoidingView,
+  Platform
 } from 'react-native'
-import { TextInput, Button } from 'react-native-paper'
-import { Picker } from '@react-native-picker/picker'
+import { TextInput } from 'react-native-paper'
+import { Ionicons } from '@expo/vector-icons'
+import { SafeAreaView } from 'react-native-safe-area-context'
 import { reportService } from '../services/supabase/reportService'
 
 const CreateReportScreen = ({ navigation, route }) => {
-  const { reportedUserId, reportedUserName, bookingId, jobId } = route.params || {}
+  const { reportedUserId, reportedUserName, bookingId, jobId, onReportSubmitted } = route.params || {}
   
   const [formData, setFormData] = useState({
     reported_user_id: reportedUserId,
@@ -26,161 +29,345 @@ const CreateReportScreen = ({ navigation, route }) => {
   const [loading, setLoading] = useState(false)
 
   const reportTypes = [
-    { value: 'caregiver_misconduct', label: 'Caregiver Misconduct' },
-    { value: 'parent_maltreatment', label: 'Parent Maltreatment' },
-    { value: 'inappropriate_behavior', label: 'Inappropriate Behavior' },
-    { value: 'safety_concern', label: 'Safety Concern' },
-    { value: 'payment_dispute', label: 'Payment Dispute' },
-    { value: 'other', label: 'Other' }
+    { value: 'caregiver_misconduct', label: 'Caregiver Misconduct', icon: 'person-remove' },
+    { value: 'parent_maltreatment', label: 'Parent Maltreatment', icon: 'warning' },
+    { value: 'inappropriate_behavior', label: 'Inappropriate Behavior', icon: 'alert-circle' },
+    { value: 'safety_concern', label: 'Safety Concern', icon: 'shield-outline' },
+    { value: 'payment_dispute', label: 'Payment Dispute', icon: 'card-outline' },
+    { value: 'other', label: 'Other', icon: 'ellipsis-horizontal' }
   ]
 
   const severityLevels = [
-    { value: 'low', label: 'Low' },
-    { value: 'medium', label: 'Medium' },
-    { value: 'high', label: 'High' },
-    { value: 'critical', label: 'Critical' }
+    { value: 'low', label: 'Low', color: '#10B981', icon: 'information-circle' },
+    { value: 'medium', label: 'Medium', color: '#F59E0B', icon: 'alert-circle' },
+    { value: 'high', label: 'High', color: '#EF4444', icon: 'warning' },
+    { value: 'critical', label: 'Critical', color: '#DC2626', icon: 'alert' }
   ]
 
   const handleSubmit = async () => {
     if (!formData.title.trim() || !formData.description.trim()) {
-      Alert.alert('Error', 'Please fill in all required fields')
+      Alert.alert('Missing Information', 'Please fill in all required fields')
+      return
+    }
+
+    if (!formData.reported_user_id) {
+      Alert.alert('Error', 'Missing user information. Please try again.')
       return
     }
 
     setLoading(true)
     try {
-      await reportService.createReport(formData)
+      const result = await reportService.createReport(formData)
+      console.log('Report created:', result)
+      
+      if (onReportSubmitted) {
+        onReportSubmitted()
+      }
+      
       Alert.alert(
         'Report Submitted',
         'Your report has been submitted successfully. We will review it and take appropriate action.',
         [{ text: 'OK', onPress: () => navigation.goBack() }]
       )
     } catch (error) {
-      Alert.alert('Error', 'Failed to submit report. Please try again.')
+      console.error('Report submission error:', error)
+      Alert.alert('Submission Failed', error.message || 'Failed to submit report. Please try again.')
     } finally {
       setLoading(false)
     }
   }
 
-  return (
-    <ScrollView style={styles.container}>
-      <View style={styles.content}>
-        <Text style={styles.title}>Report User</Text>
-        
-        {reportedUserName && (
-          <Text style={styles.subtitle}>Reporting: {reportedUserName}</Text>
-        )}
-
-        <View style={styles.field}>
-          <Text style={styles.label}>Report Type *</Text>
-          <View style={styles.pickerContainer}>
-            <Picker
-              selectedValue={formData.report_type}
-              onValueChange={(value) => setFormData({...formData, report_type: value})}
-            >
-              {reportTypes.map(type => (
-                <Picker.Item key={type.value} label={type.label} value={type.value} />
-              ))}
-            </Picker>
-          </View>
-        </View>
-
-        <TextInput
-          label="Title *"
-          value={formData.title}
-          onChangeText={(text) => setFormData({...formData, title: text})}
-          mode="outlined"
-          style={styles.input}
-          maxLength={255}
-        />
-
-        <TextInput
-          label="Description *"
-          value={formData.description}
-          onChangeText={(text) => setFormData({...formData, description: text})}
-          mode="outlined"
-          multiline
-          numberOfLines={6}
-          style={styles.input}
-          placeholder="Please provide detailed information about the incident..."
-        />
-
-        <View style={styles.field}>
-          <Text style={styles.label}>Severity</Text>
-          <View style={styles.pickerContainer}>
-            <Picker
-              selectedValue={formData.severity}
-              onValueChange={(value) => setFormData({...formData, severity: value})}
-            >
-              {severityLevels.map(level => (
-                <Picker.Item key={level.value} label={level.label} value={level.value} />
-              ))}
-            </Picker>
-          </View>
-        </View>
-
-        <Text style={styles.note}>
-          * Required fields. All reports are reviewed by our moderation team.
-        </Text>
-
-        <Button
-          mode="contained"
-          onPress={handleSubmit}
-          loading={loading}
-          disabled={loading}
-          style={styles.submitButton}
-        >
-          Submit Report
-        </Button>
+  const renderTypeSelector = () => (
+    <View style={styles.sectionContainer}>
+      <Text style={styles.sectionTitle}>Report Type *</Text>
+      <View style={styles.optionsGrid}>
+        {reportTypes.map(type => (
+          <TouchableOpacity
+            key={type.value}
+            style={[
+              styles.optionCard,
+              formData.report_type === type.value && styles.selectedOption
+            ]}
+            onPress={() => setFormData({...formData, report_type: type.value})}
+          >
+            <Ionicons 
+              name={type.icon} 
+              size={24} 
+              color={formData.report_type === type.value ? '#FFFFFF' : '#6B7280'} 
+            />
+            <Text style={[
+              styles.optionText,
+              formData.report_type === type.value && styles.selectedOptionText
+            ]}>
+              {type.label}
+            </Text>
+          </TouchableOpacity>
+        ))}
       </View>
-    </ScrollView>
+    </View>
+  )
+
+  const renderSeveritySelector = () => (
+    <View style={styles.sectionContainer}>
+      <Text style={styles.sectionTitle}>Severity Level</Text>
+      <View style={styles.severityRow}>
+        {severityLevels.map(level => (
+          <TouchableOpacity
+            key={level.value}
+            style={[
+              styles.severityCard,
+              { borderColor: level.color },
+              formData.severity === level.value && { backgroundColor: level.color }
+            ]}
+            onPress={() => setFormData({...formData, severity: level.value})}
+          >
+            <Ionicons 
+              name={level.icon} 
+              size={20} 
+              color={formData.severity === level.value ? '#FFFFFF' : level.color} 
+            />
+            <Text style={[
+              styles.severityText,
+              { color: formData.severity === level.value ? '#FFFFFF' : level.color }
+            ]}>
+              {level.label}
+            </Text>
+          </TouchableOpacity>
+        ))}
+      </View>
+    </View>
+  )
+
+  return (
+    <SafeAreaView style={styles.container}>
+      <KeyboardAvoidingView 
+        style={styles.keyboardView}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      >
+        {/* Header */}
+        <View style={styles.header}>
+          <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
+            <Ionicons name="arrow-back" size={24} color="#111827" />
+          </TouchableOpacity>
+          <View style={styles.headerContent}>
+            <Text style={styles.headerTitle}>Report User</Text>
+            {reportedUserName && (
+              <Text style={styles.headerSubtitle}>Reporting: {reportedUserName}</Text>
+            )}
+          </View>
+        </View>
+
+        <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
+          {renderTypeSelector()}
+
+          <View style={styles.sectionContainer}>
+            <Text style={styles.sectionTitle}>Report Title *</Text>
+            <TextInput
+              value={formData.title}
+              onChangeText={(text) => setFormData({...formData, title: text})}
+              mode="outlined"
+              style={styles.textInput}
+              placeholder="Brief summary of the issue"
+              maxLength={255}
+              outlineColor="#E5E7EB"
+              activeOutlineColor="#3B82F6"
+            />
+          </View>
+
+          <View style={styles.sectionContainer}>
+            <Text style={styles.sectionTitle}>Detailed Description *</Text>
+            <TextInput
+              value={formData.description}
+              onChangeText={(text) => setFormData({...formData, description: text})}
+              mode="outlined"
+              multiline
+              numberOfLines={6}
+              style={[styles.textInput, styles.textArea]}
+              placeholder="Please provide detailed information about the incident, including when it occurred and any relevant context..."
+              outlineColor="#E5E7EB"
+              activeOutlineColor="#3B82F6"
+            />
+          </View>
+
+          {renderSeveritySelector()}
+
+          <View style={styles.disclaimerContainer}>
+            <Ionicons name="information-circle" size={20} color="#6B7280" />
+            <Text style={styles.disclaimerText}>
+              All reports are reviewed by our moderation team. False reports may result in account restrictions.
+            </Text>
+          </View>
+        </ScrollView>
+
+        <View style={styles.footer}>
+          <TouchableOpacity
+            style={[styles.submitButton, loading && styles.submitButtonDisabled]}
+            onPress={handleSubmit}
+            disabled={loading}
+          >
+            {loading ? (
+              <View style={styles.loadingContainer}>
+                <Text style={styles.submitButtonText}>Submitting...</Text>
+              </View>
+            ) : (
+              <>
+                <Ionicons name="flag" size={20} color="#FFFFFF" />
+                <Text style={styles.submitButtonText}>Submit Report</Text>
+              </>
+            )}
+          </TouchableOpacity>
+        </View>
+      </KeyboardAvoidingView>
+    </SafeAreaView>
   )
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f5f5f5'
+    backgroundColor: '#F9FAFB'
   },
-  content: {
-    padding: 20
+  keyboardView: {
+    flex: 1
   },
-  title: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    marginBottom: 8
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    backgroundColor: '#FFFFFF',
+    borderBottomWidth: 1,
+    borderBottomColor: '#E5E7EB'
   },
-  subtitle: {
+  backButton: {
+    padding: 8,
+    marginRight: 8
+  },
+  headerContent: {
+    flex: 1
+  },
+  headerTitle: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: '#111827'
+  },
+  headerSubtitle: {
+    fontSize: 14,
+    color: '#6B7280',
+    marginTop: 2
+  },
+  scrollView: {
+    flex: 1,
+    paddingHorizontal: 16
+  },
+  sectionContainer: {
+    marginTop: 24
+  },
+  sectionTitle: {
     fontSize: 16,
-    color: '#666',
-    marginBottom: 20
+    fontWeight: '600',
+    color: '#111827',
+    marginBottom: 12
   },
-  field: {
-    marginBottom: 16
+  optionsGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 12
   },
-  label: {
-    fontSize: 16,
-    fontWeight: '500',
-    marginBottom: 8
+  optionCard: {
+    flex: 1,
+    minWidth: '45%',
+    backgroundColor: '#FFFFFF',
+    padding: 16,
+    borderRadius: 12,
+    borderWidth: 2,
+    borderColor: '#E5E7EB',
+    alignItems: 'center',
+    gap: 8
   },
-  pickerContainer: {
-    borderWidth: 1,
-    borderColor: '#ddd',
-    borderRadius: 4,
-    backgroundColor: 'white'
+  selectedOption: {
+    backgroundColor: '#3B82F6',
+    borderColor: '#3B82F6'
   },
-  input: {
-    marginBottom: 16,
-    backgroundColor: 'white'
-  },
-  note: {
+  optionText: {
     fontSize: 12,
-    color: '#666',
-    fontStyle: 'italic',
-    marginBottom: 20
+    fontWeight: '500',
+    color: '#6B7280',
+    textAlign: 'center'
+  },
+  selectedOptionText: {
+    color: '#FFFFFF'
+  },
+  textInput: {
+    backgroundColor: '#FFFFFF'
+  },
+  textArea: {
+    minHeight: 120
+  },
+  severityRow: {
+    flexDirection: 'row',
+    gap: 8
+  },
+  severityCard: {
+    flex: 1,
+    backgroundColor: '#FFFFFF',
+    padding: 12,
+    borderRadius: 8,
+    borderWidth: 2,
+    alignItems: 'center',
+    gap: 4
+  },
+  severityText: {
+    fontSize: 12,
+    fontWeight: '600'
+  },
+  disclaimerContainer: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    backgroundColor: '#F3F4F6',
+    padding: 16,
+    borderRadius: 12,
+    marginTop: 24,
+    gap: 12
+  },
+  disclaimerText: {
+    flex: 1,
+    fontSize: 14,
+    color: '#6B7280',
+    lineHeight: 20
+  },
+  footer: {
+    padding: 16,
+    backgroundColor: '#FFFFFF',
+    borderTopWidth: 1,
+    borderTopColor: '#E5E7EB'
   },
   submitButton: {
-    paddingVertical: 8
+    backgroundColor: '#EF4444',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 16,
+    borderRadius: 12,
+    gap: 8,
+    shadowColor: '#EF4444',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 4
+  },
+  submitButtonDisabled: {
+    backgroundColor: '#9CA3AF',
+    shadowOpacity: 0
+  },
+  submitButtonText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#FFFFFF'
+  },
+  loadingContainer: {
+    flexDirection: 'row',
+    alignItems: 'center'
   }
 })
 

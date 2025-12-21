@@ -7,11 +7,19 @@ const ReportButton = ({ reportedUserId, bookingId, onReportSubmitted, style }) =
   const navigation = useNavigation()
 
   const handlePress = () => {
-    navigation.navigate('CreateReport', {
-      reportedUserId,
-      bookingId,
-      onReportSubmitted
-    })
+    try {
+      if (!navigation) {
+        console.warn('Navigation not available')
+        return
+      }
+      navigation.navigate('CreateReport', {
+        reportedUserId,
+        bookingId,
+        onReportSubmitted
+      })
+    } catch (error) {
+      console.error('Navigation error:', error)
+    }
   }
 
   return (

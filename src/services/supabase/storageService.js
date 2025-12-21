@@ -49,27 +49,20 @@ export class StorageService extends SupabaseBase {
 
       const storagePath = data?.path || fileName
 
-      const { data: signedData, error: signedError } = await supabase.storage
+      // Use public URL for profile images (no expiration)
+      const { data: publicData } = supabase.storage
         .from(PROFILE_BUCKET)
-        .createSignedUrl(storagePath, SIGNED_URL_TTL_SECONDS)
+        .getPublicUrl(storagePath)
 
-      let signedUrl = signedData?.signedUrl
+      const publicUrl = publicData?.publicUrl
 
-      if (signedError || !signedUrl) {
-        console.warn('Falling back to public profile image URL:', signedError)
-        const { data: publicData } = supabase.storage
-          .from(PROFILE_BUCKET)
-          .getPublicUrl(storagePath)
-        signedUrl = publicData?.publicUrl
-      }
-
-      if (!signedUrl) {
+      if (!publicUrl) {
         throw new Error('Failed to generate profile image URL')
       }
 
-      await userService.updateProfile(userId, { profile_image: signedUrl })
+      await userService.updateProfile(userId, { profile_image: publicUrl })
 
-      return { url: signedUrl, path: storagePath }
+      return { url: publicUrl, path: storagePath }
     } catch (error) {
       return this._handleError('uploadProfileImage', error)
     }

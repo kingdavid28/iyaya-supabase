@@ -99,6 +99,10 @@ export class SupabaseBase {
 
   async _getCurrentUser() {
     try {
+      if (!supabase || !supabase.auth) {
+        console.warn('⚠️ Supabase client not initialized')
+        return null
+      }
       const { data: { user }, error } = await supabase.auth.getUser()
       if (error) {
         console.warn('⚠️ Auth error:', error.message)

@@ -1,5 +1,6 @@
 // c:/Users/reycel/Documents/iyayabeforereadme/forTransferIyaya/iyayaSupa/src/services/supabase/privacyService.js
-import { SupabaseBase, supabase } from './base.js'
+import { SupabaseBase } from './base.js'
+import supabase from '../../config/supabase.js'
 import { getCachedOrFetch, invalidateCache } from './cache.js'
 import { notificationService } from './notificationService.js'
 
@@ -188,6 +189,12 @@ class PrivacyService extends SupabaseBase {
 
     async getPrivacySettings(userId = null) {
         try {
+            // Check if supabase client is available
+            if (!supabase || !supabase.from) {
+                console.warn('⚠️ Supabase client not available, returning default privacy settings')
+                return { userId: userId || null, data: { ...DEFAULT_SETTINGS } }
+            }
+
             const targetId = await this._resolveTargetUserId(userId)
             const cacheKey = this._settingsCacheKey(targetId)
 

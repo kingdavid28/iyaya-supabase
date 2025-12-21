@@ -62,11 +62,12 @@ const Header = ({
       return null;
     }
 
-    if (profileImage.startsWith('http')) {
+    // For Supabase URLs (signed or public), use directly
+    if (profileImage.includes('supabase.co') || profileImage.startsWith('http')) {
       return { uri: profileImage };
     }
 
-    // Use dynamic API URL
+    // Use dynamic API URL for other cases
     const baseUrl = getCurrentSocketURL();
     return { uri: `${baseUrl}${profileImage}` };
   };
@@ -103,9 +104,12 @@ const Header = ({
                       source={imageSource}
                       style={headerStyles.profileImage}
                       onError={(error) => {
-                        // Reduce log noise - only log actual errors, not missing files
+                        // Only log significant errors, not expired URLs or missing files
                         const errorMessage = error?.nativeEvent?.error || error;
-                        if (errorMessage && !errorMessage.includes("couldn't be opened because there is no such file")) {
+                        if (errorMessage && 
+                            !errorMessage.includes("couldn't be opened because there is no such file") &&
+                            !errorMessage.includes("Failed to load resource") &&
+                            !profileImage?.includes('supabase.co')) {
                           console.warn('Failed to load profile image:', errorMessage);
                         }
                       }}
