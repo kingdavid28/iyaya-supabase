@@ -234,10 +234,6 @@ const CaregiverDashboard = () => {
   const [selectedFamilyForHighlight, setSelectedFamilyForHighlight] = useState(null);
   const [showRatingsModal, setShowRatingsModal] = useState(false);
 
-  const openRatingsModal = useCallback(() => {
-    setShowRatingsModal(true);
-  }, []);
-
   const closeRatingsModal = useCallback(() => {
     setShowRatingsModal(false);
   }, []);
@@ -245,6 +241,11 @@ const CaregiverDashboard = () => {
   const preloadCaregiverReviews = useCallback(async () => {
     await fetchCaregiverReviews({ showSkeleton: false });
   }, [fetchCaregiverReviews]);
+
+  const handleOpenRatings = useCallback(async () => {
+    await preloadCaregiverReviews();
+    setShowRatingsModal(true);
+  }, [preloadCaregiverReviews]);
 
   const recentHighlightFamilies = useMemo(() => {
     const combined = [...(bookings || []), ...(applications || [])];
@@ -1338,12 +1339,9 @@ const CaregiverDashboard = () => {
     }
   }, [handleCloseReviewModal, refreshCaregiverReviews, selectedReview, showToast, user?.id]);
 
-  const handleOpenRatings = useCallback(async () => {
-    await preloadCaregiverReviews();
-    setShowRatingsModal(true);
-  }, [preloadCaregiverReviews]);
-
   return (
+
+
     <Fragment>
       <View style={styles.container}>
         <CaregiverDashboardHeader
