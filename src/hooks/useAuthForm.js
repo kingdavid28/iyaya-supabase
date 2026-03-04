@@ -23,18 +23,22 @@ export const useAuthForm = (initialData = {}) => {
     }
   };
 
-  const validateForm = (mode) => {
+  const validateForm = (mode, role = 'parent') => {
     let rules = {};
-    
-    if (mode === 'login') {
-      rules = validationRules.userLogin;
-    } else if (mode === 'signup') {
-      rules = {
-        email: validationRules.userRegistration.email,
-        password: validationRules.userRegistration.password,
-        phone: validationRules.userRegistration.phone,
-        firstName: (value) => !value?.trim() ? STRINGS.FIRST_NAME_ERROR : null,
-        lastName: (value) => !value?.trim() ? STRINGS.LAST_NAME_ERROR : null,
+
+    // Common rules for all modes
+    const commonRules = {
+      email: validationRules.userRegistration.email,
+      password: mode === 'signup' 
+        ? validationRules.userRegistration.password 
+        : validationRules.userLogin.password,
+      firstName: (value) => !value?.trim() ? STRINGS.FIRST_NAME_ERROR : null,
+      lastName: (value) => !value?.trim() ? STRINGS.LAST_NAME_ERROR : null,
+    };
+
+    // Role-specific rules
+    const roleRules = {
+      caregiver: {
         birthDate: (value) => {
           if (!value) return STRINGS.BIRTH_DATE_ERROR;
           const date = new Date(value);
@@ -42,10 +46,32 @@ export const useAuthForm = (initialData = {}) => {
           if (date > new Date()) return STRINGS.FUTURE_BIRTH_DATE;
           return null;
         },
+        phone: validationRules.userRegistration.phone,
+      },
+      parent: {
+        phone: validationRules.userRegistration.phone,
+      }
+    };
+
+    // Mode-specific rules
+    if (mode === 'login') {
+      rules = {
+        email: validationRules.userLogin.email,
+        password: validationRules.userLogin.password
+      };
+    } else if (mode === 'signup') {
+      rules = {
+        ...commonRules,
+        ...(roleRules[role] || {}),
         confirmPassword: (value) => {
           if (value !== formData.password) return STRINGS.PASSWORDS_NO_MATCH;
           return null;
-        }
+        },
+        // Add role-specific required fields
+        ...(role === 'caregiver' ? {
+          middleInitial: (value) => value && value.length > 1 ? 'Middle initial should be 1 character or empty' : null,
+          birthDate: roleRules.caregiver.birthDate
+        } : {})
       };
     } else if (mode === 'reset') {
       rules = { email: validationRules.userRegistration.email };

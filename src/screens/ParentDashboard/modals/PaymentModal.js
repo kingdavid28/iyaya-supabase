@@ -10,6 +10,9 @@ import {
   submitPaymentProof,
   PaymentProofError
 } from '../../../utils/paymentProofHelpers';
+// Solana Integration
+import { SolanaPaymentFlow } from '../../../components/payments/SolanaPaymentFlow';
+import { useSolana } from '../../../contexts/SolanaContext';
 
 const PaymentModal = ({ 
   visible, 
@@ -19,7 +22,8 @@ const PaymentModal = ({
   caregiverName, 
   bookingDate,
   paymentType = 'deposit',
-  onPaymentSuccess 
+  onPaymentSuccess,
+  caregiverWallet // Add caregiver wallet for Solana payments
 }) => {
   const [image, setImage] = useState(null);
   const [uploading, setUploading] = useState(false);
@@ -28,6 +32,8 @@ const PaymentModal = ({
   const [mimeType, setMimeType] = useState('image/jpeg');
   const [showRating, setShowRating] = useState(false);
   const [canRate, setCanRate] = useState(false);
+  const [paymentMethod, setPaymentMethod] = useState('traditional'); // 'traditional' or 'crypto'
+  const { validateAddress } = useSolana();
 
   // Safe formatting for payment data
   const formatPaymentData = () => {
@@ -189,31 +195,80 @@ const PaymentModal = ({
 
           {/* Content */}
           <View style={styles.modalBody}>
-            <View style={styles.paymentDetails}>
-              <View style={styles.detailRow}>
-                <Text style={styles.detailLabel}>
-                  {formattedData.paymentType === 'deposit' ? 'Deposit Amount:' : 
-                   formattedData.paymentType === 'final_payment' ? 'Final Payment:' : 'Amount:'}
-                </Text>
-                <Text style={styles.detailValue}>₱{formattedData.amount}</Text>
-              </View>
-              {formattedData.paymentType !== 'full' && (
-                <View style={styles.detailRow}>
-                  <Text style={styles.detailLabel}>Total Booking Cost:</Text>
-                  <Text style={styles.detailValue}>₱{formattedData.totalAmount}</Text>
+            {/* Payment Method Selection */}
+            {caregiverWallet && validateAddress(caregiverWallet.wallet_address) && (
+              <View style={styles.paymentMethodSelector}>
+                <Text style={styles.sectionTitle}>Payment Method</Text>
+                <View style={styles.methodButtons}>
+                  <TouchableOpacity
+                    style={[
+                      styles.methodButton,
+                      paymentMethod === 'traditional' && styles.selectedMethod
+                    ]}
+                    onPress={() => setPaymentMethod('traditional')}
+                  >
+                    <Text style={[
+                      styles.methodText,
+                      paymentMethod === 'traditional' && styles.selectedMethodText
+                    ]}>Traditional</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[
+                      styles.methodButton,
+                      paymentMethod === 'crypto' && styles.selectedMethod
+                    ]}
+                    onPress={() => setPaymentMethod('crypto')}
+                  >
+                    <Text style={[
+                      styles.methodText,
+                      paymentMethod === 'crypto' && styles.selectedMethodText
+                    ]}>Crypto ({caregiverWallet.preferred_token})</Text>
+                  </TouchableOpacity>
                 </View>
-              )}
-              <View style={styles.detailRow}>
-                <Text style={styles.detailLabel}>Caregiver:</Text>
-                <Text style={styles.detailValue}>{formattedData.caregiverName}</Text>
               </View>
-              <View style={styles.detailRow}>
-                <Text style={styles.detailLabel}>Booking Date:</Text>
-                <Text style={styles.detailValue}>{formattedData.bookingDate}</Text>
-              </View>
-            </View>
+            )}
 
-            <View style={styles.uploadContainer}>
+            {paymentMethod === 'crypto' && caregiverWallet ? (
+              <SolanaPaymentFlow
+                booking={{
+                  id: bookingId,
+                  amount_usd: formattedData?.amount || amount
+                }}
+                caregiverWallet={caregiverWallet}
+                onPaymentComplete={(signature) => {
+                  Alert.alert('Success', 'Crypto payment completed!');
+                  onPaymentSuccess?.();
+                  onClose();
+                }}
+                onCancel={() => setPaymentMethod('traditional')}
+              />
+            ) : (
+              <>
+                <View style={styles.paymentDetails}>
+                  <View style={styles.detailRow}>
+                    <Text style={styles.detailLabel}>
+                      {formattedData.paymentType === 'deposit' ? 'Deposit Amount:' : 
+                       formattedData.paymentType === 'final_payment' ? 'Final Payment:' : 'Amount:'}
+                    </Text>
+                    <Text style={styles.detailValue}>₱{formattedData.amount}</Text>
+                  </View>
+                  {formattedData.paymentType !== 'full' && (
+                    <View style={styles.detailRow}>
+                      <Text style={styles.detailLabel}>Total Booking Cost:</Text>
+                      <Text style={styles.detailValue}>₱{formattedData.totalAmount}</Text>
+                    </View>
+                  )}
+                  <View style={styles.detailRow}>
+                    <Text style={styles.detailLabel}>Caregiver:</Text>
+                    <Text style={styles.detailValue}>{formattedData.caregiverName}</Text>
+                  </View>
+                  <View style={styles.detailRow}>
+                    <Text style={styles.detailLabel}>Booking Date:</Text>
+                    <Text style={styles.detailValue}>{formattedData.bookingDate}</Text>
+                  </View>
+                </View>
+
+                <View style={styles.uploadContainer}>
               {renderStatusIcon()}
               <Text style={styles.uploadStatusText}>{renderStatusText()}</Text>
               
@@ -277,6 +332,8 @@ const PaymentModal = ({
                 }}
               />
             )}
+              </>
+            )}
           </View>
     </ModalWrapper>
   );
@@ -295,6 +352,39 @@ const styles = StyleSheet.create({
     width: '90%',
     maxHeight: '80%',
     overflow: 'hidden',
+  },
+  paymentMethodSelector: {
+    marginBottom: 20,
+  },
+  sectionTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    marginBottom: 12,
+    color: '#111827',
+  },
+  methodButtons: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  methodButton: {
+    flex: 1,
+    padding: 12,
+    borderRadius: 8,
+    borderWidth: 2,
+    borderColor: '#E5E7EB',
+    alignItems: 'center',
+  },
+  selectedMethod: {
+    borderColor: '#3B82F6',
+    backgroundColor: '#EBF4FF',
+  },
+  methodText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#6B7280',
+  },
+  selectedMethodText: {
+    color: '#3B82F6',
   },
   modalHeader: {
     flexDirection: 'row',

@@ -132,6 +132,7 @@ try {
       headers: {
         'X-Client-Info': 'iyaya-mobile/1.0.0',
         'X-Platform': Platform.OS,
+        'Accept': 'application/json',
       },
     }
   });
@@ -334,10 +335,11 @@ export const handleAuthError = async (error) => {
   return { userError: 'Authentication failed. Please try again.' };
 };
 
-// Export a method to get the client with initialization check
+// Export a method to get client with initialization check
 export const getSupabaseClient = () => {
   if (!supabase) {
-    throw new Error('Supabase client not initialized');
+    console.warn('Supabase client not initialized');
+    return null;
   }
   return supabase;
 };

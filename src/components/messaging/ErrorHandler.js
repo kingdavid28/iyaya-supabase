@@ -1,7 +1,7 @@
 import React, { useState, useCallback } from 'react';
 import { View, Text, Animated, StyleSheet, TouchableOpacity, Dimensions } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-
+import { Platform } from 'react-native';
 const { width } = Dimensions.get('window');
 
 // Error types and their user-friendly messages
@@ -90,7 +90,7 @@ const ToastNotification = ({ visible, type, message, onHide }) => {
     if (visible) {
       Animated.spring(slideAnim, {
         toValue: 1,
-        useNativeDriver: true,
+        useNativeDriver: Platform.OS !== 'web',
         tension: 50,
         friction: 7,
       }).start();
@@ -109,7 +109,7 @@ const ToastNotification = ({ visible, type, message, onHide }) => {
   const hideToast = useCallback(() => {
     Animated.spring(slideAnim, {
       toValue: 0,
-      useNativeDriver: true,
+      useNativeDriver: Platform.OS !== 'web',
       tension: 50,
       friction: 7,
     }).start(() => {

@@ -27,32 +27,28 @@ export default function WelcomeScreen() {
   const isLoggedIn = !!user;
   const role = user?.role;
   const hasNavigated = React.useRef(false);
-  
+
+  // Safety check for navigation initialization
+  if (!navigation) {
+    console.warn('[Welcome] Navigation not initialized yet');
+    return null;
+  }
+
   // Debug: log auth state when it changes
   React.useEffect(() => {
-    console.log('[Welcome] Auth state:', { 
-      hasUser: !!user, 
-      userEmail: user?.email, 
+    console.log('[Welcome] Auth state:', {
+      hasUser: !!user,
+      userEmail: user?.email,
       userRole: user?.role,
       isLoggedIn,
       role,
       isLoading
     });
-    
-    // Navigate to dashboard if user is authenticated with role
-    if (!isLoading && user && user.role && !hasNavigated.current) {
-      hasNavigated.current = true;
-      const dashboardRoute = user.role === 'caregiver' ? 'CaregiverDashboard' : 'ParentDashboard';
-      console.log('[Welcome] Navigating authenticated user to:', dashboardRoute);
-      
-      setTimeout(() => {
-        navigation.dispatch(CommonActions.reset({
-          index: 0,
-          routes: [{ name: dashboardRoute }],
-        }));
-      }, 100);
-    }
-    
+
+    // NOTE: Auto-navigation is disabled here because individual auth screens
+    // (CaregiverAuth, ParentAuth) handle navigation after login with correct role.
+    // This prevents override issues where database role differs from intended role.
+
     // If user is authenticated but has no role, show role selection
     if (!isLoading && user && !user.role) {
       console.log('[Welcome] User authenticated but no role, showing role selection');
@@ -71,14 +67,20 @@ export default function WelcomeScreen() {
   // Navigation handlers
   const handleParentPress = React.useCallback(async () => {
     console.log('[Welcome] Parent card pressed', { isLoggedIn, role });
-    
+
+    // Safety check for navigation
+    if (!navigation) {
+      console.warn('[Welcome] Navigation not available in handleParentPress');
+      return;
+    }
+
     // Track user interaction
-    trackEvent('welcome_card_clicked', { 
+    trackEvent('welcome_card_clicked', {
       card_type: 'parent',
       user_logged_in: isLoggedIn,
       user_role: role
     });
-    
+
     if (isLoggedIn && role === 'parent') {
       // Navigate to parent dashboard if already logged in as parent
       navigation.dispatch(CommonActions.reset({
@@ -91,12 +93,12 @@ export default function WelcomeScreen() {
       try {
         const { userService } = await import('../services/supabase/userService');
         await userService.updateProfile(user.id, { role: 'parent' });
-        
+
         // Force refresh user data in AuthContext
         window.location.reload();
       } catch (error) {
         console.error('Failed to update user role:', error);
-        // Navigate anyway - the role will be set on next login
+        // Navigate anyway - role will be set on next login
         navigation.dispatch(CommonActions.reset({
           index: 0,
           routes: [{ name: 'ParentDashboard' }],
@@ -110,14 +112,20 @@ export default function WelcomeScreen() {
 
   const handleCaregiverPress = React.useCallback(async () => {
     console.log('[Welcome] Caregiver card pressed', { isLoggedIn, role });
-    
+
+    // Safety check for navigation
+    if (!navigation) {
+      console.warn('[Welcome] Navigation not available in handleCaregiverPress');
+      return;
+    }
+
     // Track user interaction
-    trackEvent('welcome_card_clicked', { 
+    trackEvent('welcome_card_clicked', {
       card_type: 'caregiver',
       user_logged_in: isLoggedIn,
       user_role: role
     });
-    
+
     if (isLoggedIn && role === 'caregiver') {
       // Navigate to caregiver dashboard if already logged in as caregiver
       navigation.dispatch(CommonActions.reset({
@@ -130,7 +138,7 @@ export default function WelcomeScreen() {
       try {
         const { userService } = await import('../services/supabase/userService');
         await userService.updateProfile(user.id, { role: 'caregiver' });
-        
+
         // Force refresh user data in AuthContext
         window.location.reload();
       } catch (error) {
@@ -162,7 +170,7 @@ export default function WelcomeScreen() {
     console.log('[Welcome] Showing role selection for authenticated user');
     // User is authenticated but needs to select role - show welcome screen
   }
-  
+
   // Ensure we always render something visible
   console.log('[Welcome] Rendering WelcomeScreen', { isLoading, user: !!user, role: user?.role });
 
@@ -199,14 +207,14 @@ export default function WelcomeScreen() {
   ];
 
   return (
-    <LinearGradient 
-      colors={backgroundGradient} 
+    <LinearGradient
+      colors={backgroundGradient}
       style={styles.gradient}
       start={{ x: 0, y: 0 }}
       end={{ x: 1, y: 1 }}
     >
       <SafeAreaView style={styles.safeArea}>
-        <ScrollView 
+        <ScrollView
           contentContainerStyle={styles.container}
           showsVerticalScrollIndicator={false}
           bounces={false}
@@ -214,12 +222,12 @@ export default function WelcomeScreen() {
           {/* Header Section */}
           <View style={styles.header}>
             <View style={styles.logoContainer} accessibilityLabel="Iyaya logo">
-              <LinearGradient 
+              <LinearGradient
                 colors={logoGradient}
                 style={styles.logoBackground}
               >
-                <Image 
-                  source={require('../../assets/icon.png')} 
+                <Image
+                  source={require('../../assets/icon.png')}
                   style={styles.logo}
                   resizeMode="contain"
                   accessibilityLabel="Iyaya app logo"
@@ -240,7 +248,7 @@ export default function WelcomeScreen() {
             {/* Parent Card */}
             <Pressable
               style={({ pressed }) => [
-                styles.card, 
+                styles.card,
                 styles.parentCard,
                 pressed && styles.cardPressed
               ]}
@@ -251,7 +259,7 @@ export default function WelcomeScreen() {
               accessibilityHint="Double tap to select parent role"
             >
               <View style={styles.cardContent}>
-                <LinearGradient 
+                <LinearGradient
                   colors={parentGradient}
                   style={[styles.iconContainer, styles.parentIconContainer]}
                   start={{ x: 0, y: 0 }}
@@ -277,7 +285,7 @@ export default function WelcomeScreen() {
             {/* Caregiver Card */}
             <Pressable
               style={({ pressed }) => [
-                styles.card, 
+                styles.card,
                 styles.caregiverCard,
                 pressed && styles.cardPressed
               ]}
@@ -288,7 +296,7 @@ export default function WelcomeScreen() {
               accessibilityHint="Double tap to select caregiver role"
             >
               <View style={styles.cardContent}>
-                <LinearGradient 
+                <LinearGradient
                   colors={caregiverGradient}
                   style={[styles.iconContainer, styles.caregiverIconContainer]}
                   start={{ x: 0, y: 0 }}
@@ -315,18 +323,18 @@ export default function WelcomeScreen() {
           {/* Features Section */}
           <View style={styles.featuresContainer}>
             {features.map((feature, index) => (
-              <View 
-                key={index} 
+              <View
+                key={index}
                 style={styles.feature}
                 accessibilityLabel={`${feature.title}: ${feature.description}`}
                 accessibilityRole="text"
               >
                 <View style={[styles.featureIcon, { backgroundColor: feature.bgColor }]}>
-                  <Ionicons 
-                    name={feature.icon} 
-                    size={24} 
-                    color={feature.color} 
-                    accessibilityLabel={`${feature.title} icon`} 
+                  <Ionicons
+                    name={feature.icon}
+                    size={24}
+                    color={feature.color}
+                    accessibilityLabel={`${feature.title} icon`}
                   />
                 </View>
                 <Text style={styles.featureTitle}>{feature.title}</Text>
@@ -348,11 +356,19 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   loadingContainer: {
-    flex: 1,
+    flexGrow: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#f8f9fa',
-    padding: 20,
+    backgroundColor: '#f8fafc',
+    paddingHorizontal: Platform.select({
+      web: 24,
+      default: 16
+    }),
+    paddingVertical: Platform.select({
+      web: 20,
+      default: 16
+    }),
+    minHeight: '100%',
   },
   loadingText: {
     marginTop: 12,
@@ -450,13 +466,19 @@ const styles = StyleSheet.create({
       web: 50,
       default: 30
     }),
-    gap: 16,
+    gap: Platform.select({
+      web: 24,
+      default: 16
+    }),
     width: '100%',
     maxWidth: Platform.select({
       web: 1200,
-      default: '100%',
+      default: '100%'
     }),
-    paddingHorizontal: 16,
+    paddingHorizontal: Platform.select({
+      web: 24,
+      default: 16
+    }),
   },
   card: {
     flex: Platform.select({
@@ -478,12 +500,12 @@ const styles = StyleSheet.create({
       default: 24
     }),
     shadowColor: "#000",
-    shadowOffset: { 
-      width: 0, 
+    shadowOffset: {
+      width: 0,
       height: Platform.select({
         web: 4,
         default: 2
-      }) 
+      })
     },
     shadowOpacity: Platform.select({
       web: 0.1,
@@ -561,10 +583,20 @@ const styles = StyleSheet.create({
   getStartedButton: {
     flexDirection: "row",
     alignItems: "center",
-    paddingVertical: 12,
-    paddingHorizontal: 20,
+    paddingVertical: Platform.select({
+      web: 16,
+      default: 12
+    }),
+    paddingHorizontal: Platform.select({
+      web: 24,
+      default: 20
+    }),
     borderRadius: 25,
     borderWidth: 1,
+    minWidth: Platform.select({
+      web: 200,
+      default: 160
+    }),
   },
   parentButton: {
     backgroundColor: "transparent",

@@ -27,7 +27,7 @@ import {
   Switch,
   TextInput,
 } from 'react-native-paper';
-
+import { caregiverProfileService } from '../services/caregiverProfileService';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as DocumentPicker from 'expo-document-picker';
@@ -208,18 +208,6 @@ const EnhancedCaregiverProfileWizard = ({ navigation, route }) => {
     },
   });
 
-  useEffect(() => {
-    if (!existingProfile) return;
-
-    setFormData(prev => ({
-      ...prev,
-      rating: typeof existingProfile.rating === 'number' ? existingProfile.rating : prev.rating,
-      reviewCount: existingProfile.reviewCount ?? existingProfile.reviews ?? prev.reviewCount ?? 0,
-      completedJobs: existingProfile.completedJobs ?? prev.completedJobs ?? 0,
-      responseRate: existingProfile.responseRate || prev.responseRate || '0%'
-    }));
-  }, [existingProfile]);
-
   const [tempInputs, setTempInputs] = useState({
     newSkill: '',
     newCertification: '',
@@ -238,7 +226,17 @@ const EnhancedCaregiverProfileWizard = ({ navigation, route }) => {
     certExpiryDate: null,
   });
 
+  useEffect(() => {
+    if (!existingProfile) return;
 
+    setFormData(prev => ({
+      ...prev,
+      rating: typeof existingProfile.rating === 'number' ? existingProfile.rating : prev.rating,
+      reviewCount: existingProfile.reviewCount ?? existingProfile.reviews ?? prev.reviewCount ?? 0,
+      completedJobs: existingProfile.completedJobs ?? prev.completedJobs ?? 0,
+      responseRate: existingProfile.responseRate || prev.responseRate || '0%'
+    }));
+  }, [existingProfile]);
 
   // Enhanced profile image upload using Supabase
   const handleProfileImageUpload = async () => {
@@ -468,10 +466,26 @@ const EnhancedCaregiverProfileWizard = ({ navigation, route }) => {
           return;
         }
 
-        // Convert document to base64 for upload
-        const base64 = await FileSystem.readAsStringAsync(asset.uri, {
-          encoding: 'base64',
-        });
+        let base64;
+        
+        if (Platform.OS === 'web') {
+          // Web implementation using FileReader
+          const file = await fetch(asset.uri).then(res => res.blob());
+          base64 = await new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.readAsDataURL(file);
+            reader.onload = () => {
+              const base64String = reader.result.split(',')[1]; // Remove the data URL prefix
+              resolve(base64String);
+            };
+            reader.onerror = (error) => reject(error);
+          });
+        } else {
+          // Native implementation
+          base64 = await FileSystem.readAsStringAsync(asset.uri, {
+            encoding: 'base64',
+          });
+        }
 
         console.log('📄 Uploading document:', documentType.label);
         const response = await supabaseService.uploadProfileImage(user.id, base64);
@@ -1053,7 +1067,7 @@ const EnhancedCaregiverProfileWizard = ({ navigation, route }) => {
         return;
       }
 
-      // Normalize enums and required fields to match backend expectations
+      // Normalize enums and required fields
       const normalizedCertifications = formData.certifications
         .filter(cert => cert && (typeof cert === 'string' || cert.name))
         .map(cert => typeof cert === 'string' ? cert : cert.name);
@@ -1073,7 +1087,7 @@ const EnhancedCaregiverProfileWizard = ({ navigation, route }) => {
         };
       }).filter(Boolean);
 
-      // Split data between users table and caregiver_profiles table
+      // User profile data
       const userProfileData = {
         name: formData.name,
         phone: formData.phone && formData.phone.trim() !== '+63' ? formData.phone : '+639123456789',
@@ -1087,6 +1101,7 @@ const EnhancedCaregiverProfileWizard = ({ navigation, route }) => {
         experience: formData.experience.description || '',
       };
 
+      // Caregiver profile data
       const caregiverProfileData = {
         user_id: user.id,
         bio: formData.bio,
@@ -1096,7 +1111,6 @@ const EnhancedCaregiverProfileWizard = ({ navigation, route }) => {
         hourly_rate: parseFloat(formData.hourlyRate) || 0,
         availability: formData.availability,
         background_check_status: formData.backgroundCheck?.requestBackgroundCheck ? 'requested' : 'pending',
-        // Store complex data structures as JSONB
         age_care_ranges: normalizedAgeCareRanges,
         emergency_contacts: formData.emergencyContacts,
         portfolio: formData.portfolio,
@@ -1118,65 +1132,53 @@ const EnhancedCaregiverProfileWizard = ({ navigation, route }) => {
 
       // Update user profile first
       console.log('🔄 Updating user profile...');
-      await supabaseService.updateProfile(user.id, userProfileData);
+      const { error: userError } = await supabaseService.updateProfile(user.id, userProfileData);
 
-      // All complex data is now stored in caregiver_profiles table above
+      if (userError) {
+        console.error('❌ User profile update failed:', userError);
+        throw new Error('Failed to update user profile');
+      }
 
       // Then create/update caregiver profile
       console.log('🔄 Creating/updating caregiver profile...');
-      const { data, error } = await supabase
-        .from('caregiver_profiles')
-        .upsert(caregiverProfileData, {
-          onConflict: 'user_id',
-          ignoreDuplicates: false
-        })
-        .select()
-        .single();
+      const { data: caregiverData, error: caregiverError } = await caregiverProfileService.updateProfile(caregiverProfileData);
 
-      if (error) throw error;
+      if (caregiverError) {
+        console.error('❌ Caregiver profile update failed:', caregiverError);
+        throw new Error('Failed to update caregiver profile');
+      }
 
-      console.log('📦 Caregiver profile data stored:', JSON.stringify(caregiverProfileData, null, 2));
-
-      const result = data;
-      console.log('✅ CAREGIVER PROFILE SUCCESS');
+      console.log('✅ Profile update successful');
 
       if (!isEdit) {
         await AsyncStorage.removeItem(`@enhanced_caregiver_profile_draft_${user?.id}`);
       }
 
-      if (result) {
-        showSnackbar(isEdit ? 'Profile updated successfully' : 'Profile created successfully');
+      showSnackbar(isEdit ? 'Profile updated successfully' : 'Profile created successfully');
 
-        setTimeout(() => {
-          navigation.navigate('CaregiverDashboard', { refreshProfile: Date.now() });
-        }, 1000);
-      }
+      setTimeout(() => {
+        navigation.navigate('CaregiverDashboard', { refreshProfile: Date.now() });
+      }, 1000);
 
     } catch (error) {
       console.error('❌ Profile submission failed:', error);
-
       let errorMessage = 'Failed to save profile. Please try again.';
 
-      try {
-        if (error?.response?.status === 404) {
-          errorMessage = 'Profile endpoint not found. Please check backend.';
-        } else if (error?.response?.status === 401 || (error?.message && error.message.includes('401'))) {
-          errorMessage = 'Session expired. Please login again.';
-          setTimeout(() => {
-            if (navigation?.navigate) {
-              navigation.navigate('Welcome');
-            }
-          }, 2000);
-        } else if (error?.response?.data?.message && typeof error.response.data.message === 'string') {
-          errorMessage = error.response.data.message;
-        } else if (error?.message && typeof error.message === 'string') {
-          errorMessage = error.message;
-        } else if (error?.code) {
-          errorMessage = `Error code: ${error.code}. Please try again.`;
-        }
-      } catch (parseError) {
-        console.error('Error parsing error message:', parseError);
-        errorMessage = 'An unexpected error occurred. Please try again.';
+      if (error?.response?.status === 404) {
+        errorMessage = 'Profile endpoint not found. Please check backend.';
+      } else if (error?.response?.status === 401 || (error?.message && error.message.includes('401'))) {
+        errorMessage = 'Session expired. Please login again.';
+        setTimeout(() => {
+          if (navigation?.navigate) {
+            navigation.navigate('Welcome');
+          }
+        }, 2000);
+      } else if (error?.response?.data?.message && typeof error.response.data.message === 'string') {
+        errorMessage = error.response.data.message;
+      } else if (error?.message && typeof error.message === 'string') {
+        errorMessage = error.message;
+      } else if (error?.code) {
+        errorMessage = `Error code: ${error.code}. Please try again.`;
       }
 
       Alert.alert('Submission Failed', errorMessage);
@@ -1186,7 +1188,7 @@ const EnhancedCaregiverProfileWizard = ({ navigation, route }) => {
   };
 
   const renderProgressIndicator = () => (
-    <View style={styles.progressContainer}>
+    <View style={styles.progressSection}>
       <View style={styles.progressHeader}>
         <Text style={styles.progressTitle}>
           Step {String(currentStep + 1)} of {String(ENHANCED_STEPS.length)}
@@ -1208,8 +1210,6 @@ const EnhancedCaregiverProfileWizard = ({ navigation, route }) => {
       />
     </View>
   );
-
-
 
   const renderBasicInformation = () => (
     <View style={styles.stepContainer}>

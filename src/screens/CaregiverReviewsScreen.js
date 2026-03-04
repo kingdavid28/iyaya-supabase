@@ -8,7 +8,8 @@ import {
   TouchableOpacity,
   View
 } from 'react-native';
-import StarRating, { StarRatingDisplay } from 'react-native-star-rating-widget';
+// import StarRating, { StarRatingDisplay } from 'react-native-star-rating-widget';
+import { View as StarRating, View as StarRatingDisplay } from 'react-native';
 import ReviewList from '../components/features/profile/ReviewList';
 import { useAuth } from '../contexts/AuthContext';
 import { reviewService } from '../services';

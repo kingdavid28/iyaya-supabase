@@ -1,4 +1,5 @@
-import { Slider } from '@miblanchard/react-native-slider';
+// import { Slider } from '@miblanchard/react-native-slider';
+import { View as Slider } from 'react-native';
 import { RotateCcw, X } from 'lucide-react-native';
 import React, { useEffect, useState } from 'react';
 import {

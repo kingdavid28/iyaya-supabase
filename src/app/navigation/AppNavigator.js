@@ -197,73 +197,93 @@ const AppNavigatorWithAuth = () => {
   }, []);
 
   // Handle splash screen timeout
-// Handle splash screen with platform-specific logic and robust error handling
-useEffect(() => {
-  // Don't set up timeout if still loading or onboarding not checked
-  if (isLoading || !onboardingChecked || fallbackTimeoutRef.current) {
-    return;
-  }
+  // Handle splash screen with platform-specific logic and robust error handling
+  useEffect(() => {
+    // Don't set up timeout if still loading or onboarding not checked
+    if (isLoading || !onboardingChecked || fallbackTimeoutRef.current) {
+      return;
+    }
 
-  // Platform-specific splash screen handling
-  const handleSplashScreen = async () => {
-    try {
-      // Always hide splash screen immediately for web deployment
-      await SplashScreen.hideAsync();
-      
-      if (Platform.OS !== 'web') {
-        // Native: Set a fallback timeout to ensure splash screen is hidden
-        const timeoutId = setTimeout(async () => {
-          console.warn('⚠️ SplashScreen fallback triggered - forcing hide after timeout', { 
-            platform: Platform.OS,
-            isLoading,
-            onboardingChecked
-          });
-          try {
-            await SplashScreen.hideAsync();
-          } catch (error) {
-            console.error('Failed to hide splash screen in fallback:', error);
-          }
-        }, 3000); // 3 second timeout for native platforms
+    // Platform-specific splash screen handling
+    const handleSplashScreen = async () => {
+      try {
+        // Always hide splash screen immediately for web deployment
+        await SplashScreen.hideAsync();
 
-        fallbackTimeoutRef.current = timeoutId;
+        if (Platform.OS !== 'web') {
+          // Native: Set a fallback timeout to ensure splash screen is hidden
+          const timeoutId = setTimeout(async () => {
+            console.warn('⚠️ SplashScreen fallback triggered - forcing hide after timeout', {
+              platform: Platform.OS,
+              isLoading,
+              onboardingChecked
+            });
+            try {
+              await SplashScreen.hideAsync();
+            } catch (error) {
+              console.error('Failed to hide splash screen in fallback:', error);
+            }
+          }, 3000); // 3 second timeout for native platforms
 
-        // Clean up the timeout if the component unmounts
-        return () => {
-          if (fallbackTimeoutRef.current === timeoutId) {
-            clearTimeout(timeoutId);
-            fallbackTimeoutRef.current = null;
-          }
-        };
+          fallbackTimeoutRef.current = timeoutId;
+
+          // Clean up the timeout if the component unmounts
+          return () => {
+            if (fallbackTimeoutRef.current === timeoutId) {
+              clearTimeout(timeoutId);
+              fallbackTimeoutRef.current = null;
+            }
+          };
+        }
+      } catch (error) {
+        console.error('Error in splash screen handling:', error);
       }
-    } catch (error) {
-      console.error('Error in splash screen handling:', error);
-    }
-  };
+    };
 
-  handleSplashScreen();
+    handleSplashScreen();
 
-  // Cleanup function
-  return () => {
-    if (fallbackTimeoutRef.current) {
-      clearTimeout(fallbackTimeoutRef.current);
-      fallbackTimeoutRef.current = null;
-    }
-  };
-}, [isLoading, onboardingChecked]);
+    // Cleanup function
+    return () => {
+      if (fallbackTimeoutRef.current) {
+        clearTimeout(fallbackTimeoutRef.current);
+        fallbackTimeoutRef.current = null;
+      }
+    };
+  }, [isLoading, onboardingChecked]);
 
   // Handle navigation when user is authenticated
+  // NOTE: Individual auth screens (CaregiverAuth, ParentAuth) handle navigation after login
+  // This effect is only for app startup to set initial route
   useEffect(() => {
     if (!isLoading && user && user.role && navigationRef.current && onboardingChecked) {
       const currentRoute = navigationRef.current.getCurrentRoute()?.name;
-      const dashboardRoute = user.role === 'caregiver' ? 'CaregiverDashboard' : 'ParentDashboard';
-      
-      // Only navigate if not already on the correct dashboard
-      if (currentRoute !== dashboardRoute && 
-          currentRoute !== 'AuthCallback' && 
-          !currentRoute?.includes('Dashboard')) {
-        console.log('[AppNavigator] User authenticated, navigating to:', dashboardRoute);
-        
-        // Use a longer timeout to ensure navigation state is ready
+
+      console.log('🧭 [AppNavigator] Auth state changed:', {
+        currentRoute,
+        userRole: user.role,
+        isOnAuthScreen: currentRoute?.includes('Auth') || currentRoute === 'Welcome',
+        isOnDashboard: currentRoute?.includes('Dashboard')
+      });
+
+      // If user is on an auth screen, let that screen handle navigation
+      if (currentRoute?.includes('Auth') || currentRoute === 'Welcome' || currentRoute === 'AuthCallback') {
+        console.log('🧭 [AppNavigator] User on auth screen, letting auth screen handle navigation');
+        return;
+      }
+
+      // If already on a dashboard, don't override
+      if (currentRoute?.includes('Dashboard')) {
+        console.log('🧭 [AppNavigator] User already on dashboard, not changing');
+        return;
+      }
+
+      // If user somehow ended up somewhere else with no role set, navigate to appropriate dashboard
+      if (!currentRoute || (currentRoute !== 'CaregiverDashboard' && currentRoute !== 'ParentDashboard')) {
+        const normalizedRole = String(user.role).toLowerCase().trim();
+        const dashboardRoute = normalizedRole === 'caregiver' ? 'CaregiverDashboard' : 'ParentDashboard';
+
+        console.log('🧭 [AppNavigator] User not on dashboard, navigating to:', dashboardRoute);
+
         setTimeout(() => {
           if (navigationRef.current && !isLoading) {
             navigationRef.current.reset({
@@ -274,7 +294,7 @@ useEffect(() => {
         }, 500);
       }
     }
-  }, [user?.id, user?.role, isLoading, onboardingChecked]);
+  }, [user?.id, isLoading, onboardingChecked]);
 
   // Show loading screen while checking auth and onboarding
   if (isLoading || !onboardingChecked) {
@@ -290,7 +310,7 @@ useEffect(() => {
     if (showOnboarding) {
       return "Onboarding";
     }
-    
+
     // Always start with Welcome - navigation will happen after auth loads
     return "Welcome";
   };
@@ -301,8 +321,8 @@ useEffect(() => {
       ref={navigationRef}
       linking={{
         prefixes: [
-          'iyaya://', 
-          'https://iyaya-supabase.vercel.app',
+          'iyaya://',
+          ...(Platform.OS === 'web' && typeof window !== 'undefined' ? [window.location.origin] : []),
           'exp://192.168.1.100:8081/--/',
           'exp://localhost:8081/--/'
         ],
@@ -351,231 +371,242 @@ useEffect(() => {
           }}
         >
           {/* Onboarding & Welcome */}
-          <Stack.Screen 
-            name="Onboarding" 
-            component={OnboardingScreen} 
-            options={{ 
-              headerShown: false,
-              gestureEnabled: false 
-            }} 
-          />
-          <Stack.Screen 
-            name="Welcome" 
-            component={WelcomeScreen} 
-            options={{ 
+          <Stack.Screen
+            name="Onboarding"
+            component={OnboardingScreen}
+            options={{
               headerShown: false,
               gestureEnabled: false
-            }} 
+            }}
           />
-          
+          <Stack.Screen
+            name="Welcome"
+            component={WelcomeScreen}
+            options={{
+              headerShown: false,
+              gestureEnabled: false
+            }}
+          />
+
           {/* Auth Screens */}
-          <Stack.Screen 
-            name="ParentAuth" 
-            component={ParentAuth} 
-            options={{ 
-              title: "Parent Login", 
-              headerShown: false, 
+          <Stack.Screen
+            name="ParentAuth"
+            component={ParentAuth}
+            options={{
+              title: "Parent Login",
+              headerShown: false,
               headerBackTitle: "Back",
               animation: 'slide_from_right'
-            }} 
+            }}
           />
-          <Stack.Screen 
-            name="CaregiverAuth" 
-            component={CaregiverAuth} 
-            options={{ 
-              title: "Caregiver Login", 
-              headerShown: false, 
+          <Stack.Screen
+            name="CaregiverAuth"
+            component={CaregiverAuth}
+            options={{
+              title: "Caregiver Login",
+              headerShown: false,
               headerBackTitle: "Back",
               animation: 'slide_from_right'
-            }} 
+            }}
           />
-          <Stack.Screen 
-            name="AuthCallback" 
-            component={AuthCallbackScreen} 
-            options={{ 
+          <Stack.Screen
+            name="AuthCallback"
+            component={AuthCallbackScreen}
+            options={{
               headerShown: false,
               gestureEnabled: false
-            }} 
+            }}
           />
-          
+
           {/* Dashboard Screens */}
-          <Stack.Screen 
-            name="ParentDashboard" 
-            component={ParentDashboard} 
-            options={{ 
+          <Stack.Screen
+            name="ParentDashboard"
+            component={ParentDashboard}
+            options={{
               headerShown: false,
               gestureEnabled: false
-            }} 
+            }}
           />
-          <Stack.Screen 
-            name="CaregiverDashboard" 
-            component={CaregiverDashboard} 
-            options={{ 
+          <Stack.Screen
+            name="CaregiverDashboard"
+            component={CaregiverDashboard}
+            options={{
               headerShown: false,
               gestureEnabled: false
-            }} 
+            }}
           />
-          
+
           {/* Profile Screens */}
-          <Stack.Screen 
-            name="Profile" 
-            component={ProfileScreen} 
-            options={{ 
-              title: "Edit Profile", 
-              headerBackTitle: "Back" 
-            }} 
+          <Stack.Screen
+            name="Profile"
+            component={ProfileScreen}
+            options={{
+              title: "Edit Profile",
+              headerBackTitle: "Back"
+            }}
           />
-          <Stack.Screen 
-            name="ParentProfile" 
-            component={ParentProfile} 
-            options={{ 
-              title: "My Profile", 
-              headerBackTitle: "Back", 
-              headerShown: false 
-            }} 
+          <Stack.Screen
+            name="ParentProfile"
+            component={ParentProfile}
+            options={{
+              title: "My Profile",
+              headerBackTitle: "Back",
+              headerShown: false
+            }}
           />
-          <Stack.Screen 
-            name="CaregiverProfile" 
-            component={CaregiverProfileComplete} 
-            options={{ 
-              title: "Caregiver Profile", 
-              headerShown: false, 
-              headerBackTitle: "Back" 
-            }} 
+          <Stack.Screen
+            name="CaregiverProfile"
+            component={CaregiverProfileComplete}
+            options={{
+              title: "Caregiver Profile",
+              headerShown: false,
+              headerBackTitle: "Back"
+            }}
           />
-          
+
           {/* Verification Screens */}
-          <Stack.Screen 
-            name="EmailVerification" 
-            component={EmailVerificationScreen} 
-            options={{ 
-              title: "Verifying Email", 
+          <Stack.Screen
+            name="EmailVerification"
+            component={EmailVerificationScreen}
+            options={{
+              title: "Verifying Email",
               headerShown: false,
               gestureEnabled: false
-            }} 
+            }}
           />
-          <Stack.Screen 
-            name="VerificationSuccess" 
-            component={VerificationSuccessScreen} 
-            options={{ 
-              title: "Verification Complete", 
+          <Stack.Screen
+            name="VerificationSuccess"
+            component={VerificationSuccessScreen}
+            options={{
+              title: "Verification Complete",
               headerShown: false,
               gestureEnabled: false
-            }} 
+            }}
           />
-          <Stack.Screen 
-            name="EmailVerificationPending" 
-            component={EmailVerificationPendingScreen} 
-            options={{ 
-              title: "Verify Your Email", 
+          <Stack.Screen
+            name="EmailVerificationPending"
+            component={EmailVerificationPendingScreen}
+            options={{
+              title: "Verify Your Email",
               headerShown: false,
               gestureEnabled: false
-            }} 
+            }}
           />
-          
+
           {/* Management Screens */}
-          <Stack.Screen 
-            name="ChildrenManagement" 
-            component={ChildrenManagementScreen} 
-            options={{ 
-              title: "Manage Children", 
-              headerBackTitle: "Back" 
-            }} 
+          <Stack.Screen
+            name="ChildrenManagement"
+            component={ChildrenManagementScreen}
+            options={{
+              title: "Manage Children",
+              headerBackTitle: "Back"
+            }}
           />
-          <Stack.Screen 
-            name="AvailabilityManagement" 
-            component={AvailabilityManagementScreen} 
-            options={{ 
-              title: "Manage Availability", 
-              headerBackTitle: "Back" 
-            }} 
+          <Stack.Screen
+            name="AvailabilityManagement"
+            component={AvailabilityManagementScreen}
+            options={{
+              title: "Manage Availability",
+              headerBackTitle: "Back"
+            }}
           />
-          <Stack.Screen 
-            name="BookingManagement" 
-            component={BookingManagementScreen} 
-            options={{ 
-              title: "Manage Bookings", 
-              headerBackTitle: "Back" 
-            }} 
+          <Stack.Screen
+            name="BookingManagement"
+            component={BookingManagementScreen}
+            options={{
+              title: "Manage Bookings",
+              headerBackTitle: "Back"
+            }}
           />
-          
+
           {/* Wizard & Profile Creation */}
-          <Stack.Screen 
-            name="EnhancedCaregiverProfileWizard" 
-            component={EnhancedCaregiverProfileWizard} 
-            options={{ 
-              title: "Complete Your Profile", 
+          <Stack.Screen
+            name="EnhancedCaregiverProfileWizard"
+            component={EnhancedCaregiverProfileWizard}
+            options={{
+              title: "Complete Your Profile",
               headerBackTitle: "Back",
               gestureEnabled: false
-            }} 
+            }}
           />
-          <Stack.Screen 
-            name="CaregiverProfileComplete" 
-            component={CaregiverProfileComplete} 
-            options={{ 
+          <Stack.Screen
+            name="CaregiverProfileComplete"
+            component={CaregiverProfileComplete}
+            options={{
               headerShown: false,
               gestureEnabled: false
-            }} 
+            }}
           />
-          
+
           {/* Job & Booking */}
-          <Stack.Screen 
-            name="JobSearch" 
-            component={JobSearchScreen} 
-            options={{ 
-              title: "Find Jobs", 
-              headerBackTitle: "Back" 
-            }} 
+          <Stack.Screen
+            name="JobSearch"
+            component={JobSearchScreen}
+            options={{
+              title: "Find Jobs",
+              headerBackTitle: "Back"
+            }}
           />
-          <Stack.Screen 
-            name="PaymentConfirmation" 
-            component={PaymentConfirmationScreen} 
-            options={{ 
-              title: "Confirm Payment", 
-              headerBackTitle: "Back" 
-            }} 
+          <Stack.Screen
+            name="PaymentConfirmation"
+            component={PaymentConfirmationScreen}
+            options={{
+              title: "Confirm Payment",
+              headerBackTitle: "Back"
+            }}
           />
-          
+
           {/* Chat & Reviews */}
-          <Stack.Screen 
-            name="Chat" 
-            component={Chat} 
-            options={{ 
-              headerShown: false 
-            }} 
-          />
-          <Stack.Screen 
-            name="CaregiverReviews" 
-            component={CaregiverReviewsScreen} 
-            options={{ 
-              title: "Caregiver Reviews", 
-              headerShown: false 
-            }} 
-          />
-          
-          {/* Reports & Appeals */}
-          <Stack.Screen 
-            name="Appeal" 
-            component={AppealScreen} 
-            options={{ 
-              title: "Appeal Suspension", 
-              headerBackTitle: "Back" 
-            }} 
-          />
-          <Stack.Screen 
-            name="CreateReport" 
-            component={CreateReportScreen} 
-            options={{ 
-              title: "Report User", 
-              headerBackTitle: "Back" 
-            }} 
-          />
-          <Stack.Screen 
-            name="MyReports" 
-            component={MyReportsScreen} 
-            options={{ 
+          <Stack.Screen
+            name="Chat"
+            component={Chat}
+            options={{
               headerShown: false
-            }} 
+            }}
+          />
+          <Stack.Screen
+            name="CaregiverReviews"
+            component={CaregiverReviewsScreen}
+            options={{
+              title: "Caregiver Reviews",
+              headerShown: false
+            }}
+          />
+
+          {/* Reports & Appeals */}
+          <Stack.Screen
+            name="Appeal"
+            component={AppealScreen}
+            options={{
+              title: "Appeal Suspension",
+              headerBackTitle: "Back"
+            }}
+          />
+          <Stack.Screen
+            name="CreateReport"
+            component={CreateReportScreen}
+            options={{
+              title: "Report User",
+              headerBackTitle: "Back",
+              headerShown: false
+            }}
+          />
+          <Stack.Screen
+            name="MyReports"
+            component={MyReportsScreen}
+            options={{
+              headerShown: false
+            }}
+          />
+
+          {/* Week 4: Payment Test */}
+          <Stack.Screen
+            name="PaymentTest"
+            component={require('../../screens/PaymentTestScreen').default}
+            options={{
+              title: "Payment Test",
+              headerBackTitle: "Back"
+            }}
           />
         </Stack.Navigator>
       </StatusGuard>

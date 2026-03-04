@@ -2,7 +2,6 @@ import { Ionicons } from '@expo/vector-icons';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import { LinearGradient } from "expo-linear-gradient";
 import * as Linking from 'expo-linking';
-import * as WebBrowser from 'expo-web-browser';
 import React, { Fragment, useCallback, useEffect, useMemo, useState } from "react";
 import { ActivityIndicator, Alert, Dimensions, Modal, Platform, Pressable, Linking as RNLinking, RefreshControl, ScrollView, Text, TextInput, View } from "react-native";
 import { Button } from "react-native-paper";
@@ -43,11 +42,20 @@ import CaregiverProfileSection from './CaregiverDashboard/components/CaregiverPr
 import MessagesTab from './CaregiverDashboard/components/MessagesTab';
 import NotificationsTab from './CaregiverDashboard/components/NotificationsTab';
 import JobsTab, { CaregiverJobCard } from './CaregiverDashboard/JobsTab';
+import { WalletManagementTab } from './CaregiverDashboard/WalletManagementTab';
 import { styles } from './styles/CaregiverDashboard.styles';
+
+// Theme context import
+import { useThemeContext } from '../contexts/ThemeContext';
+import { StyleSheet } from 'react-native';
+
 // Lines 27-42 - Added usePrivacy import
-import { usePrivacy } from '../components/features/privacy/PrivacyManager'; // 
+import { usePrivacy } from '../components/features/privacy/PrivacyManager';
 import PrivacyNotificationModal from '../components/features/privacy/PrivacyNotificationModal';
-import { ReviewForm } from '../components/forms/ReviewForm';
+// Import components directly instead of lazy loading to avoid bundle issues
+import { SolanaPayment } from '../components/SolanaPayment';
+import { WalletSetup } from '../components/WalletSetupSecure';
+import ReviewForm from '../components/forms/ReviewForm';
 import RatingsReviewsModal from '../components/ui/modals/RatingsReviewsModal';
 
 // =============================================================================
@@ -77,6 +85,327 @@ const SkeletonPill = ({ width, height, style }) => (
 // =============================================================================
 
 const CaregiverDashboard = () => {
+  // Add theme context
+  const { theme, isDark } = useThemeContext();
+
+  // Create dynamic styles
+  const dynamicStyles = useMemo(() => StyleSheet.create({
+    container: {
+      flex: 1,
+      backgroundColor: theme.colors.background,
+    },
+    content: {
+      backgroundColor: theme.colors.background,
+    },
+    dashboardSkeletonContainer: {
+      backgroundColor: theme.colors.background,
+      paddingBottom: 20,
+    },
+    dashboardSkeletonCard: {
+      backgroundColor: theme.colors.surface,
+      borderColor: theme.colors.border,
+    },
+    dashboardSkeletonBlock: {
+      backgroundColor: isDark ? theme.colors.surfaceVariant : '#E5E7EB',
+    },
+    dashboardSkeletonCircle: {
+      backgroundColor: isDark ? theme.colors.surfaceVariant : '#E5E7EB',
+    },
+    dashboardSkeletonPill: {
+      backgroundColor: isDark ? theme.colors.surfaceVariant : '#E5E7EB',
+    },
+
+    // Header styles
+    headerContainer: {
+      backgroundColor: theme.colors.surface,
+      borderBottomColor: theme.colors.border,
+    },
+    headerText: {
+      color: theme.colors.text,
+    },
+    headerSubtext: {
+      color: theme.colors.textSecondary,
+    },
+
+    // Section styles
+    section: {
+      backgroundColor: theme.colors.background,
+    },
+    sectionHeader: {
+      borderBottomColor: theme.colors.border,
+    },
+    sectionTitle: {
+      color: theme.colors.text,
+    },
+    seeAllText: {
+      color: theme.colors.primary,
+    },
+
+    // Application card styles
+    enhancedApplicationCard: {
+      backgroundColor: theme.colors.surface,
+      borderColor: theme.colors.border,
+      shadowColor: theme.colors.shadow || '#000000',
+    },
+    applicationCardTitle: {
+      color: theme.colors.text,
+    },
+    applicationCardFamily: {
+      color: theme.colors.textSecondary,
+    },
+    applicationDetailTextInline: {
+      color: theme.colors.textSecondary,
+    },
+
+    // Booking card styles
+    dashboardBookingCard: {
+      backgroundColor: theme.colors.surface,
+      borderColor: theme.colors.border,
+      shadowColor: theme.colors.shadow || '#000000',
+    },
+    dashboardBookingLocationText: {
+      color: theme.colors.textSecondary,
+    },
+
+    // Text styles
+    textPrimary: {
+      color: theme.colors.text,
+    },
+    textSecondary: {
+      color: theme.colors.textSecondary,
+    },
+
+    // Button styles
+    primaryButton: {
+      backgroundColor: theme.colors.primary,
+    },
+    primaryButtonText: {
+      color: theme.colors.onPrimary || '#FFFFFF',
+    },
+    primaryButtonDisabled: {
+      backgroundColor: theme.colors.surfaceVariant,
+    },
+    secondaryButton: {
+      backgroundColor: 'transparent',
+      borderColor: theme.colors.border,
+    },
+    secondaryButtonText: {
+      color: theme.colors.text,
+    },
+    dashboardBookingSecondaryButton: {
+      backgroundColor: 'transparent',
+      borderColor: theme.colors.border,
+    },
+    dashboardBookingSecondaryText: {
+      color: theme.colors.text,
+    },
+    dashboardBookingPrimaryButton: {
+      backgroundColor: theme.colors.primary,
+    },
+    dashboardBookingPrimaryText: {
+      color: theme.colors.onPrimary || '#FFFFFF',
+    },
+    dashboardBookingConfirmButton: {
+      backgroundColor: theme.colors.success,
+    },
+    dashboardBookingConfirmText: {
+      color: theme.colors.onSuccess || '#FFFFFF',
+    },
+
+    // Modal styles
+    modalOverlay: {
+      backgroundColor: theme.colors.modalOverlay || 'rgba(0, 0, 0, 0.5)',
+    },
+    applicationModal: {
+      backgroundColor: theme.colors.surface,
+    },
+    modalCloseButton: {
+      backgroundColor: theme.colors.surfaceVariant,
+    },
+
+    // Input styles
+    applicationInput: {
+      backgroundColor: theme.colors.surface,
+      borderColor: theme.colors.border,
+      color: theme.colors.text,
+    },
+    applicationTextArea: {
+      color: theme.colors.text,
+    },
+    inputLabel: {
+      color: theme.colors.text,
+    },
+    suggestedCoverLettersContainer: {
+      backgroundColor: theme.colors.surfaceVariant,
+    },
+    coverLetterChip: {
+      backgroundColor: theme.colors.surface,
+      borderColor: theme.colors.border,
+    },
+    coverLetterChipText: {
+      color: theme.colors.textSecondary,
+    },
+    coverLetterChipSelected: {
+      backgroundColor: theme.colors.primary + '20',
+      borderColor: theme.colors.primary,
+    },
+    coverLetterChipTextSelected: {
+      color: theme.colors.primary,
+    },
+
+    // Tab styles
+    navContainer: {
+      backgroundColor: theme.colors.surface,
+      borderBottomColor: theme.colors.border,
+    },
+    navTab: {
+      backgroundColor: theme.colors.surface,
+    },
+    navTabActive: {
+      backgroundColor: theme.colors.primary + '15',
+      borderBottomColor: theme.colors.primary,
+    },
+    navTabText: {
+      color: theme.colors.text,
+    },
+    navTabTextActive: {
+      color: theme.colors.primary,
+    },
+
+    // Notification badge
+    notificationBadge: {
+      backgroundColor: theme.colors.error,
+    },
+    notificationBadgeText: {
+      color: theme.colors.onError || '#FFFFFF',
+    },
+
+    // Loading indicators
+    loadingContainer: {
+      backgroundColor: theme.colors.surface,
+    },
+    loadingText: {
+      color: theme.colors.textSecondary,
+    },
+
+    // Job details modal
+    jobDetailsModal: {
+      backgroundColor: theme.colors.surface,
+    },
+    jobDetailsContent: {
+      backgroundColor: theme.colors.surface,
+    },
+    jobDetailsHeader: {
+      borderBottomColor: theme.colors.border,
+    },
+    jobDetailsTitle: {
+      color: theme.colors.text,
+    },
+    jobDetailsFamily: {
+      color: theme.colors.textSecondary,
+    },
+    jobDetailsText: {
+      color: theme.colors.text,
+    },
+    jobDetailsDescription: {
+      color: theme.colors.textSecondary,
+    },
+    jobDetailsSectionTitle: {
+      color: theme.colors.text,
+    },
+    jobDetailsPillText: {
+      color: theme.colors.textSecondary,
+    },
+    jobDetailsRequirementsTitle: {
+      color: theme.colors.text,
+    },
+    jobDetailsRequirementText: {
+      color: theme.colors.text,
+    },
+
+    // Highlight modal
+    highlightModalCard: {
+      backgroundColor: theme.colors.surface,
+    },
+    highlightModalTitle: {
+      color: theme.colors.text,
+    },
+    highlightModalSubtitle: {
+      color: theme.colors.textSecondary,
+    },
+    highlightSectionTitle: {
+      color: theme.colors.text,
+    },
+    highlightSectionDescription: {
+      color: theme.colors.textSecondary,
+    },
+    highlightFamilyName: {
+      color: theme.colors.text,
+    },
+    highlightFamilyMeta: {
+      color: theme.colors.textSecondary,
+    },
+    highlightHintText: {
+      color: theme.colors.text,
+    },
+    highlightEmptyTitle: {
+      color: theme.colors.text,
+    },
+    highlightEmptySubtitle: {
+      color: theme.colors.textSecondary,
+    },
+
+    // Review styles
+    reviewsContainer: {
+      backgroundColor: theme.colors.background,
+    },
+    reviewsCard: {
+      backgroundColor: theme.colors.surface,
+    },
+    reviewsEmptyCard: {
+      backgroundColor: theme.colors.surfaceVariant,
+    },
+    reviewsEmptyTitle: {
+      color: theme.colors.text,
+    },
+    reviewsEmptySubtitle: {
+      color: theme.colors.textSecondary,
+    },
+
+  }), [theme, isDark]);
+
+  // Merge with existing styles
+  const mergedStyles = useMemo(() => {
+    // Deep merge function
+    const deepMerge = (target, source) => {
+      const output = { ...target };
+
+      for (const key in source) {
+        if (source.hasOwnProperty(key)) {
+          if (source[key] instanceof Object && key in target) {
+            output[key] = deepMerge(target[key], source[key]);
+          } else {
+            output[key] = source[key];
+          }
+        }
+      }
+
+      return output;
+    };
+
+    return deepMerge(styles, dynamicStyles);
+  }, [styles, dynamicStyles]);
+
+  // Theme-aware icon colors
+  const iconColors = useMemo(() => ({
+    primary: theme.colors.primary,
+    secondary: theme.colors.textSecondary,
+    success: theme.colors.success,
+    warning: theme.colors.warning,
+    error: theme.colors.error,
+    info: theme.colors.info,
+  }), [theme]);
+
   const navigation = useNavigation()
   const route = useRoute()
   const { user, signOut } = useAuth()
@@ -749,34 +1078,39 @@ const CaregiverDashboard = () => {
       onClose={() => setEditProfileModalVisible(false)}
     >
       <SharedCard style={styles.editProfileModal}>
-        <Text style={styles.editProfileTitle}>Quick Edit Profile</Text>
-        <Text style={styles.editProfileSubtitle}>For full profile editing, use the Complete Profile button</Text>
+        <Text style={[mergedStyles.textPrimary, styles.editProfileTitle]}>Quick Edit Profile</Text>
+        <Text style={[mergedStyles.textSecondary, styles.editProfileSubtitle]}>For full profile editing, use the Complete Profile button</Text>
         <FormInput
           label="Name"
           value={profileName}
           onChangeText={setProfileName}
+          theme={theme}
         />
         <FormInput
           label="Hourly Rate (₱)"
           value={profileHourlyRate}
           onChangeText={setProfileHourlyRate}
           keyboardType="numeric"
+          theme={theme}
         />
         <FormInput
           label="Experience (months)"
           value={profileExperience}
           onChangeText={setProfileExperience}
           keyboardType="numeric"
+          theme={theme}
         />
         <SharedButton
           title="Save Changes"
           onPress={handleSaveProfile}
           style={{ marginBottom: 8 }}
+          theme={theme}
         />
         <SharedButton
           title="Cancel"
           variant="secondary"
           onPress={() => setEditProfileModalVisible(false)}
+          theme={theme}
         />
       </SharedCard>
     </ModalWrapper>
@@ -788,6 +1122,7 @@ const CaregiverDashboard = () => {
       message={toast.message}
       type={toast.type}
       onHide={() => setToast((t) => ({ ...t, visible: false }))}
+      theme={theme}
     />
   )
 
@@ -950,10 +1285,12 @@ const CaregiverDashboard = () => {
 
     const tabs = [
       { id: 'dashboard', label: 'Dashboard', icon: 'grid' },
+      { id: 'profile', label: 'Profile', icon: 'person' },
       { id: 'jobs', label: 'Jobs', icon: 'briefcase', badgeCount: notificationCounts.jobs },
       { id: 'applications', label: 'Applications', icon: 'document-text' },
       { id: 'bookings', label: 'Bookings', icon: 'calendar', badgeCount: notificationCounts.bookings },
       { id: 'messages', label: 'Messages', icon: 'chatbubble-ellipses-outline', badgeCount: notificationCounts.messages },
+      { id: 'wallet', label: 'Wallet', icon: 'wallet' },
       { id: 'reviews', label: 'Reviews', icon: 'star', badgeCount: notificationCounts.reviews },
       { id: 'notifications', label: 'Notifications', icon: 'notifications-outline', badgeCount: totalUnread },
     ];
@@ -968,7 +1305,7 @@ const CaregiverDashboard = () => {
     });
 
     return (
-      <View style={styles.navContainer}>
+      <View style={mergedStyles.navContainer}>
         <ScrollView
           horizontal
           showsHorizontalScrollIndicator={false}
@@ -984,24 +1321,24 @@ const CaregiverDashboard = () => {
                 fetchApplications();
               }
             };
-            const iconColor = active ? '#3b83f5' : '#6B7280';
+            const iconColor = active ? theme.colors.primary : theme.colors.textSecondary;
             return (
               <Pressable
                 key={tab.id}
                 onPress={onPress}
-                style={[styles.navTab, active ? styles.navTabActive : null]}
+                style={[mergedStyles.navTab, active ? mergedStyles.navTabActive : null]}
               >
                 <View style={{ position: 'relative' }}>
                   <Ionicons name={tab.icon} size={18} color={iconColor} />
                   {tab.badgeCount > 0 ? (
-                    <View style={styles.notificationBadge}>
-                      <Text style={styles.notificationBadgeText}>
+                    <View style={mergedStyles.notificationBadge}>
+                      <Text style={mergedStyles.notificationBadgeText}>
                         {tab.badgeCount > 99 ? '99+' : tab.badgeCount}
                       </Text>
                     </View>
                   ) : null}
                 </View>
-                <Text style={[styles.navTabText, active ? styles.navTabTextActive : null]}>
+                <Text style={[mergedStyles.navTabText, active ? mergedStyles.navTabTextActive : null]}>
                   {tab.label}
                 </Text>
               </Pressable>
@@ -1132,9 +1469,9 @@ const CaregiverDashboard = () => {
   const reviewsEmptyComponent = useMemo(() => {
     if (reviewsLoading) {
       return (
-        <View style={styles.loadingContainer}>
-          <ActivityIndicator size="small" color="#3B82F6" />
-          <Text style={styles.loadingText}>Loading highlights...</Text>
+        <View style={mergedStyles.loadingContainer}>
+          <ActivityIndicator size="small" color={theme.colors.primary} />
+          <Text style={mergedStyles.loadingText}>Loading highlights...</Text>
         </View>
       );
     }
@@ -1142,27 +1479,27 @@ const CaregiverDashboard = () => {
     const hasReviews = !!totalReviews;
 
     return (
-      <View style={styles.reviewsEmptyCard}>
-        <Ionicons name={hasReviews ? 'search-outline' : 'sparkles-outline'} size={32} color="#3B82F6" />
-        <Text style={styles.reviewsEmptyTitle}>
+      <View style={mergedStyles.reviewsEmptyCard}>
+        <Ionicons name={hasReviews ? 'search-outline' : 'sparkles-outline'} size={32} color={theme.colors.primary} />
+        <Text style={mergedStyles.reviewsEmptyTitle}>
           {hasReviews ? 'No highlights match this view' : 'No highlights yet'}
         </Text>
-        <Text style={styles.reviewsEmptySubtitle}>
+        <Text style={mergedStyles.reviewsEmptySubtitle}>
           {hasReviews
             ? 'Try a different filter or invite families to leave feedback.'
             : 'Once families share their experiences after bookings, their testimonials will appear here.'}
         </Text>
       </View>
     );
-  }, [reviewsLoading, totalReviews]);
+  }, [reviewsLoading, totalReviews, theme, mergedStyles]);
 
   const reviewsFooterComponent = useMemo(() => (
-    <View style={styles.reviewsFooterCard}>
+    <View style={[mergedStyles.reviewsFooterCard, { backgroundColor: theme.colors.surfaceVariant }]}>
       <View style={styles.reviewsFooterContent}>
-        <Ionicons name="sparkles-outline" size={24} color="#1D4ED8" />
+        <Ionicons name="sparkles-outline" size={24} color={theme.colors.primary} />
         <View style={styles.reviewsFooterTextWrapper}>
-          <Text style={styles.reviewsFooterTitle}>Keep the stories coming</Text>
-          <Text style={styles.reviewsFooterSubtitle}>
+          <Text style={[mergedStyles.reviewsFooterTitle, { color: theme.colors.text }]}>Keep the stories coming</Text>
+          <Text style={[mergedStyles.reviewsFooterSubtitle, { color: theme.colors.textSecondary }]}>
             Follow up with recent families to capture their experience while it's still fresh.
           </Text>
         </View>
@@ -1176,7 +1513,7 @@ const CaregiverDashboard = () => {
         <Text style={styles.reviewsFooterButtonText}>Request highlight</Text>
       </Pressable>
     </View>
-  ), [handleGeneralHighlightRequest, highlightRequestSending]);
+  ), [handleGeneralHighlightRequest, highlightRequestSending, theme, mergedStyles]);
 
   const handleSelectReviewFilter = useCallback((filterId) => {
     setReviewsFilter(current => (current === filterId ? current : filterId));
@@ -1185,7 +1522,7 @@ const CaregiverDashboard = () => {
   const reviewsHeaderComponent = (
     <View>
       <LinearGradient
-        colors={["#1d4ed8", "#1e40af"]}
+        colors={isDark ? ["#1e40af", "#1e3a8a"] : ["#1d4ed8", "#1e40af"]}
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 1 }}
         style={styles.reviewsHeroCard}
@@ -1234,40 +1571,43 @@ const CaregiverDashboard = () => {
 
       <View style={styles.reviewsSummaryGrid}>
         {reviewSummaryItems.map(item => (
-          <View key={item.id} style={styles.reviewsSummaryCard}>
+          <View key={item.id} style={[mergedStyles.reviewsSummaryCard, { backgroundColor: theme.colors.surface }]}>
             <View style={[styles.reviewsSummaryIconWrap, { backgroundColor: `${item.accent}1A` }]}>
               <Ionicons name={item.icon} size={18} color={item.accent} />
             </View>
-            <Text style={styles.reviewsSummaryLabel}>{item.label}</Text>
-            <Text style={styles.reviewsSummaryMetric}>{item.value}</Text>
+            <Text style={[mergedStyles.reviewsSummaryLabel, { color: theme.colors.textSecondary }]}>{item.label}</Text>
+            <Text style={[mergedStyles.reviewsSummaryMetric, { color: theme.colors.text }]}>{item.value}</Text>
           </View>
         ))}
       </View>
 
-      <View style={styles.reviewsBreakdownCard}>
-        <Text style={styles.reviewsBreakdownTitle}>Rating distribution</Text>
+      <View style={[mergedStyles.reviewsBreakdownCard, { backgroundColor: theme.colors.surface }]}>
+        <Text style={[mergedStyles.reviewsBreakdownTitle, { color: theme.colors.text }]}>Rating distribution</Text>
         {ratingDistribution.map(bucket => {
           const percentage = totalReviews ? Math.round((bucket.count / totalReviews) * 100) : 0;
           return (
             <View key={bucket.rating} style={styles.reviewsBreakdownRow}>
-              <Text style={styles.reviewsBreakdownLabel}>{`${bucket.rating}★`}</Text>
-              <View style={styles.reviewsBreakdownBar}>
+              <Text style={[mergedStyles.reviewsBreakdownLabel, { color: theme.colors.text }]}>{`${bucket.rating}★`}</Text>
+              <View style={[mergedStyles.reviewsBreakdownBar, { backgroundColor: theme.colors.surfaceVariant }]}>
                 <View
                   style={[
-                    styles.reviewsBreakdownFill,
-                    { width: `${Math.min(100, Math.max(bucket.count > 0 ? 12 : 0, percentage))}%` }
+                    mergedStyles.reviewsBreakdownFill,
+                    {
+                      width: `${Math.min(100, Math.max(bucket.count > 0 ? 12 : 0, percentage))}%`,
+                      backgroundColor: theme.colors.primary
+                    }
                   ]}
                 />
               </View>
-              <Text style={styles.reviewsBreakdownValue}>{bucket.count}</Text>
+              <Text style={[mergedStyles.reviewsBreakdownValue, { color: theme.colors.text }]}>{bucket.count}</Text>
             </View>
           );
         })}
       </View>
 
-      <View style={styles.reviewsContextBanner}>
-        <Ionicons name="information-circle" size={18} color="#2563eb" />
-        <Text style={styles.reviewsContextText}>
+      <View style={[mergedStyles.reviewsContextBanner, { backgroundColor: theme.colors.surfaceVariant }]}>
+        <Ionicons name="information-circle" size={18} color={theme.colors.primary} />
+        <Text style={[mergedStyles.reviewsContextText, { color: theme.colors.text }]}>
           Highlights are generated from verified family feedback. Reach out to families after successful bookings to grow your reputation.
         </Text>
       </View>
@@ -1275,22 +1615,23 @@ const CaregiverDashboard = () => {
   );
 
   const renderReviewsTab = () => (
-    <View style={styles.reviewsContainer}>
-      <View style={styles.reviewsCard}>
-        <ReviewList
-          reviews={filteredReviews}
-          currentUserId={user?.id}
+    <View style={mergedStyles.reviewsContainer}>
+      <View style={mergedStyles.reviewsCard}>
+        <CaregiverReviewsTab
+          reviews={reviewsSorted}
+          loading={reviewsLoading}
           refreshing={refreshingReviews}
-          onRefresh={() => refreshCaregiverReviews()}
+          currentUserId={user?.id}
+          onRefresh={refreshCaregiverReviews}
           onEditReview={(review) => {
             setSelectedReview(review);
             setShowReviewForm(true);
           }}
-          ListHeaderComponent={reviewsHeaderComponent}
-          ListFooterComponent={reviewsFooterComponent}
-          ListEmptyComponent={reviewsEmptyComponent}
-          contentContainerStyle={styles.reviewsListContent}
-          useVirtualizedList={false}
+          onOpenRatings={handleOpenRatings}
+          onRequestHighlight={handleGeneralHighlightRequest}
+          highlightRequestSending={highlightRequestSending}
+          theme={theme}
+          isDark={isDark}
         />
       </View>
     </View>
@@ -1340,10 +1681,8 @@ const CaregiverDashboard = () => {
   }, [handleCloseReviewModal, refreshCaregiverReviews, selectedReview, showToast, user?.id]);
 
   return (
-
-
     <Fragment>
-      <View style={styles.container}>
+      <View style={mergedStyles.container}>
         <CaregiverDashboardHeader
           notificationCounts={notificationCounts}
           pendingRequests={pendingRequests}
@@ -1386,14 +1725,16 @@ const CaregiverDashboard = () => {
             }
             console.log('✅ Logout completed');
           }}
+          theme={theme}
+          isDark={isDark}
         />
         {renderTopNav()}
 
         <View style={{ flex: 1 }}>
           {activeTab === "dashboard" && (
             initialLoading ? (
-              <ScrollView contentContainerStyle={styles.dashboardSkeletonContainer}>
-                <SkeletonCard style={styles.dashboardSkeletonSummaryCard}>
+              <ScrollView contentContainerStyle={mergedStyles.dashboardSkeletonContainer}>
+                <SkeletonCard style={mergedStyles.dashboardSkeletonSummaryCard}>
                   <View style={styles.dashboardSkeletonSummaryRow}>
                     <SkeletonCircle size={64} />
                     <View style={styles.dashboardSkeletonSummaryInfo}>
@@ -1443,60 +1784,64 @@ const CaregiverDashboard = () => {
               </ScrollView>
             ) : (
               <ScrollView
-                style={styles.content}
+                style={mergedStyles.content}
                 refreshControl={
                   <RefreshControl
                     refreshing={refreshing}
                     onRefresh={onRefresh}
-                    colors={['#3B82F6']}
-                    tintColor="#3B82F6"
+                    colors={[theme.colors.primary]}
+                    tintColor={theme.colors.primary}
                   />
                 }
               >
-                <CaregiverProfileSection profile={profile} activeTab={activeTab} />
+                <CaregiverProfileSection profile={profile} activeTab={activeTab} theme={theme} />
 
                 <View style={styles.statsGrid}>
                   <QuickStat
                     icon="star"
                     value={ratingDisplay}
                     label="Rating"
-                    color="#F59E0B"
-                    bgColor="#FEF3C7"
-                    styles={styles}
+                    color={isDark ? '#FBBF24' : '#F59E0B'}
+                    bgColor={isDark ? '#7c2d12' : '#FEF3C7'}
+                    styles={mergedStyles}
                     subtitle={ratingStatSubtitle}
                     ctaLabel={ratingStatCTA}
                     accessibilityHint="Shows detailed caregiver ratings and reviews"
                     onPress={handleOpenRatings}
                     showArrow
+                    theme={theme}
                   />
                   <QuickStat
                     icon="briefcase"
                     value={String(completedJobsCount)}
                     label="Jobs Done"
-                    color="#10B981"
-                    bgColor="#D1FAE5"
-                    styles={styles}
+                    color={isDark ? '#34D399' : '#10B981'}
+                    bgColor={isDark ? '#065f46' : '#D1FAE5'}
+                    styles={mergedStyles}
                     subtitle={completedJobsSubtitle}
                     showTrend={completedJobsCount > 0}
+                    theme={theme}
                   />
                   <QuickStat
                     icon="chatbubble"
                     value={profile?.responseRate || "0%"}
                     label="Response Rate"
-                    color="#3B82F6"
-                    bgColor="#DBEAFE"
-                    styles={styles}
+                    color={isDark ? '#60A5FA' : '#3B82F6'}
+                    bgColor={isDark ? '#1e40af' : '#DBEAFE'}
+                    styles={mergedStyles}
                     showTrend={Number.parseInt(String(profile?.responseRate || '0').replace(/[^\d]/g, ''), 10) > 0}
+                    theme={theme}
                   />
                   <QuickStat
                     icon="checkmark-circle"
                     value={trustScoreValue > 0 ? String(trustScoreValue) : '—'}
                     label="Trust Score"
-                    color="#8B5CF6"
-                    bgColor="#EDE9FE"
-                    styles={styles}
+                    color={isDark ? '#A78BFA' : '#8B5CF6'}
+                    bgColor={isDark ? '#5b21b6' : '#EDE9FE'}
+                    styles={mergedStyles}
                     subtitle={trustScoreSubtitle}
                     showBadge={profile?.verification?.verified}
+                    theme={theme}
                   />
                 </View>
 
@@ -1504,40 +1849,44 @@ const CaregiverDashboard = () => {
                   <QuickAction
                     icon="search"
                     label="Find Jobs"
-                    gradientColors={["#3B82F6", "#2563EB"]}
+                    gradientColors={isDark ? ["#1e40af", "#1e3a8a"] : ["#3B82F6", "#2563EB"]}
                     onPress={() => {
                       setActiveTab('jobs')
                       fetchJobs()
                     }}
-                    styles={styles}
+                    styles={mergedStyles}
+                    theme={theme}
                   />
                   <QuickAction
                     icon="calendar"
                     label="Bookings"
-                    gradientColors={["#22C55E", "#16A34A"]}
+                    gradientColors={isDark ? ["#065f46", "#047857"] : ["#22C55E", "#16A34A"]}
                     onPress={() => setActiveTab('bookings')}
-                    styles={styles}
+                    styles={mergedStyles}
+                    theme={theme}
                   />
 
                   <QuickAction
                     icon="document-text"
                     label="Applications"
-                    gradientColors={["#fb7185", "#ef4444"]}
+                    gradientColors={isDark ? ["#9f1239", "#be123c"] : ["#fb7185", "#ef4444"]}
                     onPress={() => setActiveTab('applications')}
-                    styles={styles}
+                    styles={mergedStyles}
+                    theme={theme}
                   />
                   <QuickAction
                     icon="chatbubbles"
                     label="Messages"
-                    gradientColors={["#8B5CF6", "#7C3AED"]}
+                    gradientColors={isDark ? ["#6d28d9", "#5b21b6"] : ["#8B5CF6", "#7C3AED"]}
                     onPress={() => setActiveTab('messages')}
-                    styles={styles}
+                    styles={mergedStyles}
+                    theme={theme}
                   />
                 </View>
 
-                <View style={styles.section}>
+                <View style={mergedStyles.section}>
                   <LinearGradient
-                    colors={['#667eea', '#764ba2']}
+                    colors={isDark ? ['#4c1d95', '#5b21b6'] : ['#667eea', '#764ba2']}
                     start={{ x: 0, y: 0 }}
                     end={{ x: 1, y: 1 }}
                     style={styles.enhancedProfileCard}
@@ -1575,24 +1924,51 @@ const CaregiverDashboard = () => {
                   </LinearGradient>
                 </View>
 
-                <View style={styles.section}>
-                  <View style={styles.sectionHeader}>
+                {/* Wallet Setup */}
+                <View style={mergedStyles.section}>
+                  <LinearGradient
+                    colors={isDark ? ["#047857", "#065f46"] : ["#10B981", "#059669"]}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 1 }}
+                    style={styles.enhancedProfileCard}
+                  >
+                    <View style={styles.enhancedProfileContent}>
+                      <View style={styles.enhancedProfileHeader}>
+                        <View style={styles.enhancedProfileIcon}>
+                          <Ionicons name="wallet" size={24} color="#FFFFFF" />
+                        </View>
+                        <View style={styles.enhancedProfileText}>
+                          <Text style={styles.enhancedProfileTitle}>Solana Wallet Setup</Text>
+                          <Text style={styles.enhancedProfileDescription}>
+                            Configure your Solana wallet to receive payments in SOL or USDC
+                          </Text>
+                        </View>
+                      </View>
+                    </View>
+                    <View style={mergedStyles.walletSetupContainer}>
+                      <WalletSetup theme={theme} />
+                    </View>
+                  </LinearGradient>
+                </View>
+
+                <View style={mergedStyles.section}>
+                  <View style={[mergedStyles.sectionHeader, styles.sectionHeader]}>
                     <View style={styles.sectionHeaderMain}>
-                      <Ionicons name="briefcase" size={20} color="#1F2937" />
-                      <Text style={styles.sectionTitle}>Recommended Jobs</Text>
+                      <Ionicons name="briefcase" size={20} color={theme.colors.text} />
+                      <Text style={mergedStyles.sectionTitle}>Recommended Jobs</Text>
                     </View>
                     <Pressable
                       style={styles.seeAllButton}
                       onPress={() => setActiveTab('jobs')}
                     >
-                      <Text style={styles.seeAllText}>See All</Text>
-                      <Ionicons name="chevron-forward" size={16} color="#3B82F6" />
+                      <Text style={mergedStyles.seeAllText}>See All</Text>
+                      <Ionicons name="chevron-forward" size={16} color={theme.colors.primary} />
                     </Pressable>
                   </View>
                   {jobsLoading ? (
-                    <View style={styles.loadingContainer}>
-                      <ActivityIndicator size="small" color="#3B82F6" />
-                      <Text style={styles.loadingText}>Loading jobs...</Text>
+                    <View style={mergedStyles.loadingContainer}>
+                      <ActivityIndicator size="small" color={theme.colors.primary} />
+                      <Text style={mergedStyles.loadingText}>Loading jobs...</Text>
                     </View>
                   ) : (
                     <ScrollView
@@ -1627,6 +2003,8 @@ const CaregiverDashboard = () => {
                               marginLeft: index === 0 ? 2 : 0,
                               flexGrow: 0,
                             }}
+                            theme={theme}
+                            isDark={isDark}
                           />
                         );
                       })}
@@ -1634,48 +2012,49 @@ const CaregiverDashboard = () => {
                   )}
                 </View>
 
-                <View style={styles.section}>
-                  <View style={styles.sectionHeader}>
+                <View style={mergedStyles.section}>
+                  <View style={[mergedStyles.sectionHeader, styles.sectionHeader]}>
                     <View style={styles.sectionHeaderMain}>
-                      <Ionicons name="document-text" size={20} color="#1F2937" />
-                      <Text style={styles.sectionTitle}>Recent Applications</Text>
+                      <Ionicons name="document-text" size={20} color={theme.colors.text} />
+                      <Text style={mergedStyles.sectionTitle}>Recent Applications</Text>
                     </View>
                     <Pressable
                       style={styles.seeAllButton}
                       onPress={() => setActiveTab("applications")}
                     >
-                      <Text style={styles.seeAllText}>View All</Text>
-                      <Ionicons name="chevron-forward" size={16} color="#3B82F6" />
+                      <Text style={mergedStyles.seeAllText}>View All</Text>
+                      <Ionicons name="chevron-forward" size={16} color={theme.colors.primary} />
                     </Pressable>
                   </View>
                   {(applications || []).slice(0, 2).map((application, index) => (
-                    <View key={application.id || index} style={styles.enhancedApplicationCard}>
+                    <View key={application.id || index} style={mergedStyles.enhancedApplicationCard}>
                       <View style={styles.applicationCardHeader}>
                         <View style={styles.applicationCardMain}>
-                          <Text style={styles.applicationCardTitle} numberOfLines={1}>
+                          <Text style={mergedStyles.applicationCardTitle} numberOfLines={1}>
                             {application.jobTitle || application.job?.title || 'Childcare Position'}
                           </Text>
-                          <Text style={styles.applicationCardFamily}>
+                          <Text style={mergedStyles.applicationCardFamily}>
                             {application.family || application.job?.family || 'Family'}
                           </Text>
                         </View>
                         <StatusBadge
                           status={application.status}
                           style={styles.applicationStatusBadge}
+                          theme={theme}
                         />
                       </View>
 
                       <View style={styles.applicationCardDetails}>
                         <View style={styles.applicationDetailItem}>
-                          <Ionicons name="calendar-outline" size={14} color="#6B7280" />
-                          <Text style={styles.applicationDetailTextInline}>
+                          <Ionicons name="calendar-outline" size={14} color={theme.colors.textSecondary} />
+                          <Text style={mergedStyles.applicationDetailTextInline}>
                             Applied {application.appliedDate ? new Date(application.appliedDate).toLocaleDateString() : 'Recently'}
                           </Text>
                         </View>
                         {application.proposedRate && (
                           <View style={styles.applicationDetailItem}>
-                            <Ionicons name="cash-outline" size={14} color="#6B7280" />
-                            <Text style={styles.applicationDetailTextInline}>
+                            <Ionicons name="cash-outline" size={14} color={theme.colors.textSecondary} />
+                            <Text style={mergedStyles.applicationDetailTextInline}>
                               ₱{application.proposedRate}/hr
                             </Text>
                           </View>
@@ -1684,39 +2063,39 @@ const CaregiverDashboard = () => {
 
                       <View style={styles.applicationCardActions}>
                         <Pressable
-                          style={styles.secondaryButton}
+                          style={mergedStyles.secondaryButton}
                           onPress={() => handleViewApplication(application)}
                         >
-                          <Text style={styles.secondaryButtonText}>View Details</Text>
+                          <Text style={mergedStyles.secondaryButtonText}>View Details</Text>
                         </Pressable>
                         <Pressable
                           style={[
-                            styles.primaryButton,
-                            application.status !== 'accepted' && styles.primaryButtonDisabled,
+                            mergedStyles.primaryButton,
+                            application.status !== 'accepted' && mergedStyles.primaryButtonDisabled,
                           ]}
                           onPress={() => handleMessageFamily(application)}
                           disabled={application.status !== 'accepted'}
                         >
                           <Ionicons name="chatbubble-outline" size={16} color="#FFFFFF" />
-                          <Text style={styles.primaryButtonText}>Message</Text>
+                          <Text style={mergedStyles.primaryButtonText}>Message</Text>
                         </Pressable>
                       </View>
                     </View>
                   ))}
                 </View>
 
-                <View style={styles.section}>
-                  <View style={styles.sectionHeader}>
+                <View style={mergedStyles.section}>
+                  <View style={[mergedStyles.sectionHeader, styles.sectionHeader]}>
                     <View style={styles.sectionHeaderMain}>
-                      <Ionicons name="calendar" size={20} color="#1F2937" />
-                      <Text style={styles.sectionTitle}>Upcoming Bookings</Text>
+                      <Ionicons name="calendar" size={20} color={theme.colors.text} />
+                      <Text style={mergedStyles.sectionTitle}>Upcoming Bookings</Text>
                     </View>
                     <Pressable
                       style={styles.seeAllButton}
                       onPress={() => setActiveTab('bookings')}
                     >
-                      <Text style={styles.seeAllText}>See All</Text>
-                      <Ionicons name="chevron-forward" size={16} color="#3B82F6" />
+                      <Text style={mergedStyles.seeAllText}>See All</Text>
+                      <Ionicons name="chevron-forward" size={16} color={theme.colors.primary} />
                     </Pressable>
                   </View>
                   {(bookings || []).slice(0, 2).map((booking, index) => {
@@ -1736,9 +2115,9 @@ const CaregiverDashboard = () => {
                     const rateLabel = hourlyRate ? `${formatPeso(hourlyRate)}/hr` : null;
 
                     return (
-                      <View key={bookingId || index} style={styles.dashboardBookingCard}>
+                      <View key={bookingId || index} style={mergedStyles.dashboardBookingCard}>
                         <LinearGradient
-                          colors={['#667eea', '#764ba2']}
+                          colors={isDark ? ['#4c1d95', '#5b21b6'] : ['#667eea', '#764ba2']}
                           start={{ x: 0, y: 0 }}
                           end={{ x: 1, y: 0 }}
                           style={styles.dashboardBookingHeader}
@@ -1761,16 +2140,16 @@ const CaregiverDashboard = () => {
                         <View style={styles.dashboardBookingContent}>
                           <View style={styles.dashboardBookingMetaRow}>
                             <View style={styles.dashboardBookingMetaChip}>
-                              <Ionicons name="time-outline" size={14} color="#2563EB" />
+                              <Ionicons name="time-outline" size={14} color={isDark ? '#60A5FA' : '#2563EB'} />
                               <Text style={styles.dashboardBookingMetaText}>{formattedTime}</Text>
                             </View>
                             <View style={styles.dashboardBookingMetaChip}>
-                              <Ionicons name="people-outline" size={14} color="#10B981" />
+                              <Ionicons name="people-outline" size={14} color={isDark ? '#34D399' : '#10B981'} />
                               <Text style={styles.dashboardBookingMetaText}>{childrenLabel}</Text>
                             </View>
                             {rateLabel ? (
                               <View style={styles.dashboardBookingMetaChip}>
-                                <Ionicons name="cash-outline" size={14} color="#059669" />
+                                <Ionicons name="cash-outline" size={14} color={isDark ? '#10B981' : '#059669'} />
                                 <Text style={styles.dashboardBookingMetaText}>{rateLabel}</Text>
                               </View>
                             ) : null}
@@ -1781,41 +2160,62 @@ const CaregiverDashboard = () => {
                               style={styles.dashboardBookingLocation}
                               onPress={() => handleGetDirections(booking)}
                             >
-                              <Ionicons name="location-outline" size={16} color="#7C3AED" />
-                              <Text style={styles.dashboardBookingLocationText} numberOfLines={1}>
+                              <Ionicons name="location-outline" size={16} color={isDark ? '#A78BFA' : '#7C3AED'} />
+                              <Text style={mergedStyles.dashboardBookingLocationText} numberOfLines={1}>
                                 {locationLabel}
                               </Text>
-                              <Ionicons name="open-outline" size={16} color="#7C3AED" />
+                              <Ionicons name="open-outline" size={16} color={isDark ? '#A78BFA' : '#7C3AED'} />
                             </Pressable>
                           ) : null}
 
                           <View style={styles.dashboardBookingActions}>
                             <Pressable
-                              style={styles.dashboardBookingSecondaryButton}
+                              style={mergedStyles.dashboardBookingSecondaryButton}
                               onPress={() => {
                                 setSelectedBooking(booking);
                                 setShowBookingDetails(true);
                               }}
                             >
-                              <Ionicons name="eye-outline" size={16} color="#1F2937" />
-                              <Text style={styles.dashboardBookingSecondaryText}>Details</Text>
+                              <Ionicons name="eye-outline" size={16} color={theme.colors.text} />
+                              <Text style={mergedStyles.dashboardBookingSecondaryText}>Details</Text>
                             </Pressable>
                             <Pressable
-                              style={styles.dashboardBookingPrimaryButton}
+                              style={mergedStyles.dashboardBookingPrimaryButton}
                               onPress={() => handleBookingMessage(booking)}
                             >
                               <Ionicons name="chatbubble-outline" size={16} color="#FFFFFF" />
-                              <Text style={styles.dashboardBookingPrimaryText}>Message</Text>
+                              <Text style={mergedStyles.dashboardBookingPrimaryText}>Message</Text>
                             </Pressable>
                           </View>
 
+                          {/* Demo Solana Payment */}
+                          {statusLower === 'completed' && (
+                            <View style={{ marginTop: 12, padding: 12, backgroundColor: theme.colors.surfaceVariant, borderRadius: 8 }}>
+                              <Text style={{ fontSize: 14, fontWeight: '600', color: theme.colors.primary, marginBottom: 8 }}>Payment Demo</Text>
+                              <SolanaPayment
+                                booking={booking}
+                                caregiver={{
+                                  id: user?.id,
+                                  name: profile?.name || 'Caregiver',
+                                  solana_wallet_address: 'Demo123...abc',
+                                  preferred_token: 'USDC'
+                                }}
+                                amount={hourlyRate || 25}
+                                onPaymentComplete={(signature) => {
+                                  showToast(`Demo payment completed! Signature: ${signature.substring(0, 20)}...`, 'success');
+                                }}
+                                theme={theme}
+                              />
+                            </View>
+                          )}
+
                           {statusLower === 'pending' ? (
                             <Pressable
-                              style={styles.dashboardBookingConfirmButton}
+                              style={mergedStyles.dashboardBookingConfirmButton}
                               onPress={() => handleConfirmAttendance(booking)}
                             >
                               <Ionicons name="checkmark" size={16} color="#FFFFFF" />
-                              <Text style={styles.dashboardBookingConfirmText}>Confirm Attendance</Text>
+                              <Text style={mergedStyles.dashboardBookingConfirmText}>Confirm Attendance</Text>
                             </Pressable>
                           ) : null}
                         </View>
@@ -1837,6 +2237,8 @@ const CaregiverDashboard = () => {
               onJobView={handleViewJob}
               refreshing={refreshing}
               loading={jobsLoading}
+              theme={theme}
+              isDark={isDark}
             />
           )}
 
@@ -1886,6 +2288,8 @@ const CaregiverDashboard = () => {
               refreshing={refreshing}
               onRefresh={onRefresh}
               loading={jobsLoading}
+              theme={theme}
+              isDark={isDark}
             />
           )}
 
@@ -1904,6 +2308,8 @@ const CaregiverDashboard = () => {
               pendingContract={pendingContractToOpen}
               onPendingContractHandled={() => setPendingContractToOpen(null)}
               currentUserId={user?.id || null}
+              theme={theme}
+              isDark={isDark}
             />
           )}
 
@@ -1912,6 +2318,73 @@ const CaregiverDashboard = () => {
               navigation={navigation}
               refreshing={refreshing}
               onRefresh={onRefresh}
+              theme={theme}
+              isDark={isDark}
+            />
+          )}
+
+          {activeTab === 'profile' && (
+            <ScrollView
+              style={mergedStyles.content}
+              refreshControl={
+                <RefreshControl
+                  refreshing={refreshing}
+                  onRefresh={onRefresh}
+                  colors={[theme.colors.primary]}
+                  tintColor={theme.colors.primary}
+                />
+              }
+            >
+              <CaregiverProfileSection profile={profile} activeTab={activeTab} theme={theme} />
+              
+              <View style={mergedStyles.section}>
+                <LinearGradient
+                  colors={isDark ? ['#4c1d95', '#5b21b6'] : ['#667eea', '#764ba2']}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 1 }}
+                  style={styles.enhancedProfileCard}
+                >
+                  <View style={styles.enhancedProfileContent}>
+                    <View style={styles.enhancedProfileHeader}>
+                      <View style={styles.enhancedProfileIcon}>
+                        <Ionicons name="sparkles" size={24} color="#FFFFFF" />
+                      </View>
+                      <View style={styles.enhancedProfileText}>
+                        <Text style={styles.enhancedProfileTitle}>Complete Your Enhanced Profile</Text>
+                        <Text style={styles.enhancedProfileDescription}>
+                          Add documents, certifications, and portfolio to stand out and get more bookings
+                        </Text>
+                      </View>
+                    </View>
+                    <Pressable
+                      style={styles.enhancedProfileButton}
+                      onPress={() => {
+                        try {
+                          navigation.navigate('EnhancedCaregiverProfileWizard', {
+                            isEdit: true,
+                            existingProfile: profile,
+                          });
+                        } catch (error) {
+                          console.error('Navigation error:', error);
+                          Alert.alert('Navigation Error', 'Failed to open profile wizard. Please try again.');
+                        }
+                      }}
+                    >
+                      <Text style={styles.enhancedProfileButtonText}>Complete Profile</Text>
+                      <Ionicons name="arrow-forward" size={16} color="#FFFFFF" />
+                    </Pressable>
+                  </View>
+                </LinearGradient>
+              </View>
+            </ScrollView>
+          )}
+
+          {activeTab === 'wallet' && (
+            <WalletManagementTab
+              refreshing={refreshing}
+              onRefresh={onRefresh}
+              theme={theme}
+              isDark={isDark}
             />
           )}
 
@@ -1929,6 +2402,8 @@ const CaregiverDashboard = () => {
               onOpenRatings={handleOpenRatings}
               onRequestHighlight={handleGeneralHighlightRequest}
               highlightRequestSending={highlightRequestSending}
+              theme={theme}
+              isDark={isDark}
             />
           )}
 
@@ -1988,6 +2463,8 @@ const CaregiverDashboard = () => {
                 }
               }}
               onRefresh={onRefresh}
+              theme={theme}
+              isDark={isDark}
             />
           )}
 
@@ -2007,8 +2484,9 @@ const CaregiverDashboard = () => {
           onCancelBooking={() => handleCancelBooking(selectedBooking)}
           onGetDirections={() => handleGetDirections(selectedBooking)}
           onConfirmAttendance={() => handleConfirmAttendance(selectedBooking)}
-          colors={['#667eea', '#764ba2']}
+          colors={isDark ? ['#4c1d95', '#5b21b6'] : ['#667eea', '#764ba2']}
           userType="caregiver"
+          theme={theme}
         />
       )}
 
@@ -2025,11 +2503,11 @@ const CaregiverDashboard = () => {
           transparent
           animationType="slide"
         >
-          <View style={styles.modalOverlay}>
-            <View style={styles.applicationModal}>
+          <View style={mergedStyles.modalOverlay}>
+            <View style={mergedStyles.applicationModal}>
               <ScrollView showsVerticalScrollIndicator={false}>
                 <View style={styles.applicationModalHeader}>
-                  <Text style={styles.applicationModalTitle}>Apply to Job</Text>
+                  <Text style={[mergedStyles.applicationModalTitle, { color: theme.colors.text }]}>Apply to Job</Text>
                   <Pressable
                     onPress={() => {
                       if (!applicationSubmitting) {
@@ -2038,35 +2516,36 @@ const CaregiverDashboard = () => {
                         setApplicationForm({ coverLetter: '', proposedRate: '' })
                       }
                     }}
-                    style={styles.modalCloseButton}
+                    style={mergedStyles.modalCloseButton}
                   >
-                    <Ionicons name="close" size={24} color="#6B7280" />
+                    <Ionicons name="close" size={24} color={theme.colors.textSecondary} />
                   </Pressable>
                 </View>
 
                 <View style={styles.jobSummary}>
-                  <Text style={styles.jobSummaryTitle}>{selectedJob.title}</Text>
-                  <Text style={styles.jobSummaryFamily}>{selectedJob.family}</Text>
-                  <Text style={styles.jobSummaryRate}>₱{selectedJob.hourlyRate}/hour</Text>
+                  <Text style={[styles.jobSummaryTitle, { color: theme.colors.text }]}>{selectedJob.title}</Text>
+                  <Text style={[styles.jobSummaryFamily, { color: theme.colors.textSecondary }]}>{selectedJob.family}</Text>
+                  <Text style={[styles.jobSummaryRate, { color: theme.colors.primary }]}>₱{selectedJob.hourlyRate}/hour</Text>
                 </View>
 
                 <View style={styles.applicationFormContainer}>
                   <View style={styles.inputGroup}>
-                    <Text style={styles.inputLabel}>Proposed Rate (Optional)</Text>
+                    <Text style={mergedStyles.inputLabel}>Proposed Rate (Optional)</Text>
                     <TextInput
-                      style={styles.applicationInput}
+                      style={mergedStyles.applicationInput}
                       placeholder={`₱${selectedJob.hourlyRate}`}
                       value={applicationForm.proposedRate}
                       onChangeText={(text) => setApplicationForm(prev => ({ ...prev, proposedRate: text }))}
                       keyboardType="numeric"
                       editable={!applicationSubmitting}
+                      placeholderTextColor={theme.colors.textSecondary}
                     />
                   </View>
 
                   <View style={styles.inputGroup}>
-                    <Text style={styles.inputLabel}>Cover Letter (Optional)</Text>
+                    <Text style={mergedStyles.inputLabel}>Cover Letter (Optional)</Text>
 
-                    <View style={styles.suggestedCoverLettersContainer}>
+                    <View style={mergedStyles.suggestedCoverLettersContainer}>
                       {[
                         'I am passionate about childcare and have experience working with children of all ages. I would love to help your family.',
                         'As a certified caregiver with first aid training, I prioritize safety while creating a fun and nurturing environment for children.',
@@ -2076,7 +2555,7 @@ const CaregiverDashboard = () => {
                         return (
                           <Pressable
                             key={index}
-                            style={[styles.coverLetterChip, isSelected && styles.coverLetterChipSelected]}
+                            style={[mergedStyles.coverLetterChip, isSelected && mergedStyles.coverLetterChipSelected]}
                             onPress={() => {
                               setApplicationForm(prev => ({
                                 ...prev,
@@ -2084,7 +2563,7 @@ const CaregiverDashboard = () => {
                               }));
                             }}
                           >
-                            <Text style={[styles.coverLetterChipText, isSelected && styles.coverLetterChipTextSelected]}>
+                            <Text style={[mergedStyles.coverLetterChipText, isSelected && mergedStyles.coverLetterChipTextSelected]}>
                               {suggestion.length > 50 ? `${suggestion.substring(0, 50)}...` : suggestion}
                             </Text>
                           </Pressable>
@@ -2093,7 +2572,7 @@ const CaregiverDashboard = () => {
                     </View>
 
                     <TextInput
-                      style={[styles.applicationInput, styles.applicationTextArea]}
+                      style={[mergedStyles.applicationInput, mergedStyles.applicationTextArea]}
                       placeholder="Tell the family why you're the perfect fit for this job..."
                       value={applicationForm.coverLetter}
                       onChangeText={(text) => setApplicationForm(prev => ({ ...prev, coverLetter: text }))}
@@ -2101,6 +2580,7 @@ const CaregiverDashboard = () => {
                       numberOfLines={4}
                       textAlignVertical="top"
                       editable={!applicationSubmitting}
+                      placeholderTextColor={theme.colors.textSecondary}
                     />
                   </View>
                 </View>
@@ -2117,6 +2597,7 @@ const CaregiverDashboard = () => {
                     }}
                     style={styles.cancelButton}
                     disabled={applicationSubmitting}
+                    textColor={theme.colors.text}
                   >
                     Cancel
                   </Button>
@@ -2132,6 +2613,7 @@ const CaregiverDashboard = () => {
                     style={styles.submitButton}
                     loading={applicationSubmitting}
                     disabled={applicationSubmitting}
+                    buttonColor={theme.colors.primary}
                   >
                     {applicationSubmitting ? 'Submitting...' : 'Submit Application'}
                   </Button>
@@ -2202,10 +2684,10 @@ const CaregiverDashboard = () => {
             transparent
             animationType="slide"
           >
-            <View style={styles.modalOverlay}>
-              <View style={styles.applicationModal}>
+            <View style={mergedStyles.modalOverlay}>
+              <View style={mergedStyles.applicationModal}>
                 <LinearGradient
-                  colors={['#4F46E5', '#7C3AED']}
+                  colors={isDark ? ['#3730a3', '#5b21b6'] : ['#4F46E5', '#7C3AED']}
                   start={{ x: 0, y: 0 }}
                   end={{ x: 1, y: 1 }}
                   style={styles.applicationHeroGradient}
@@ -2231,6 +2713,7 @@ const CaregiverDashboard = () => {
                       status={selectedApplication.status}
                       showIcon
                       style={styles.applicationStatusBadge}
+                      theme={theme}
                     />
                   </View>
                 </LinearGradient>
@@ -2243,40 +2726,40 @@ const CaregiverDashboard = () => {
                     {infoTiles.length > 0 && (
                       <View style={styles.applicationInfoGrid}>
                         {infoTiles.map((tile, index) => (
-                          <View key={`application-info-${index}`} style={styles.applicationInfoTile}>
-                            <Ionicons name={tile.icon} size={18} color="#4338CA" />
-                            <Text style={styles.applicationInfoLabel}>{tile.label}</Text>
-                            <Text style={styles.applicationInfoValue}>{String(tile.value)}</Text>
+                          <View key={`application-info-${index}`} style={[styles.applicationInfoTile, { backgroundColor: theme.colors.surfaceVariant }]}>
+                            <Ionicons name={tile.icon} size={18} color={theme.colors.primary} />
+                            <Text style={[mergedStyles.applicationInfoLabel, { color: theme.colors.textSecondary }]}>{tile.label}</Text>
+                            <Text style={[mergedStyles.applicationInfoValue, { color: theme.colors.text }]}>{String(tile.value)}</Text>
                           </View>
                         ))}
                       </View>
                     )}
 
                     {messageBody && (
-                      <View style={styles.applicationSection}>
-                        <Text style={styles.applicationSectionTitle}>Your Message</Text>
-                        <View style={styles.applicationSectionCard}>
-                          <Text style={styles.applicationSectionCardText}>{String(messageBody)}</Text>
+                      <View style={mergedStyles.applicationSection}>
+                        <Text style={[mergedStyles.applicationSectionTitle, { color: theme.colors.text }]}>Your Message</Text>
+                        <View style={[mergedStyles.applicationSectionCard, { backgroundColor: theme.colors.surfaceVariant }]}>
+                          <Text style={[mergedStyles.applicationSectionCardText, { color: theme.colors.text }]}>{String(messageBody)}</Text>
                         </View>
                       </View>
                     )}
 
                     {descriptionBody && (
-                      <View style={styles.applicationSection}>
-                        <Text style={styles.applicationSectionTitle}>Job Description</Text>
-                        <View style={styles.applicationSectionCard}>
-                          <Text style={styles.applicationSectionCardText}>{String(descriptionBody)}</Text>
+                      <View style={mergedStyles.applicationSection}>
+                        <Text style={[mergedStyles.applicationSectionTitle, { color: theme.colors.text }]}>Job Description</Text>
+                        <View style={[mergedStyles.applicationSectionCard, { backgroundColor: theme.colors.surfaceVariant }]}>
+                          <Text style={[mergedStyles.applicationSectionCardText, { color: theme.colors.text }]}>{String(descriptionBody)}</Text>
                         </View>
                       </View>
                     )}
 
                     {requirementTags.length > 0 && (
-                      <View style={styles.applicationSection}>
-                        <Text style={styles.applicationSectionTitle}>Requirements</Text>
+                      <View style={mergedStyles.applicationSection}>
+                        <Text style={[mergedStyles.applicationSectionTitle, { color: theme.colors.text }]}>Requirements</Text>
                         <View style={styles.applicationTagList}>
                           {requirementTags.map((req, index) => (
-                            <View key={`application-tag-${index}`} style={styles.applicationTagChip}>
-                              <Text style={styles.applicationTagChipText}>{String(req)}</Text>
+                            <View key={`application-tag-${index}`} style={[mergedStyles.applicationTagChip, { backgroundColor: theme.colors.surfaceVariant }]}>
+                              <Text style={[mergedStyles.applicationTagChipText, { color: theme.colors.text }]}>{String(req)}</Text>
                             </View>
                           ))}
                         </View>
@@ -2290,6 +2773,7 @@ const CaregiverDashboard = () => {
                     mode="outlined"
                     onPress={() => setShowApplicationDetails(false)}
                     style={styles.cancelButton}
+                    textColor={theme.colors.text}
                   >
                     Close
                   </Button>
@@ -2302,6 +2786,7 @@ const CaregiverDashboard = () => {
                       handleMessageFamily(selectedApplication);
                     }}
                     disabled={!canMessageFamily}
+                    buttonColor={theme.colors.primary}
                   >
                     {canMessageFamily ? 'Message Family' : 'Message Unavailable'}
                   </Button>
@@ -2322,17 +2807,17 @@ const CaregiverDashboard = () => {
           transparent
           animationType="slide"
         >
-          <View style={styles.modalOverlay}>
-            <View style={styles.jobDetailsModal}>
+          <View style={mergedStyles.modalOverlay}>
+            <View style={mergedStyles.jobDetailsModal}>
               <ScrollView showsVerticalScrollIndicator={false}>
-                <View style={styles.jobDetailsContent}>
-                  <View style={styles.jobDetailsHeader}>
-                    <Text style={styles.jobDetailsTitle}>{String(selectedJob.title || 'Childcare Position')}</Text>
-                    <Text style={styles.jobDetailsFamily}>{String(selectedJob.family || selectedJob.familyName || 'Family')}</Text>
+                <View style={mergedStyles.jobDetailsContent}>
+                  <View style={mergedStyles.jobDetailsHeader}>
+                    <Text style={mergedStyles.jobDetailsTitle}>{String(selectedJob.title || 'Childcare Position')}</Text>
+                    <Text style={mergedStyles.jobDetailsFamily}>{String(selectedJob.family || selectedJob.familyName || 'Family')}</Text>
                     {selectedJob.urgent && (
-                      <View style={styles.jobDetailsPill}>
-                        <Ionicons name="flash" color="#DC2626" size={14} />
-                        <Text style={styles.jobDetailsPillText}>Urgent Need</Text>
+                      <View style={[styles.jobDetailsPill, { backgroundColor: theme.colors.error + '20' }]}>
+                        <Ionicons name="flash" color={theme.colors.error} size={14} />
+                        <Text style={[mergedStyles.jobDetailsPillText, { color: theme.colors.error }]}>Urgent Need</Text>
                       </View>
                     )}
                   </View>
@@ -2340,15 +2825,15 @@ const CaregiverDashboard = () => {
                   <View style={styles.jobDetailsInfo}>
                     <View style={styles.jobDetailsRow}>
                       <View style={styles.jobDetailsIcon}>
-                        <Ionicons name="location" size={16} color="#1D4ED8" />
+                        <Ionicons name="location" size={16} color={theme.colors.primary} />
                       </View>
-                      <Text style={styles.jobDetailsText}>{selectedJob.location || 'Location not specified'}</Text>
+                      <Text style={mergedStyles.jobDetailsText}>{selectedJob.location || 'Location not specified'}</Text>
                     </View>
                     <View style={styles.jobDetailsRow}>
                       <View style={styles.jobDetailsIcon}>
-                        <Ionicons name="calendar" size={16} color="#1D4ED8" />
+                        <Ionicons name="calendar" size={16} color={theme.colors.primary} />
                       </View>
-                      <Text style={styles.jobDetailsText}>{selectedJob.date ? new Date(selectedJob.date).toLocaleDateString() : 'Date not specified'}</Text>
+                      <Text style={mergedStyles.jobDetailsText}>{selectedJob.date ? new Date(selectedJob.date).toLocaleDateString() : 'Date not specified'}</Text>
                     </View>
                     {(() => {
                       const scheduleLabel = buildJobScheduleLabel(selectedJob);
@@ -2356,24 +2841,24 @@ const CaregiverDashboard = () => {
                       return (
                         <View style={styles.jobDetailsRow}>
                           <View style={styles.jobDetailsIcon}>
-                            <Ionicons name="time" size={16} color="#1D4ED8" />
+                            <Ionicons name="time" size={16} color={theme.colors.primary} />
                           </View>
-                          <Text style={styles.jobDetailsText}>{scheduleLabel}</Text>
+                          <Text style={mergedStyles.jobDetailsText}>{scheduleLabel}</Text>
                         </View>
                       );
                     })()}
                     <View style={styles.jobDetailsRow}>
                       <View style={styles.jobDetailsIcon}>
-                        <Ionicons name="cash" size={16} color="#059669" />
+                        <Ionicons name="cash" size={16} color={theme.colors.success} />
                       </View>
-                      <Text style={[styles.jobDetailsText, { color: '#047857', fontWeight: '600' }]}> {formatPeso(selectedJob.hourly_rate || selectedJob.hourlyRate || 0)}/hr</Text>
+                      <Text style={[mergedStyles.jobDetailsText, { color: theme.colors.success, fontWeight: '600' }]}> {formatPeso(selectedJob.hourly_rate || selectedJob.hourlyRate || 0)}/hr</Text>
                     </View>
                     {selectedJob.applicationData?.proposedRate && selectedJob.applicationData.proposedRate !== (selectedJob.hourly_rate || selectedJob.hourlyRate) && (
                       <View style={styles.jobDetailsRow}>
                         <View style={styles.jobDetailsIcon}>
-                          <Ionicons name="trending-up" size={16} color="#3B82F6" />
+                          <Ionicons name="trending-up" size={16} color={theme.colors.info} />
                         </View>
-                        <Text style={[styles.jobDetailsText, { color: '#3B82F6', fontWeight: '600' }]}>
+                        <Text style={[mergedStyles.jobDetailsText, { color: theme.colors.info, fontWeight: '600' }]}>
                           {formatPeso(selectedJob.applicationData.proposedRate)}/hr (Your proposed rate)
                         </Text>
                       </View>
@@ -2390,9 +2875,9 @@ const CaregiverDashboard = () => {
                       return (
                         <View style={styles.jobDetailsRow}>
                           <View style={styles.jobDetailsIcon}>
-                            <Ionicons name="calendar-outline" size={16} color="#0EA5E9" />
+                            <Ionicons name="calendar-outline" size={16} color={theme.colors.info} />
                           </View>
-                          <Text style={[styles.jobDetailsText, { color: '#0EA5E9' }]}>
+                          <Text style={[mergedStyles.jobDetailsText, { color: theme.colors.info }]}>
                             {rawSchedule}
                           </Text>
                         </View>
@@ -2401,9 +2886,9 @@ const CaregiverDashboard = () => {
                     {selectedJob.children?.length > 0 && (
                       <View style={styles.jobDetailsRow}>
                         <View style={styles.jobDetailsIcon}>
-                          <Ionicons name="people" size={16} color="#1D4ED8" />
+                          <Ionicons name="people" size={16} color={theme.colors.primary} />
                         </View>
-                        <Text style={styles.jobDetailsText}>
+                        <Text style={mergedStyles.jobDetailsText}>
                           {selectedJob.children.length} child{selectedJob.children.length > 1 ? 'ren' : ''}
                           {selectedJob.children.map((child) => ` ${child.name} (${child.age})`).join(', ')}
                         </Text>
@@ -2412,36 +2897,36 @@ const CaregiverDashboard = () => {
                     {selectedJob.users?.email && (
                       <View style={styles.jobDetailsRow}>
                         <View style={styles.jobDetailsIcon}>
-                          <Ionicons name="mail" size={16} color="#1D4ED8" />
+                          <Ionicons name="mail" size={16} color={theme.colors.primary} />
                         </View>
-                        <Text style={styles.jobDetailsText}>{selectedJob.users.email}</Text>
+                        <Text style={mergedStyles.jobDetailsText}>{selectedJob.users.email}</Text>
                       </View>
                     )}
                     {selectedJob.users?.phone && (
                       <View style={styles.jobDetailsRow}>
                         <View style={styles.jobDetailsIcon}>
-                          <Ionicons name="call" size={16} color="#1D4ED8" />
+                          <Ionicons name="call" size={16} color={theme.colors.primary} />
                         </View>
-                        <Text style={styles.jobDetailsText}>{selectedJob.users.phone}</Text>
+                        <Text style={mergedStyles.jobDetailsText}>{selectedJob.users.phone}</Text>
                       </View>
                     )}
                   </View>
 
                   {selectedJob.description && (
-                    <View style={styles.jobDetailsSection}>
-                      <Text style={styles.jobDetailsSectionTitle}>Job Description</Text>
-                      <Text style={styles.jobDetailsDescription}>{String(selectedJob.description)}</Text>
+                    <View style={mergedStyles.jobDetailsSection}>
+                      <Text style={mergedStyles.jobDetailsSectionTitle}>Job Description</Text>
+                      <Text style={mergedStyles.jobDetailsDescription}>{String(selectedJob.description)}</Text>
                     </View>
                   )}
 
                   {selectedJob.children?.length > 0 && (
-                    <View style={styles.jobDetailsSection}>
-                      <Text style={styles.jobDetailsSectionTitle}>Children Information</Text>
+                    <View style={mergedStyles.jobDetailsSection}>
+                      <Text style={mergedStyles.jobDetailsSectionTitle}>Children Information</Text>
                       <View style={styles.jobDetailsPillRow}>
                         {selectedJob.children.map((child, index) => (
-                          <View key={index} style={styles.jobDetailsPill}>
-                            <Ionicons name="person" size={14} color="#4338CA" />
-                            <Text style={styles.jobDetailsPillText}>{child.name} · {child.age} yrs</Text>
+                          <View key={index} style={[mergedStyles.jobDetailsPill, { backgroundColor: theme.colors.surfaceVariant }]}>
+                            <Ionicons name="person" size={14} color={theme.colors.primary} />
+                            <Text style={mergedStyles.jobDetailsPillText}>{child.name} · {child.age} yrs</Text>
                           </View>
                         ))}
                       </View>
@@ -2449,12 +2934,12 @@ const CaregiverDashboard = () => {
                   )}
 
                   {Array.isArray(selectedJob.requirements) && selectedJob.requirements.length > 0 && (
-                    <View style={styles.jobDetailsRequirements}>
-                      <Text style={styles.jobDetailsRequirementsTitle}>Key Requirements</Text>
+                    <View style={mergedStyles.jobDetailsRequirements}>
+                      <Text style={mergedStyles.jobDetailsRequirementsTitle}>Key Requirements</Text>
                       {selectedJob.requirements.map((req, idx) => (
                         <View key={idx} style={styles.jobDetailsRequirementRow}>
-                          <Ionicons name="checkmark-circle" size={18} color="#10B981" />
-                          <Text style={styles.jobDetailsRequirementText}>{String(req)}</Text>
+                          <Ionicons name="checkmark-circle" size={18} color={theme.colors.success} />
+                          <Text style={mergedStyles.jobDetailsRequirementText}>{String(req)}</Text>
                         </View>
                       ))}
                     </View>
@@ -2473,30 +2958,30 @@ const CaregiverDashboard = () => {
                     if (application || applicationData) {
                       const appData = applicationData || application;
                       return (
-                        <View style={styles.jobDetailsSection}>
-                          <Text style={styles.jobDetailsSectionTitle}>Your Application</Text>
-                          <View style={styles.applicationStatusCard}>
+                        <View style={mergedStyles.jobDetailsSection}>
+                          <Text style={mergedStyles.jobDetailsSectionTitle}>Your Application</Text>
+                          <View style={[mergedStyles.applicationStatusCard, { backgroundColor: theme.colors.surfaceVariant }]}>
                             <View style={styles.applicationStatusHeader}>
-                              <Ionicons name="checkmark-circle" size={20} color="#10B981" />
-                              <Text style={styles.applicationStatusText}>
+                              <Ionicons name="checkmark-circle" size={20} color={theme.colors.success} />
+                              <Text style={[mergedStyles.applicationStatusText, { color: theme.colors.text }]}>
                                 Applied on {new Date(appData.appliedDate || appData.applied_at || Date.now()).toLocaleDateString()}
                               </Text>
                             </View>
-                            <Text style={styles.applicationStatusLabel}>
+                            <Text style={[mergedStyles.applicationStatusLabel, { color: theme.colors.textSecondary }]}>
                               Status: {appData.applicationStatus || appData.status || 'Pending'}
                             </Text>
 
                             {appData.proposedRate && (
-                              <View style={styles.coverLetterPreview}>
-                                <Text style={styles.coverLetterLabel}>Your Proposed Rate:</Text>
-                                <Text style={styles.applicationStatusText}>₱{appData.proposedRate}/hr</Text>
+                              <View style={mergedStyles.coverLetterPreview}>
+                                <Text style={[mergedStyles.coverLetterLabel, { color: theme.colors.textSecondary }]}>Your Proposed Rate:</Text>
+                                <Text style={[mergedStyles.applicationStatusText, { color: theme.colors.text }]}>₱{appData.proposedRate}/hr</Text>
                               </View>
                             )}
 
                             {(appData.coverLetter || appData.message) && (
-                              <View style={styles.coverLetterPreview}>
-                                <Text style={styles.coverLetterLabel}>Your Message:</Text>
-                                <Text style={styles.coverLetterText}>{appData.coverLetter || appData.message}</Text>
+                              <View style={mergedStyles.coverLetterPreview}>
+                                <Text style={[mergedStyles.coverLetterLabel, { color: theme.colors.textSecondary }]}>Your Message:</Text>
+                                <Text style={[mergedStyles.coverLetterText, { color: theme.colors.text }]}>{appData.coverLetter || appData.message}</Text>
                               </View>
                             )}
                           </View>
@@ -2512,6 +2997,7 @@ const CaregiverDashboard = () => {
                       onPress={() => { setShowJobDetails(false); setSelectedJob(null); }}
                       style={styles.jobDetailsPrimaryButton}
                       labelStyle={styles.jobDetailsPrimaryLabel}
+                      buttonColor={theme.colors.primary}
                     >
                       Close
                     </Button>
@@ -2532,6 +3018,8 @@ const CaregiverDashboard = () => {
         caregiverName={profile?.name || user?.name}
         currentUserId={user?.id}
         onPreload={preloadCaregiverReviews}
+        theme={theme}
+        isDark={isDark}
       />
 
       <PrivacyNotificationModal
@@ -2541,6 +3029,8 @@ const CaregiverDashboard = () => {
         subtitle="Manage requests for your personal information as a caregiver"
         emptyStateTitle="No privacy requests from parents"
         emptyStateMessage="You're all caught up—no pending caregiver requests."
+        theme={theme}
+        isDark={isDark}
       />
 
       <RequestInfoModal
@@ -2551,6 +3041,7 @@ const CaregiverDashboard = () => {
         onTargetChange={handleRequestInfoTargetChange}
         onSuccess={handleRequestInfoSuccess}
         userType="caregiver"
+        theme={theme}
       />
 
       <Modal
@@ -2559,8 +3050,8 @@ const CaregiverDashboard = () => {
         onRequestClose={handleCloseReviewModal}
         transparent
       >
-        <View style={styles.modalOverlay}>
-          <View style={[styles.applicationModal, { maxHeight: '80%' }]}>
+        <View style={mergedStyles.modalOverlay}>
+          <View style={[mergedStyles.applicationModal, { maxHeight: '80%' }]}>
             <ReviewForm
               onSubmit={handleSubmitReview}
               onCancel={handleCloseReviewModal}
@@ -2569,11 +3060,12 @@ const CaregiverDashboard = () => {
               submitLabel={selectedReview ? 'Update Review' : 'Submit Review'}
               heading={selectedReview ? 'Update Your Feedback' : 'Share Your Experience'}
               enableImageUpload={false}
+              theme={theme}
             />
             {reviewSubmitting && (
-              <View style={styles.loadingContainer}>
-                <ActivityIndicator size="small" color="#3B82F6" />
-                <Text style={styles.loadingText}>Saving review...</Text>
+              <View style={mergedStyles.loadingContainer}>
+                <ActivityIndicator size="small" color={theme.colors.primary} />
+                <Text style={mergedStyles.loadingText}>Saving review...</Text>
               </View>
             )}
           </View>
@@ -2586,7 +3078,9 @@ const CaregiverDashboard = () => {
         onClose={() => setShowSettings(false)}
         user={user}
         userType="caregiver"
-        colors={{ primary: '#3B82F6' }}
+        colors={{ primary: theme.colors.primary }}
+        theme={theme}
+        isDark={isDark}
       />
 
       {/* Request Info Modal */}
@@ -2598,6 +3092,7 @@ const CaregiverDashboard = () => {
           setShowRequestModal(false);
           showToast('Request sent successfully!', 'success');
         }}
+        theme={theme}
       />
 
       {/* Highlight Request Modal */}
@@ -2607,13 +3102,13 @@ const CaregiverDashboard = () => {
         transparent
         onRequestClose={() => setShowHighlightRequestModal(false)}
       >
-        <View style={styles.modalOverlay}>
-          <View style={styles.highlightModalCard}>
+        <View style={mergedStyles.modalOverlay}>
+          <View style={mergedStyles.highlightModalCard}>
             <View style={styles.highlightModalHeader}>
               <View style={styles.highlightModalTitleRow}>
                 <View style={{ flex: 1, paddingRight: 16 }}>
-                  <Text style={styles.highlightModalTitle}>Request a Highlight</Text>
-                  <Text style={styles.highlightModalSubtitle}>
+                  <Text style={mergedStyles.highlightModalTitle}>Request a Highlight</Text>
+                  <Text style={mergedStyles.highlightModalSubtitle}>
                     Choose a family you've recently worked with to ask for a highlight on your profile.
                   </Text>
                 </View>
@@ -2622,11 +3117,11 @@ const CaregiverDashboard = () => {
                     setShowHighlightRequestModal(false);
                     setSelectedFamilyForHighlight(null);
                   }}
-                  style={styles.highlightCloseButton}
+                  style={mergedStyles.highlightCloseButton}
                   accessibilityRole="button"
                   accessibilityLabel="Close highlight request"
                 >
-                  <Ionicons name="close" size={22} color="#4B5563" />
+                  <Ionicons name="close" size={22} color={theme.colors.textSecondary} />
                 </Pressable>
               </View>
             </View>
@@ -2637,8 +3132,8 @@ const CaregiverDashboard = () => {
               contentContainerStyle={styles.highlightBodyContent}
             >
               <View style={styles.highlightSection}>
-                <Text style={styles.highlightSectionTitle}>Recent Families</Text>
-                <Text style={styles.highlightSectionDescription}>
+                <Text style={mergedStyles.highlightSectionTitle}>Recent Families</Text>
+                <Text style={mergedStyles.highlightSectionDescription}>
                   Highlights help families understand why others loved working with you. Select a recent booking or application below.
                 </Text>
 
@@ -2664,14 +3159,14 @@ const CaregiverDashboard = () => {
                       <Pressable
                         key={item.key}
                         style={[
-                          styles.highlightFamilyItem,
-                          isSelected && styles.highlightFamilySelected,
+                          mergedStyles.highlightFamilyItem,
+                          isSelected && mergedStyles.highlightFamilySelected,
                           isLast && styles.highlightFamilyItemLast,
                         ]}
                         onPress={handleSelectFamily}
                         accessibilityRole="button"
                         accessibilityState={{ selected: isSelected }}
-                        android_ripple={{ color: 'rgba(99,102,241,0.12)' }}
+                        android_ripple={{ color: theme.colors.primary + '20' }}
                       >
                         <View style={styles.highlightFamilyRow}>
                           <View style={styles.highlightFamilyInfo}>
@@ -2679,16 +3174,16 @@ const CaregiverDashboard = () => {
                               <Ionicons
                                 name={item.iconName}
                                 size={20}
-                                color={isSelected ? '#4338CA' : '#6366F1'}
+                                color={isSelected ? theme.colors.primary : theme.colors.textSecondary}
                               />
                             </View>
                             <View style={styles.highlightFamilyText}>
-                              <Text style={styles.highlightFamilyName}>{item.name}</Text>
-                              <Text style={styles.highlightFamilyMeta}>{item.statusLabel}</Text>
+                              <Text style={mergedStyles.highlightFamilyName}>{item.name}</Text>
+                              <Text style={mergedStyles.highlightFamilyMeta}>{item.statusLabel}</Text>
                             </View>
                           </View>
                           {isSelected && (
-                            <Ionicons name="checkmark-circle" size={22} color="#4338CA" />
+                            <Ionicons name="checkmark-circle" size={22} color={theme.colors.primary} />
                           )}
                         </View>
                       </Pressable>
@@ -2696,12 +3191,12 @@ const CaregiverDashboard = () => {
                   })}
 
                   {recentHighlightFamilies.length === 0 && (
-                    <View style={styles.highlightEmptyState}>
-                      <View style={styles.highlightEmptyIcon}>
-                        <Ionicons name="sparkles-outline" size={28} color="#9CA3AF" />
+                    <View style={[mergedStyles.highlightEmptyState, { backgroundColor: theme.colors.surfaceVariant }]}>
+                      <View style={[mergedStyles.highlightEmptyIcon, { backgroundColor: theme.colors.surface }]}>
+                        <Ionicons name="sparkles-outline" size={28} color={theme.colors.textSecondary} />
                       </View>
-                      <Text style={styles.highlightEmptyTitle}>No families available yet</Text>
-                      <Text style={styles.highlightEmptySubtitle}>
+                      <Text style={mergedStyles.highlightEmptyTitle}>No families available yet</Text>
+                      <Text style={mergedStyles.highlightEmptySubtitle}>
                         Once you complete bookings or engage with families, they will appear here so you can request a highlight.
                       </Text>
                     </View>
@@ -2710,9 +3205,9 @@ const CaregiverDashboard = () => {
               </View>
 
               <View style={styles.highlightSection}>
-                <View style={styles.highlightHintBox}>
-                  <Ionicons name="information-circle-outline" size={18} color="#6366F1" style={styles.highlightHintIcon} />
-                  <Text style={styles.highlightHintText}>
+                <View style={[mergedStyles.highlightHintBox, { backgroundColor: theme.colors.surfaceVariant }]}>
+                  <Ionicons name="information-circle-outline" size={18} color={theme.colors.primary} style={styles.highlightHintIcon} />
+                  <Text style={mergedStyles.highlightHintText}>
                     Families receive a friendly message summarizing why highlights matter. You can add a personal note after selecting a family.
                   </Text>
                 </View>
@@ -2728,7 +3223,7 @@ const CaregiverDashboard = () => {
                     setSelectedFamilyForHighlight(null);
                   }}
                   style={[styles.highlightSecondaryButton, styles.highlightActionButton]}
-                  labelStyle={styles.highlightSecondaryLabel}
+                  labelStyle={[mergedStyles.highlightSecondaryLabel, { color: theme.colors.text }]}
                 >
                   Cancel
                 </Button>
@@ -2747,6 +3242,7 @@ const CaregiverDashboard = () => {
                   style={[styles.highlightPrimaryButton, styles.highlightActionButton]}
                   loading={highlightRequestSending}
                   disabled={highlightRequestSending || !selectedFamilyForHighlight}
+                  buttonColor={theme.colors.primary}
                 >
                   <View style={styles.highlightPrimaryContent}>
                     <Ionicons name="send" size={18} color="#FFFFFF" />
@@ -2770,10 +3266,12 @@ const CaregiverDashboard = () => {
           onSign={handleContractSignFromModal}
           onResend={handleResendContract}
           onDownloadPdf={handleDownloadContractPdf}
+          theme={theme}
+          isDark={isDark}
         />
       )}
     </Fragment>
   );
-}
+};
 
 export default CaregiverDashboard;

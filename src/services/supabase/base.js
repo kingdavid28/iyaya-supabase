@@ -4,12 +4,23 @@ import { resolveSupabaseUserId } from './utils/idResolver'
 
 export class SupabaseBase {
   _withTimeout(promise, timeoutMs = 10000) {
+    // If the promise is a Supabase query, we'll handle it differently
+    if (promise && typeof promise.then === 'function' && promise.query) {
+      const timeoutPromise = new Promise((_, reject) => 
+        setTimeout(() => reject(new Error('Network request timed out')), timeoutMs)
+      );
+      
+      // Return the first promise that resolves/rejects
+      return Promise.race([promise, timeoutPromise]);
+    }
+    
+    // For regular promises, just race them
     return Promise.race([
       promise,
       new Promise((_, reject) => 
         setTimeout(() => reject(new Error('Network request timed out')), timeoutMs)
       )
-    ])
+    ]);
   }
 
   _handleError(method, error, throwError = true) {

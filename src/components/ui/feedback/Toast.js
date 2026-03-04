@@ -7,9 +7,9 @@ export const Toast = ({ visible, message, type = 'success', onHide, duration = 2
   useEffect(() => {
     let timer;
     if (visible) {
-      Animated.timing(opacity, { toValue: 1, duration: 200, useNativeDriver: true }).start(() => {
+      Animated.timing(opacity, { toValue: 1, duration: 200, useNativeDriver: false }).start(() => {
         timer = setTimeout(() => {
-          Animated.timing(opacity, { toValue: 0, duration: 200, useNativeDriver: true }).start(() => {
+          Animated.timing(opacity, { toValue: 0, duration: 200, useNativeDriver: false }).start(() => {
             onHide && onHide();
           });
         }, duration);

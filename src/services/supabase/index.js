@@ -14,13 +14,14 @@ import { reviewService } from './reviewService'
 import { storageService } from './storageService'
 import { userService } from './userService'
 import { userStatusService } from './userStatusService'
+import walletService from './walletService'
 
 // Import the main supabaseService for upload functionality
 // Note: This creates a circular dependency issue since we're importing from parent directory
 // TODO: Move uploadProfileImage to storageService and remove this import
 
 // Export individual services (preferred approach)
-export { applicationService, bookingService, childrenService, contractService, informationRequestService, jobService, messagingService, notificationService, privacyService, realtimeService, reportService, reviewService, storageService, userService, userStatusService }
+export { applicationService, bookingService, childrenService, contractService, informationRequestService, jobService, messagingService, notificationService, privacyService, realtimeService, reportService, reviewService, storageService, userService, userStatusService, walletService }
 
 // Facade pattern for unified access (when needed)
 export class SupabaseServiceFacade {
@@ -40,6 +41,7 @@ export class SupabaseServiceFacade {
     this.reports = reportService
     this.contracts = contractService
     this.informationRequests = informationRequestService
+    this.wallet = walletService
   }
 
   // === USER & PROFILE METHODS ===
@@ -135,6 +137,12 @@ export class SupabaseServiceFacade {
   async updateReview(reviewId, data) { return this.reviews.updateReview(reviewId, data) }
 
   // === REALTIME SUBSCRIPTIONS ===
+  // === WALLET METHODS ===
+  async getWallet(userId) { return this.wallet.getWallet(userId) }
+  async saveWallet(userId, walletData) { return this.wallet.saveWallet(userId, walletData) }
+  async verifyWallet(userId, walletAddress) { return this.wallet.verifyWallet(userId, walletAddress) }
+  async deleteWallet(userId) { return this.wallet.deleteWallet(userId) }
+
   subscribeToApplications(jobId, callback) { return this.realtime.subscribeToApplications(jobId, callback) }
   subscribeToBookings(userId, callback) { return this.realtime.subscribeToBookings(userId, callback) }
 

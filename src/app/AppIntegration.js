@@ -1,11 +1,8 @@
 import React, { useEffect } from 'react';
 import { trackEvent } from '../utils/analytics';
-import { useSecurity } from '../hooks/useSecurity';
 
 // Integration component to initialize all implemented functionality
 const AppIntegration = ({ children }) => {
-  const { checkRateLimit } = useSecurity();
-
   useEffect(() => {
     const initializeApp = async () => {
       try {

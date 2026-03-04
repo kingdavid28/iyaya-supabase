@@ -2,11 +2,10 @@ import { useEffect, useState, useCallback } from 'react'
 import { useAuth } from '../contexts/AuthContext'
 import { userStatusService } from '../services/supabase/userStatusService'
 import { Alert } from 'react-native'
-import { useNavigation } from '@react-navigation/native'
+import { navigationService } from '../navigation/navigationService'
 
 export const useUserStatus = () => {
   const { user, signOut } = useAuth()
-  const navigation = useNavigation()
   const [statusData, setStatusData] = useState(null)
   const [loading, setLoading] = useState(true)
   const [subscription, setSubscription] = useState(null)
@@ -87,7 +86,7 @@ export const useUserStatus = () => {
   const handleAppeal = async () => {
     try {
       const details = await userStatusService.getUserSuspensionDetails(user.id)
-      navigation.navigate('Appeal', { suspensionDetails: details })
+      navigationService.navigate('Appeal', { suspensionDetails: details })
     } catch (error) {
       console.error('Error navigating to appeal:', error)
       Alert.alert('Error', 'Unable to open appeal form. Please try again.')

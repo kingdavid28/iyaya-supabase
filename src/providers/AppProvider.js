@@ -1,7 +1,7 @@
 import React from 'react';
 import { View, ActivityIndicator } from 'react-native';
 import { ThemeProvider, useThemeContext } from '../contexts/ThemeContext';
-import { PaperProvider } from 'react-native-paper';
+// import { PaperProvider } from 'react-native-paper';
 import { AppProvider as CoreAppProvider } from '../contexts/AppContext';
 
 // Wrapper component to access theme context
@@ -18,9 +18,9 @@ const ThemeWrapper = ({ children }) => {
   }
   
   return (
-    <PaperProvider theme={theme}>
+    <View style={{ flex: 1 }}>
       {children}
-    </PaperProvider>
+    </View>
   );
 };
 

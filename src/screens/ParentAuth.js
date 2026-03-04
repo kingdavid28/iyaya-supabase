@@ -1,8 +1,7 @@
 import { Ionicons } from "@expo/vector-icons";
-import { CommonActions, useFocusEffect } from '@react-navigation/native';
 import { LinearGradient } from "expo-linear-gradient";
-import Constants from 'expo-constants';
-import React, { useState } from 'react';
+import { CommonActions } from '@react-navigation/native';
+import React, { useState, useCallback } from 'react';
 import {
   Alert,
   Image,
@@ -15,25 +14,18 @@ import {
   View
 } from 'react-native';
 import { Button, TextInput, useTheme } from "react-native-paper";
-import { useApp } from "../contexts/AppContext";
-import { useAuth } from '../contexts/AuthContext';
 import { useAuthForm } from '../hooks/useAuthForm';
-import { useAuthSubmit } from '../hooks/useAuthSubmit';
+import { useAuth } from '../contexts/AuthContext';
 import CustomDateTimePicker from '../shared/ui/inputs/DateTimePicker';
 import GoogleSignInButton from '../components/auth/GoogleSignInButton';
 
 const ParentAuth = ({ navigation, route }) => {
-  const theme = useTheme();
-  const { dispatch } = useApp();
-  const { user: authUser, signIn, signUp, signInWithGoogle, verifyEmailToken } = useAuth();
-
-  // Navigation is now handled by AuthContext, no need for focus effect
-
   const [mode, setMode] = useState(route.params?.mode || 'login');
-  const { formData, formErrors, handleChange, validateForm: validateCurrentForm, resetForm } = useAuthForm();
-  const { handleSubmit: handleFormSubmit, handleManualVerification, isSubmitting } = useAuthSubmit(navigation);
+  const { formData, formErrors, handleChange, validateForm, resetForm } = useAuthForm({ role: 'parent' });
+  const { signIn, signUp, signInWithGoogle, signOut, resetPassword } = useAuth();
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Calculate age from birth date
   const calculateAge = (birthDate) => {
@@ -51,6 +43,10 @@ const ParentAuth = ({ navigation, route }) => {
   const handleSubmit = async () => {
     try {
       if (mode === 'signup') {
+        if (!validateForm(mode, 'parent')) {
+          return;
+        }
+
         // Validate age requirement
         if (formData.birthDate) {
           const age = calculateAge(formData.birthDate);
@@ -64,14 +60,22 @@ const ParentAuth = ({ navigation, route }) => {
           }
         }
 
+        setIsSubmitting(true);
+        console.log('🚀 Proceeding with signup for:', formData.email, 'as parent');
+
+        // Prepare user data with role (matching CaregiverAuth pattern)
         const userData = {
-          name: `${formData.firstName} ${formData.lastName}`,
+          name: `${formData.firstName} ${formData.middleInitial ? formData.middleInitial + '. ' : ''}${formData.lastName}`.trim(),
           firstName: formData.firstName,
           lastName: formData.lastName,
+          ...(formData.middleInitial && { middleInitial: formData.middleInitial }),
+          ...(formData.birthDate && { birthDate: formData.birthDate }),
           phone: formData.phone,
-          role: 'parent'
+          role: 'parent' // Explicit role for parents
         };
-        await signUp(formData.email, formData.password, userData);
+
+        // Execute signup
+        const result = await signUp(formData.email, formData.password, userData);
 
         // Show email verification notification
         Alert.alert(
@@ -81,15 +85,73 @@ const ParentAuth = ({ navigation, route }) => {
             {
               text: 'OK',
               onPress: () => {
-                // Switch to login mode after signup
                 setMode('login');
                 resetForm();
               }
             }
           ]
         );
+
+        return result;
+
       } else if (mode === 'login') {
-        await signIn(formData.email, formData.password);
+        if (!validateForm(mode, 'parent')) {
+          return;
+        }
+        setIsSubmitting(true);
+        console.log('🔐 [ParentAuth] Starting login...');
+
+        const result = await signIn(formData.email, formData.password);
+
+        if (result?.error) {
+          throw new Error(result.error.message || 'Failed to sign in');
+        }
+
+        // Verify the user has the correct role
+        const userRole = result?.user?.role?.toLowerCase()?.trim();
+        
+        if (userRole !== 'parent') {
+          console.error('❌ [ParentAuth] Role mismatch:', { expected: 'parent', actual: userRole });
+          
+          // Sign out the user
+          await signOut();
+          
+          throw new Error(`This account is registered as a ${userRole || 'different user type'}. Please use the ${userRole || 'correct'} login page.`);
+        }
+
+        console.log('🔐 [ParentAuth] Login successful, navigating to ParentDashboard');
+
+        // Small delay to ensure auth state is fully updated
+        setTimeout(() => {
+          // Navigate to ParentDashboard after successful login
+          navigation.dispatch(
+            CommonActions.reset({
+              index: 0,
+              routes: [{ name: 'ParentDashboard' }],
+            })
+          );
+        }, 100);
+
+        return result;
+
+      } else if (mode === 'reset') {
+        if (!validateForm(mode, 'parent')) {
+          return;
+        }
+        setIsSubmitting(true);
+        console.log('🔄 [ParentAuth] Starting password reset...');
+
+        const result = await resetPassword(formData.email);
+
+        Alert.alert(
+          "Reset Link Sent",
+          "If an account with that email exists, a password reset link has been sent."
+        );
+
+        setMode('login');
+        resetForm();
+
+        return result;
       }
     } catch (error) {
       console.error('Auth error:', error?.message);
@@ -102,6 +164,8 @@ const ParentAuth = ({ navigation, route }) => {
         { text: 'OK' }
       ]);
       return;
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -109,6 +173,10 @@ const ParentAuth = ({ navigation, route }) => {
     setMode(mode === 'login' ? 'signup' : 'login');
     resetForm();
   };
+
+  const handleGoBack = useCallback(() => {
+    navigation.goBack();
+  }, [navigation]);
 
   return (
     <KeyboardAvoidingView
@@ -129,7 +197,7 @@ const ParentAuth = ({ navigation, route }) => {
         >
           <View style={styles.header}>
             <TouchableOpacity
-              onPress={() => navigation.goBack()}
+              onPress={handleGoBack}
               style={styles.backButton}
               accessibilityLabel="Go back"
             >
@@ -327,7 +395,7 @@ const ParentAuth = ({ navigation, route }) => {
                       <Text style={styles.dividerText}>or</Text>
                       <View style={styles.dividerLine} />
                     </View>
-                    
+
                     <GoogleSignInButton
                       onPress={() => signInWithGoogle('parent')}
                       loading={isSubmitting}

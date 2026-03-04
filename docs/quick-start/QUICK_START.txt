@@ -1,0 +1,108 @@
+╔══════════════════════════════════════════════════════════════════╗
+║                    IMMEDIATE ACTION REQUIRED                     ║
+║                  Role Mapping & Wallet Fix                       ║
+╚══════════════════════════════════════════════════════════════════╝
+
+┌──────────────────────────────────────────────────────────────────┐
+│ STEP 1: RUN MIGRATIONS IN SUPABASE SQL EDITOR                   │
+└──────────────────────────────────────────────────────────────────┘
+
+  1️⃣  migrations/005_complete_wallet_fix.sql
+      → Adds wallet columns (solana_wallet_address, preferred_token)
+      → Creates update_user_wallet() RPC function
+
+  2️⃣  migrations/006_fix_role_constraint.sql
+      → Fixes role constraint to accept 'parent'
+      → Updates any 'customer' roles to 'parent'
+
+  3️⃣  migrations/012_fix_role_consistency.sql
+      → Ensures consistency across app_user and users tables
+      → Updates is_admin() function
+
+  4️⃣  migrations/VERIFY_MIGRATIONS.sql
+      → Verifies all changes were applied correctly
+      → Shows summary of database state
+
+┌──────────────────────────────────────────────────────────────────┐
+│ STEP 2: VERIFY MIGRATIONS SUCCEEDED                              │
+└──────────────────────────────────────────────────────────────────┘
+
+  Run in Supabase SQL Editor:
+
+  SELECT constraint_name, check_clause 
+  FROM information_schema.check_constraints 
+  WHERE constraint_name LIKE '%role%';
+
+  ✅ Should show: 'parent', 'caregiver', 'admin'
+  ❌ Should NOT show: 'customer'
+
+┌──────────────────────────────────────────────────────────────────┐
+│ STEP 3: TEST AUTHENTICATION FLOWS                                │
+└──────────────────────────────────────────────────────────────────┘
+
+  🧑‍⚕️ CAREGIVER TEST:
+     Signup → Email Verify → Login → CaregiverDashboard ✅
+
+  👨‍👩‍👧 PARENT TEST:
+     Signup → Email Verify → Login → ParentDashboard ✅
+
+  💰 WALLET TEST:
+     Login → Settings → Add Wallet → Save → Refresh → Verify ✅
+
+┌──────────────────────────────────────────────────────────────────┐
+│ ROLE MAPPING REFERENCE                                           │
+└──────────────────────────────────────────────────────────────────┘
+
+  User Type    │ Database Role │ Dashboard
+  ─────────────┼───────────────┼─────────────────────
+  Parent       │ 'parent'      │ ParentDashboard
+  Caregiver    │ 'caregiver'   │ CaregiverDashboard
+  Admin        │ 'admin'       │ AdminDashboard
+
+  ⚠️  IMPORTANT: Always use 'parent', NEVER 'customer'
+
+┌──────────────────────────────────────────────────────────────────┐
+│ QUICK TROUBLESHOOTING                                            │
+└──────────────────────────────────────────────────────────────────┘
+
+  ❌ "Role constraint violation"
+     → Run migration 012_fix_role_consistency.sql
+
+  ❌ "Column does not exist: solana_wallet_address"
+     → Run migration 005_complete_wallet_fix.sql
+
+  ❌ "Wrong dashboard redirect"
+     → Check user role in database:
+       SELECT id, email, role FROM users WHERE email = 'user@email.com';
+
+  ❌ "Email already exists"
+     → Use different email OR delete from Supabase Auth dashboard
+
+┌──────────────────────────────────────────────────────────────────┐
+│ FILES TO REVIEW                                                  │
+└──────────────────────────────────────────────────────────────────┘
+
+  📄 IMMEDIATE_CHECKLIST.md     - Step-by-step checklist
+  📄 MIGRATION_GUIDE.md          - Comprehensive guide
+  📄 ROLE_MAPPING_FIX_SUMMARY.md - Complete summary
+  📄 migrations/VERIFY_MIGRATIONS.sql - Verification script
+
+┌──────────────────────────────────────────────────────────────────┐
+│ SUCCESS CRITERIA                                                 │
+└──────────────────────────────────────────────────────────────────┘
+
+  ✅ All migrations run without errors
+  ✅ Verification script shows all checks passed
+  ✅ Caregiver signup → CaregiverDashboard
+  ✅ Parent signup → ParentDashboard
+  ✅ Wallet save functionality works
+  ✅ No 'customer' roles in database
+  ✅ All roles are 'parent', 'caregiver', or 'admin'
+
+┌──────────────────────────────────────────────────────────────────┐
+│ ESTIMATED TIME: 15-20 minutes                                    │
+└──────────────────────────────────────────────────────────────────┘
+
+╔══════════════════════════════════════════════════════════════════╗
+║  🎯 START HERE: Open Supabase SQL Editor and run migrations     ║
+╚══════════════════════════════════════════════════════════════════╝

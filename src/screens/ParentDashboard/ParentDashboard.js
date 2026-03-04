@@ -2,10 +2,11 @@ import { useNavigation } from '@react-navigation/native';
 import * as Sharing from 'expo-sharing';
 import * as WebBrowser from 'expo-web-browser';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { Alert, Linking, Platform, Text, View } from 'react-native';
+import { Alert, Linking, Platform, StyleSheet, Text, View } from 'react-native';
 
 // Core imports
 import { useAuth } from '../../contexts/AuthContext';
+import { useThemeContext } from '../../contexts/ThemeContext'; // Added theme context
 import { useNotificationCounts } from '../../hooks/useNotificationCounts';
 import { useParentDashboard } from '../../hooks/useParentDashboard';
 
@@ -19,7 +20,7 @@ import {
   countActiveFilters,
   getDefaultFilters,
 } from '../../utils/filterUtils';
-import { styles } from '../styles/ParentDashboard.styles';
+import { styles as staticStyles } from '../styles/ParentDashboard.styles';
 
 // Component imports
 import ContractTypeSelector, { CONTRACT_TYPES } from '../../components/modals/ContractTypeSelector';
@@ -268,8 +269,38 @@ class ErrorBoundary extends React.Component {
 }
 
 const ParentDashboard = () => {
+  // Theme context
+  const { theme, isDark } = useThemeContext();
   const navigation = useNavigation();
   const { signOut, user } = useAuth();
+
+  // Create dynamic styles based on theme
+  const dynamicStyles = useMemo(() => StyleSheet.create({
+    container: {
+      flex: 1,
+      backgroundColor: theme.colors.background,
+    },
+    contentContainer: {
+      flex: 1,
+      backgroundColor: theme.colors.background,
+    },
+    defaultTab: {
+      flex: 1,
+      justifyContent: 'center',
+      alignItems: 'center',
+      backgroundColor: theme.colors.background,
+    },
+    errorText: {
+      color: theme.colors.error,
+    },
+    // Add other dynamic styles as needed
+  }), [theme, isDark]);
+
+  // Merge static and dynamic styles
+  const styles = useMemo(() => ({
+    ...staticStyles,
+    ...dynamicStyles,
+  }), [dynamicStyles]);
 
   // Dashboard data
   const {
@@ -463,7 +494,7 @@ const ParentDashboard = () => {
 
     Alert.alert(
       'Select a caregiver first',
-      'Choose a caregiver from the dashboard and tap “Request Info” on their card to start a privacy request.'
+      'Choose a caregiver from the dashboard and tap "Request Info" on their card to start a privacy request.'
     );
   }, [requestInfoTarget, toggleModal]);
 
@@ -1308,11 +1339,18 @@ const ParentDashboard = () => {
     }
   }, [profileForm, toggleModal, loadProfile, user?.id]);
 
+  // Enhanced renderActiveTab with theme props
   const renderActiveTab = () => {
+    const tabProps = {
+      theme,
+      isDark,
+    };
+
     switch (activeTab) {
       case 'home':
         return (
           <HomeTab
+            {...tabProps}
             bookings={bookings}
             children={children}
             quickActions={quickActions}
@@ -1342,6 +1380,7 @@ const ParentDashboard = () => {
       case 'search':
         return (
           <SearchTab
+            {...tabProps}
             caregivers={caregiversWithReviews}
             filteredCaregivers={filteredCaregivers}
             onViewCaregiver={handleViewCaregiver}
@@ -1363,6 +1402,7 @@ const ParentDashboard = () => {
       case 'bookings':
         return (
           <BookingsTab
+            {...tabProps}
             bookings={bookings}
             bookingsFilter={bookingsFilter}
             setBookingsFilter={setBookingsFilter}
@@ -1397,6 +1437,7 @@ const ParentDashboard = () => {
       case 'messages':
         return (
           <MessagesTab
+            {...tabProps}
             navigation={navigation}
             refreshing={refreshing}
             onRefresh={onRefresh}
@@ -1405,6 +1446,7 @@ const ParentDashboard = () => {
       case 'jobs':
         return (
           <JobsTab
+            {...tabProps}
             jobs={jobs}
             refreshing={refreshing}
             onRefresh={onRefresh}
@@ -1421,6 +1463,7 @@ const ParentDashboard = () => {
       case 'applications':
         return (
           <JobApplicationsTab
+            {...tabProps}
             applications={applications}
             bookings={bookings}
             loading={applicationsLoading}
@@ -1438,6 +1481,7 @@ const ParentDashboard = () => {
       case 'reviews':
         return (
           <ReviewsTab
+            {...tabProps}
             refreshing={refreshing}
             onRefresh={onRefresh}
             loading={loading}
@@ -1446,6 +1490,7 @@ const ParentDashboard = () => {
       case 'alerts':
         return (
           <AlertsTab
+            {...tabProps}
             navigation={navigation}
             refreshing={refreshing}
             onRefresh={onRefresh}
@@ -1464,7 +1509,9 @@ const ParentDashboard = () => {
       default:
         return (
           <View style={styles.defaultTab}>
-            <Text>Select a tab to get started</Text>
+            <Text style={{ color: theme.colors.text }}>
+              Select a tab to get started
+            </Text>
           </View>
         );
     }
@@ -1474,6 +1521,8 @@ const ParentDashboard = () => {
     <View style={styles.container}>
       <View style={styles.contentContainer}>
         <Header
+          theme={theme}
+          isDark={isDark}
           navigation={navigation}
           onProfilePress={() => toggleModal('profile', true)}
           onSignOut={signOut}
@@ -1491,6 +1540,8 @@ const ParentDashboard = () => {
         />
 
         <NavigationTabs
+          theme={theme}
+          isDark={isDark}
           activeTab={activeTab}
           setActiveTab={setActiveTab}
           onProfilePress={() => toggleModal('profile', true)}

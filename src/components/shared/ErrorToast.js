@@ -1,7 +1,7 @@
 import React, { useEffect } from 'react';
 import { View, Text, StyleSheet, Animated } from 'react-native';
 import { AlertCircle } from 'lucide-react-native';
-
+import { Platform } from 'react-native';
 const ErrorToast = ({ message, visible, onHide, duration = 3000 }) => {
   const opacity = React.useRef(new Animated.Value(0)).current;
 
@@ -11,13 +11,13 @@ const ErrorToast = ({ message, visible, onHide, duration = 3000 }) => {
         Animated.timing(opacity, {
           toValue: 1,
           duration: 300,
-          useNativeDriver: true,
+          useNativeDriver: Platform.OS !== 'web',
         }),
         Animated.delay(duration),
         Animated.timing(opacity, {
           toValue: 0,
           duration: 300,
-          useNativeDriver: true,
+          useNativeDriver: Platform.OS !== 'web',
         }),
       ]).start(() => {
         if (onHide) onHide();

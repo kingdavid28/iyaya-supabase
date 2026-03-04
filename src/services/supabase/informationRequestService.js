@@ -517,9 +517,9 @@ class InformationRequestService extends SupabaseBase {
                     .eq('id', permissions.targetId)
                     .maybeSingle(),
                 supabase
-                    .from('caregiver_profiles')
+                    .from('caregiver')
                     .select('*')
-                    .eq('user_id', permissions.targetId)
+                    .eq('id', permissions.targetId)
                     .maybeSingle()
             ])
 

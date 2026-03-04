@@ -313,13 +313,13 @@ export const useCaregiverDashboard = () => {
       // Get user profile from users table
       const userProfile = await supabaseService.getProfile(targetUserId);
 
-      // Get caregiver-specific profile from caregiver_profiles table
+      // Get caregiver-specific profile from caregiver table
       let caregiverProfile = null;
       try {
         const { data } = await supabase
-          .from('caregiver_profiles')
+          .from('caregiver')
           .select('*')
-          .eq('user_id', targetUserId)
+          .eq('id', targetUserId)
           .single();
         caregiverProfile = data;
       } catch (error) {

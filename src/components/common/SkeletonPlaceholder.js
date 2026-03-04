@@ -1,6 +1,6 @@
 import React, { useEffect, useRef } from 'react'
 import { Animated, Easing, StyleSheet, View } from 'react-native'
-
+import { Platform } from 'react-native';
 const BASE_COLOR = '#E4E6F1'
 const HIGHLIGHT_COLOR = 'rgba(255, 255, 255, 0.35)'
 
@@ -14,13 +14,13 @@ const useShimmer = () => {
           toValue: 1,
           duration: 1200,
           easing: Easing.linear,
-          useNativeDriver: true
+          useNativeDriver: Platform.OS !== 'web'
         }),
         Animated.timing(translate, {
           toValue: 0,
           duration: 1200,
           easing: Easing.linear,
-          useNativeDriver: true
+          useNativeDriver: Platform.OS !== 'web'
         })
       ])
     )

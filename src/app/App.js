@@ -1,11 +1,19 @@
+import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { QueryClient, QueryClientProvider, focusManager } from '@tanstack/react-query';
 import { Buffer } from 'buffer';
 import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
-import React, { useEffect, useState, useCallback } from 'react';
 import { ActivityIndicator, AppState, Platform, Text, View, LogBox } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
+import { PaperProvider } from 'react-native-paper';
+import 'react-native-get-random-values';
+
+// Theme and Context Providers
+import { ThemeProvider, useThemeContext } from '../contexts/ThemeContext';
+
+// Solana Integration
+import { SolanaProvider } from '../contexts/SolanaContext';
 
 // Ignore specific warnings
 LogBox.ignoreLogs([
@@ -18,7 +26,7 @@ const Analytics = React.memo(() => {
   if (Platform.OS !== 'web' || process.env.NODE_ENV !== 'production') {
     return null;
   }
-  
+
   try {
     const { Analytics: VercelAnalytics } = require('@vercel/analytics/react');
     return <VercelAnalytics />;
@@ -46,9 +54,9 @@ const queryClient = new QueryClient({
   },
 });
 
-// Lazy load components
-const LazyAppNavigator = React.lazy(() => import('./navigation/AppNavigator'));
-const LazyAppIntegration = React.lazy(() => import('./AppIntegration'));
+// Import components directly to avoid bundle loading issues
+import AppNavigator from './navigation/AppNavigator';
+import AppIntegration from './AppIntegration';
 
 // Core providers
 import PrivacyProvider from '../components/features/privacy/PrivacyManager';
@@ -56,7 +64,7 @@ import ProfileDataProvider from '../components/features/privacy/ProfileDataManag
 import AppProvider from '../providers/AppProvider';
 import { ErrorBoundary } from '../shared/ui';
 import { AuthProvider } from '../contexts/AuthContext';
-import { ensureInitialized, getSession } from '../config/supabase';
+import { ensureInitialized } from '../config/supabase';
 
 // Initialize splash screen
 SplashScreen.preventAutoHideAsync().catch(() => {
@@ -75,7 +83,7 @@ const AppInitializer = ({ children, onInitialized }) => {
       try {
         // Initialize Supabase and get session
         const session = await ensureInitialized();
-        
+
         if (isMounted) {
           setInitialized(true);
           setError(null);
@@ -175,21 +183,23 @@ const AppContent = () => {
   }
 
   return (
-    <React.Suspense
-      fallback={
-        <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
-          <ActivityIndicator size="large" />
-        </View>
-      }
-    >
-      <View style={{ flex: 1 }} onLayout={onLayoutRootView}>
-        <LazyAppIntegration sessionInfo={sessionInfo}>
-          <LazyAppNavigator />
-          <StatusBar style="auto" />
-          <Analytics />
-        </LazyAppIntegration>
-      </View>
-    </React.Suspense>
+    <View style={{ flex: 1 }} onLayout={onLayoutRootView}>
+      <AppIntegration sessionInfo={sessionInfo}>
+        <AppNavigator />
+        <StatusBar style="auto" />
+        <Analytics />
+      </AppIntegration>
+    </View>
+  );
+};
+
+// Themed App Wrapper
+const ThemedApp = ({ children }) => {
+  const { theme } = useThemeContext();
+  return (
+    <PaperProvider theme={theme}>
+      {children}
+    </PaperProvider>
   );
 };
 
@@ -209,17 +219,23 @@ export default function App() {
       <ErrorBoundary>
         <QueryClientProvider client={queryClient}>
           <SafeAreaProvider>
-            <AppProvider>
-              <ProfileDataProvider>
-                <PrivacyProvider>
-                  <AppInitializer>
-                    <AuthProvider>
-                      <AppContent />
-                    </AuthProvider>
-                  </AppInitializer>
-                </PrivacyProvider>
-              </ProfileDataProvider>
-            </AppProvider>
+            <ThemeProvider>
+              <ThemedApp>
+                <SolanaProvider>
+                  <AppProvider>
+                    <ProfileDataProvider>
+                      <PrivacyProvider>
+                        <AppInitializer>
+                          <AuthProvider>
+                            <AppContent />
+                          </AuthProvider>
+                        </AppInitializer>
+                      </PrivacyProvider>
+                    </ProfileDataProvider>
+                  </AppProvider>
+                </SolanaProvider>
+              </ThemedApp>
+            </ThemeProvider>
           </SafeAreaProvider>
         </QueryClientProvider>
       </ErrorBoundary>

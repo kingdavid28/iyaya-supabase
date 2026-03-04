@@ -1,11 +1,8 @@
 {
-  "extends": "./node_modules/expo/tsconfig.base",
+  "extends": "expo/tsconfig.base",
   "compilerOptions": {
     "target": "esnext",
-    "lib": [
-      "dom",
-      "esnext"
-    ],
+    "lib": ["dom", "esnext", "es2017"],
     "allowJs": true,
     "skipLibCheck": true,
     "esModuleInterop": true,
@@ -18,9 +15,7 @@
     "moduleResolution": "bundler",
     "baseUrl": ".",
     "paths": {
-      "@/*": [
-        "./src/*"
-      ]
+      "@/*": ["./src/*"]
     },
     "jsx": "react-native",
     "module": "esnext",
@@ -30,16 +25,29 @@
     "noImplicitReturns": false,
     "noImplicitThis": false,
     "noUnusedLocals": false,
-    "noUnusedParameters": false
+    "noUnusedParameters": false,
+    "types": ["react", "react-native", "node"],
+    "downlevelIteration": true
   },
   "include": [
     "src/**/*",
+    "admin/**/*",
     "App.tsx",
+    "App.js",
     "app.json",
     "babel.config.js",
-    "metro.config.js"
+    "metro.config.js",
+    "**/*.ts",
+    "**/*.tsx",
+    "**/*.js",
+    "**/*.jsx"
   ],
   "exclude": [
-    "node_modules"
+    "node_modules",
+    "**/node_modules/*",
+    "**/__tests__/*",
+    "**/*.spec.ts",
+    "**/*.test.ts",
+    "**/__mocks__/*"
   ]
 }

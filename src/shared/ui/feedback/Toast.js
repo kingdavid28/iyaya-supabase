@@ -1,15 +1,15 @@
 import React, { useEffect, useRef } from 'react';
 import { Animated, Text, View, StyleSheet } from 'react-native';
-
+import { Platform } from 'react-native';
 export const Toast = ({ visible, message, type = 'success', onHide, duration = 2000 }) => {
   const opacity = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
     let timer;
     if (visible) {
-      Animated.timing(opacity, { toValue: 1, duration: 200, useNativeDriver: true }).start(() => {
+      Animated.timing(opacity, { toValue: 1, duration: 200, useNativeDriver: Platform.OS !== 'web' }).start(() => {
         timer = setTimeout(() => {
-          Animated.timing(opacity, { toValue: 0, duration: 200, useNativeDriver: true }).start(() => {
+          Animated.timing(opacity, { toValue: 0, duration: 200, useNativeDriver: Platform.OS !== 'web' }).start(() => {
             onHide && onHide();
           });
         }, duration);

@@ -11,15 +11,16 @@ const AuthCallbackScreen = ({ navigation }) => {
     const handleCallback = async () => {
       try {
         console.log('🔄 Processing OAuth callback...');
-        
-        // Handle OAuth callback with default parent role
-        await handleOAuthCallback('parent');
-        
+
+        // Handle OAuth callback - do NOT force a role, let fetchUserWithProfile get the actual role from database
+        await handleOAuthCallback();
+
         // Wait a moment for auth state to update
         setTimeout(() => {
           if (user) {
-            console.log('✅ User authenticated, navigating to dashboard');
+            console.log('✅ User authenticated with role:', user.role);
             const dashboardRoute = user.role === 'caregiver' ? 'CaregiverDashboard' : 'ParentDashboard';
+            console.log('🧭 Navigating to:', dashboardRoute);
             navigation.dispatch(
               CommonActions.reset({
                 index: 0,
@@ -36,7 +37,7 @@ const AuthCallbackScreen = ({ navigation }) => {
             );
           }
           setProcessing(false);
-        }, 1500);
+        }, 500);
       } catch (error) {
         console.error('❌ Auth callback error:', error);
         navigation.dispatch(

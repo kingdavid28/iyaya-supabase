@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-
+import { StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import {
   Image,
@@ -10,7 +10,6 @@ import {
   View
 } from 'react-native';
 import { useAuth } from '../contexts/AuthContext';
-// Removed old import - using updated Supabase service
 import RatingsReviewsModal from '../components/ui/modals/RatingsReviewsModal';
 import { getCurrentSocketURL } from '../config/api';
 import { supabase } from '../config/supabase';
@@ -42,13 +41,18 @@ const CaregiverProfileComplete = ({ navigation, route }) => {
 
   const loadProfile = async () => {
     if (!profileUserId) {
-      console.log(' No user ID available');
+      console.log('No user ID available');
       return;
     }
 
     try {
       setLoading(true);
-      console.log(' Loading profile for user:', profileUserId);
+      
+      // Add defensive check for Supabase client
+      if (!supabase) {
+        console.error('Supabase client is not initialized');
+        throw new Error('Database connection failed');
+      }
 
       const parseNullableArray = (rawValue, fallback = []) => {
         if (!rawValue && rawValue !== 0) {
@@ -146,22 +150,26 @@ const CaregiverProfileComplete = ({ navigation, route }) => {
         .eq('id', profileUserId)
         .maybeSingle();
 
-      console.log(' User data:', userData);
-      console.log(' User error:', userError);
+      if (userError) {
+        console.error('User query error:', userError);
+        throw userError;
+      }
 
-      if (userError) throw userError;
+      if (!userData) {
+        console.error('No user data found for ID:', profileUserId);
+        throw new Error('User profile not found');
+      }
 
-      // Get caregiver profile data from caregiver_profiles table
+      // Get caregiver profile data from caregiver table
       const { data: caregiverData, error: caregiverError } = await supabase
-        .from('caregiver_profiles')
+        .from('caregiver')
         .select('*')
-        .eq('user_id', profileUserId)
+        .eq('id', profileUserId)
         .maybeSingle();
 
-      console.log(' Caregiver data:', caregiverData);
-      console.log(' Caregiver error:', caregiverError);
-
+      // Only throw error if it's not a "no rows returned" error
       if (caregiverError && caregiverError.code !== 'PGRST116') {
+        console.error('Caregiver query error:', caregiverError);
         throw caregiverError;
       }
 
@@ -231,10 +239,37 @@ const CaregiverProfileComplete = ({ navigation, route }) => {
         },
       };
 
-      console.log(' Combined profile data:', combinedProfile);
+      console.log('Profile loaded successfully');
       setProfile(combinedProfile);
+      
     } catch (error) {
-      console.error(' Profile load error:', error);
+      console.error('Profile load error:', error);
+      
+      // Set empty profile to show UI
+      setProfile({
+        name: '',
+        bio: '',
+        profileImage: null,
+        skills: [],
+        hourlyRate: null,
+        certifications: [],
+        availability: { days: [] },
+        ageCareRanges: [],
+        emergencyContacts: [],
+        backgroundCheckStatus: null,
+        experience: { description: '' },
+        documents: [],
+        portfolio: { images: [] },
+        education: null,
+        languages: [],
+        address: {
+          street: '',
+          city: '',
+          province: '',
+          zipCode: '',
+          country: 'Philippines',
+        },
+      });
     } finally {
       setLoading(false);
     }
@@ -602,7 +637,7 @@ const CaregiverProfileComplete = ({ navigation, route }) => {
   );
 };
 
-const styles = {
+const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#f5f5f5',
@@ -915,6 +950,6 @@ const styles = {
     marginBottom: 12,
     color: '#333',
   },
-};
+});
 
 export default CaregiverProfileComplete;

@@ -11,18 +11,97 @@ class SocketService {
   }
 
   async connect(userId) {
-    // Socket connection completely disabled
-    return Promise.resolve();
+    // Option 1: Keep disabled but fix other methods
+    // return Promise.resolve();
+    
+    // Option 2: Implement connection (recommended)
+    if (this.socket?.connected) {
+      return Promise.resolve();
+    }
+
+    const token = getAuthToken();
+    if (!token) {
+      return Promise.reject(new Error('No auth token available'));
+    }
+
+    try {
+      this.socket = io(process.env.REACT_APP_SOCKET_URL || 'http://localhost:3001', {
+        auth: { token },
+        query: { userId }
+      });
+
+      this.setupEventHandlers();
+
+      return new Promise((resolve, reject) => {
+        this.socket.on('connect', () => {
+          this.isConnected = true;
+          this.reconnectAttempts = 0;
+          resolve();
+        });
+
+        this.socket.on('connect_error', (error) => {
+          reject(error);
+        });
+
+        // Optional timeout
+        setTimeout(() => {
+          reject(new Error('Connection timeout'));
+        }, 10000);
+      });
+    } catch (error) {
+      return Promise.reject(error);
+    }
   }
 
   setupEventHandlers() {
-    // Socket event handlers disabled
-    return;
+    if (!this.socket) return;
+
+    // Handle disconnection
+    this.socket.on('disconnect', (reason) => {
+      this.isConnected = false;
+      if (reason === 'io server disconnect' || reason === 'transport close') {
+        this.handleReconnect();
+      }
+    });
+
+    // Forward socket events to registered handlers
+    const events = [
+      'new_message',
+      'new_notification',
+      'user_typing',
+      'user_stopped_typing',
+      'new_job',
+      'new_application',
+      'new_booking'
+    ];
+
+    events.forEach(event => {
+      this.socket.on(event, (data) => {
+        const handler = this.messageHandlers.get(event);
+        if (handler) {
+          handler(data);
+        }
+      });
+    });
   }
 
   handleReconnect() {
-    // Reconnection disabled
-    return;
+    if (this.reconnectAttempts >= this.maxReconnectAttempts) {
+      console.error('Max reconnection attempts reached');
+      return;
+    }
+
+    this.reconnectAttempts++;
+    const delay = Math.min(1000 * Math.pow(2, this.reconnectAttempts), 30000);
+
+    setTimeout(async () => {
+      try {
+        await this.connect();
+      } catch (error) {
+        console.error('Reconnection failed:', error);
+        this.handleReconnect();
+      }
+    }, delay);
   }
 
   disconnect() {
@@ -32,6 +111,7 @@ class SocketService {
     }
     this.isConnected = false;
     this.messageHandlers.clear();
+    this.reconnectAttempts = 0;
   }
 
   // Room management
@@ -60,7 +140,7 @@ class SocketService {
     }
   }
 
-  // Event handlers
+  // Event handlers - store callbacks
   onNewMessage(handler) {
     this.messageHandlers.set('new_message', handler);
   }
@@ -77,7 +157,6 @@ class SocketService {
     this.messageHandlers.set('user_stopped_typing', handler);
   }
 
-  // Job and application event handlers
   onNewJob(handler) {
     this.messageHandlers.set('new_job', handler);
   }
@@ -90,9 +169,11 @@ class SocketService {
     this.messageHandlers.set('new_booking', handler);
   }
 
-  // Remove listener method
   removeListener(eventType) {
     this.messageHandlers.delete(eventType);
+    if (this.socket) {
+      this.socket.off(eventType);
+    }
   }
 
   // Utility methods

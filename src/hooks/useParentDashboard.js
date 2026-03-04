@@ -33,8 +33,24 @@ const EMPTY_PROFILE = {
 const normalizeProfile = (profileData = {}) => {
   const rawAddress = profileData.address || profileData.location || '';
   const addressString = typeof rawAddress === 'string' ? rawAddress : (rawAddress?.street || rawAddress?.city || '');
-  const profileImage = profileData.profileImage || profileData.profile_image || profileData.avatar || profileData.imageUrl || null;
+  
+  // Extract profile image from all possible sources
+  const profileImage = profileData.profileImage 
+    || profileData.profile_image 
+    || profileData.avatar 
+    || profileData.imageUrl 
+    || profileData.image 
+    || null;
+
   const location = profileData.location || addressString;
+
+  console.log('📊 Normalizing profile:', {
+    hasName: !!profileData.name,
+    hasEmail: !!profileData.email,
+    hasProfileImage: !!profileImage,
+    profileImage,
+    profileDataKeys: Object.keys(profileData || {}).filter(k => k.includes('image') || k.includes('avatar')),
+  });
 
   return {
     ...profileData,
@@ -45,7 +61,9 @@ const normalizeProfile = (profileData = {}) => {
     location,
     children: profileData.children || [],
     profileImage,
+    profile_image: profileImage, // Ensure snake_case is also available
     imageUrl: profileImage,
+    avatar: profileImage,
   };
 };
 
@@ -314,7 +332,25 @@ export const useParentDashboard = () => {
       try {
         const profileResponse = await apiService.auth.getProfile();
         const profileData = profileResponse?.data || profileResponse || {};
-        return normalizeProfile(profileData);
+        
+        console.log('📥 useParentDashboard - Raw profile response:', {
+          has_data: !!profileResponse?.data,
+          profile_data_keys: Object.keys(profileData),
+          profileImage: profileData?.profileImage,
+          profile_image: profileData?.profile_image,
+          has_image_field: 'profile_image' in profileData || 'profileImage' in profileData
+        });
+        
+        const normalized = normalizeProfile(profileData);
+        
+        console.log('📤 useParentDashboard - Normalized profile:', {
+          name: normalized.name,
+          email: normalized.email,
+          profileImage: normalized.profileImage,
+          profile_image: normalized.profile_image
+        });
+        
+        return normalized;
       } catch (error) {
         console.error('Error loading profile:', error);
         return EMPTY_PROFILE;

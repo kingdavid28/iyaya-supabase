@@ -1,0 +1,131 @@
+╔══════════════════════════════════════════════════════════════════╗
+║                     🚨 ACTION REQUIRED NOW 🚨                    ║
+╚══════════════════════════════════════════════════════════════════╝
+
+┌──────────────────────────────────────────────────────────────────┐
+│ ISSUE FOUND: Duplicate RLS Policies on 'users' table            │
+└──────────────────────────────────────────────────────────────────┘
+
+┌──────────────────────────────────────────────────────────────────┐
+│ SOLUTION: Run 4 Migrations in Supabase SQL Editor               │
+└──────────────────────────────────────────────────────────────────┘
+
+  📝 STEP 1: Open Supabase SQL Editor
+     → Go to your Supabase project
+     → Click "SQL Editor" in sidebar
+     → Click "New query"
+
+  🔧 STEP 2: Run Migrations (IN ORDER!)
+     
+     1️⃣  migrations/005_complete_wallet_fix.sql
+         ✓ Adds wallet columns
+         ✓ Creates RPC function
+     
+     2️⃣  migrations/006_fix_role_constraint.sql
+         ✓ Fixes role constraint
+         ✓ Migrates 'customer' → 'parent'
+     
+     3️⃣  migrations/012_fix_role_consistency.sql
+         ✓ Ensures consistency
+         ✓ Updates is_admin() function
+     
+     4️⃣  migrations/013_cleanup_duplicate_policies.sql ⭐ NEW
+         ✓ Removes duplicate RLS policies
+         ✓ Cleans up users table
+     
+     5️⃣  migrations/VERIFY_MIGRATIONS.sql
+         ✓ Verifies everything worked
+
+  ✅ STEP 3: Verify Success
+     → Check for "ALL CHECKS PASSED" message
+     → No errors in SQL Editor
+
+  🧪 STEP 4: Test Application
+     → Caregiver signup → CaregiverDashboard ✅
+     → Parent signup → ParentDashboard ✅
+     → Wallet save → Data persists ✅
+
+┌──────────────────────────────────────────────────────────────────┐
+│ WHAT GETS FIXED                                                  │
+└──────────────────────────────────────────────────────────────────┘
+
+  ✅ Role Consistency
+     Before: Mixed 'customer' and 'parent' ❌
+     After:  Only 'parent', 'caregiver', 'admin' ✅
+
+  ✅ Wallet Functionality
+     Before: Missing columns ❌
+     After:  Full wallet support ✅
+
+  ✅ RLS Policies
+     Before: 11 duplicate policies ❌
+     After:  5 clean policies ✅
+
+  ✅ Authentication Flow
+     Before: Wrong dashboard redirects ❌
+     After:  Correct routing ✅
+
+┌──────────────────────────────────────────────────────────────────┐
+│ DUPLICATE POLICIES BEING REMOVED                                │
+└──────────────────────────────────────────────────────────────────┘
+
+  ❌ "Authenticated users can view caregiver profiles"
+  ❌ "Authenticated users can view parent profiles"
+  ❌ "Users can update own profile"
+  ❌ "Users can update their own profile"
+  ❌ "Users can view own profile"
+  ❌ "Users can view their own profile"
+
+┌──────────────────────────────────────────────────────────────────┐
+│ POLICIES BEING KEPT                                              │
+└──────────────────────────────────────────────────────────────────┘
+
+  ✅ users_select_own_profile
+  ✅ users_insert_own_profile
+  ✅ users_update_own_profile
+  ✅ users_delete_own_profile
+  ✅ Service role can manage users
+
+┌──────────────────────────────────────────────────────────────────┐
+│ TIME ESTIMATE                                                    │
+└──────────────────────────────────────────────────────────────────┘
+
+  ⏱️  Run migrations:     5 minutes
+  ⏱️  Verify:             2 minutes
+  ⏱️  Test:              15 minutes
+  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  ⏱️  TOTAL:            ~22 minutes
+
+┌──────────────────────────────────────────────────────────────────┐
+│ SUCCESS CRITERIA                                                 │
+└──────────────────────────────────────────────────────────────────┘
+
+  ✅ All 4 migrations run without errors
+  ✅ Verification shows "ALL CHECKS PASSED"
+  ✅ Only 5 RLS policies on users table
+  ✅ No duplicate policies
+  ✅ Caregiver → CaregiverDashboard
+  ✅ Parent → ParentDashboard
+  ✅ Wallet save works
+
+┌──────────────────────────────────────────────────────────────────┐
+│ DOCUMENTATION                                                    │
+└──────────────────────────────────────────────────────────────────┘
+
+  📄 ACTION_NOW.md              ← You are here
+  📄 IMMEDIATE_CHECKLIST.md     ← Detailed checklist
+  📄 README_IMMEDIATE_TASKS.md  ← Full overview
+  📄 INDEX.md                   ← All documentation
+
+┌──────────────────────────────────────────────────────────────────┐
+│ NEED HELP?                                                       │
+└──────────────────────────────────────────────────────────────────┘
+
+  1. Check IMMEDIATE_CHECKLIST.md for step-by-step
+  2. Review MIGRATION_GUIDE.md for testing
+  3. See ROLE_MAPPING_FIX_SUMMARY.md for details
+
+╔══════════════════════════════════════════════════════════════════╗
+║  🎯 START NOW: Open Supabase SQL Editor                         ║
+║  📁 Run: migrations/005_complete_wallet_fix.sql                  ║
+╚══════════════════════════════════════════════════════════════════╝

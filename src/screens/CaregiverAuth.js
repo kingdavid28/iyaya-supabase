@@ -1,5 +1,5 @@
 import { Ionicons } from '@expo/vector-icons';
-import { useFocusEffect } from '@react-navigation/native';
+import { useFocusEffect, CommonActions } from '@react-navigation/native';
 import { LinearGradient } from 'expo-linear-gradient';
 import Constants from 'expo-constants';
 import React, { useState } from 'react';
@@ -28,28 +28,11 @@ import { navigateToUserDashboard } from '../utils/navigationUtils';
 const CaregiverAuth = ({ navigation }) => {
   const [mode, setMode] = useState('login');
   const { dispatch } = useApp();
-  const { user: authUser, signIn, signUp, signInWithGoogle, resetPassword, verifyEmailToken } = useAuth();
-  const { formData, formErrors, handleChange, validateForm: validateCurrentForm, resetForm } = useAuthForm();
-  const { handleSubmit: handleAuthSubmit, isSubmitting } = useAuthSubmit(navigation);
+  const { user: authUser, signIn, signUp, signInWithGoogle, signOut, resetPassword, verifyEmailToken } = useAuth();
+  const { formData, formErrors, handleChange, validateForm, resetForm } = useAuthForm({ role: 'caregiver' });
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
-
-  // Execute function for handling async operations
-  const execute = async (asyncFunc, options = {}) => {
-    try {
-      const result = await asyncFunc();
-      return result;
-    } catch (error) {
-      if (options.onError) {
-        options.onError(error);
-      } else {
-        console.error('Error:', error);
-      }
-      throw error;
-    }
-  };
-
-  // Navigation is now handled by AuthContext, no need for focus effect
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Calculate age from birth date
   const calculateAge = (birthDate) => {
@@ -65,56 +48,59 @@ const CaregiverAuth = ({ navigation }) => {
 
   const handleFormSubmit = async () => {
     try {
+      // Dismiss keyboard if it's open
       Keyboard.dismiss();
     } catch (e) {
-      // Keyboard might not be available on web
+      console.log('Keyboard not available:', e);
     }
 
-    if (!validateCurrentForm(mode)) {
+    // Validate form
+    if (!validateForm(mode, 'caregiver')) {
       return;
     }
 
-    const { email, password, firstName, lastName, middleInitial, birthDate, phone } = formData;
-    const fullName = `${firstName} ${middleInitial ? middleInitial + '. ' : ''}${lastName}`.trim();
+    try {
+      setIsSubmitting(true);
 
-    const result = await execute(async () => {
       if (mode === 'signup') {
-        // Validate age requirement
-        if (birthDate) {
-          const age = calculateAge(birthDate);
+        // Validate age requirement for signup
+        if (formData.birthDate) {
+          const age = calculateAge(formData.birthDate);
           if (age < 18) {
             Alert.alert(
               'Age Requirement',
               'You must be at least 18 years old to create an account.',
               [{ text: 'OK' }]
             );
+            setIsSubmitting(false);
             return;
           }
         }
 
-        // Proceed with signup - backend will handle duplicate emails
-        console.log('🚀 Proceeding with signup for:', email, 'as caregiver');
+        console.log('🚀 Proceeding with signup for:', formData.email, 'as caregiver');
 
+        // Prepare user data with role
         const userData = {
-          name: fullName,
-          firstName,
-          lastName,
-          middleInitial,
-          birthDate,
-          phone,
-          role: 'caregiver'
+          name: `${formData.firstName} ${formData.middleInitial ? formData.middleInitial + '. ' : ''}${formData.lastName}`.trim(),
+          firstName: formData.firstName,
+          lastName: formData.lastName,
+          ...(formData.middleInitial && { middleInitial: formData.middleInitial }),
+          ...(formData.birthDate && { birthDate: formData.birthDate }),
+          phone: formData.phone,
+          role: 'caregiver' // Explicit role for caregivers
         };
-        const result = await signUp(email, password, userData);
+
+        // Execute signup
+        const result = await signUp(formData.email, formData.password, userData);
 
         // Show email verification notification
         Alert.alert(
           'Check Your Email',
-          `We've sent a verification link to ${email}. Please check your email and click the link to verify your account before signing in.`,
+          `We've sent a verification link to ${formData.email}. Please check your email and click the link to verify your account before signing in.`,
           [
             {
               text: 'OK',
               onPress: () => {
-                // Switch to login mode after signup
                 setMode('login');
                 resetForm();
               }
@@ -123,48 +109,93 @@ const CaregiverAuth = ({ navigation }) => {
         );
 
         return result;
+
+      } else if (mode === 'login') {
+        console.log('🔐 [CaregiverAuth] Starting login...');
+
+        const result = await signIn(formData.email, formData.password);
+
+        if (result?.error) {
+          throw new Error(result.error.message || 'Failed to sign in');
+        }
+
+        // Verify the user has the correct role from the profile (not user_metadata)
+        const userRole = result?.user?.role?.toLowerCase()?.trim();
+        
+        if (userRole !== 'caregiver') {
+          console.error('❌ [CaregiverAuth] Role mismatch:', { expected: 'caregiver', actual: userRole });
+          
+          // Sign out the user
+          await signOut();
+          
+          throw new Error(`This account is registered as a ${userRole || 'different user type'}. Please use the ${userRole || 'correct'} login page.`);
+        }
+
+        console.log('🔐 [CaregiverAuth] Login successful, navigating to CaregiverDashboard');
+
+        // Small delay to ensure auth state is fully updated
+        setTimeout(() => {
+          navigation.dispatch(
+            CommonActions.reset({
+              index: 0,
+              routes: [{ name: 'CaregiverDashboard' }],
+            })
+          );
+        }, 100);
+
+        return result;
+
       } else if (mode === 'reset') {
-        const result = await resetPassword(email);
-        Alert.alert("Reset Link Sent", "If an account with that email exists, a password reset link has been sent.");
+        console.log('🔄 [CaregiverAuth] Starting password reset...');
+
+        const result = await resetPassword(formData.email);
+
+        Alert.alert(
+          "Reset Link Sent",
+          "If an account with that email exists, a password reset link has been sent."
+        );
+
         setMode('login');
+        resetForm();
+
         return result;
+      }
+    } catch (error) {
+      console.error('Auth error:', error);
+      const errorMessage = error?.message || 'An error occurred during authentication';
+
+      if (errorMessage.includes('already exists') ||
+        errorMessage.includes('duplicate') ||
+        errorMessage.includes('E11000')) {
+        Alert.alert(
+          "Email Already Exists",
+          "This email is already registered. Please use a different email or try signing in."
+        );
+      } else if (errorMessage.includes('verify your email') ||
+        errorMessage.includes('verification')) {
+        Alert.alert(
+          "Email Not Verified",
+          "Please check your email and click the verification link before logging in."
+        );
+      } else if (errorMessage.includes('Invalid login credentials') ||
+        errorMessage.includes('invalid email or password')) {
+        Alert.alert(
+          "Login Failed",
+          "Invalid email or password. Please try again."
+        );
       } else {
-        const result = await signIn(email, password);
-
-        // Don't override role - use the role from login response
-
-        // Navigate after successful login
-        if (result?.success && result?.user?.role) {
-          navigateToUserDashboard(navigation, result.user.role);
-        }
-
-        return result;
+        Alert.alert("Authentication Failed", errorMessage);
       }
-    }, {
-      onError: (error) => {
-        const errorMessage = error?.message || "Authentication failed";
-        if (errorMessage.includes('already exists') || errorMessage.includes('duplicate') || errorMessage.includes('E11000')) {
-          Alert.alert("Email Already Exists", "This email is already registered. Please use a different email or try signing in.");
-        } else if (errorMessage.includes('verify your email') || errorMessage.includes('verification')) {
-          Alert.alert("Email Not Verified", "Please check your email and click the verification link before logging in.");
-        } else {
-          Alert.alert("Error", errorMessage);
-        }
-      }
-    });
+
+      return { error };
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const toggleAuthMode = () => {
     setMode(mode === 'login' ? 'signup' : 'login');
     resetForm();
-  };
-
-  const onSubmit = () => {
-    const formWithRole = { ...formData, role: 'caregiver' };
-    const result = handleAuthSubmit(mode, formWithRole, validateCurrentForm);
-    if (mode === 'reset' && result) {
-      setMode('login');
-    }
   };
 
   const keyboardOffset = Platform.select({ ios: 80, android: 0 });
@@ -378,13 +409,22 @@ const CaregiverAuth = ({ navigation }) => {
                       <Text style={styles.dividerText}>or</Text>
                       <View style={styles.dividerLine} />
                     </View>
-                    
+
                     <GoogleSignInButton
                       onPress={async () => {
                         try {
                           await signInWithGoogle('caregiver')
                         } catch (error) {
-                          Alert.alert('Google Sign In Failed', error.message)
+                          console.error('Auth error:', error?.message);
+
+                          const friendlyMessage = error?.message?.includes('Invalid login credentials')
+                            ? 'Invalid email or password. Please try again.'
+                            : error?.message || 'Unable to complete the request. Please try again.';
+
+                          Alert.alert('Authentication Failed', friendlyMessage, [
+                            { text: 'OK' }
+                          ]);
+                          return;
                         }
                       }}
                       loading={isSubmitting}

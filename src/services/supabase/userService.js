@@ -20,41 +20,52 @@ export class UserService extends SupabaseBase {
 
       const cacheKey = `profile:${resolvedUserId}`
       const data = await getCachedOrFetch(cacheKey, async () => {
-        const { data, error } = await this._withTimeout(
+        const { data: existingProfile, error: fetchError } = await this._withTimeout(
           supabase
             .from('users')
-            .select(`
-              id,
-              name,
-              email,
-              profile_image,
-              first_name,
-              last_name,
-              phone,
-              address,
-              location,
-              role,
-              hourly_rate,
-              email_verified,
-              auth_provider,
-              created_at,
-              updated_at
-            `)
+            .select('*')
             .eq('id', resolvedUserId)
-            .maybeSingle()
+            .single()
         )
 
-        if (error) {
-          console.warn('Error getting profile:', error)
+        if (fetchError && fetchError.code !== 'PGRST116') {
+          console.warn('⚠️ Non-critical: Could not check if profile exists:', fetchError.message)
           return null
         }
 
-        return data || null
+        if (existingProfile) {
+          return existingProfile
+        }
+
+        // Create a new profile with default role
+        const newProfile = {
+          id: resolvedUserId,
+          email: '',
+          role: 'parent', // Set default role to 'parent'
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        }
+
+        // Insert the new profile with a timeout
+        const insertPromise = supabase
+          .from('users')
+          .insert(newProfile)
+          .select()
+          .single();
+
+        const { data: createdProfile, error: createError } = await this._withTimeout(insertPromise, 5000);
+
+        if (createError) {
+          console.warn('⚠️ Non-critical: Could not create profile:', createError.message)
+          return null
+        }
+
+        return createdProfile
       }, 5 * 60 * 1000)
 
       if (!data) return null
 
-      return {
+      const normalized = {
         ...data,
         firstName: data.first_name,
         lastName: data.last_name,
@@ -66,6 +77,17 @@ export class UserService extends SupabaseBase {
         updatedAt: data.updated_at,
         displayName: data.name || `${data.first_name || ''} ${data.last_name || ''}`.trim() || data.email?.split('@')[0] || 'User'
       }
+
+      console.log('📊 UserService.getProfile() - Raw DB data:', {
+        id: data.id,
+        name: data.name,
+        profile_image: data.profile_image,
+        profile_image_type: typeof data.profile_image,
+        profile_image_is_empty: data.profile_image === '' || data.profile_image === null,
+        all_image_fields: Object.keys(data).filter(k => k.includes('image') || k.includes('avatar')).map(k => ({ [k]: data[k] }))
+      })
+
+      return normalized
     } catch (error) {
       return this._handleError('getProfile', error, false)
     }

@@ -19,7 +19,7 @@ const CaregiverProfileSection = ({ profile, activeTab }) => {
     });
   };
 
-  if (Platform.OS === 'web' || activeTab !== 'dashboard') {
+  if (activeTab !== 'dashboard') {
     return null;
   }
 

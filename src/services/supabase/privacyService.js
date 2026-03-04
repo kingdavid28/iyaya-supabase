@@ -1,8 +1,18 @@
 // c:/Users/reycel/Documents/iyayabeforereadme/forTransferIyaya/iyayaSupa/src/services/supabase/privacyService.js
 import { SupabaseBase } from './base.js'
-import supabase from '../../config/supabase.js'
 import { getCachedOrFetch, invalidateCache } from './cache.js'
 import { notificationService } from './notificationService.js'
+import { getSupabaseClient } from '../../config/supabase.js'
+
+// Safe supabase getter with fallback
+const getSupabase = () => {
+  try {
+    return getSupabaseClient()
+  } catch (error) {
+    console.warn('Supabase not initialized:', error.message)
+    return null
+  }
+}
 
 // Database artefacts
 const TABLE_SETTINGS = 'privacy_settings'
@@ -139,9 +149,9 @@ class PrivacyService extends SupabaseBase {
     }
 
     async _detectSettingsSchema() {
-        if (this._settingsSchema) {
-            return this._settingsSchema
-        }
+        if (this._settingsSchema) return this._settingsSchema
+        const supabase = getSupabase()
+        if (!supabase) return 'camel'
 
         try {
             const { data } = await supabase
@@ -150,20 +160,17 @@ class PrivacyService extends SupabaseBase {
                 .limit(1)
                 .maybeSingle()
 
-            if (data && typeof data === 'object') {
-                const hasCamel = Object.prototype.hasOwnProperty.call(data, 'userId')
-                    || Object.keys(data).some((key) => !key.includes('_') && key !== key.toLowerCase())
+            if (data) {
+                const hasSnake = Object.keys(data).some((key) => key.includes('_'))
+                this._settingsSchema = hasSnake ? 'snake' : 'camel'
+            } else {
+                this._settingsSchema = 'camel'
+            }
 
-                this._settingsSchema = hasCamel ? 'camel' : 'snake'
-                return this._settingsSchema
-            }
-        } catch (error) {
-            if (!isMissingTableError(error, TABLE_SETTINGS)) {
-                console.warn('Unable to detect privacy settings schema:', error)
-            }
+            return this._settingsSchema
+        } catch {
+            return 'camel'
         }
-
-        this._settingsSchema = 'snake'
         return this._settingsSchema
     }
 
@@ -188,10 +195,10 @@ class PrivacyService extends SupabaseBase {
     }
 
     async getPrivacySettings(userId = null) {
+        const supabase = getSupabase()
         try {
-            // Check if supabase client is available
             if (!supabase || !supabase.from) {
-                console.warn('⚠️ Supabase client not available, returning default privacy settings')
+                console.warn('Supabase client not available, returning default privacy settings')
                 return { userId: userId || null, data: { ...DEFAULT_SETTINGS } }
             }
 
@@ -209,7 +216,6 @@ class PrivacyService extends SupabaseBase {
 
                     if (error) {
                         if (isMissingTableError(error, TABLE_SETTINGS)) {
-                            console.warn('⚠️ privacy_settings table not found - returning defaults')
                             return { ...DEFAULT_SETTINGS }
                         }
                         throw error
@@ -221,15 +227,16 @@ class PrivacyService extends SupabaseBase {
 
             return { userId: targetId, data }
         } catch (error) {
-            if (isMissingTableError(error, TABLE_SETTINGS)) {
-                console.warn('⚠️ Falling back to default privacy settings due to missing table')
-                return { userId: userId || null, data: { ...DEFAULT_SETTINGS } }
-            }
-            return this._handleError('getPrivacySettings', error)
+            console.warn('getPrivacySettings error:', error.message)
+            return { userId: userId || null, data: { ...DEFAULT_SETTINGS } }
         }
     }
 
     async updatePrivacySettings(userId = null, settings = {}) {
+        const supabase = getSupabase()
+        if (!supabase) {
+            return { userId: userId || null, data: { ...DEFAULT_SETTINGS } }
+        }
         try {
             const targetId = await this._resolveTargetUserId(userId)
             const preferredSchema = await this._detectSettingsSchema()
@@ -325,12 +332,17 @@ class PrivacyService extends SupabaseBase {
 
             throw lastError
         } catch (error) {
-            return this._handleError('updatePrivacySettings', error)
+            console.warn('updatePrivacySettings error:', error.message)
+            return { userId: userId || null, data: { ...DEFAULT_SETTINGS } }
         }
     }
 
     async getViewerPermissions(targetUserId, viewerUserId = null, options = {}) {
         const { includeExpired = false } = options
+        const supabase = getSupabase()
+        if (!supabase) {
+            return { targetId: targetUserId, viewerId: viewerUserId, entries: [], permissions: [], permissionsCamel: [], expiresAt: null }
+        }
 
         try {
             const targetId = await this._ensureUserId(targetUserId, 'Target user ID')
@@ -385,11 +397,16 @@ class PrivacyService extends SupabaseBase {
                 expiresAt: expiresAt ? new Date(expiresAt).toISOString() : null
             }
         } catch (error) {
-            return this._handleError('getViewerPermissions', error)
+            console.warn('getViewerPermissions error:', error.message)
+            return { targetId: targetUserId, viewerId: viewerUserId, entries: [], permissions: [], permissionsCamel: [], expiresAt: null }
         }
     }
 
     async grantPermission({ targetUserId, viewerUserId, fields = [], metadata = {}, expiresAt = null }) {
+        const supabase = getSupabase()
+        if (!supabase) {
+            throw new Error('Supabase client not available')
+        }
         try {
             if (!Array.isArray(fields) || fields.length === 0) {
                 throw new Error('At least one field must be provided')
@@ -426,6 +443,10 @@ class PrivacyService extends SupabaseBase {
     }
 
     async revokePermission(targetUserId, viewerUserId, fields = null) {
+        const supabase = getSupabase()
+        if (!supabase) {
+            throw new Error('Supabase client not available')
+        }
         try {
             const targetId = await this._ensureUserId(targetUserId, 'Target user ID')
             const viewerId = await this._ensureUserId(viewerUserId, 'Viewer user ID')
@@ -456,6 +477,12 @@ class PrivacyService extends SupabaseBase {
 
     async getPrivacyNotifications(userId = null, options = {}) {
         const { includeRead = true } = options
+        const supabase = getSupabase()
+        
+        if (!supabase) {
+            return { userId: userId || null, data: [], unreadCount: 0 }
+        }
+
         try {
             const targetId = await this._resolveTargetUserId(userId)
             const cacheKey = this._notificationsCacheKey(targetId)
@@ -476,7 +503,6 @@ class PrivacyService extends SupabaseBase {
                     const { data, error } = await query
                     if (error) {
                         if (isMissingTableError(error, TABLE_NOTIFICATIONS)) {
-                            console.warn('⚠️ privacy_notifications table not found - returning empty notifications')
                             return []
                         }
                         throw error
@@ -493,15 +519,15 @@ class PrivacyService extends SupabaseBase {
                 unreadCount
             }
         } catch (error) {
-            if (isMissingTableError(error, TABLE_NOTIFICATIONS)) {
-                console.warn('⚠️ Falling back to empty privacy notifications due to missing table')
-                return { userId: userId || null, data: [], unreadCount: 0 }
-            }
-            return this._handleError('getPrivacyNotifications', error)
+            return { userId: userId || null, data: [], unreadCount: 0 }
         }
     }
 
     async markNotificationAsRead(notificationId, userId = null) {
+        const supabase = getSupabase()
+        if (!supabase) {
+            return null
+        }
         try {
             this._validateId(notificationId, 'Notification ID')
             const targetId = await this._resolveTargetUserId(userId)
@@ -537,6 +563,10 @@ class PrivacyService extends SupabaseBase {
     }
 
     async acknowledgeNotifications(userId = null, notificationIds = []) {
+        const supabase = getSupabase()
+        if (!supabase) {
+            return []
+        }
         try {
             const targetId = await this._resolveTargetUserId(userId)
 

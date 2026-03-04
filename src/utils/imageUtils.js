@@ -12,13 +12,21 @@ export const getProfileImageUrl = (user) => {
   try {
     let imageUrl = null;
 
-    // If user has a profile image URL
+    // If user has a profile image URL (check both camelCase and snake_case)
     if (user?.profileImage) {
       imageUrl = user.profileImage;
+    }
+    // Check snake_case variant from database
+    else if (user?.profile_image) {
+      imageUrl = user.profile_image;
     }
     // If user has an avatar URL
     else if (user?.avatar) {
       imageUrl = user.avatar;
+    }
+    // If user has an imageUrl
+    else if (user?.imageUrl) {
+      imageUrl = user.imageUrl;
     }
     // If user has a photoURL (Firebase auth)
     else if (user?.photoURL) {

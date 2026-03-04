@@ -9,6 +9,7 @@ import { supabase } from '../../../services/supabase/base';
 import { contractService } from '../../../services/supabase/contractService';
 import { colors, styles } from '../../styles/ParentDashboard.styles';
 import BookingItem from './BookingItem';
+import { clampToMinimumWage } from '../../../utils/wageUtils';
 
 const DATE_FORMATTER = new Intl.DateTimeFormat('en-PH', {
   month: 'long',
@@ -235,13 +236,13 @@ const SkeletonBookingItem = React.memo(() => {
           toValue: 1,
           duration: 1200,
           easing: Easing.linear,
-          useNativeDriver: true
+          useNativeDriver: false
         }),
         Animated.timing(shimmer, {
           toValue: 0,
           duration: 1200,
           easing: Easing.linear,
-          useNativeDriver: true
+          useNativeDriver: false
         })
       ])
     );

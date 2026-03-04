@@ -60,3 +60,10 @@ export const getNextStatusAfterPayment = (currentStatus, paymentType) => {
   
   return currentStatus;
 };
+
+export default {
+  calculateDeposit,
+  calculateRemainingPayment,
+  getPaymentActions,
+  getNextStatusAfterPayment,
+};

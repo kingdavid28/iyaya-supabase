@@ -1,6 +1,7 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react'
 import { ActivityIndicator, Platform, View } from 'react-native'
 import Constants from 'expo-constants'
+import * as Linking from 'expo-linking'
 
 import supabase from '../config/supabase'
 import { tokenManager } from '../utils/tokenManager'
@@ -11,7 +12,12 @@ import { trackUserRegistration, trackUserLogin } from '../utils/analytics'
 const getRedirectUrl = () => {
   if (Platform.OS === 'web' && typeof window !== 'undefined') {
     // Use current domain for web
-    return window.location.origin + '/auth/callback'
+    const origin = window.location.origin;
+    // Ensure we use the correct domain for production
+    if (origin.includes('localhost') || origin.includes('192.168')) {
+      return origin + '/auth/callback';
+    }
+    return 'https://iyaya-supabase.vercel.app/auth/callback';
   }
   // Fallback for development and native
   return Constants.expoConfig?.extra?.redirectUrl || 'http://localhost:3000/auth/callback'
@@ -19,7 +25,6 @@ const getRedirectUrl = () => {
 
 const REDIRECT_URL = getRedirectUrl()
 
-const DEFAULT_ROLE = 'parent'
 const MAX_RETRIES = 3
 const RETRY_DELAY = 1000
 
@@ -30,6 +35,9 @@ const AuthErrorTypes = {
   INVALID_CREDENTIALS: 'invalid_credentials',
   SESSION_EXPIRED: 'session_expired',
   USER_RESTRICTED: 'user_restricted',
+  DATABASE_ERROR: 'DATABASE_ERROR',
+  VALIDATION_ERROR: 'VALIDATION_ERROR',
+  AUTH_ERROR: 'AUTH_ERROR',
   EMAIL_NOT_VERIFIED: 'email_not_verified',
   UNKNOWN: 'unknown_error'
 }
@@ -74,7 +82,7 @@ export const AuthProvider = ({ children }) => {
       return await fn()
     } catch (error) {
       if (retries === 0) throw error
-      
+
       console.log(`Retrying operation, ${retries} attempts left...`)
       await new Promise(resolve => setTimeout(resolve, delay))
       return retryWithBackoff(fn, retries - 1, delay * 2)
@@ -85,159 +93,183 @@ export const AuthProvider = ({ children }) => {
     try {
       console.log('🔍 Fetching profile for user:', {
         id: authUser.id,
-        email: authUser.email,
-        authUserKeys: Object.keys(authUser)
-      })
+        email: authUser.email
+      });
 
-      const { data, error } = await retryWithBackoff(() =>
-        supabase
-          .from('users')
-          .select('*')
-          .eq('id', authUser.id)
-      )
-
-      if (error) {
-        console.error('❌ Error fetching user profile:', {
-          message: error?.message,
-          code: error?.code
-        })
-        // Return minimal user object with default role
-        return { 
-          ...authUser, 
-          role: DEFAULT_ROLE,
-          profile: null 
-        }
-      }
-
-      const profile = data && data.length > 0 ? data[0] : null
-      console.log('👤 User profile found:', profile ? 'Yes' : 'No')
-
-      // Check user status asynchronously
-      let statusData = { canAccess: true }
-      try {
-        statusData = await userStatusService.checkUserStatus(authUser.id)
-        if (!statusData.canAccess) {
-          console.warn('⚠️ User access restricted:', statusData)
-        }
-      } catch (statusError) {
-        console.error('Error checking user status:', statusError)
-      }
-
-      const userWithProfile = {
-        ...authUser,
-        role: profile?.role || DEFAULT_ROLE,
-        name: profile?.name || authUser.user_metadata?.name,
-        profile,
-        status: profile?.status || 'active',
-        statusData
-      }
-
-      console.log('✅ Final user object:', {
-        id: userWithProfile.id,
-        email: userWithProfile.email,
-        role: userWithProfile.role
-      })
-      
-      return userWithProfile
-    } catch (err) {
-      console.error('❌ Error in fetchUserWithProfile:', err)
-      return { 
-        ...authUser, 
-        role: DEFAULT_ROLE,
-        profile: null 
-      }
-    }
-  }, [])
-
-  const ensureUserProfileExists = useCallback(async (authUser, roleHint = DEFAULT_ROLE) => {
-    try {
-      if (!authUser?.id) {
-        console.warn('⚠️ Cannot ensure profile without auth user ID')
-        return null
-      }
-
-      // Check if profile exists
-      const { data: existingProfile, error: selectError } = await supabase
+      // Remove the .timeout() method and use a Promise.race for timeout
+      const profilePromise = supabase
         .from('users')
         .select('*')
         .eq('id', authUser.id)
-        .maybeSingle()
+        .single();
 
-      if (selectError && selectError.code !== 'PGRST116') {
-        console.error('❌ Failed to check existing profile:', selectError)
-        throw new AuthError('Failed to check user profile', AuthErrorTypes.UNKNOWN, selectError)
+      // Add a timeout using Promise.race
+      const timeoutPromise = new Promise((_, reject) =>
+        setTimeout(() => reject(new Error('Profile fetch timeout')), 5000)
+      );
+
+      const { data: profile, error } = await Promise.race([
+        profilePromise,
+        timeoutPromise
+      ]);
+
+      if (error) {
+        console.error('❌ Supabase error:', error);
+        throw new AuthError('Failed to fetch user profile', AuthErrorTypes.DATABASE_ERROR, error);
       }
 
-      if (existingProfile) {
-        console.log('ℹ️ Profile already exists for user:', authUser.id)
-        return existingProfile
+      if (!profile?.role) {
+        console.error('❌ No role found in profile:', profile);
+        throw new AuthError('User role not found', AuthErrorTypes.VALIDATION_ERROR);
       }
 
-      // Prepare profile data with correct role from hint
-      const role = roleHint
-      const firstName = authUser.user_metadata?.first_name
-        || authUser.user_metadata?.given_name
-        || authUser.user_metadata?.firstName
-        || null
-      const lastName = authUser.user_metadata?.last_name
-        || authUser.user_metadata?.family_name
-        || authUser.user_metadata?.lastName
-        || null
-      const derivedName = [firstName, lastName].filter(Boolean).join(' ')
-      const name = authUser.user_metadata?.name
-        || authUser.user_metadata?.full_name
-        || authUser.user_metadata?.fullName
-        || derivedName
-        || authUser.email?.split('@')?.[0]
-        || 'User'
+      console.log('✅ Fetched profile:', {
+        id: profile.id,
+        role: profile.role,
+        email: profile.email
+      });
 
-      // Determine auth provider
-      const authProvider = authUser.app_metadata?.provider || 'supabase'
-      
-      const profilePayload = {
-        id: authUser.id,
-        email: authUser.email,
-        name,
-        role,
-        first_name: firstName,
-        last_name: lastName,
-        phone: authUser.user_metadata?.phone || null,
-        auth_provider: authProvider,
-        status: 'active',
-        email_verified: !!authUser.email_confirmed_at,
-        profile_image: authUser.user_metadata?.avatar_url || authUser.user_metadata?.picture || null,
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString()
-      }
-
-      // Remove undefined values
-      const cleanedPayload = Object.fromEntries(
-        Object.entries(profilePayload).filter(([, value]) => value !== undefined)
-      )
-
-      // Insert profile
-      const { data: upsertData, error: upsertError } = await supabase
-        .from('users')
-        .upsert([cleanedPayload], { onConflict: 'id' })
-        .select()
-
-      if (upsertError) {
-        console.error('❌ Failed to create profile:', upsertError)
-        throw new AuthError('Failed to create user profile', AuthErrorTypes.UNKNOWN, upsertError)
-      }
-
-      console.log('✅ Profile created successfully:', {
-        userId: authUser.id,
-        role: role,
-        name: name,
-        email: authUser.email
-      })
-      return Array.isArray(upsertData) ? upsertData[0] : upsertData
-    } catch (error) {
-      console.error('❌ ensureUserProfileExists error:', error)
-      throw error
+      return {
+        ...authUser,
+        role: profile.role,
+        name: profile?.name || authUser.user_metadata?.name,
+        profile,
+        status: 'active'
+      };
+    } catch (err) {
+      console.error('❌ Error in fetchUserWithProfile:', err);
+      throw err; // Re-throw to be handled by the caller
     }
-  }, [])
+  }, []);
+
+  const ensureUserProfileExists = useCallback(async (authUser, role) => {
+    // Validate role is provided
+    if (!role) {
+      throw new Error('Role is required when creating a user profile');
+    }
+
+    const MAX_RETRIES = 2;
+    const RETRY_DELAY = 3000;
+
+    // Quick check if profile exists first
+    const quickCheck = async () => {
+      try {
+        const query = supabase
+          .from('users')
+          .select('id, role')
+          .eq('id', authUser.id)
+          .maybeSingle();
+
+        const { data } = await Promise.race([
+          query,
+          new Promise((_, reject) => 
+            setTimeout(() => reject(new Error('Query timeout')), 5000)
+          )
+        ]);
+
+        if (data) {
+          console.log('✅ Profile exists with role:', data.role);
+        }
+        return data;
+      } catch (error) {
+        console.warn('Quick profile check failed, will retry:', error.message);
+        return null;
+      }
+    };
+
+    // Create or update profile with retry logic
+    const createOrUpdateProfile = async (attempt = 1) => {
+      try {
+        console.log(`🔄 Profile creation/update attempt ${attempt}/${MAX_RETRIES + 1}`);
+
+        const now = new Date().toISOString();
+
+        const profileData = {
+          id: authUser.id,
+          email: authUser.email || authUser.user_metadata?.email,
+          role: role,
+          first_name: authUser.user_metadata?.first_name ||
+            authUser.user_metadata?.given_name ||
+            authUser.user_metadata?.firstName ||
+            null,
+          last_name: authUser.user_metadata?.last_name ||
+            authUser.user_metadata?.family_name ||
+            authUser.user_metadata?.lastName ||
+            null,
+          name: authUser.user_metadata?.name ||
+            authUser.user_metadata?.full_name ||
+            `${authUser.user_metadata?.first_name || ''} ${authUser.user_metadata?.last_name || ''}`.trim() ||
+            authUser.email?.split('@')[0] ||
+            'User',
+          auth_provider: authUser.app_metadata?.provider || 'supabase',
+          created_at: now,
+          updated_at: now
+        };
+
+        // Use upsert to handle both insert and update cases
+        const query = supabase
+          .from('users')
+          .upsert(profileData, { onConflict: 'id' })
+          .select()
+          .single();
+
+        const { data, error } = await Promise.race([
+          query,
+          new Promise((_, reject) => 
+            setTimeout(() => reject(new Error('Query timeout')), 10000)
+          )
+        ]);
+
+        if (error) throw error;
+        console.log(`✅ Profile ${data.id} created/updated with role: ${data.role}`);
+        return data;
+
+      } catch (error) {
+        if (error.code === '23505') { // Unique violation - profile exists
+          console.log('ℹ️ Profile already exists, fetching...');
+          const { data } = await supabase
+            .from('users')
+            .select('*')
+            .eq('id', authUser.id)
+            .single();
+          if (data) return data;
+        }
+
+        if (attempt <= MAX_RETRIES) {
+          const delay = RETRY_DELAY * attempt;
+          console.log(`⏳ Retry ${attempt}/${MAX_RETRIES} in ${delay}ms...`);
+          await new Promise(resolve => setTimeout(resolve, delay));
+          return createOrUpdateProfile(attempt + 1);
+        }
+
+        console.error('❌ Failed to create/update profile after retries:', error);
+        throw error;
+      }
+    };
+
+    try {
+      // 1. Quick check if profile exists
+      const existingProfile = await quickCheck();
+
+      // 2. If profile exists but has no role, we'll update it
+      if (existingProfile && !existingProfile.role) {
+        console.log('🔄 Profile exists but has no role, updating...');
+        return await createOrUpdateProfile();
+      }
+
+      // 3. If profile doesn't exist, create it
+      if (!existingProfile) {
+        console.log('🔄 No profile found, creating new one...');
+        return await createOrUpdateProfile();
+      }
+
+      return existingProfile;
+
+    } catch (error) {
+      console.error('⚠️ Could not ensure profile exists:', error.message);
+      throw error;
+    }
+  }, []);
 
   const initializeSession = useCallback(async () => {
     try {
@@ -252,13 +284,21 @@ export const AuthProvider = ({ children }) => {
         }
       }
 
-      const { data, error } = await retryWithBackoff(() => 
+      const { data, error } = await retryWithBackoff(() =>
         supabase.auth.getSession()
       )
 
       if (error) {
         console.warn('Session fetch error:', error.message)
-        // Don't throw on session errors, just clear state
+        // Clear invalid tokens on 400 errors
+        if (error.status === 400 || error.message?.includes('refresh_token')) {
+          console.log('🧹 Clearing invalid session tokens')
+          await supabase.auth.signOut().catch(() => {})
+          if (Platform.OS === 'web') {
+            localStorage.clear()
+            sessionStorage.clear()
+          }
+        }
         sessionRef.current = null
         safeSetState(setUser, null)
         safeSetState(setError, null)
@@ -270,7 +310,7 @@ export const AuthProvider = ({ children }) => {
 
       if (session?.user) {
         // Get role hint for OAuth users
-        let roleHint = DEFAULT_ROLE
+        let roleHint = null
         if (Platform.OS === 'web') {
           const storedRole = sessionStorage.getItem('pendingRole')
           if (storedRole) {
@@ -278,21 +318,23 @@ export const AuthProvider = ({ children }) => {
             sessionStorage.removeItem('pendingRole')
           }
         }
-        
+
         // Ensure profile exists for OAuth users
-        await ensureUserProfileExists(session.user, roleHint)
-        
+        if (roleHint) {
+          await ensureUserProfileExists(session.user, roleHint)
+        }
+
         const userWithProfile = await fetchUserWithProfile(session.user)
         safeSetState(setUser, userWithProfile)
       } else {
         safeSetState(setUser, null)
       }
-      
+
       safeSetState(setError, null)
     } catch (err) {
       console.error('❌ Initial session fetch failed:', err)
       sessionRef.current = null
-      
+
       // Clear tokens on error
       await tokenManager.logout().catch(console.warn)
       await supabase.auth.signOut().catch(console.warn)
@@ -327,7 +369,7 @@ export const AuthProvider = ({ children }) => {
 
             if (session?.user) {
               // Get role hint from storage for OAuth users
-              let roleHint = DEFAULT_ROLE
+              let roleHint = null
               if (Platform.OS === 'web') {
                 const storedRole = sessionStorage.getItem('pendingRole')
                 if (storedRole) {
@@ -336,14 +378,16 @@ export const AuthProvider = ({ children }) => {
                   console.log('🎯 Using stored role hint:', roleHint)
                 }
               }
-              
-              // Always ensure profile exists with correct role
-              await ensureUserProfileExists(session.user, roleHint)
-              
+
+              // Always ensure profile exists with correct role if we have a role hint
+              if (roleHint) {
+                await ensureUserProfileExists(session.user, roleHint)
+              }
+
               const userWithProfile = await fetchUserWithProfile(session.user)
               safeSetState(setUser, userWithProfile)
               safeSetState(setError, null)
-              
+
               // Track login
               if (event === 'SIGNED_IN') {
                 const isOAuth = session.user.app_metadata?.provider !== 'email'
@@ -371,9 +415,14 @@ export const AuthProvider = ({ children }) => {
         unsubscribe()
       }
     }
-  }, [initializeSession, fetchUserWithProfile, safeSetState])
+  }, [initializeSession, fetchUserWithProfile, safeSetState, ensureUserProfileExists])
 
   const signUp = async (email, password, userData) => {
+    // Validate role is provided
+    if (!userData?.role) {
+      throw new AuthError('Role is required', AuthErrorTypes.VALIDATION_ERROR);
+    }
+
     try {
       safeSetState(setError, null)
       safeSetState(setLoading, true)
@@ -397,23 +446,35 @@ export const AuthProvider = ({ children }) => {
         throw new AuthError(error.message, AuthErrorTypes.INVALID_CREDENTIALS, error)
       }
 
-      // Create user profile
+      // Create user profile and get user with role
+      let userWithRole = data.user;
       if (data.user) {
         console.log('🔄 Creating user profile for:', data.user.id)
-        
+
         // Track user registration
         trackUserRegistration(userData.role)
 
         try {
           await ensureUserProfileExists(data.user, userData.role)
           console.log('✅ Profile created successfully')
+          // Fetch the profile to get complete user data with role
+          userWithRole = await fetchUserWithProfile(data.user)
         } catch (profileError) {
           console.error('❌ Profile creation failed:', profileError)
-          // Don't throw - user can still sign in, profile might be created later
+          // Still return user with role from userData even if profile creation fails
+          userWithRole = {
+            ...data.user,
+            role: userData.role
+          }
         }
       }
 
-      return data
+      return {
+        ...data,
+        success: true,
+        requiresVerification: !data.user?.email_confirmed_at,
+        user: userWithRole
+      }
     } catch (err) {
       safeSetState(setError, err.message)
       throw err
@@ -442,13 +503,19 @@ export const AuthProvider = ({ children }) => {
       //   throw new AuthError('Please verify your email before signing in.', AuthErrorTypes.EMAIL_NOT_VERIFIED)
       // }
 
-      // Track user login
+      // Get user profile with role
+      let userWithProfile = data.user;
       if (data.user) {
-        const userWithProfile = await fetchUserWithProfile(data.user)
+        userWithProfile = await fetchUserWithProfile(data.user)
         trackUserLogin(userWithProfile?.role || 'unknown')
       }
 
-      return data
+      // Return user data with profile/role information
+      return {
+        ...data,
+        success: true,
+        user: userWithProfile
+      }
     } catch (err) {
       safeSetState(setError, err.message)
       throw err
@@ -466,10 +533,10 @@ export const AuthProvider = ({ children }) => {
 
       // Clear token manager
       await tokenManager.logout()
-      
+
       // Sign out from Supabase
       const { error } = await supabase.auth.signOut()
-      
+
       if (error && !(error?.name === 'AuthSessionMissingError' || error?.message?.toLowerCase().includes('auth session missing'))) {
         console.warn('Sign out error:', error.message)
       }
@@ -477,40 +544,40 @@ export const AuthProvider = ({ children }) => {
       // Clear local state
       safeSetState(setUser, null)
       sessionRef.current = null
-      
+
       // Aggressive cleanup for web
       if (Platform.OS === 'web' && typeof window !== 'undefined') {
         // Clear all storage
         localStorage.clear()
         sessionStorage.clear()
-        
+
         // Clear cookies
         document.cookie.split(';').forEach(cookie => {
           const eqPos = cookie.indexOf('=')
           const name = eqPos > -1 ? cookie.substr(0, eqPos) : cookie
           document.cookie = `${name}=;expires=Thu, 01 Jan 1970 00:00:00 GMT;path=/`
         })
-        
+
         console.log('✅ Logout complete, reloading page...')
-        
+
         // Force page reload to clear all state
         setTimeout(() => {
           window.location.href = '/'
         }, 100)
       }
-      
+
       return { success: true }
     } catch (err) {
       console.error('❌ Logout failed:', err)
       safeSetState(setError, err.message)
-      
+
       // Force reload even on error
       if (Platform.OS === 'web') {
         setTimeout(() => {
           window.location.href = '/'
         }, 100)
       }
-      
+
       throw err
     } finally {
       safeSetState(setLoading, false)
@@ -523,11 +590,11 @@ export const AuthProvider = ({ children }) => {
       const { error } = await supabase.auth.resetPasswordForEmail(email, {
         redirectTo: REDIRECT_URL.replace('/auth/callback', '/reset-password')
       })
-      
+
       if (error) {
         throw new AuthError(error.message, AuthErrorTypes.UNKNOWN, error)
       }
-      
+
       return { success: true }
     } catch (err) {
       safeSetState(setError, err.message)
@@ -539,7 +606,7 @@ export const AuthProvider = ({ children }) => {
     try {
       safeSetState(setError, null)
       console.log('🔄 Resending verification email to:', email)
-      
+
       const { error } = await supabase.auth.resend({
         type: 'signup',
         email,
@@ -547,12 +614,12 @@ export const AuthProvider = ({ children }) => {
           emailRedirectTo: REDIRECT_URL
         }
       })
-      
+
       if (error) {
         console.error('❌ Resend error:', error)
         throw new AuthError(error.message, AuthErrorTypes.UNKNOWN, error)
       }
-      
+
       console.log('✅ Verification email resent successfully')
       return { success: true, message: 'Verification email sent. Please check your inbox and spam folder.' }
     } catch (err) {
@@ -568,11 +635,11 @@ export const AuthProvider = ({ children }) => {
       const { error } = await supabase.auth.updateUser({
         password: newPassword
       })
-      
+
       if (error) {
         throw new AuthError(error.message, AuthErrorTypes.UNKNOWN, error)
       }
-      
+
       return { success: true }
     } catch (err) {
       safeSetState(setError, err.message)
@@ -596,7 +663,7 @@ export const AuthProvider = ({ children }) => {
       if (error) {
         throw new AuthError(error.message, AuthErrorTypes.UNAUTHORIZED, error)
       }
-      
+
       return data
     } catch (err) {
       safeSetState(setError, err.message)
@@ -606,46 +673,72 @@ export const AuthProvider = ({ children }) => {
     }
   }
 
-  const signInWithGoogle = async (roleHint = DEFAULT_ROLE) => {
+  const signInWithGoogle = async (roleHint = null) => {
     try {
       safeSetState(setError, null)
       safeSetState(setLoading, true)
-      
-      console.log('🔄 Starting Google Sign-In...', { 
-        platform: Platform.OS, 
-        roleHint,
-        supabaseUrl: supabase?.supabaseUrl,
-        hasAuth: !!supabase?.auth
+
+      console.log('🔄 Starting Google Sign-In...', {
+        platform: Platform.OS,
+        roleHint: 'caregiver',
+        supabaseUrl: supabase?.supabaseUrl
       })
-      
-      // Store role hint for later use
-      if (Platform.OS === 'web') {
-        sessionStorage.setItem('pendingRole', roleHint)
-        console.log('💾 Stored role hint:', roleHint)
-      }
-      
+
       // Test Supabase connection first
-      try {
-        const { data: testData, error: testError } = await supabase.auth.getSession()
-        console.log('🧪 Supabase connection test:', { hasData: !!testData, error: testError?.message })
-      } catch (testErr) {
-        console.error('❌ Supabase connection failed:', testErr)
+      const { data: testData, error: testError } = await supabase
+        .from('profiles')
+        .select('id')
+        .limit(1)
+
+      if (testError) {
+        console.error('❌ Supabase connection test failed:', testError)
+        throw new AuthError('Failed to connect to authentication service', AuthErrorTypes.NETWORK, testError)
       }
-      
+
+      console.log('🧪 Supabase connection test:', { error: testError, hasData: !!testData })
+
+      // Use production redirect URL for web
+      const redirectTo = Platform.OS === 'web' 
+        ? 'https://iyaya-supabase.vercel.app/auth/callback'
+        : getRedirectUrl()
+
       const { data, error } = await supabase.auth.signInWithOAuth({
-        provider: 'google'
+        provider: 'google',
+        options: {
+          redirectTo,
+          queryParams: {
+            access_type: 'offline',
+            prompt: 'consent',
+          },
+        },
       })
-      
+
       if (error) {
-        console.error('❌ OAuth error details:', {
+        console.error('❌ Google OAuth error:', {
           message: error.message,
           status: error.status,
           details: error
         })
         throw new AuthError(error.message, AuthErrorTypes.UNAUTHORIZED, error)
       }
-      
+
       console.log('✅ Google OAuth response:', data)
+      
+      // Redirect to OAuth URL on web, open in browser on mobile
+      if (data?.url) {
+        if (Platform.OS === 'web') {
+          console.log('🔄 Redirecting to OAuth URL...')
+          window.location.href = data.url
+        } else {
+          console.log('🌐 Opening OAuth URL in browser...')
+          Linking.openURL(data.url).catch(err => {
+            console.error('Failed to open OAuth URL:', err)
+            throw new AuthError('Could not open OAuth URL', AuthErrorTypes.AUTH_ERROR, err)
+          })
+        }
+        return data
+      }
+      
       return data
     } catch (err) {
       console.error('❌ Google Sign-In failed:', {
@@ -660,32 +753,34 @@ export const AuthProvider = ({ children }) => {
     }
   }
 
-  const handleOAuthCallback = async (roleHint = DEFAULT_ROLE) => {
+  const handleOAuthCallback = async (roleHint = null) => {
     try {
       safeSetState(setError, null)
       safeSetState(setLoading, true)
-      
+
       console.log('🔄 Handling OAuth callback...', { roleHint })
-      
+
       const { data, error } = await supabase.auth.getSession()
-      
+
       if (error) {
         console.error('❌ OAuth callback error:', error)
         throw new AuthError(error.message, AuthErrorTypes.UNAUTHORIZED, error)
       }
-      
+
       if (data?.session?.user) {
         console.log('✅ OAuth session found, ensuring profile exists...')
-        
-        // Ensure user profile exists with role hint
-        await ensureUserProfileExists(data.session.user, roleHint)
-        
+
+        // Ensure user profile exists with role hint if provided
+        if (roleHint) {
+          await ensureUserProfileExists(data.session.user, roleHint)
+        }
+
         // Track successful OAuth login
         trackUserLogin('oauth')
-        
+
         return data.session
       }
-      
+
       throw new AuthError('No session found after OAuth callback', AuthErrorTypes.SESSION_EXPIRED)
     } catch (err) {
       console.error('❌ OAuth callback failed:', err)
@@ -716,13 +811,13 @@ export const AuthProvider = ({ children }) => {
     if (!session?.user?.id) {
       return null
     }
-    
+
     if (!user) {
       const userWithProfile = await fetchUserWithProfile(session.user)
       safeSetState(setUser, userWithProfile)
       return userWithProfile
     }
-    
+
     return user
   }, [requireAuthSession, user, fetchUserWithProfile, safeSetState])
 
@@ -730,15 +825,29 @@ export const AuthProvider = ({ children }) => {
     if (!user) return null
 
     try {
-      const { data, error } = await supabase
+      // Try the users table first (has more fields including profile_image)
+      let { data, error } = await supabase
         .from('users')
         .select('*')
         .eq('id', user.id)
+        .single()
+
+      // User not found in users table
+      if (error && error.code === 'PGRST116') {
+        console.log('User not found in users table')
+        throw error
+
+      }
 
       if (error) throw error
-      return data && data.length > 0 ? data[0] : null
+      return data
     } catch (err) {
-      console.error('Error fetching user profile:', err)
+      console.error('❌ Error fetching user profile:', {
+        message: err?.message || String(err),
+        code: err?.code,
+        details: err?.details,
+        hint: err?.hint
+      })
       return null
     }
   }
@@ -750,6 +859,7 @@ export const AuthProvider = ({ children }) => {
   const value = useMemo(() => ({
     user,
     loading,
+    isLoading: loading, // Alias for better semantics
     error,
     signUp,
     signIn,
@@ -783,6 +893,12 @@ export const AuthProvider = ({ children }) => {
   ])
 
   if (loading && !user) {
+    // Force loading to complete after a reasonable timeout
+    const timeoutId = setTimeout(() => {
+      console.warn('⏱️ Auth loading timeout (5s), forcing completion');
+      safeSetState(setLoading, false);
+    }, 5000); // 5 second timeout - more reasonable for slow networks
+
     return (
       <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
         <ActivityIndicator size="large" />

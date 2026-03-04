@@ -1,27 +1,27 @@
 const isWeb = process.env.EXPO_PLATFORM === 'web';
 
 const plugins = [
-  "expo-secure-store",
-  "expo-font"
+  "@react-native-community/datetimepicker",
+  "expo-web-browser"
 ];
 
 // Only add Google Sign-In plugin for native builds
-if (!isWeb) {
-  plugins.push([
-    "@react-native-google-signin/google-signin",
-    {
-      iosUrlScheme: "com.googleusercontent.apps.998196800470-mguo8sj1ke7iv604mo1qmuq2565dnhv9"
-    }
-  ]);
-}
+// if (!isWeb) {
+//   plugins.push([
+//     "@react-native-google-signin/google-signin",
+//     {
+//       iosUrlScheme: "com.googleusercontent.apps.998196800470-mguo8sj1ke7iv604mo1qmuq2565dnhv9"
+//     }
+//   ]);
+// }
 
 module.exports = {
   expo: {
     name: "iYaya",
     slug: "iyaya-caregiver-app",
     version: "1.0.0",
-    orientation: "portrait",
-    icon: "./assets/logo.png",
+    orientation: "default",
+    icon: "./assets/icon.png",
     userInterfaceStyle: "light",
     splash: {
       image: "./assets/splash.png",
@@ -38,20 +38,21 @@ module.exports = {
     },
     android: {
       adaptiveIcon: {
-        foregroundImage: "./assets/logo.png",
+        foregroundImage: "./assets/adaptive-icon.png",
         backgroundColor: "#FFFFFF"
       },
       package: "com.iyaya.app",
       jsEngine: "hermes"
     },
     web: {
-      favicon: "./assets/logo.png",
+      favicon: "./assets/favicon.png",
       bundler: "metro"
     },
     plugins,
     scheme: "iyaya-app",
     extra: {
       supabaseUrl: process.env.EXPO_PUBLIC_SUPABASE_URL || "https://myiyrmiiywwgismcpith.supabase.co",
+      googleMapsApiKey: process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY || "AIzaSyC9w7Mq4yZ-qi0vBbEjzethLH5qazqGucI",
       supabaseAnonKey: process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY || null,
       googleWebClientId: process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID || "998196800470-k3los9p540onooj79g69q9urln8lqbn3.apps.googleusercontent.com",
       googleAndroidClientId: process.env.EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID || "998196800470-cng01lpqeq3ogq77mibb11psk1udedm8.apps.googleusercontent.com",
