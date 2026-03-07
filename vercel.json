@@ -4,7 +4,7 @@
   "rewrites": [
     {
       "source": "/auth/callback",
-      "destination": "/auth/callback.html"
+      "destination": "/index.html"
     },
     {
       "source": "/_expo/static/(.*)",

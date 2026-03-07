@@ -121,13 +121,13 @@ const CaregiverAuth = ({ navigation }) => {
 
         // Verify the user has the correct role from the profile (not user_metadata)
         const userRole = result?.user?.role?.toLowerCase()?.trim();
-        
+
         if (userRole !== 'caregiver') {
           console.error('❌ [CaregiverAuth] Role mismatch:', { expected: 'caregiver', actual: userRole });
-          
+
           // Sign out the user
           await signOut();
-          
+
           throw new Error(`This account is registered as a ${userRole || 'different user type'}. Please use the ${userRole || 'correct'} login page.`);
         }
 
@@ -181,7 +181,11 @@ const CaregiverAuth = ({ navigation }) => {
         errorMessage.includes('invalid email or password')) {
         Alert.alert(
           "Login Failed",
-          "Invalid email or password. Please try again."
+          "Invalid email or password. Please try again or use 'Forgot password?' to reset your password.",
+          [
+            { text: 'Forgot Password', onPress: () => setMode('reset') },
+            { text: 'Try Again', style: 'cancel' }
+          ]
         );
       } else {
         Alert.alert("Authentication Failed", errorMessage);
@@ -413,9 +417,11 @@ const CaregiverAuth = ({ navigation }) => {
                     <GoogleSignInButton
                       onPress={async () => {
                         try {
-                          await signInWithGoogle('caregiver')
+                          console.log('🔘 Google Sign-In button clicked');
+                          const result = await signInWithGoogle('caregiver');
+                          console.log('🎯 Sign-In result:', result);
                         } catch (error) {
-                          console.error('Auth error:', error?.message);
+                          console.error('❌ Google Sign-In error:', error?.message);
 
                           const friendlyMessage = error?.message?.includes('Invalid login credentials')
                             ? 'Invalid email or password. Please try again.'

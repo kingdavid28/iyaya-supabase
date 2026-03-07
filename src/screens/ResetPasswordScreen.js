@@ -12,7 +12,7 @@ import {
 import { TextInput, Button } from 'react-native-paper';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
-import { authAPI } from '../config/api';
+import { useAuth } from '../contexts/AuthContext';
 import {
   AuthStatusSkeleton,
   AuthActionSkeleton
@@ -25,16 +25,15 @@ const ResetPasswordScreen = ({ navigation, route }) => {
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [errors, setErrors] = useState({});
+  const { updatePassword } = useAuth();
 
   const { token } = route.params || {};
 
   useEffect(() => {
-    if (!token) {
-      Alert.alert('Error', 'Invalid reset link', [
-        { text: 'OK', onPress: () => navigation.navigate('WelcomeScreen') }
-      ]);
-    }
-  }, [token]);
+    // Supabase handles the token automatically through the URL hash
+    // No need to validate token manually
+    console.log('ResetPasswordScreen loaded');
+  }, []);
 
   const validatePassword = (password) => {
     const minLength = __DEV__ ? 8 : 12;
@@ -85,9 +84,11 @@ const ResetPasswordScreen = ({ navigation, route }) => {
 
     try {
       setLoading(true);
-      const response = await authAPI.confirmPasswordReset(token, newPassword);
 
-      if (response.success) {
+      // Use Supabase's updatePassword method
+      const result = await updatePassword(newPassword);
+
+      if (result.success) {
         Alert.alert(
           'Success',
           'Your password has been reset successfully. You can now log in with your new password.',
@@ -100,25 +101,29 @@ const ResetPasswordScreen = ({ navigation, route }) => {
         );
       }
     } catch (error) {
-      Alert.alert('Error', error.message || 'Failed to reset password. Please try again.');
+      console.error('Password reset error:', error);
+      Alert.alert(
+        'Error',
+        error.message || 'Failed to reset password. The reset link may have expired. Please request a new one.'
+      );
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <KeyboardAvoidingView 
+    <KeyboardAvoidingView
       style={styles.container}
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
     >
-      <LinearGradient 
+      <LinearGradient
         colors={["#fce8f4", "#f3e8ff"]}
         style={[styles.container, styles.gradient]}
       >
         <ScrollView contentContainerStyle={styles.scrollContent}>
           <View style={styles.header}>
-            <TouchableOpacity 
-              onPress={() => navigation.goBack()} 
+            <TouchableOpacity
+              onPress={() => navigation.goBack()}
               style={styles.backButton}
             >
               <Ionicons name="arrow-back" size={24} color="#db2777" />
@@ -145,8 +150,8 @@ const ResetPasswordScreen = ({ navigation, route }) => {
                 style={styles.input}
                 secureTextEntry={!showPassword}
                 right={
-                  <TextInput.Icon 
-                    icon={showPassword ? "eye-off" : "eye"} 
+                  <TextInput.Icon
+                    icon={showPassword ? "eye-off" : "eye"}
                     onPress={() => setShowPassword(!showPassword)}
                     color="#db2777"
                   />
@@ -171,8 +176,8 @@ const ResetPasswordScreen = ({ navigation, route }) => {
                 style={styles.input}
                 secureTextEntry={!showConfirmPassword}
                 right={
-                  <TextInput.Icon 
-                    icon={showConfirmPassword ? "eye-off" : "eye"} 
+                  <TextInput.Icon
+                    icon={showConfirmPassword ? "eye-off" : "eye"}
                     onPress={() => setShowConfirmPassword(!showConfirmPassword)}
                     color="#db2777"
                   />
@@ -184,8 +189,8 @@ const ResetPasswordScreen = ({ navigation, route }) => {
                 <Text style={styles.singleError}>{errors.confirmPassword}</Text>
               )}
 
-              <Button 
-                mode="contained" 
+              <Button
+                mode="contained"
                 onPress={handleSubmit}
                 disabled={loading || !newPassword || !confirmPassword}
                 style={styles.submitButton}

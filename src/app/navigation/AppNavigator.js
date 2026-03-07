@@ -16,6 +16,8 @@ import WelcomeScreen from "../../screens/WelcomeScreen";
 
 // Auth screen imports
 import EmailVerificationScreen from "../../screens/EmailVerificationScreen";
+import ResetPasswordScreen from "../../screens/ResetPasswordScreen";
+// import DebugAuthCallback from "../../screens/debug-auth-callback"; // Temporarily disabled
 
 // Chat screen imports
 import CaregiverReviewsScreen from "../../screens/CaregiverReviewsScreen";
@@ -311,6 +313,20 @@ const AppNavigatorWithAuth = () => {
       return "Onboarding";
     }
 
+    // Check if we're on the OAuth callback page
+    if (Platform.OS === 'web' && typeof window !== 'undefined') {
+      const isCallbackPage = window.location.pathname.includes('/auth/callback');
+      const hasOAuthTokens = window.location.hash.includes('access_token') ||
+        window.location.search.includes('code=') ||
+        window.location.search.includes('??code='); // Handle malformed URL
+
+      if (isCallbackPage || hasOAuthTokens) {
+        console.log('🔄 [AppNavigator] Detected OAuth callback, starting with AuthCallback screen');
+        console.log('📍 URL:', window.location.href);
+        return "AuthCallback";
+      }
+    }
+
     // Always start with Welcome - navigation will happen after auth loads
     return "Welcome";
   };
@@ -330,6 +346,7 @@ const AppNavigatorWithAuth = () => {
           screens: {
             ContractView: 'contract/:contractId',
             AuthCallback: 'auth/callback',
+            ResetPassword: 'reset-password',
             Welcome: '',
             Onboarding: 'onboarding',
             ParentAuth: 'auth/parent',
@@ -413,6 +430,15 @@ const AppNavigatorWithAuth = () => {
             name="AuthCallback"
             component={AuthCallbackScreen}
             options={{
+              headerShown: false,
+              gestureEnabled: false
+            }}
+          />
+          <Stack.Screen
+            name="ResetPassword"
+            component={ResetPasswordScreen}
+            options={{
+              title: "Reset Password",
               headerShown: false,
               gestureEnabled: false
             }}

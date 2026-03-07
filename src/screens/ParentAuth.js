@@ -109,13 +109,13 @@ const ParentAuth = ({ navigation, route }) => {
 
         // Verify the user has the correct role
         const userRole = result?.user?.role?.toLowerCase()?.trim();
-        
+
         if (userRole !== 'parent') {
           console.error('❌ [ParentAuth] Role mismatch:', { expected: 'parent', actual: userRole });
-          
+
           // Sign out the user
           await signOut();
-          
+
           throw new Error(`This account is registered as a ${userRole || 'different user type'}. Please use the ${userRole || 'correct'} login page.`);
         }
 
@@ -397,7 +397,16 @@ const ParentAuth = ({ navigation, route }) => {
                     </View>
 
                     <GoogleSignInButton
-                      onPress={() => signInWithGoogle('parent')}
+                      onPress={async () => {
+                        try {
+                          console.log('🔘 Google Sign-In button clicked (Parent)');
+                          const result = await signInWithGoogle('parent');
+                          console.log('🎯 Sign-In result:', result);
+                        } catch (error) {
+                          console.error('❌ Google Sign-In error:', error?.message);
+                          Alert.alert('Authentication Failed', error?.message || 'Unable to sign in with Google. Please try again.');
+                        }
+                      }}
                       loading={isSubmitting}
                     />
                   </>

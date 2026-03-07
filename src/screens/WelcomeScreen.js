@@ -10,7 +10,8 @@ import {
   StyleSheet,
   Text,
   View,
-  ActivityIndicator
+  ActivityIndicator,
+  TouchableOpacity  // Added missing import
 } from "react-native";
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAuth } from "../contexts/AuthContext";
@@ -27,6 +28,31 @@ export default function WelcomeScreen() {
   const isLoggedIn = !!user;
   const role = user?.role;
   const hasNavigated = React.useRef(false);
+
+  // Define features array at the top to ensure it's always available
+  const features = [
+    {
+      icon: "checkmark-circle-outline",
+      color: "#16a34a",
+      bgColor: "#dcfce7",
+      title: "Verified Profiles",
+      description: "All caregivers undergo background checks and verification"
+    },
+    {
+      icon: "people-outline",
+      color: "#d97706",
+      bgColor: "#fef3c7",
+      title: "Trusted Community",
+      description: "Join thousands of happy families and caregivers"
+    },
+    {
+      icon: "heart-outline",
+      color: "#9333ea",
+      bgColor: "#f3e8ff",
+      title: "Made with Love",
+      description: "Built by parents, for parents and caregivers"
+    }
+  ];
 
   // Safety check for navigation initialization
   if (!navigation) {
@@ -45,10 +71,6 @@ export default function WelcomeScreen() {
       isLoading
     });
 
-    // NOTE: Auto-navigation is disabled here because individual auth screens
-    // (CaregiverAuth, ParentAuth) handle navigation after login with correct role.
-    // This prevents override issues where database role differs from intended role.
-
     // If user is authenticated but has no role, show role selection
     if (!isLoading && user && !user.role) {
       console.log('[Welcome] User authenticated but no role, showing role selection');
@@ -61,8 +83,6 @@ export default function WelcomeScreen() {
       hasNavigated.current = false;
     }
   }, [isLoggedIn]);
-
-  // Navigation is now handled by AppNavigator, no need for automatic redirect
 
   // Navigation handlers
   const handleParentPress = React.useCallback(async () => {
@@ -174,37 +194,11 @@ export default function WelcomeScreen() {
   // Ensure we always render something visible
   console.log('[Welcome] Rendering WelcomeScreen', { isLoading, user: !!user, role: user?.role });
 
-
-
   // Gradient colors reused throughout the component
   const backgroundGradient = ["#fce8f4", "#e0f2fe", "#f3e8ff"];
   const parentGradient = ["#fce7f3", "#fbcfe8"];
   const caregiverGradient = ["#e0f2fe", "#bae6fd"];
   const logoGradient = ["#fbcfe8", "#f9a8d4"];
-
-  const features = [
-    {
-      icon: "checkmark-circle-outline",
-      color: "#16a34a",
-      bgColor: "#dcfce7",
-      title: "Verified Profiles",
-      description: "All caregivers undergo background checks and verification"
-    },
-    {
-      icon: "people-outline",
-      color: "#d97706",
-      bgColor: "#fef3c7",
-      title: "Trusted Community",
-      description: "Join thousands of happy families and caregivers"
-    },
-    {
-      icon: "heart-outline",
-      color: "#9333ea",
-      bgColor: "#f3e8ff",
-      title: "Made with Love",
-      description: "Built by parents, for parents and caregivers"
-    }
-  ];
 
   return (
     <LinearGradient
@@ -323,19 +317,9 @@ export default function WelcomeScreen() {
           {/* Features Section */}
           <View style={styles.featuresContainer}>
             {features.map((feature, index) => (
-              <View
-                key={index}
-                style={styles.feature}
-                accessibilityLabel={`${feature.title}: ${feature.description}`}
-                accessibilityRole="text"
-              >
-                <View style={[styles.featureIcon, { backgroundColor: feature.bgColor }]}>
-                  <Ionicons
-                    name={feature.icon}
-                    size={24}
-                    color={feature.color}
-                    accessibilityLabel={`${feature.title} icon`}
-                  />
+              <View key={index} style={styles.feature}>
+                <View style={[styles.featureIcon, { backgroundColor: feature.color }]}>
+                  <Ionicons name={feature.icon} size={30} color="#fff" />
                 </View>
                 <Text style={styles.featureTitle}>{feature.title}</Text>
                 <Text style={styles.featureDescription}>{feature.description}</Text>
@@ -356,19 +340,10 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   loadingContainer: {
-    flexGrow: 1,
+    flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
     backgroundColor: '#f8fafc',
-    paddingHorizontal: Platform.select({
-      web: 24,
-      default: 16
-    }),
-    paddingVertical: Platform.select({
-      web: 20,
-      default: 16
-    }),
-    minHeight: '100%',
   },
   loadingText: {
     marginTop: 12,
@@ -377,7 +352,6 @@ const styles = StyleSheet.create({
   },
   container: {
     flexGrow: 1,
-    justifyContent: 'center',
     alignItems: 'center',
     paddingTop: Platform.select({
       web: 60,
@@ -387,12 +361,6 @@ const styles = StyleSheet.create({
       web: 40,
       default: 20
     }),
-    maxWidth: Platform.select({
-      web: 1200,
-      default: '100%',
-    }),
-    alignSelf: 'center',
-    width: '100%',
   },
   header: {
     alignItems: "center",
@@ -519,10 +487,6 @@ const styles = StyleSheet.create({
       web: 8,
       default: 3
     }),
-    minHeight: Platform.select({
-      web: 320,
-      default: 280
-    }),
     borderWidth: 2,
   },
   cardPressed: {
@@ -631,19 +595,18 @@ const styles = StyleSheet.create({
       web: 'row',
       default: 'column'
     }),
-    justifyContent: 'space-between',
+    justifyContent: 'center',
     alignItems: 'flex-start',
     gap: 24,
     width: '100%',
     paddingHorizontal: 16,
+    marginBottom: 30,
     maxWidth: Platform.select({
       web: 1200,
       default: '100%',
     }),
   },
   feature: {
-    alignItems: 'center',
-    paddingHorizontal: 8,
     flex: Platform.select({
       web: 1,
       default: undefined
@@ -652,6 +615,9 @@ const styles = StyleSheet.create({
       web: undefined,
       default: '100%'
     }),
+    alignItems: 'center',
+    padding: 20,
+    borderRadius: 16,
     marginBottom: Platform.select({
       web: 0,
       default: 16
@@ -687,5 +653,41 @@ const styles = StyleSheet.create({
     color: "#6b7280",
     textAlign: "center",
     lineHeight: 16,
+  },
+  featureGradient: {
+    borderRadius: 12,
+    padding: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  featureContent: {
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  debugContainer: {
+    width: '100%',
+    paddingHorizontal: 16,
+    marginTop: 20,
+    marginBottom: 30,
+    alignItems: 'center',
+  },
+  debugButton: {
+    backgroundColor: "#ff6b6b",
+    borderRadius: 12,
+    padding: 16,
+    alignItems: 'center',
+    maxWidth: 300,
+    width: '100%',
+  },
+  debugButtonText: {
+    fontSize: 16,
+    fontWeight: "600",
+    color: "#fff",
+    marginBottom: 4,
+  },
+  debugButtonSubtext: {
+    fontSize: 12,
+    color: "#fff",
+    opacity: 0.9,
   },
 });

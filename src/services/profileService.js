@@ -10,14 +10,8 @@ import { tokenManager } from '../utils/tokenManager';
 class ProfileService {
 
   constructor() {
-    const fallbackUrl = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:5000';
-    if (!API_CONFIG || !API_CONFIG.BASE_URL) {
-      console.error('API_CONFIG.BASE_URL is undefined. Using fallback.');
-      this.baseURL = `${fallbackUrl}/api/profile`;
-    } else {
-      this.baseURL = `${API_CONFIG.BASE_URL}/profile`;
-    }
-    console.log('🔗 ProfileService using URL:', this.baseURL);
+    // This service now uses SupabaseService directly, no need for REST endpoint
+    console.log('🔗 ProfileService using SupabaseService (direct database access)');
     console.log('🔗 API_CONFIG:', API_CONFIG);
     console.log('🔗 EXPO_PUBLIC_API_URL:', process.env.EXPO_PUBLIC_API_URL);
   }

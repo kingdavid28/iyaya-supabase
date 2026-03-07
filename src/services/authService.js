@@ -138,7 +138,7 @@ class AuthService {
       
       const targetUserId = userId || user.id;
       const { data, error } = await supabase
-        .from('profiles')
+        .from('caregiver_profiles')
         .select('*')
         .eq('id', targetUserId)
         .single();
@@ -157,7 +157,7 @@ class AuthService {
       if (userError) throw userError;
 
       const { data, error } = await supabase
-        .from('profiles')
+        .from('caregiver_profiles')
         .update(updates)
         .eq('id', user.id)
         .select()
@@ -178,7 +178,7 @@ class AuthService {
 
       // Delete profile first
       const { error: profileError } = await supabase
-        .from('profiles')
+        .from('caregiver_profiles')
         .delete()
         .eq('id', user.id);
 

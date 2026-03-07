@@ -461,6 +461,12 @@ const AppProvider = ({ children }) => {
           throw new Error("No authenticated user")
         }
 
+        // Test Supabase connection first
+        const { data: testData, error: testError } = await supabase
+          .from('caregiver_profiles')
+          .select('id')
+          .limit(1)
+
         // Use Supabase service instead of old API
         const { authAPI } = await import('../services');
         const updatedProfile = await authAPI.updateProfile(profileData)

@@ -96,44 +96,49 @@ export const AuthProvider = ({ children }) => {
         email: authUser.email
       });
 
-      // Remove the .timeout() method and use a Promise.race for timeout
-      const profilePromise = supabase
-        .from('users')
-        .select('*')
-        .eq('id', authUser.id)
-        .single();
-
-      // Add a timeout using Promise.race
-      const timeoutPromise = new Promise((_, reject) =>
-        setTimeout(() => reject(new Error('Profile fetch timeout')), 5000)
-      );
-
-      const { data: profile, error } = await Promise.race([
-        profilePromise,
-        timeoutPromise
+      // Query users table for role and caregiver_profiles for profile data
+      const [userResult, profileResult] = await Promise.all([
+        supabase
+          .from('users')
+          .select('id, role, email, name')
+          .eq('id', authUser.id)
+          .single(),
+        supabase
+          .from('caregiver_profiles')
+          .select('id, user_id, bio, experience, skills, hourly_rate')
+          .eq('user_id', authUser.id)
+          .maybeSingle()
       ]);
 
-      if (error) {
-        console.error('❌ Supabase error:', error);
-        throw new AuthError('Failed to fetch user profile', AuthErrorTypes.DATABASE_ERROR, error);
+      const { data: user, error: userError } = userResult;
+      const { data: profile, error: profileError } = profileResult;
+
+      if (userError) {
+        console.error('❌ Users table error:', userError);
+        throw new AuthError('Failed to fetch user role', AuthErrorTypes.DATABASE_ERROR, userError);
       }
 
-      if (!profile?.role) {
-        console.error('❌ No role found in profile:', profile);
+      if (profileError && profileError.code !== 'PGRST116') {
+        console.warn('⚠️ Profile table error (may not exist):', profileError);
+      }
+
+      if (!user?.role) {
+        console.error('❌ No role found in users table:', user);
         throw new AuthError('User role not found', AuthErrorTypes.VALIDATION_ERROR);
       }
 
-      console.log('✅ Fetched profile:', {
-        id: profile.id,
-        role: profile.role,
-        email: profile.email
+      console.log('✅ Fetched user with role and profile:', {
+        id: user.id,
+        role: user.role,
+        email: user.email,
+        hasProfile: !!profile
       });
 
       return {
         ...authUser,
-        role: profile.role,
-        name: profile?.name || authUser.user_metadata?.name,
-        profile,
+        role: user.role,
+        name: user?.name || authUser.user_metadata?.name,
+        profile: profile || null, // Return caregiver profile if exists
         status: 'active'
       };
     } catch (err) {
@@ -151,7 +156,7 @@ export const AuthProvider = ({ children }) => {
     const MAX_RETRIES = 2;
     const RETRY_DELAY = 3000;
 
-    // Quick check if profile exists first
+    // Quick check if user exists in users table first
     const quickCheck = async () => {
       try {
         const query = supabase
@@ -162,7 +167,7 @@ export const AuthProvider = ({ children }) => {
 
         const { data } = await Promise.race([
           query,
-          new Promise((_, reject) => 
+          new Promise((_, reject) =>
             setTimeout(() => reject(new Error('Query timeout')), 5000)
           )
         ]);
@@ -177,62 +182,80 @@ export const AuthProvider = ({ children }) => {
       }
     };
 
-    // Create or update profile with retry logic
+    // Create or update user role and caregiver profile with retry logic
     const createOrUpdateProfile = async (attempt = 1) => {
       try {
         console.log(`🔄 Profile creation/update attempt ${attempt}/${MAX_RETRIES + 1}`);
 
         const now = new Date().toISOString();
 
-        const profileData = {
+        // Update user role in users table
+        const userData = {
           id: authUser.id,
-          email: authUser.email || authUser.user_metadata?.email,
+          email: authUser.email,
+          name: authUser.user_metadata?.name || authUser.user_metadata?.full_name || null,
           role: role,
-          first_name: authUser.user_metadata?.first_name ||
-            authUser.user_metadata?.given_name ||
-            authUser.user_metadata?.firstName ||
-            null,
-          last_name: authUser.user_metadata?.last_name ||
-            authUser.user_metadata?.family_name ||
-            authUser.user_metadata?.lastName ||
-            null,
-          name: authUser.user_metadata?.name ||
-            authUser.user_metadata?.full_name ||
-            `${authUser.user_metadata?.first_name || ''} ${authUser.user_metadata?.last_name || ''}`.trim() ||
-            authUser.email?.split('@')[0] ||
-            'User',
-          auth_provider: authUser.app_metadata?.provider || 'supabase',
-          created_at: now,
           updated_at: now
         };
 
-        // Use upsert to handle both insert and update cases
-        const query = supabase
+        const userQuery = supabase
           .from('users')
-          .upsert(profileData, { onConflict: 'id' })
+          .upsert(userData, { onConflict: 'id' })
           .select()
           .single();
 
-        const { data, error } = await Promise.race([
-          query,
-          new Promise((_, reject) => 
-            setTimeout(() => reject(new Error('Query timeout')), 10000)
-          )
+        // Create caregiver profile if role is caregiver
+        let profileQuery = Promise.resolve({ data: null, error: null });
+        if (role === 'caregiver') {
+          const profileData = {
+            user_id: authUser.id,
+            bio: authUser.user_metadata?.bio || '',
+            experience: authUser.user_metadata?.experience || '',
+            skills: authUser.user_metadata?.skills || [],
+            hourly_rate: authUser.user_metadata?.hourly_rate || null,
+            created_at: now,
+            updated_at: now
+          };
+
+          profileQuery = supabase
+            .from('caregiver_profiles')
+            .upsert(profileData, { onConflict: 'user_id' })
+            .select()
+            .single();
+        }
+
+        const [userResult, profileResult] = await Promise.all([
+          userQuery,
+          profileQuery
         ]);
 
-        if (error) throw error;
-        console.log(`✅ Profile ${data.id} created/updated with role: ${data.role}`);
-        return data;
+        const { data: user, error: userError } = userResult;
+        const { data: profile, error: profileError } = profileResult;
+
+        if (userError) throw userError;
+        if (role === 'caregiver' && profileError) throw profileError;
+
+        console.log(`✅ User role updated: ${user.role}, Caregiver profile: ${profile ? 'created/updated' : 'not applicable'}`);
+        return { user, profile };
 
       } catch (error) {
         if (error.code === '23505') { // Unique violation - profile exists
           console.log('ℹ️ Profile already exists, fetching...');
-          const { data } = await supabase
-            .from('users')
-            .select('*')
-            .eq('id', authUser.id)
-            .single();
-          if (data) return data;
+          const [userResult, profileResult] = await Promise.all([
+            supabase
+              .from('users')
+              .select('*')
+              .eq('id', authUser.id)
+              .single(),
+            supabase
+              .from('caregiver_profiles')
+              .select('*')
+              .eq('user_id', authUser.id)
+              .maybeSingle()
+          ]);
+          if (userResult.data && profileResult.data) {
+            return { user: userResult.data, profile: profileResult.data };
+          }
         }
 
         if (attempt <= MAX_RETRIES) {
@@ -242,7 +265,6 @@ export const AuthProvider = ({ children }) => {
           return createOrUpdateProfile(attempt + 1);
         }
 
-        console.error('❌ Failed to create/update profile after retries:', error);
         throw error;
       }
     };
@@ -273,6 +295,19 @@ export const AuthProvider = ({ children }) => {
 
   const initializeSession = useCallback(async () => {
     try {
+      // Check if we're on the OAuth callback page - if so, let AuthCallbackScreen handle it
+      if (Platform.OS === 'web' && typeof window !== 'undefined') {
+        const isCallbackPage = window.location.pathname.includes('/auth/callback');
+        const hasOAuthTokens = window.location.hash.includes('access_token') ||
+          window.location.search.includes('code=');
+
+        if (isCallbackPage && hasOAuthTokens) {
+          console.log('🔄 On OAuth callback page, skipping auto-initialization');
+          safeSetState(setLoading, false);
+          return;
+        }
+      }
+
       // Handle OAuth callback on web
       if (Platform.OS === 'web' && window.location.hash) {
         console.log('🔄 Handling OAuth callback...')
@@ -293,7 +328,7 @@ export const AuthProvider = ({ children }) => {
         // Clear invalid tokens on 400 errors
         if (error.status === 400 || error.message?.includes('refresh_token')) {
           console.log('🧹 Clearing invalid session tokens')
-          await supabase.auth.signOut().catch(() => {})
+          await supabase.auth.signOut().catch(() => { })
           if (Platform.OS === 'web') {
             localStorage.clear()
             sessionStorage.clear()
@@ -680,27 +715,26 @@ export const AuthProvider = ({ children }) => {
 
       console.log('🔄 Starting Google Sign-In...', {
         platform: Platform.OS,
-        roleHint: 'caregiver',
+        roleHint: roleHint,
         supabaseUrl: supabase?.supabaseUrl
       })
 
-      // Test Supabase connection first
-      const { data: testData, error: testError } = await supabase
-        .from('profiles')
-        .select('id')
-        .limit(1)
-
-      if (testError) {
-        console.error('❌ Supabase connection test failed:', testError)
-        throw new AuthError('Failed to connect to authentication service', AuthErrorTypes.NETWORK, testError)
+      // Store role hint in sessionStorage before redirect (web only)
+      if (Platform.OS === 'web' && roleHint) {
+        try {
+          sessionStorage.setItem('pendingRole', roleHint)
+          console.log('💾 Stored role hint in sessionStorage:', roleHint)
+        } catch (storageError) {
+          console.warn('⚠️ Could not store role hint:', storageError)
+        }
       }
 
-      console.log('🧪 Supabase connection test:', { error: testError, hasData: !!testData })
-
-      // Use production redirect URL for web
-      const redirectTo = Platform.OS === 'web' 
-        ? 'https://iyaya-supabase.vercel.app/auth/callback'
+      // Use appropriate redirect URL based on environment
+      const redirectTo = Platform.OS === 'web' && typeof window !== 'undefined'
+        ? `${window.location.origin}/auth/callback`
         : getRedirectUrl()
+
+      console.log('🔗 OAuth redirect URL:', redirectTo);
 
       const { data, error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
@@ -723,7 +757,7 @@ export const AuthProvider = ({ children }) => {
       }
 
       console.log('✅ Google OAuth response:', data)
-      
+
       // Redirect to OAuth URL on web, open in browser on mobile
       if (data?.url) {
         if (Platform.OS === 'web') {
@@ -738,7 +772,7 @@ export const AuthProvider = ({ children }) => {
         }
         return data
       }
-      
+
       return data
     } catch (err) {
       console.error('❌ Google Sign-In failed:', {
@@ -760,6 +794,37 @@ export const AuthProvider = ({ children }) => {
 
       console.log('🔄 Handling OAuth callback...', { roleHint })
 
+      // Check if we have OAuth tokens in the URL
+      if (Platform.OS === 'web' && typeof window !== 'undefined') {
+        // Fix malformed URL with double question marks (??code=)
+        if (window.location.search.includes('??code=')) {
+          console.log('🔧 Detected malformed URL with double question marks')
+          const fixedUrl = window.location.href.replace('??code=', '?code=')
+          console.log('🔧 Normalizing URL from:', window.location.href)
+          console.log('🔧 Normalizing URL to:', fixedUrl)
+          window.history.replaceState({}, '', fixedUrl)
+          // URL is now fixed, continue processing
+        }
+
+        const hasAccessToken = window.location.hash.includes('access_token')
+        const hasCode = window.location.search.includes('code=')
+
+        console.log('🔍 OAuth URL check:', {
+          hasAccessToken,
+          hasCode,
+          hash: window.location.hash.substring(0, 50),
+          search: window.location.search.substring(0, 50)
+        })
+
+        if (!hasAccessToken && !hasCode) {
+          console.warn('⚠️ No OAuth tokens found in URL - possible OAuth configuration issue')
+          throw new AuthError(
+            'OAuth tokens not received. Please check your Supabase OAuth configuration.',
+            AuthErrorTypes.AUTH_ERROR
+          )
+        }
+      }
+
       const { data, error } = await supabase.auth.getSession()
 
       if (error) {
@@ -768,19 +833,32 @@ export const AuthProvider = ({ children }) => {
       }
 
       if (data?.session?.user) {
-        console.log('✅ OAuth session found, ensuring profile exists...')
+        console.log('✅ OAuth session found:', {
+          userId: data.session.user.id,
+          email: data.session.user.email,
+          provider: data.session.user.app_metadata?.provider
+        })
 
         // Ensure user profile exists with role hint if provided
         if (roleHint) {
+          console.log('🔄 Creating user profile with role:', roleHint)
           await ensureUserProfileExists(data.session.user, roleHint)
         }
+
+        // Fetch the complete user profile with role
+        const userWithProfile = await fetchUserWithProfile(data.session.user)
 
         // Track successful OAuth login
         trackUserLogin('oauth')
 
-        return data.session
+        return {
+          success: true,
+          session: data.session,
+          user: userWithProfile
+        }
       }
 
+      console.error('❌ No session found after OAuth callback')
       throw new AuthError('No session found after OAuth callback', AuthErrorTypes.SESSION_EXPIRED)
     } catch (err) {
       console.error('❌ OAuth callback failed:', err)
@@ -893,11 +971,11 @@ export const AuthProvider = ({ children }) => {
   ])
 
   if (loading && !user) {
-    // Force loading to complete after a reasonable timeout
+    // Force loading to complete after a reasonable timeout (increased for OAuth)
     const timeoutId = setTimeout(() => {
-      console.warn('⏱️ Auth loading timeout (5s), forcing completion');
+      console.warn('⏱️ Auth loading timeout (15s), forcing completion');
       safeSetState(setLoading, false);
-    }, 5000); // 5 second timeout - more reasonable for slow networks
+    }, 15000); // 15 second timeout - allows OAuth flow to complete
 
     return (
       <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
