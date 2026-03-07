@@ -1,28 +1,19 @@
-# OAuth Callback Flow - Fix Summary
+# OAuth Callback Flow - Complete Fix Summary
 
-## Latest Fix: Malformed URL with Double Question Marks ✅
+## Latest Fix: PKCE 400 Error ✅
 
-**Issue**: The OAuth callback URL has `??code=` instead of `?code=`
-- Example: `https://iyaya-supabase.vercel.app/??code=123bc2e5-6187-4551-b741-d5518487b81a`
-- This malformed URL prevents Supabase from parsing the OAuth code
+**Issue**: Getting 400 Bad Request when exchanging OAuth code for session
+```
+POST .../auth/v1/token?grant_type=pkce 400 (Bad Request)
+```
 
-**Root Cause**: The `callback.html` file was redirecting to `/?${search}`, which created `/?code=...` that became `??code=...` when combined with the existing `?` in the URL.
+**Root Cause**: PKCE authorization codes can only be used ONCE. The flow was:
+1. Supabase redirects to `/auth/callback?code=xxx`
+2. `callback.html` loads
+3. `callback.html` redirects to `/?code=xxx`
+4. Supabase tries to exchange code again → 400 Error (code already used)
 
-**Fixes Applied**:
-1. **Updated `public/auth/callback.html`** - Now detects and fixes `??` URLs, and redirects to `/auth/callback?code=...` instead of `/?code=...`
-2. **Updated `AuthCallbackScreen.js`** - Detects and normalizes malformed URLs before processing
-3. **Updated `AuthContext.js`** - Normalizes URLs in `handleOAuthCallback()`
-4. **Updated `vercel.json`** - Changed rewrite to use `/index.html` instead of `/auth/callback.html`
-
-## How It Works Now
-
-1. Supabase redirects to: `https://iyaya-supabase.vercel.app/auth/callback?code=xxx`
-2. Vercel serves `callback.html` (if still configured) OR `index.html` (new config)
-3. If `callback.html` loads:
-   - Detects `??` and fixes it to `?`
-   - Redirects to `/auth/callback?code=xxx` (React route)
-4. React app (`AuthCallbackScreen`) processes the OAuth code
-5. User is authenticated and redirected to dashboard
+**Fix**: Updated `callback.html` to redirect to `/auth/callback?code=xxx` (React route) instead of `/?code=xxx`, ensuring the code is only exchanged once by the React app.
 
 ## Previous Fixes
 
@@ -126,9 +117,10 @@ The `409 Conflict` errors on `caregiver_profiles` table are handled by the code 
 ## Files Modified
 - `src/contexts/AuthContext.js` - Fixed email field, added OAuth validation, URL normalization
 - `src/screens/AuthCallbackScreen.js` - Added URL normalization for malformed URLs
-- `public/auth/callback.html` - Fixed redirect logic to prevent double question marks (PRIMARY FIX)
-- `vercel.json` - Fixed rewrite rule to prevent double question marks
+- `public/auth/callback.html` - Fixed to redirect to `/auth/callback` instead of `/` (CRITICAL FIX for PKCE 400 error)
+- `vercel.json` - Fixed rewrite rule
 - `OAUTH_TROUBLESHOOTING.md` - Detailed troubleshooting guide
+- `PKCE_FLOW_FIX.md` - Explanation of PKCE flow and 400 error fix
 
 ## Next Steps After Configuration
 Once OAuth is properly configured and tokens are flowing:

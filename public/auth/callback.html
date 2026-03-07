@@ -9,9 +9,7 @@
     body {
       margin: 0;
       padding: 0;
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Roboto",
-        "Oxygen", "Ubuntu", "Cantarell", "Fira Sans", "Droid Sans",
-        "Helvetica Neue", sans-serif;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Roboto", "Oxygen", "Ubuntu", "Cantarell", "Fira Sans", "Droid Sans", "Helvetica Neue", sans-serif;
       background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
       display: flex;
       justify-content: center;
@@ -65,73 +63,46 @@
   </div>
 
   <script>
-    console.log("🔐 OAuth Callback Page Loaded");
+    console.log("🔐 OAuth Callback HTML Loaded");
     console.log("URL:", window.location.href);
     console.log("Hash:", window.location.hash);
     console.log("Search:", window.location.search);
 
     // Fix malformed URL with double question marks
-    let currentUrl = window.location.href;
-    if (currentUrl.includes('??')) {
+    if (window.location.href.includes('??')) {
       console.log("🔧 Fixing malformed URL with double question marks");
-      const fixedUrl = currentUrl.replace('??', '?');
+      const fixedUrl = window.location.href.replace('??', '?');
       console.log("🔧 Fixed URL:", fixedUrl);
       window.history.replaceState({}, '', fixedUrl);
-      // Reload to process with fixed URL
-      window.location.reload();
-      return;
     }
 
-    // Extract the OAuth callback data from the URL
+    // Redirect to React app's callback route with all params intact
     const hash = window.location.hash;
-    let search = window.location.search;
+    const search = window.location.search;
 
-    // Supabase OAuth sends data in the hash
-    // Format: #access_token=...&token_type=Bearer&expires_in=3600&refresh_token=...&type=recovery
-    if (hash) {
-      console.log("✅ OAuth hash found, redirecting to app");
+    if (hash || search) {
+      console.log("✅ OAuth data found, redirecting to React app");
 
-      // Extract access_token from hash
-      const hashParams = new URLSearchParams(hash.substring(1));
-      const accessToken = hashParams.get("access_token");
+      // Build redirect URL preserving both hash and search params
+      let redirectUrl = '/auth/callback';
+      if (search) redirectUrl += search;
+      if (hash) redirectUrl += hash;
 
-      if (accessToken) {
-        console.log("✅ Access token found");
-        // Store for debugging
-        localStorage.setItem("oauth_callback_hash", hash);
-        localStorage.setItem("oauth_callback_time", new Date().toISOString());
-      }
+      console.log("🔄 Redirecting to:", redirectUrl);
 
-      // Redirect to home with hash intact - Supabase will automatically process it
-      // This ensures the app receives the OAuth session data
       setTimeout(() => {
-        console.log("🔄 Redirecting to home with OAuth hash...");
-        window.location.href = `/${hash}`;
-      }, 100);
-    } else if (search) {
-      console.log("✅ OAuth search params found, redirecting to app");
-
-      // Clean up search params - remove leading ? if present
-      if (search.startsWith('?')) {
-        search = search.substring(1);
-      }
-
-      // Redirect to auth/callback route in the React app with clean params
-      setTimeout(() => {
-        console.log("🔄 Redirecting to React app with OAuth params...");
-        window.location.href = `/auth/callback?${search}`;
+        window.location.href = redirectUrl;
       }, 100);
     } else {
-      console.warn("⚠️ No OAuth data found in URL, redirecting to home");
-      // No auth params, go straight home after a short delay
+      console.warn("⚠️ No OAuth data found, redirecting to home");
       setTimeout(() => {
         window.location.href = "/";
       }, 1000);
     }
 
-    // Timeout - if something goes wrong, go home after 5 seconds
+    // Timeout fallback
     setTimeout(() => {
-      if (window.location.pathname === "/auth/callback.html" || window.location.pathname === "/auth/callback") {
+      if (window.location.pathname.includes('/auth/callback')) {
         console.error("❌ OAuth callback timeout, redirecting to home");
         window.location.href = "/";
       }
