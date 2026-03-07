@@ -6,11 +6,23 @@
 - Example: `https://iyaya-supabase.vercel.app/??code=123bc2e5-6187-4551-b741-d5518487b81a`
 - This malformed URL prevents Supabase from parsing the OAuth code
 
-**Fix Applied**: Added URL normalization in both files:
-- `AuthCallbackScreen.js` - Detects and fixes the URL before processing
-- `AuthContext.js` - Normalizes the URL in `handleOAuthCallback()`
+**Root Cause**: The `callback.html` file was redirecting to `/?${search}`, which created `/?code=...` that became `??code=...` when combined with the existing `?` in the URL.
 
-The code now automatically converts `??code=` to `?code=` before processing the OAuth callback.
+**Fixes Applied**:
+1. **Updated `public/auth/callback.html`** - Now detects and fixes `??` URLs, and redirects to `/auth/callback?code=...` instead of `/?code=...`
+2. **Updated `AuthCallbackScreen.js`** - Detects and normalizes malformed URLs before processing
+3. **Updated `AuthContext.js`** - Normalizes URLs in `handleOAuthCallback()`
+4. **Updated `vercel.json`** - Changed rewrite to use `/index.html` instead of `/auth/callback.html`
+
+## How It Works Now
+
+1. Supabase redirects to: `https://iyaya-supabase.vercel.app/auth/callback?code=xxx`
+2. Vercel serves `callback.html` (if still configured) OR `index.html` (new config)
+3. If `callback.html` loads:
+   - Detects `??` and fixes it to `?`
+   - Redirects to `/auth/callback?code=xxx` (React route)
+4. React app (`AuthCallbackScreen`) processes the OAuth code
+5. User is authenticated and redirected to dashboard
 
 ## Previous Fixes
 
@@ -114,7 +126,8 @@ The `409 Conflict` errors on `caregiver_profiles` table are handled by the code 
 ## Files Modified
 - `src/contexts/AuthContext.js` - Fixed email field, added OAuth validation, URL normalization
 - `src/screens/AuthCallbackScreen.js` - Added URL normalization for malformed URLs
-- `vercel.json` - Fixed rewrite rule to prevent double question marks (ROOT CAUSE FIX)
+- `public/auth/callback.html` - Fixed redirect logic to prevent double question marks (PRIMARY FIX)
+- `vercel.json` - Fixed rewrite rule to prevent double question marks
 - `OAUTH_TROUBLESHOOTING.md` - Detailed troubleshooting guide
 
 ## Next Steps After Configuration

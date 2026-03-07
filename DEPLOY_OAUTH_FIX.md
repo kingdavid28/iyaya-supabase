@@ -3,22 +3,38 @@
 ## What Was Fixed
 
 1. **Email constraint error** - User profiles now include required email field
-2. **Malformed URL handling** - Code automatically fixes `??code=` to `?code=`
-3. **Root cause** - Vercel configuration updated to prevent malformed URLs
+2. **Malformed URL handling** - Multiple layers of protection:
+   - `callback.html` detects and fixes `??` before redirecting
+   - React app normalizes URLs if they slip through
+   - Proper redirect to `/auth/callback?code=...` instead of `/?code=...`
+3. **Root cause** - Fixed `callback.html` redirect logic (primary fix) and Vercel configuration
 
 ## Deploy Steps
 
 ### 1. Commit and Push Changes
 ```bash
 git add .
-git commit -m "Fix OAuth callback flow - handle malformed URLs and email constraint"
+git commit -m "Fix OAuth callback - handle malformed URLs at multiple layers"
 git push
 ```
 
 ### 2. Vercel Will Auto-Deploy
-Vercel will automatically deploy the changes when you push to your main branch.
+Vercel will automatically deploy when you push to your main branch.
 
-### 3. Test the OAuth Flow
+### 3. Clear Vercel Cache (Important!)
+Since we modified `callback.html`, you may need to clear Vercel's cache:
+1. Go to your Vercel dashboard
+2. Select your project
+3. Go to Settings → General
+4. Scroll to "Build & Development Settings"
+5. Click "Clear Cache" or redeploy
+
+Alternatively, force a fresh deployment:
+```bash
+vercel --prod --force
+```
+
+### 4. Test the OAuth Flow
 1. Go to: https://iyaya-supabase.vercel.app
 2. Click "Sign in with Google"
 3. Complete Google authentication
@@ -40,11 +56,12 @@ Vercel will automatically deploy the changes when you push to your main branch.
    - Site URL is set correctly
 
 ## Files Changed
-- `src/contexts/AuthContext.js`
-- `src/screens/AuthCallbackScreen.js`
-- `vercel.json`
-- `OAUTH_FIX_SUMMARY.md`
-- `OAUTH_TROUBLESHOOTING.md`
+- `src/contexts/AuthContext.js` - Email field fix, URL normalization
+- `src/screens/AuthCallbackScreen.js` - URL normalization
+- `public/auth/callback.html` - Fixed redirect logic (PRIMARY FIX)
+- `vercel.json` - Updated rewrite rules
+- `OAUTH_FIX_SUMMARY.md` - Documentation
+- `OAUTH_TROUBLESHOOTING.md` - Troubleshooting guide
 
 ## Next Steps After Deployment
 1. Test OAuth flow with Google
